@@ -16,6 +16,8 @@ usage:
   fluidctl render <plugin.swift | helper> [--surface menuBar|panel|window|widget]
                   [--event <action-id>[=value]]... [--tool name[:json]] [--json] [--png <dir>] [--verbose]
   fluidctl mcp                      authoring MCP server on stdio (for coding agents)
+  fluidctl agent [<plugin>...]      runtime MCP gateway on stdio: bridges to the running
+                                    app, or runs the given plugins itself when it isn't
   fluidctl secret set|get|delete <NAME> [value]
   fluidctl docs                     the plugin authoring reference
   fluidctl parity                   the surface parity ledger
@@ -169,6 +171,31 @@ case "mcp":
     let server = MCPServer(name: "fluid-authoring", version: FluidVersion.current, instructions: "Tools for writing Fluid plugins: call fluid_docs first, then fluid_new/fluid_build/fluid_render/fluid_send_event.", provider: tools)
     await server.serveStdio()
     await tools.stopAll()
+case "agent":
+    if rest.isEmpty {
+        do {
+            try UnixSocket.bridgeStdio(to: FluidPaths.agentSocket.path)
+        } catch {
+            fail("\(error)\nStart Fluid, or pass plugin files to run them here: fluidctl agent <plugin.swift>...")
+        }
+    } else {
+        let services = makeServices()
+        var supervisors: [PluginSupervisor] = []
+        for path in rest {
+            let executable = helper(for: path)
+            do {
+                let supervisor = try PluginSupervisor.make(executable: executable, services: services)
+                await supervisor.start()
+                supervisors.append(supervisor)
+            } catch {
+                fail("\(path): \(error)")
+            }
+        }
+        let running = supervisors
+        let server = MCPServer(name: "fluid", version: FluidVersion.current, instructions: "Tools from running Fluid plugins. Call fluid_plugins to see them.", provider: RuntimeTools { running })
+        await server.serveStdio()
+        for supervisor in supervisors { await supervisor.stop() }
+    }
 case "new":
     guard let path = rest.first else { fail(usage) }
     let url = URL(fileURLWithPath: path)
