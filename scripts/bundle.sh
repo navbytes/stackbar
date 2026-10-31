@@ -23,6 +23,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/FluidKit/Sources" "$APP/Contents/Resources/FluidKit/Examples" "$APP/Contents/Resources/FluidKit/Plugins"
 cp "$BIN/Fluid" "$BIN/fluidctl" "$APP/Contents/MacOS/"
 sed "s/@VERSION@/$VERSION/g" Packaging/Info.plist > "$APP/Contents/Info.plist"
+cp Packaging/AppIcon.icns "$APP/Contents/Resources/"
 
 # The slim package plugins are built against: FluidProtocol + FluidKit only.
 cp Packaging/FluidKit-Package.swift "$APP/Contents/Resources/FluidKit/Package.swift"
