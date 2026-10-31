@@ -294,8 +294,9 @@ public actor PluginSupervisor {
         }
         inFlight += 1
         let granted = granted
+        let declared = manifest
         Task { [weak self] in
-            let result = await services.handle(call, for: granted)
+            let result = await services.handle(call, for: granted, declared: declared)
             await self?.respond(id, result, generation: callGeneration)
         }
     }
