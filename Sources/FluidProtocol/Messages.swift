@@ -2,13 +2,16 @@ import Foundation
 
 /// The protocol version a host and plugin agree on in `hello`/`ready`.
 public enum FluidProtocolVersion {
-    public static let current = 1
+    /// 2 added host calls, tools, topics and the stored-values snapshot.
+    public static let current = 2
 }
 
 /// Host → plugin.
 public enum HostMessage: Codable, Equatable, Sendable {
     /// The first message. The plugin answers with `ready`, then renders.
-    case hello(protocolVersion: Int, surfaces: [Surface])
+    /// `storage` is the plugin's saved values (JSON strings by key), so
+    /// `@Stored` reads never wait on the host.
+    case hello(protocolVersion: Int, surfaces: [Surface], storage: [String: String] = [:])
     /// Run `refresh()`, then re-render.
     case trigger(reason: TriggerReason)
     /// The user acted on something the plugin rendered.
@@ -17,10 +20,16 @@ public enum HostMessage: Codable, Equatable, Sendable {
     case visibility(surface: Surface, visible: Bool)
     /// Exit cleanly; the host kills the process if it doesn't.
     case shutdown
+    /// The answer to a plugin's `request` with the same id.
+    case response(id: Int, result: HostResult)
+    /// Another plugin published to a topic this one listens to.
+    case topic(name: String, payload: String, from: String)
+    /// An agent called one of the plugin's tools.
+    case callTool(id: Int, name: String, arguments: [String: EventValue])
 }
 
 public enum TriggerReason: String, Codable, Sendable {
-    case launch, interval, wake, manual
+    case launch, interval, wake, manual, file, topic
 }
 
 /// The value that came with an event: a toggle's new state, a slider's number.
@@ -39,6 +48,104 @@ public enum PluginMessage: Codable, Equatable, Sendable {
     /// Sent after every host message has been fully handled (refresh or action
     /// done, renders sent). Lets a host or a test know the plugin is quiet.
     case settled
+    /// A call into the host. The host answers with `response(id:)`; ids are
+    /// chosen by the plugin and only need to be unique among open requests.
+    case request(id: Int, call: HostCall)
+    /// The tools the plugin offers agents. Sent after `ready` and whenever
+    /// the list changes.
+    case tools([ToolSpec])
+    /// The result of a `callTool`.
+    case toolResult(id: Int, text: String, isError: Bool)
+}
+
+/// What a plugin can ask the host to do. Every call is checked against the
+/// capabilities the user approved; a call outside them fails with a message
+/// that says which capability is missing.
+public enum HostCall: Codable, Equatable, Sendable {
+    /// Saves a value under `key` (a JSON string), or removes it with `nil`.
+    case storageSet(key: String, value: String?)
+    /// Reads a secret the manifest declares. Answers `.value(nil)` when the
+    /// user has not entered it yet; the host then asks them for it.
+    case secret(name: String)
+    /// An HTTP request to a declared domain, made by the host.
+    case http(HTTPRequest)
+    /// A current access token for a declared OAuth provider, signing in or
+    /// refreshing as needed.
+    case oauthToken(provider: String, forceRefresh: Bool)
+    /// Sends `payload` to every plugin listening on `topic`.
+    case publish(topic: String, payload: String)
+    /// A user notification.
+    case notify(title: String, body: String?)
+    /// Opens a URL with the default app (https, mailto, or a file URL).
+    case openURL(String)
+    /// Puts text on the clipboard.
+    case copy(String)
+}
+
+public enum HostResult: Codable, Equatable, Sendable {
+    case ok
+    case value(String?)
+    case http(HTTPResponse)
+    case failure(String)
+}
+
+public struct HTTPRequest: Codable, Equatable, Sendable {
+    public var url: String
+    public var method: String
+    public var headers: [String: String]
+    public var body: Data?
+    public var timeout: Double
+
+    public init(url: String, method: String = "GET", headers: [String: String] = [:], body: Data? = nil, timeout: Double = 30) {
+        self.url = url
+        self.method = method
+        self.headers = headers
+        self.body = body
+        self.timeout = timeout
+    }
+}
+
+public struct HTTPResponse: Codable, Equatable, Sendable {
+    public var status: Int
+    public var headers: [String: String]
+    public var body: Data
+
+    public init(status: Int, headers: [String: String] = [:], body: Data = Data()) {
+        self.status = status
+        self.headers = headers
+        self.body = body
+    }
+}
+
+/// A tool an agent can call, described the way MCP describes tools.
+public struct ToolSpec: Codable, Equatable, Sendable {
+    public var name: String
+    public var description: String
+    public var parameters: [ToolParameter]
+
+    public init(name: String, description: String, parameters: [ToolParameter] = []) {
+        self.name = name
+        self.description = description
+        self.parameters = parameters
+    }
+}
+
+public struct ToolParameter: Codable, Equatable, Sendable {
+    public enum Kind: String, Codable, Sendable {
+        case string, number, boolean
+    }
+
+    public var name: String
+    public var description: String
+    public var kind: Kind
+    public var required: Bool
+
+    public init(_ name: String, _ kind: Kind = .string, description: String = "", required: Bool = true) {
+        self.name = name
+        self.kind = kind
+        self.description = description
+        self.required = required
+    }
 }
 
 public enum LogLevel: String, Codable, Sendable {

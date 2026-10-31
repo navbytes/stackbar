@@ -2,7 +2,8 @@ import FluidKit
 import Foundation
 
 /// The smallest useful Fluid plugin: a menu-bar clock with a panel that shows
-/// state, a toggle and a button. Needs no network and no secrets.
+/// state, a toggle and a button. Needs no network and no secrets; its settings
+/// and laps are `@Stored`, so they survive restarts.
 @main
 final class Clock: FluidPlugin {
     static let manifest = Manifest(
@@ -13,8 +14,8 @@ final class Clock: FluidPlugin {
     )
 
     var now = Date()
-    var use24Hour = true
-    var laps: [Date] = []
+    @Stored("use24Hour") var use24Hour = true
+    @Stored("laps") var laps: [Date] = []
 
     func refresh() async throws {
         now = Date()

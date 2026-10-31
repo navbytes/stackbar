@@ -12,7 +12,7 @@ public enum SandboxEntitlements {
         var result = ["com.apple.security.app-sandbox": true]
         for capability in manifest.capabilities {
             switch capability {
-            case .network:
+            case .network, .oauth:
                 result["com.apple.security.network.client"] = true
             case .files:
                 result["com.apple.security.files.user-selected.read-write"] = true
@@ -39,6 +39,7 @@ public enum SandboxEntitlements {
             case .files(let paths): return "Reads and writes " + paths.joined(separator: ", ")
             case .run(let commands): return "Runs " + commands.joined(separator: ", ")
             case .secret(let name): return "Reads the secret \(name)"
+            case .oauth(let provider): return "Signs in to \(provider.name) (\(URLParts.host(of: provider.authorizeURL) ?? provider.authorizeURL))" + (provider.scopes.isEmpty ? "" : " with scopes " + provider.scopes.joined(separator: " "))
             }
         }
     }

@@ -47,7 +47,12 @@ final class StdioTransport: Sendable {
                     let chunk = input.availableData
                     if chunk.isEmpty { break }
                     for line in buffer.append(chunk) {
-                        if let message = try? LineCodec.decode(HostMessage.self, from: line) {
+                        guard let message = try? LineCodec.decode(HostMessage.self, from: line) else { continue }
+                        if case .response(let id, let result) = message {
+                            // Straight to the waiting call, not behind the
+                            // refresh that is awaiting it.
+                            HostClient.shared.resolve(id: id, result: result)
+                        } else {
                             continuation.yield(message)
                         }
                     }

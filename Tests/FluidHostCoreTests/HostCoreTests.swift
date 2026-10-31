@@ -130,24 +130,6 @@ final class PluginSupervisorTests: XCTestCase {
 
     static func helper(_ name: String) -> URL { productsDirectory.appendingPathComponent(name) }
 
-    final class Log: @unchecked Sendable {
-        private let lock = NSLock()
-        private var lines: [String] = []
-        func add(_ update: PluginSupervisor.Update) {
-            if case .log(_, let line) = update { lock.withLock { lines.append(line) } }
-        }
-        var all: [String] { lock.withLock { lines } }
-    }
-
-    func waitUntil(_ timeout: Double = 15, _ condition: () async -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if await condition() { return true }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        return false
-    }
-
     func testReadsTheManifestFromTheHelper() throws {
         let manifest = try PluginProcess.readManifest(executable: Self.helper("ClockPlugin"))
         XCTAssertEqual(manifest.id, "dev.fluid.example.clock")
@@ -224,5 +206,62 @@ final class PluginSupervisorTests: XCTestCase {
         }
         XCTAssertTrue(failed)
         await supervisor.stop()
+    }
+
+    func testHostServicesStorageSecretsHTTPToolsAndTopics() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let server = try LoopbackServer { _ in .text("pong") }
+        defer { server.stop() }
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore(["FIXTURE_SECRET": "s3cret"]))
+        let fast = BackoffPolicy(initialDelay: 0.05, multiplier: 1, maxDelay: 0.05, maxConsecutiveFailures: 3)
+        let supervisor = try PluginSupervisor.make(executable: Self.helper("FixturePlugin"), policy: fast, services: services)
+        await supervisor.start()
+        _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
+        func panelText() async -> String { await supervisor.views[.panel].map { TreeTextRenderer.render($0) } ?? "" }
+        func waitForPanel(_ text: String) async -> Bool { await waitUntil(10) { await panelText().contains(text) } }
+
+        await supervisor.event("button/Save")
+        let saved = await waitForPanel("saved 1")
+        XCTAssertTrue(saved)
+        let stored = await services.storage.snapshot(for: "dev.fluid.test.fixture")
+        XCTAssertEqual(stored["saved"], "1")
+
+        await supervisor.event("button/Secret")
+        let secret = await waitForPanel("status secret s3cret")
+        let secretText = await panelText()
+        XCTAssertTrue(secret, secretText)
+        await supervisor.event("button/Undeclared secret")
+        let refused = await waitForPanel("status refused")
+        XCTAssertTrue(refused)
+
+        await supervisor.event("field/URL", value: .text("\(server.baseURL)/ping"))
+        let fetched = await waitForPanel("status http 200 pong")
+        let fetchedText = await panelText()
+        XCTAssertTrue(fetched, fetchedText)
+
+        let tools = await supervisor.tools.map(\.name)
+        XCTAssertEqual(tools, ["count", "add"])
+        let added = await supervisor.callTool("add", arguments: ["amount": .number(5)])
+        XCTAssertEqual(added.text, "now 5")
+        XCTAssertFalse(added.isError)
+        let missing = await supervisor.callTool("add")
+        XCTAssertTrue(missing.isError, "required arguments are checked")
+        let unknown = await supervisor.callTool("nope")
+        XCTAssertTrue(unknown.isError)
+
+        try await services.bus.publish("fixture.inbox", payload: "hello", from: "dev.test.sender")
+        let topic = await waitForPanel("status topic fixture.inbox hello from dev.test.sender")
+        let topicText = await panelText()
+        XCTAssertTrue(topic, topicText)
+
+        // Saved values survive a crash; ordinary state does not.
+        await supervisor.event("button/Crash")
+        _ = await waitUntil { await supervisor.restarts == 1 }
+        let survived = await waitForPanel("saved 1")
+        XCTAssertTrue(survived)
+        await supervisor.stop()
+        let listeners = await services.bus.listeners(of: "fixture.inbox")
+        XCTAssertEqual(listeners, [], "a stopped plugin stops listening")
     }
 }

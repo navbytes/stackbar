@@ -86,7 +86,7 @@ func render(_ path: String, options: [String]) async {
             switch update {
             case .log(let level, let message): FileHandle.standardError.write(Data("[\(level.rawValue)] \(message)\n".utf8))
             case .state(let state): FileHandle.standardError.write(Data("[state] \(state)\n".utf8))
-            case .render: break
+            case .render, .tools: break
             }
         }
     } catch {

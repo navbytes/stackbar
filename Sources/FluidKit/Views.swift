@@ -238,3 +238,146 @@ public struct Divider: FluidView {
     public init() {}
     public func resolve(in context: RenderContext) -> [ViewNode] { [.divider] }
 }
+
+/// A label and its value on one line.
+public struct LabeledContent: FluidView {
+    var label: String
+    var value: String
+    var valueRole: Role = .primary
+
+    public init(_ label: String, value: String) {
+        self.label = label
+        self.value = value
+    }
+
+    public func role(_ role: Role) -> LabeledContent { var copy = self; copy.valueRole = role; return copy }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        [.labeled(label: label, value: value, role: valueRole)]
+    }
+}
+
+/// A small chart of a series of numbers: a sparkline in the menu bar.
+public struct Chart: FluidView {
+    var values: [Double]
+    var kind: ChartKind
+    var label: String?
+    var role: Role
+
+    public init(_ label: String? = nil, values: [Double], kind: ChartKind = .line, role: Role = .accent) {
+        self.label = label
+        self.values = values
+        self.kind = kind
+        self.role = role
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        // Non-finite values would not survive JSON; the host draws gaps as 0.
+        [.chart(values: values.map { $0.isFinite ? $0 : 0 }, kind: kind, label: label, role: role)]
+    }
+}
+
+/// A one-line text input. `onSubmit` gets the text when the user presses return.
+public struct TextField: FluidView {
+    var placeholder: String
+    var text: String
+    var key: String?
+    var onSubmit: @MainActor (String) async throws -> Void
+
+    public init(_ placeholder: String, text: String = "", key: String? = nil, onSubmit: @escaping @MainActor (String) async throws -> Void) {
+        self.placeholder = placeholder
+        self.text = text
+        self.key = key
+        self.onSubmit = onSubmit
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        let submit = onSubmit
+        let id = context.register("field/\(key ?? placeholder)") { value in
+            if case .text(let text) = value { try await submit(text) }
+        }
+        return [.textField(placeholder: placeholder, text: text, action: id)]
+    }
+}
+
+/// A choice among a few options.
+public struct Picker: FluidView {
+    var title: String
+    var options: [String]
+    var selection: String?
+    var key: String?
+    var onChange: @MainActor (String) async throws -> Void
+
+    public init(_ title: String, options: [String], selection: String?, key: String? = nil, onChange: @escaping @MainActor (String) async throws -> Void) {
+        self.title = title
+        self.options = options
+        self.selection = selection
+        self.key = key
+        self.onChange = onChange
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        let change = onChange
+        let options = options
+        let id = context.register("picker/\(key ?? title)") { value in
+            if case .text(let choice) = value, options.contains(choice) { try await change(choice) }
+        }
+        return [.picker(title: title, options: options, selection: selection, action: id)]
+    }
+}
+
+/// A continuous value in a range.
+public struct Slider: FluidView {
+    var title: String
+    var value: Double
+    var range: ClosedRange<Double>
+    var step: Double?
+    var key: String?
+    var onChange: @MainActor (Double) async throws -> Void
+
+    public init(_ title: String, value: Double, in range: ClosedRange<Double> = 0...1, step: Double? = nil, key: String? = nil, onChange: @escaping @MainActor (Double) async throws -> Void) {
+        self.title = title
+        self.value = value
+        self.range = range
+        self.step = step
+        self.key = key
+        self.onChange = onChange
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        let change = onChange
+        let range = range
+        let id = context.register("slider/\(key ?? title)") { value in
+            if case .number(let number) = value { try await change(min(max(number, range.lowerBound), range.upperBound)) }
+        }
+        return [.slider(title: title, value: value, min: range.lowerBound, max: range.upperBound, step: step, action: id)]
+    }
+}
+
+/// Opens a URL. The host opens it directly.
+public struct Link: FluidView {
+    var title: String
+    var url: String
+
+    public init(_ title: String, url: String) {
+        self.title = title
+        self.url = url
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] { [.link(title: title, url: url)] }
+}
+
+/// What to show when there's nothing to show.
+public struct ContentUnavailableView: FluidView {
+    var title: String
+    var symbol: String?
+    var message: String?
+
+    public init(_ title: String, symbol: String? = nil, message: String? = nil) {
+        self.title = title
+        self.symbol = symbol
+        self.message = message
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] { [.empty(title: title, symbol: symbol, message: message)] }
+}

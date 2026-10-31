@@ -3,11 +3,12 @@ import FluidProtocol
 
 /// Keeps one plugin alive and turns its messages into state the UI can show.
 ///
-/// The supervisor owns the helper process: it says hello, fires the manifest's
-/// triggers, forwards the user's events, remembers the latest tree per surface,
-/// and restarts the helper with backoff when it exits unexpectedly. The last
-/// trees stay on screen through a restart, so a crash shows as a brief stale
-/// moment rather than an empty panel.
+/// The supervisor owns the helper process: it says hello (with the plugin's
+/// saved values), fires the manifest's triggers, forwards the user's events,
+/// answers host calls through `HostServices`, routes topics and tool calls,
+/// remembers the latest tree per surface, and restarts the helper with backoff
+/// when it exits unexpectedly. The last trees stay on screen through a
+/// restart, so a crash shows as a brief stale moment rather than an empty panel.
 ///
 /// Process events are funnelled through one `AsyncStream` and handled in the
 /// order they arrived, so a render can never be overtaken by an older one.
@@ -24,16 +25,22 @@ public actor PluginSupervisor {
         case state(State)
         case render(Surface, ViewNode)
         case log(LogLevel, String)
+        case tools([ToolSpec])
     }
 
     public nonisolated let executable: URL
     public nonisolated let manifest: Manifest
     private let policy: BackoffPolicy
     private let environment: [String: String]?
+    private let services: HostServices?
     private let onUpdate: @Sendable (Update) -> Void
+    /// The capabilities the user approved; host calls are checked against
+    /// these, not against whatever the manifest asks for.
+    public private(set) var granted: Manifest
 
     public private(set) var state: State = .stopped
     public private(set) var views: [Surface: ViewNode] = [:]
+    public private(set) var tools: [ToolSpec] = []
     public private(set) var restarts = 0
     /// How many host messages the current helper has finished handling. Tools
     /// and tests wait on it instead of guessing with sleeps.
@@ -46,35 +53,51 @@ public actor PluginSupervisor {
     private var stopping = false
     private var consumer: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
+    private var watcher: Task<Void, Never>?
     private var pendingRestart: Task<Void, Never>?
+    private var nextToolCall = 1
+    private var toolCalls: [Int: CheckedContinuation<(text: String, isError: Bool), Never>] = [:]
 
-    public init(executable: URL, manifest: Manifest, policy: BackoffPolicy = .standard, environment: [String: String]? = nil, onUpdate: @escaping @Sendable (Update) -> Void = { _ in }) {
+    public init(executable: URL, manifest: Manifest, grantedCapabilities: [Capability]? = nil, policy: BackoffPolicy = .standard, environment: [String: String]? = nil, services: HostServices? = nil, onUpdate: @escaping @Sendable (Update) -> Void = { _ in }) {
         self.executable = executable
         self.manifest = manifest
+        var granted = manifest
+        if let grantedCapabilities { granted.capabilities = grantedCapabilities }
+        self.granted = granted
         self.policy = policy
         self.environment = environment
+        self.services = services
         self.onUpdate = onUpdate
     }
 
     /// Reads the plugin's manifest, then returns a supervisor for it (not yet started).
-    public static func make(executable: URL, policy: BackoffPolicy = .standard, environment: [String: String]? = nil, onUpdate: @escaping @Sendable (Update) -> Void = { _ in }) throws -> PluginSupervisor {
+    public static func make(executable: URL, policy: BackoffPolicy = .standard, environment: [String: String]? = nil, services: HostServices? = nil, onUpdate: @escaping @Sendable (Update) -> Void = { _ in }) throws -> PluginSupervisor {
         let manifest = try PluginProcess.readManifest(executable: executable)
-        return PluginSupervisor(executable: executable, manifest: manifest, policy: policy, environment: environment, onUpdate: onUpdate)
+        return PluginSupervisor(executable: executable, manifest: manifest, policy: policy, environment: environment, services: services, onUpdate: onUpdate)
     }
 
-    public func start() {
+    public func start() async {
         stopping = false
-        spawn()
+        consecutiveFailures = 0
+        await spawn()
     }
 
     /// Stops the helper and every timer. Safe to call more than once.
-    public func stop() {
+    public func stop() async {
         stopping = true
         pendingRestart?.cancel()
         ticker?.cancel()
+        watcher?.cancel()
         process?.terminate()
         process = nil
+        failToolCalls("the plugin stopped")
+        await services?.bus.unsubscribe(manifest.id)
         setState(.stopped)
+    }
+
+    /// Changes what the plugin may do from now on (after an update sheet).
+    public func grant(_ capabilities: [Capability]) {
+        granted.capabilities = capabilities
     }
 
     public func send(_ message: HostMessage) {
@@ -100,6 +123,22 @@ public actor PluginSupervisor {
         send(.visibility(surface: surface, visible: visible))
     }
 
+    /// Calls one of the plugin's tools and waits for its answer.
+    public func callTool(_ name: String, arguments: [String: EventValue] = [:], timeout: Double = 60) async -> (text: String, isError: Bool) {
+        guard state == .running, let process else { return ("\(manifest.name) is not running", true) }
+        let id = nextToolCall
+        nextToolCall += 1
+        let currentGeneration = generation
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(timeout))
+            await self?.finishToolCall(id, text: "\(name) timed out after \(Int(timeout))s", isError: true, generation: currentGeneration)
+        }
+        return await withCheckedContinuation { continuation in
+            toolCalls[id] = continuation
+            process.send(.callTool(id: id, name: name, arguments: arguments))
+        }
+    }
+
     /// Messages the host sends a fresh helper before anything else: `hello`,
     /// plus a launch trigger when the manifest asks for one.
     public nonisolated var startupMessageCount: Int {
@@ -108,10 +147,12 @@ public actor PluginSupervisor {
 
     // MARK: - Process lifecycle
 
-    private func spawn() {
+    private func spawn() async {
         generation += 1
         let current = generation
         setState(.starting)
+        let storage = await services?.storage.snapshot(for: manifest.id) ?? [:]
+        guard current == generation, !stopping else { return }
         let helper = PluginProcess(executable: executable, environment: environment)
         let (events, continuation) = AsyncStream.makeStream(of: PluginProcess.Event.self)
         do {
@@ -131,11 +172,17 @@ public actor PluginSupervisor {
             }
         }
         let offered = manifest.surfaces.filter(Surface.allCases.contains)
-        helper.send(.hello(protocolVersion: FluidProtocolVersion.current, surfaces: offered))
+        helper.send(.hello(protocolVersion: FluidProtocolVersion.current, surfaces: offered, storage: storage))
         if manifest.triggers.contains(.launch) {
             helper.send(.trigger(reason: .launch))
         }
         startTicker()
+        startWatcher()
+        if let services, !manifest.topics.isEmpty {
+            await services.bus.subscribe(manifest.id, to: manifest.topics) { [weak self] topic, payload, from in
+                Task { await self?.send(.topic(name: topic, payload: payload, from: from)) }
+            }
+        }
     }
 
     private func startTicker() {
@@ -151,12 +198,32 @@ public actor PluginSupervisor {
         }
     }
 
+    /// Polls the manifest's watched files every two seconds. Polling is dumb
+    /// but works the same on every platform and inside the sandbox.
+    private func startWatcher() {
+        watcher?.cancel()
+        let paths = manifest.watchedFiles.map { NSString(string: $0).expandingTildeInPath }
+        guard !paths.isEmpty else { return }
+        watcher = Task { [weak self] in
+            var last = FileStamp.stamps(paths)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                let now = FileStamp.stamps(paths)
+                if now != last {
+                    last = now
+                    await self?.send(.trigger(reason: .file))
+                }
+            }
+        }
+    }
+
     private func handle(_ event: PluginProcess.Event, generation eventGeneration: Int) {
         guard eventGeneration == generation else { return }
         switch event {
         case .message(.ready(let version)):
             if version != FluidProtocolVersion.current {
-                onUpdate(.log(.warning, "plugin speaks protocol \(version), host speaks \(FluidProtocolVersion.current)"))
+                onUpdate(.log(.warning, "plugin speaks protocol \(version), host speaks \(FluidProtocolVersion.current); rebuild it"))
             }
             setState(.running)
         case .message(.render(let surface, let root)):
@@ -166,6 +233,13 @@ public actor PluginSupervisor {
             onUpdate(.log(level, message))
         case .message(.settled):
             settledCount += 1
+        case .message(.request(let id, let call)):
+            answer(id, call, generation: eventGeneration)
+        case .message(.tools(let specs)):
+            tools = specs
+            onUpdate(.tools(specs))
+        case .message(.toolResult(let id, let text, let isError)):
+            finishToolCall(id, text: text, isError: isError, generation: eventGeneration)
         case .stderr(let line):
             onUpdate(.log(.debug, line))
         case .undecodable(let line):
@@ -175,10 +249,40 @@ public actor PluginSupervisor {
         }
     }
 
+    private func answer(_ id: Int, _ call: HostCall, generation callGeneration: Int) {
+        guard let services else {
+            process?.send(.response(id: id, result: .failure("host services are not available here")))
+            return
+        }
+        let granted = granted
+        Task { [weak self] in
+            let result = await services.handle(call, for: granted)
+            await self?.respond(id, result, generation: callGeneration)
+        }
+    }
+
+    private func respond(_ id: Int, _ result: HostResult, generation callGeneration: Int) {
+        guard callGeneration == generation else { return }
+        process?.send(.response(id: id, result: result))
+    }
+
+    private func finishToolCall(_ id: Int, text: String, isError: Bool, generation callGeneration: Int) {
+        guard callGeneration == generation, let continuation = toolCalls.removeValue(forKey: id) else { return }
+        continuation.resume(returning: (text, isError))
+    }
+
+    private func failToolCalls(_ reason: String) {
+        let calls = toolCalls
+        toolCalls = [:]
+        for continuation in calls.values { continuation.resume(returning: (reason, true)) }
+    }
+
     private func handleExit(status: Int32, generation exitGeneration: Int) {
         guard exitGeneration == generation else { return }
         ticker?.cancel()
+        watcher?.cancel()
         process = nil
+        failToolCalls("the plugin exited")
         if stopping {
             setState(.stopped)
             return
@@ -200,15 +304,42 @@ public actor PluginSupervisor {
         }
     }
 
-    private func restart(after exitGeneration: Int) {
+    private func restart(after exitGeneration: Int) async {
         guard !stopping, exitGeneration == generation else { return }
         restarts += 1
-        spawn()
+        await spawn()
     }
 
     private func setState(_ newState: State) {
         guard newState != state else { return }
         state = newState
         onUpdate(.state(newState))
+    }
+}
+
+/// Modification dates and sizes for a set of paths (and a folder's direct
+/// children), compared between polls.
+enum FileStamp {
+    static func stamps(_ paths: [String]) -> [String: String] {
+        var result: [String: String] = [:]
+        let manager = FileManager.default
+        for path in paths {
+            result[path] = stamp(path)
+            var isDirectory: ObjCBool = false
+            if manager.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
+                for child in (try? manager.contentsOfDirectory(atPath: path)) ?? [] {
+                    let full = (path as NSString).appendingPathComponent(child)
+                    result[full] = stamp(full)
+                }
+            }
+        }
+        return result
+    }
+
+    private static func stamp(_ path: String) -> String {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path) else { return "missing" }
+        let date = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let size = (attributes[.size] as? NSNumber)?.intValue ?? 0
+        return "\(date)-\(size)"
     }
 }

@@ -1,3 +1,4 @@
+import Foundation
 import FluidProtocol
 
 /// Draws a view tree as plain text: for `fluidctl render`, for tests, and for
@@ -57,7 +58,36 @@ public enum TreeTextRenderer {
             return [pad + (label.map { "\($0) " } ?? "") + "[\(bar)] \(Int((fraction * 100).rounded()))%"]
         case .divider:
             return [pad + "----"]
+        case .labeled(let label, let value, let role):
+            return [pad + "\(label): \(value)" + roleSuffix(role)]
+        case .chart(let values, let kind, let label, _):
+            return [pad + (label.map { "\($0) " } ?? "") + sparkline(values) + (kind == .bar ? " (bar)" : "")]
+        case .textField(let placeholder, let text, let action):
+            return [pad + "[\(text.isEmpty ? placeholder : text)____]" + tag(action)]
+        case .picker(let title, let options, let selection, let action):
+            let choices = options.map { $0 == selection ? "*\($0)*" : $0 }.joined(separator: " | ")
+            return [pad + "\(title): \(choices)" + tag(action)]
+        case .slider(let title, let value, let min, let max, _, let action):
+            return [pad + "\(title): \(format(value)) (\(format(min))...\(format(max)))" + tag(action)]
+        case .link(let title, let url):
+            return [pad + "<\(title)> \(url)"]
+        case .empty(let title, let symbol, let message):
+            return [pad + (symbol.map { "[\($0)] " } ?? "") + title + (message.map { " - \($0)" } ?? "")]
         }
+    }
+
+    /// Eight-level block characters, scaled between the series' min and max.
+    public static func sparkline(_ values: [Double]) -> String {
+        guard let low = values.min(), let high = values.max() else { return "" }
+        let blocks = Array("▁▂▃▄▅▆▇█")
+        let span = high - low
+        return String(values.map { value in
+            span == 0 ? blocks[3] : blocks[min(7, Int(((value - low) / span * 7).rounded()))]
+        })
+    }
+
+    private static func format(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(format: "%.2f", value)
     }
 
     private static func roleSuffix(_ role: Role) -> String {

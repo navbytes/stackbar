@@ -3,8 +3,9 @@
 /// A plugin never draws. It describes what it wants as a tree of `ViewNode`s and
 /// the host renders that tree natively on each surface — the menu bar, the
 /// panel, and later windows, widgets and the agent gateway. The vocabulary is
-/// deliberately small (about a dozen nodes): small enough to keep every surface
-/// in parity, and named after SwiftUI so an AI already knows it.
+/// deliberately small (under twenty nodes): small enough to keep every surface
+/// in parity (see `SurfaceParity` in FluidHostCore and docs/surface-parity.md),
+/// and named after SwiftUI so an AI already knows it.
 ///
 /// Every node carries *meaning* (a `Role`, a `TextStyle`), never pixels, so the
 /// host decides colors, fonts and spacing for light and dark mode on every
@@ -24,6 +25,24 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     /// A determinate gauge; `value` is clamped to `0...total` by renderers.
     case progress(value: Double, total: Double = 1, label: String? = nil, role: Role = .accent)
     case divider
+    /// A label and its value on one line, like SwiftUI's `LabeledContent`.
+    case labeled(label: String, value: String, role: Role = .primary)
+    /// A small chart of a series: a sparkline in the menu bar, a chart in panels.
+    case chart(values: [Double], kind: ChartKind = .line, label: String? = nil, role: Role = .accent)
+    /// A one-line text input. Submitting sends `.text` with the field's contents.
+    case textField(placeholder: String, text: String, action: ActionID)
+    /// A choice among a few options. Choosing sends `.text` with the option.
+    case picker(title: String, options: [String], selection: String?, action: ActionID)
+    /// A continuous value. Releasing sends `.number`.
+    case slider(title: String, value: Double, min: Double, max: Double, step: Double? = nil, action: ActionID)
+    /// Opens a URL. The host opens it; the plugin never hears about the click.
+    case link(title: String, url: String)
+    /// What to show when there is nothing to show, like `ContentUnavailableView`.
+    case empty(title: String, symbol: String? = nil, message: String? = nil)
+}
+
+public enum ChartKind: String, Codable, Sendable, CaseIterable {
+    case line, bar
 }
 
 /// One entry in a list: the workhorse of most plugin panels.
@@ -99,10 +118,19 @@ public enum StackAxis: String, Codable, Sendable {
     case vertical, horizontal
 }
 
-/// Where a plugin can appear. Phase 0 renders the menu bar and the panel.
+/// Where a plugin can appear.
+///
+/// The command palette and the agent gateway are not surfaces a plugin draws
+/// for: they reuse the panel's rows and the plugin's tools.
 public enum Surface: String, Codable, Sendable, CaseIterable {
+    /// The status item: compact, one line.
     case menuBar
+    /// The popover under the status item.
     case panel
+    /// A resizable window, for plugins that need room.
+    case window
+    /// A desktop or Notification Center widget: read-only, refreshed by the host.
+    case widget
 }
 
 extension ViewNode {
@@ -115,6 +143,23 @@ extension ViewNode {
         case .stack(_, _, let children), .list(_, let children), .section(_, let children):
             return children.flatMap(\.rows)
         default:
+            return []
+        }
+    }
+}
+
+extension ViewNode {
+    /// Every action id this tree can send, in order. The palette and the agent
+    /// gateway use it to list what can be pressed.
+    public var actions: [ActionID] {
+        switch self {
+        case .row(let row):
+            return row.actions.map(\.id)
+        case .button(_, _, _, let action), .toggle(_, _, let action), .textField(_, _, let action), .picker(_, _, _, let action), .slider(_, _, _, _, _, let action):
+            return [action]
+        case .stack(_, _, let children), .list(_, let children), .section(_, let children):
+            return children.flatMap(\.actions)
+        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .link, .empty:
             return []
         }
     }

@@ -23,12 +23,26 @@ public protocol FluidPlugin: AnyObject {
     func refresh() async throws
     @ViewBuilder var menuBar: ViewContent { get }
     @ViewBuilder var panel: ViewContent { get }
+    /// The window surface. Defaults to the panel's content.
+    @ViewBuilder var window: ViewContent { get }
+    /// The widget surface: read-only, so controls in it do nothing. Defaults
+    /// to the panel's content.
+    @ViewBuilder var widget: ViewContent { get }
+    /// What agents can call through the host's MCP gateway.
+    @ToolBuilder var tools: [AgentTool] { get }
+    /// Another plugin published to a topic this plugin's manifest listens to
+    /// with `.topic(name:)`. The plugin re-renders afterwards.
+    func receive(topic: String, payload: String, from sender: String) async throws
 }
 
 extension FluidPlugin {
     public func refresh() async throws {}
     public var menuBar: ViewContent { [Label(Self.manifest.name, symbol: "puzzlepiece.extension")] }
     public var panel: ViewContent { [] }
+    public var window: ViewContent { panel }
+    public var widget: ViewContent { panel }
+    public var tools: [AgentTool] { [] }
+    public func receive(topic: String, payload: String, from sender: String) async throws {}
 
     /// The entry point `@main` uses. `--manifest` prints the manifest as JSON
     /// and exits; anything else starts the protocol loop on stdin/stdout.
@@ -38,6 +52,7 @@ extension FluidPlugin {
             return
         }
         let transport = StdioTransport()
+        HostClient.shared.configure(send: transport.send)
         let runtime = PluginRuntime(plugin: Self(), send: transport.send)
         for await message in transport.incoming() {
             if await !runtime.handle(message) { break }
