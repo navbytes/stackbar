@@ -48,7 +48,7 @@
 ## 7. Rename (after 1.4)
 
 - [ ] 7.1 Bundle ids, app group, Keychain service, data directory with a one-time move
-- [ ] 7.2 `fluidctl`, FluidKit (with a deprecated re-export), `.fluidplugin`, docs
+- [ ] 7.2 `fluidctl`, FluidKit, FluidProtocol, `.fluidplugin`, docs (no compatibility alias)
 - [ ] 7.3 Rename the GitHub repository to navbytes/stackbar (Naveen)
 
 ## 8. Beta

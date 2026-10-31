@@ -34,8 +34,10 @@ kept in Info.plist from a build setting, so forks don't report into it.
 
 ## Name
 
-Rename before the first public build, in one pull request: bundle ids
+The new name is Stackbar. Rename everything before the first public build,
+in one pull request, with no internal names left as Fluid: bundle ids
 (`dev.fluid.*`), app group, Keychain service, data directory (with a one-time
-move from `~/Library/Application Support/Fluid`), `fluidctl`, FluidKit,
-`.fluidplugin`, docs. Plugin authors keep their code: FluidKit's new name
-ships with a deprecated `FluidKit` re-export for one release.
+move from `~/Library/Application Support/Fluid` for the machines already
+running it), `fluidctl`, FluidKit, FluidProtocol, `.fluidplugin`, docs, and
+the repository. There are no outside plugin authors yet, so no compatibility
+alias is kept.
