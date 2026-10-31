@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showEmptyState() {
         guard emptyStateItem == nil else { return }
         let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "drop", accessibilityDescription: "Stackbar")
+        statusItem.button?.image = NSImage(systemSymbolName: "square.stack.3d.up", accessibilityDescription: "Stackbar")
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "No plugins yet", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
