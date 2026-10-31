@@ -38,6 +38,7 @@ public struct WidgetSnapshotStore: Sendable {
     public func write(_ snapshot: WidgetSnapshot) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try JSONEncoder().encode(snapshot).write(to: file(snapshot.pluginID), options: .atomic)
+        removeLegacy(snapshot.pluginID)
     }
 
     public func read(_ pluginID: String) -> WidgetSnapshot? {
@@ -53,9 +54,16 @@ public struct WidgetSnapshotStore: Sendable {
 
     public func remove(_ pluginID: String) {
         try? FileManager.default.removeItem(at: file(pluginID))
+        removeLegacy(pluginID)
     }
 
     private func file(_ pluginID: String) -> URL {
-        directory.appendingPathComponent(PluginBuilder.sanitizedName(pluginID) + ".json")
+        directory.appendingPathComponent(PluginBuilder.dataFileName(pluginID) + ".json")
+    }
+
+    /// Snapshots written before per-id file names.
+    private func removeLegacy(_ pluginID: String) {
+        let legacy = directory.appendingPathComponent(PluginBuilder.sanitizedName(pluginID) + ".json")
+        if legacy != file(pluginID) { try? FileManager.default.removeItem(at: legacy) }
     }
 }

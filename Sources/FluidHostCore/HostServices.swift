@@ -86,6 +86,9 @@ public final class HostServices: Sendable {
             }
 
         case .secret(let name):
+            guard Manifest.isValidSecretName(name) else {
+                return .failure("secret names are 1 to 100 letters, digits, _, - or .")
+            }
             guard granted.secretNames.contains(name) else {
                 if declared.secretNames.contains(name) { return Self.awaitingApproval(granted, "to read secret \(name)") }
                 return .failure("secret \(name) is not declared; add .secret(name: \"\(name)\") to the manifest's capabilities")

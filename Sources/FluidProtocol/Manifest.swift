@@ -48,6 +48,9 @@ public struct Manifest: Codable, Equatable, Sendable {
         if triggers.contains(.clipboard), !capabilities.contains(.clipboard) {
             result.append("the .clipboard trigger needs the .clipboard capability")
         }
+        for name in secretNames where !Self.isValidSecretName(name) {
+            result.append("secret name \"\(name)\" must be 1 to 100 letters, digits, _, - or . (like GITHUB_TOKEN)")
+        }
         for capability in capabilities {
             if case .network(let hosts) = capability, hosts.contains(where: { $0.contains("/") || $0.contains(":") }) {
                 result.append("network hosts are bare domain names (api.github.com, *.example.com), not URLs")
@@ -71,6 +74,13 @@ public struct Manifest: Codable, Equatable, Sendable {
             default: return []
             }
         }
+    }
+
+    /// Secret names are plain words. The host keeps OAuth tokens in the same
+    /// store under `oauth/<plugin id>/<provider>`, so a name with a slash
+    /// could read another plugin's tokens; such names are refused.
+    public static func isValidSecretName(_ name: String) -> Bool {
+        (1...100).contains(name.utf8.count) && name.unicodeScalars.allSatisfy { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || "_-.".unicodeScalars.contains($0)) }
     }
 
     public var secretNames: [String] {
