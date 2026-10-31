@@ -31,6 +31,15 @@
 - [x] 3b.3 Row previews (`RowPreview`): full text or a kept clipboard image under a searchable list for the selected row; images only for plugins with `.clipboard`. Clipboard History previews long text, images and files
 - [x] 3b.4 Fuzzy, ranked list filtering (`TextMatch`, shared with the palette); sections filtered inside; search covers preview text
 
+## 3c. Charts and visual polish
+
+- [x] 3c.1 Chart vocabulary: `.area` and `.donut`, `ChartOptions` (labels, unit, goal, highlight); axis labels, value summary, legend for donuts
+- [x] 3c.2 Sections without rows drawn as cards
+- [x] 3c.3 Stay Awake: hours awake this week (bar, today highlighted), average, battery while awake (area), 14-day activity in settings
+- [x] 3c.4 Clipboard History window: copies per day, top source apps and kinds of copies (donuts)
+- [x] 3c.5 Up Next: time left in the current meeting, meetings-today gauge; window: hours in meetings for 7 days with a 4h goal line, today by calendar
+- [x] 3c.6 PR Cockpit window: your PRs by state, review wait times, reviews by repository, queue over time
+
 ## 4. On a Mac
 
 - [ ] 4.1 The app compiles with `MacSystem` (self-hosted runner)
@@ -42,3 +51,4 @@
 - [ ] 4.7 Left click on the cup toggles Stay Awake, right click opens the panel
 - [ ] 4.8 An Up Next reminder's Join button opens the call; clicking the notification opens the panel
 - [ ] 4.9 Clipboard preview shows long text and images for the selected row
+- [ ] 4.10 Charts read well in light and dark mode, in the panel, window and Settings

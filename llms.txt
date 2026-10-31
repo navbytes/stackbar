@@ -87,7 +87,10 @@ var menuBarClick: MenuBarAction? {
   `.preview(text:imageID:caption:)` shows the full text or a kept clipboard
   image under the list while the row is selected; search looks through it.
 - `Badge(text, role:)`, `ProgressBar(label, value:, total:)`, `LabeledContent(label, value:)`
-- `Chart(label, values: [Double], kind: .line|.bar)`
+- `Chart(label, values: [Double], kind: .line|.bar|.area|.donut, role:, labels: ["Mon", …], unit: "h", goal: 4, highlight: 6)`
+  `labels` name the points (or a donut's slices), `unit` follows values, `goal`
+  draws a target line, `highlight` emphasizes one point. A `Section` without
+  rows is drawn as a card, so group charts and values in one.
 - `Button(title, symbol:, role:) { }`, `Toggle(title, isOn:) { newValue in }`
 - `TextField(placeholder, text:) { submitted in }`, `Picker(title, options:, selection:) { choice in }`
 - `Slider(title, value:, in: 0...10, step:) { value in }`, `Link(title, url:)`

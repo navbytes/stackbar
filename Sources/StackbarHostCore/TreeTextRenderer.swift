@@ -60,8 +60,14 @@ public enum TreeTextRenderer {
             return [pad + "----"]
         case .labeled(let label, let value, let role):
             return [pad + "\(label): \(value)" + roleSuffix(role)]
-        case .chart(let values, let kind, let label, _):
-            return [pad + (label.map { "\($0) " } ?? "") + sparkline(values) + (kind == .bar ? " (bar)" : "")]
+        case .chart(let values, let kind, let label, _, let options):
+            if kind == .donut {
+                let names = options?.labels ?? []
+                let parts = values.enumerated().map { index, value in "\(index < names.count ? names[index] : "#\(index + 1)") \(format(value))\(options?.unit ?? "")" }
+                return [pad + (label.map { "\($0): " } ?? "") + parts.joined(separator: ", ") + " (donut)"]
+            }
+            let names = options?.labels.map { " [" + $0.joined(separator: " ") + "]" } ?? ""
+            return [pad + (label.map { "\($0) " } ?? "") + sparkline(values) + (kind == .line ? "" : " (\(kind.rawValue))") + names]
         case .textField(let placeholder, let text, let action):
             return [pad + "[\(text.isEmpty ? placeholder : text)____]" + tag(action)]
         case .picker(let title, let options, let selection, let action):

@@ -283,7 +283,7 @@ final class PRCockpit: StackbarPlugin {
             if tab == Tab.mine.rawValue {
                 list(shownMine, showAuthor: false, empty: ("No open pull requests", "You have nothing open right now."))
             } else {
-                if history.count > 1 { Chart("Review queue", values: history) }
+                if history.count > 1 { Chart("Review queue", values: history, kind: .area, role: shownReview.isEmpty ? .success : .accent) }
                 list(shownReview, showAuthor: true, empty: ("Nothing to review", "You're all caught up."))
             }
             HStack {
@@ -337,6 +337,51 @@ final class PRCockpit: StackbarPlugin {
                 ForEach(shownMine) { pr in row(pr, showAuthor: false) }
             }
         }
+        if !(shownReview + shownMine).isEmpty {
+            Section("Overview") {
+                let states = mineByState
+                if !states.isEmpty {
+                    Chart("Your pull requests", values: states.map { Double($0.count) }, kind: .donut, role: .success, labels: states.map(\.name))
+                }
+                let ages = reviewAges
+                if ages.contains(where: { $0 > 0 }) {
+                    Chart("How long reviews have waited", values: ages, kind: .bar, role: ages.last ?? 0 > 0 ? .warning : .accent, labels: ["< 1 day", "1–3 days", "3–7 days", "> 1 week"])
+                }
+                let repos = Dictionary(grouping: shownReview, by: \.repo).map { (name: $0.key, count: $0.value.count) }.sorted { $0.count > $1.count }.prefix(6)
+                if repos.count > 1 {
+                    Chart("To review, by repository", values: repos.map { Double($0.count) }, kind: .donut, labels: repos.map { $0.name.split(separator: "/").last.map(String.init) ?? $0.name })
+                }
+                if history.count > 1 {
+                    Chart("Review queue over time", values: history, kind: .area)
+                }
+            }
+        }
+    }
+
+    /// Your open pull requests by where they stand, for the overview donut.
+    var mineByState: [(name: String, count: Int)] {
+        func state(_ pr: PullRequest) -> String {
+            if pr.isDraft { return "Draft" }
+            if pr.readyToMerge { return "Ready to merge" }
+            if pr.checksFailed { return "Checks failing" }
+            if pr.reviewDecision == "CHANGES_REQUESTED" { return "Changes requested" }
+            if pr.reviewDecision == "APPROVED" { return "Approved" }
+            return "Waiting for review"
+        }
+        let order = ["Ready to merge", "Approved", "Waiting for review", "Changes requested", "Checks failing", "Draft"]
+        let counts = Dictionary(grouping: shownMine, by: state).mapValues(\.count)
+        return order.compactMap { name in counts[name].map { (name, $0) } }
+    }
+
+    /// Review requests by how long since they last changed: under a day,
+    /// 1–3 days, 3–7 days, over a week.
+    var reviewAges: [Double] {
+        var buckets = [0.0, 0, 0, 0]
+        for pr in shownReview {
+            let days = Date().timeIntervalSince(pr.updatedAt) / 86400
+            buckets[days < 1 ? 0 : days < 3 ? 1 : days < 7 ? 2 : 3] += 1
+        }
+        return buckets
     }
 
     var widget: ViewContent {

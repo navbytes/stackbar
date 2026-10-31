@@ -53,12 +53,19 @@ public struct NodeView: View {
         case .list(let searchable, let children):
             ListNodeView(searchable: searchable, children: children, send: send)
         case .section(let title, let children):
-            VStack(alignment: .leading, spacing: 4) {
+            // Sections of rows read as list groups; sections of charts,
+            // gauges and values sit on a card.
+            let isCard = !children.contains { if case .row = $0 { return true } else { return false } }
+            VStack(alignment: .leading, spacing: isCard ? 8 : 4) {
                 if let title {
-                    Text(title.uppercased()).font(.caption).foregroundStyle(.secondary)
+                    Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 NodeList(children: children, send: send)
             }
+            .padding(isCard ? 10 : 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isCard ? Color.primary.opacity(0.045) : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+            .padding(.top, 2)
         case .row(let row):
             RowView(row: row, send: send)
         case .badge(let text, let role):
@@ -88,8 +95,8 @@ public struct NodeView: View {
             Divider()
         case .labeled(let label, let value, let role):
             LabeledContent(label) { Text(value).foregroundStyle(role.color).textSelection(.enabled) }
-        case .chart(let values, let kind, let label, let role):
-            ChartNodeView(values: values, kind: kind, label: label, role: role)
+        case .chart(let values, let kind, let label, let role, let options):
+            ChartNodeView(values: values, kind: kind, label: label, role: role, options: options ?? ChartOptions())
         case .textField(let placeholder, let text, let action):
             FieldNodeView(placeholder: placeholder, text: text, action: action, send: send)
                 .disabled(readOnly)
@@ -440,7 +447,7 @@ struct RowView: View {
         case .progress(let value, let total, _, let role):
             BarView(fraction: total > 0 ? min(max(value, 0), total) / total : 0, color: role.color)
                 .frame(width: 64)
-        case .chart(let values, _, _, let role):
+        case .chart(let values, _, _, let role, _):
             Sparkline(values: values).stroke(role.color, lineWidth: 1.5).frame(width: 48, height: 16)
         default:
             NodeView(node: node, send: send)
@@ -472,22 +479,144 @@ struct ChartNodeView: View {
     let kind: ChartKind
     let label: String?
     let role: Role
+    let options: ChartOptions
+
+    struct Point: Identifiable {
+        let index: Int
+        let value: Double
+        let name: String
+        var id: Int { index }
+    }
+
+    private static let palette: [Color] = [.orange, .green, .purple, .pink, .teal, .yellow, .indigo, .gray]
+
+    private var points: [Point] {
+        values.enumerated().map { index, value in
+            let names = options.labels ?? []
+            return Point(index: index, value: value, name: names.indices.contains(index) ? names[index] : "\(index + 1)")
+        }
+    }
+
+    private func formatted(_ value: Double) -> String {
+        let number = abs(value - value.rounded()) < 0.05 ? String(Int(value.rounded())) : String(format: "%.1f", value)
+        return number + (options.unit ?? "")
+    }
+
+    private func color(_ index: Int) -> Color {
+        index == 0 ? role.color : Self.palette[(index - 1) % Self.palette.count]
+    }
+
+    /// The highlighted point, or the latest one, as "Mon 3.5h".
+    private var summary: String? {
+        let points = points
+        if let index = options.highlight, points.indices.contains(index) {
+            return "\(options.labels == nil ? "" : points[index].name + " ")\(formatted(points[index].value))"
+        }
+        guard let last = points.last else { return nil }
+        return kind == .bar ? "Total \(formatted(values.reduce(0, +)))" : "Now \(formatted(last.value))"
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let label { Text(label).font(.caption).foregroundStyle(.secondary) }
-            Chart {
-                ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                    if kind == .bar {
-                        BarMark(x: .value("Index", index), y: .value("Value", value))
-                    } else {
-                        LineMark(x: .value("Index", index), y: .value("Value", value))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                if let label { Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary) }
+                Spacer(minLength: 8)
+                if kind != .donut, let summary {
+                    Text(summary).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            }
+            if kind == .donut {
+                donut
+            } else {
+                series
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var series: some View {
+        Chart {
+            ForEach(points) { point in
+                if kind == .bar {
+                    BarMark(x: .value("Point", String(point.index)), y: .value("Value", point.value))
+                        .foregroundStyle(options.highlight == nil || options.highlight == point.index ? role.color : role.color.opacity(0.4))
+                        .cornerRadius(3)
+                } else if kind == .area {
+                    AreaMark(x: .value("Point", point.index), y: .value("Value", point.value))
+                        .foregroundStyle(LinearGradient(colors: [role.color.opacity(0.35), role.color.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
+                    LineMark(x: .value("Point", point.index), y: .value("Value", point.value))
+                        .foregroundStyle(role.color)
+                        .interpolationMethod(.monotone)
+                } else {
+                    LineMark(x: .value("Point", point.index), y: .value("Value", point.value))
+                        .foregroundStyle(role.color)
+                        .interpolationMethod(.monotone)
+                }
+            }
+            if let goal = options.goal {
+                RuleMark(y: .value("Goal", goal))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .foregroundStyle(Color.secondary)
+            }
+            if kind != .bar, let index = options.highlight, values.indices.contains(index) {
+                PointMark(x: .value("Point", index), y: .value("Value", values[index]))
+                    .foregroundStyle(role.color)
+                    .symbolSize(30)
+            }
+        }
+        .chartXAxis {
+            if options.labels != nil {
+                AxisMarks { value in
+                    AxisValueLabel {
+                        Text(xName(value))
                     }
                 }
             }
-            .foregroundStyle(role.color)
-            .chartXAxis(.hidden)
-            .frame(height: 80)
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                AxisGridLine().foregroundStyle(Color.primary.opacity(0.08))
+                AxisValueLabel {
+                    if let number = value.as(Double.self) { Text(formatted(number)) }
+                }
+            }
+        }
+        .frame(height: options.labels == nil ? 72 : 96)
+    }
+
+    private func xName(_ value: AxisValue) -> String {
+        let names = options.labels ?? []
+        let index = value.as(Int.self) ?? value.as(String.self).flatMap(Int.init) ?? -1
+        return names.indices.contains(index) ? names[index] : ""
+    }
+
+    private var donut: some View {
+        let total = values.reduce(0, +)
+        return HStack(spacing: 14) {
+            Chart(points) { point in
+                SectorMark(angle: .value("Value", max(point.value, 0)), innerRadius: .ratio(0.64), angularInset: 1.5)
+                    .cornerRadius(3)
+                    .foregroundStyle(color(point.index))
+            }
+            .chartLegend(.hidden)
+            .frame(width: 92, height: 92)
+            .overlay {
+                VStack(spacing: 0) {
+                    Text(formatted(total)).font(.headline.monospacedDigit())
+                    Text("total").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(points) { point in
+                    HStack(spacing: 6) {
+                        Circle().fill(color(point.index)).frame(width: 8, height: 8)
+                        Text(point.name).font(.caption).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(formatted(point.value)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 }
