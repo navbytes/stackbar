@@ -76,7 +76,11 @@ final class PluginBuilderTests: XCTestCase {
         XCTAssertEqual(PluginBuilder.cacheKey(Data("a".utf8)), PluginBuilder.cacheKey(Data("a".utf8)))
         XCTAssertNotEqual(PluginBuilder.cacheKey(Data("a".utf8)), PluginBuilder.cacheKey(Data("b".utf8)))
         XCTAssertEqual(PluginBuilder.sanitizedName("my plugin.v2"), "my-plugin-v2")
-        XCTAssertTrue(PluginBuilder.manifest(fluidPackage: URL(fileURLWithPath: "/src/Fluid")).contains(#".package(path: "/src/Fluid")"#))
+        let manifest = PluginBuilder.manifest(fluidPackage: URL(fileURLWithPath: "/src/Fluid"), targets: ["Clock_ab"])
+        XCTAssertTrue(manifest.contains(#".package(path: "/src/Fluid")"#))
+        XCTAssertTrue(manifest.contains(#".executableTarget(name: "Clock_ab", dependencies: [.product(name: "FluidKit", package: "fluid")], path: "Sources/Clock_ab")"#))
+        XCTAssertEqual(PluginBuilder.targetName("my plugin", key: "1f"), "myplugin_1f")
+        XCTAssertEqual(PluginBuilder.targetName("3d", key: "1f"), "Plugin3d_1f")
     }
 
     /// Compiles real plugins with SwiftPM. Slow (it builds FluidKit), so it
@@ -101,6 +105,14 @@ final class PluginBuilderTests: XCTestCase {
         XCTAssertFalse(first.cached)
         XCTAssertEqual(try PluginProcess.readManifest(executable: first.binary).id, "test.hello")
         XCTAssertTrue(try builder.build(source: good).cached)
+
+        // A second plugin reuses the workspace's compiled FluidKit.
+        let other = work.appendingPathComponent("Other.swift")
+        try String(contentsOf: good, encoding: .utf8).replacingOccurrences(of: "test.hello", with: "test.other").write(to: other, atomically: true, encoding: .utf8)
+        let started = Date()
+        let second = try builder.build(source: other)
+        XCTAssertEqual(try PluginProcess.readManifest(executable: second.binary).id, "test.other")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 60)
 
         let bad = work.appendingPathComponent("Broken.swift")
         try """
