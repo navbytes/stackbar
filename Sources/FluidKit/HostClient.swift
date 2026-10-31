@@ -52,6 +52,16 @@ public final class HostClient: @unchecked Sendable {
         return handler != nil
     }
 
+    /// Answers every waiting call with a failure.
+    public func failAll(_ reason: String) {
+        lock.lock()
+        let handlers = pending
+        pending.removeAll()
+        sendMessage = nil
+        lock.unlock()
+        for handler in handlers.values { handler(.failure(reason)) }
+    }
+
     /// How many calls are waiting on the host (for tests).
     public var openRequests: Int {
         lock.lock()

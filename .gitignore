@@ -4,3 +4,7 @@ Package.resolved
 DerivedData/
 *.xcuserstate
 .DS_Store
+build/
+Fluid.xcodeproj/
+Packaging/*.generated.plist
+Packaging/Widget.entitlements

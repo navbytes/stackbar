@@ -57,7 +57,12 @@ final class StdioTransport: Sendable {
                         }
                     }
                 }
+                // The host is gone (it quit or crashed). Fail waiting host
+                // calls so the runtime loop can finish, and don't outlive the
+                // host even if plugin code is stuck.
+                HostClient.shared.failAll("the host went away")
                 continuation.finish()
+                DispatchQueue.global().asyncAfter(deadline: .now() + 2) { exit(0) }
             }
             reader.start()
         }
