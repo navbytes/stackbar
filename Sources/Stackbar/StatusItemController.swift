@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import ApplicationServices
 import Observation
 import SwiftUI
 import StackbarProtocol
@@ -15,6 +16,18 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private let hosting: PassthroughHostingView<StatusItemContent>
     private var hotKey: HotKey?
     private var hotKeySpec: String?
+    /// An invisible window at the text cursor that a pasting plugin's panel
+    /// hangs from when its hotkey opens it.
+    private lazy var caretAnchor: NSWindow = {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1, height: 1), styleMask: .borderless, backing: .buffered, defer: true)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.ignoresMouseEvents = true
+        window.isReleasedWhenClosed = false
+        window.level = .popUpMenu
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        return window
+    }()
 
     init(controller: PluginController, model: AppModel, windows: PluginWindows) {
         self.controller = controller
@@ -50,10 +63,39 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         NSStatusBar.system.removeStatusItem(statusItem)
     }
 
-    func showPanel() {
+    func showPanel(atCaret: Bool = false) {
         guard let button = statusItem.button, !popover.isShown else { return }
+        // Read the caret before activating: activation moves focus to us.
+        if atCaret, let caret = Self.caretRect(), let view = caretAnchor.contentView {
+            caretAnchor.setFrame(caret, display: false)
+            caretAnchor.orderFrontRegardless()
+            NSApp.activate()
+            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+            return
+        }
         NSApp.activate()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    }
+
+    /// Where the text cursor is in the focused app, in screen coordinates,
+    /// through Accessibility (which pasting already needs). `nil` when
+    /// there's no text field or the app doesn't say, as many web views don't.
+    static func caretRect() -> NSRect? {
+        guard AXIsProcessTrusted(), let primary = NSScreen.screens.first else { return nil }
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+        let element = unsafeBitCast(focused, to: AXUIElement.self)
+        var range: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &range) == .success, let range else { return nil }
+        var bounds: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(element, kAXBoundsForRangeParameterizedAttribute as CFString, range, &bounds) == .success,
+              let bounds, CFGetTypeID(bounds) == AXValueGetTypeID() else { return nil }
+        var rect = CGRect.zero
+        guard AXValueGetValue(unsafeBitCast(bounds, to: AXValue.self), .cgRect, &rect), rect.origin != .zero else { return nil }
+        // Accessibility measures from the top-left of the main screen.
+        let flipped = NSRect(x: rect.minX, y: primary.frame.maxY - rect.maxY, width: max(rect.width, 1), height: max(rect.height, 1))
+        return NSScreen.screens.contains { $0.frame.intersects(flipped) } ? flipped : nil
     }
 
     /// Re-sizes the item whenever what it draws changes.
@@ -84,7 +126,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         hotKeySpec = spec
         hotKey?.unregister()
         hotKey = spec.flatMap(HotKeySpec.init).flatMap { parsed in
-            HotKey(spec: parsed) { [weak self] in self?.togglePanel(nil) }
+            HotKey(spec: parsed) { [weak self] in self?.hotKeyPressed() }
         }
     }
 
@@ -94,6 +136,16 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         statusItem.length = ceil(width)
         statusItem.button?.setAccessibilityLabel(controller.name)
         statusItem.button?.toolTip = controller.menuBarClick.map { "\($0.title). Right-click for \(controller.name)." }
+    }
+
+    /// A plugin that pastes (it has the clipboard capability) opens at the
+    /// text cursor, like a completion list; others open from the menu bar.
+    private func hotKeyPressed() {
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            showPanel(atCaret: controller.manifest?.capabilities.contains(.clipboard) == true)
+        }
     }
 
     @objc private func togglePanel(_ sender: Any?) {
@@ -117,6 +169,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     func popoverDidClose(_ notification: Notification) {
+        caretAnchor.orderOut(nil)
         controller.setVisible(.panel, false)
     }
 }

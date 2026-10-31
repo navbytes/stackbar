@@ -138,4 +138,36 @@ final class ClickNotifyPreviewTests: XCTestCase {
         XCTAssertEqual(alerts.all.first?.actions.last?.url, "tel:+16465588656,,123456789%23")
         await supervisor.stop()
     }
+
+    func testStayAwakeFollowsDisplaysAndDownloads() async throws {
+        let system = SimulatedSystem(status: SystemStatus(batteryLevel: 0.9, onACPower: true, externalDisplays: 0, networkBytesReceived: 0))
+        let (supervisor, directory) = try await run("StayAwakePlugin", system: system)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let id = "io.navbytes.stackbar.stay-awake"
+        func flip(_ key: String) async {
+            let before = await supervisor.settledCount
+            await supervisor.event(ActionID("toggle/\(key)"), value: .bool(true))
+            _ = await waitUntil { await supervisor.settledCount > before }
+        }
+        await flip("display")
+        await flip("download")
+        XCTAssertNil(system.keptAwake[id], "no display and no download yet")
+
+        system.simulate(status: SystemStatus(batteryLevel: 0.9, onACPower: true, externalDisplays: 1, networkBytesReceived: 0))
+        await supervisor.refresh()
+        let held = await waitUntil(5) { system.keptAwake[id]?.reason.hasSuffix("While a display is connected") == true }
+        XCTAssertTrue(held, "\(String(describing: system.keptAwake[id]))")
+
+        system.simulate(status: SystemStatus(batteryLevel: 0.9, onACPower: true, externalDisplays: 0, networkBytesReceived: 0))
+        await supervisor.refresh()
+        let released = await waitUntil(5) { system.keptAwake[id] == nil }
+        XCTAssertTrue(released, "unplugging the display lets the Mac sleep")
+
+        try await Task.sleep(nanoseconds: 1_200_000_000)
+        system.simulate(status: SystemStatus(batteryLevel: 0.9, onACPower: true, externalDisplays: 0, networkBytesReceived: 50_000_000))
+        await supervisor.refresh()
+        let downloading = await waitUntil(5) { system.keptAwake[id]?.reason.hasSuffix("While a download is running") == true }
+        XCTAssertTrue(downloading, "a fast download keeps the Mac awake")
+        await supervisor.stop()
+    }
 }

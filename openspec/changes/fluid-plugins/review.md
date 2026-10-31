@@ -17,7 +17,8 @@ work and is listed so it isn't forgotten.
   pause and ignore-next, global hotkey, agent tools.
 - Done in the second pass: a preview of the selected item's full text, image
   or files, and fuzzy, ranked search that also looks through the full text.
-- Later: opening the list at the text cursor.
+- Done in the fourth pass: the hotkey opens the list at the text cursor
+  (falling back to the menu bar where an app doesn't report one).
 
 ### Stay Awake (vs Amphetamine, KeepingYouAwake, Lungo)
 
@@ -28,8 +29,11 @@ work and is listed so it isn't forgotten.
   daily stats, agent tools; the host releases the assertion if the plugin dies.
 - Done in the second pass: click the cup to start or stop (a right click
   opens the panel), with a setting for what a click starts.
-- Later: closed-lid mode (needs a privileged helper), while a download or a
-  process runs, while an external display or a VPN is connected.
+- Done in the fourth pass: while an external display is connected, while a
+  VPN is up, while a download runs (with a speed chart); Settings explains
+  clamshell mode for working with the lid closed.
+- Later: true closed-lid mode without a display (needs a privileged helper
+  running `pmset disablesleep`), while a command-line process runs.
 
 ### Up Next (vs MeetingBar, Dato, Fantastical)
 

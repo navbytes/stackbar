@@ -42,6 +42,9 @@ final class StayAwake: StackbarPlugin {
     @Stored("notifyOnEnd") var notifyOnEnd = true
     @Stored("scheduleOn") var scheduleOn = false
     @Stored("whilePluggedIn") var whilePluggedIn = false
+    @Stored("whileExternalDisplay") var whileExternalDisplay = false
+    @Stored("whileVPN") var whileVPN = false
+    @Stored("whileDownloading") var whileDownloading = false
     /// What a click on the menu-bar cup does: -1 opens the panel, 0 starts
     /// until stopped, otherwise starts for that many minutes. Clicking again
     /// stops; a right click always opens the panel.
@@ -65,6 +68,15 @@ final class StayAwake: StackbarPlugin {
     /// Battery percentage once a minute while awake, for the session chart.
     var batteryTrail: [Double] = []
     var lastSample: Date?
+    /// The last network counter reading, for the download rate.
+    var lastBytes: (count: UInt64, at: Date)?
+    /// Bytes per second received, one sample per refresh (about 10 minutes).
+    var rateTrail: [Double] = []
+    /// A download keeps the Mac awake until this long after it goes quiet,
+    /// so a pause between files doesn't let it sleep.
+    var downloadUntil: Date?
+    static let downloadThreshold = 100_000.0
+    static let downloadGrace = 120.0
 
     // MARK: Deciding
 
@@ -75,7 +87,29 @@ final class StayAwake: StackbarPlugin {
             lastError = "\(error)"
         }
         endSessionIfDone()
+        sampleNetwork()
         await apply()
+    }
+
+    /// Turns the host's byte counter into a rate and decides whether a
+    /// download is running.
+    func sampleNetwork(now: Date = Date()) {
+        guard let count = status.networkBytesReceived else { return }
+        defer { lastBytes = (count, now) }
+        guard let last = lastBytes, count >= last.count else { return }
+        let seconds = now.timeIntervalSince(last.at)
+        guard seconds >= 1 else { return }
+        let rate = Double(count - last.count) / seconds
+        rateTrail.append(rate)
+        if rateTrail.count > 40 { rateTrail.removeFirst(rateTrail.count - 40) }
+        if rate >= Self.downloadThreshold { downloadUntil = now.addingTimeInterval(Self.downloadGrace) }
+    }
+
+    var downloading: Bool { (downloadUntil ?? .distantPast) > Date() }
+
+    static func rate(_ bytes: Double) -> String {
+        if bytes >= 1_000_000 { return String(format: "%.1f MB/s", bytes / 1_000_000) }
+        return "\(Int((bytes / 1000).rounded())) KB/s"
     }
 
     /// Why the Mac should stay awake right now, or `nil` to let it sleep.
@@ -84,6 +118,9 @@ final class StayAwake: StackbarPlugin {
         if let session { return describe(session.mode) }
         if scheduleOn, inSchedule(Date()) { return "Schedule until \(scheduleEnd)" }
         if whilePluggedIn, status.onACPower { return "While plugged in" }
+        if whileExternalDisplay, (status.externalDisplays ?? 0) > 0 { return "While a display is connected" }
+        if whileVPN, status.vpnActive == true { return "While the VPN is on" }
+        if whileDownloading, downloading { return "While a download is running" }
         return nil
     }
 
@@ -328,6 +365,10 @@ final class StayAwake: StackbarPlugin {
                 LabeledContent("Average", value: Self.clock(week.values.reduce(0, +) / 7 * 3600))
             }
         }
+        if whileDownloading, rateTrail.count >= 3, rateTrail.contains(where: { $0 >= Self.downloadThreshold }) {
+            Chart("Download speed", values: rateTrail.map { ($0 / 10_000).rounded() / 100 }, kind: .area, role: downloading ? .accent : .secondary, unit: "MB/s", goal: Self.downloadThreshold / 1_000_000)
+            Text(downloading ? "Downloading at \(Self.rate(rateTrail.last ?? 0)); staying awake until it's quiet for 2 minutes" : "No download running").style(.caption).role(.secondary)
+        }
         if let level = status.batteryLevel {
             if held != nil, batteryTrail.count >= 3 {
                 Chart("Battery while awake", values: batteryTrail, kind: .area, role: level < 0.2 ? .critical : status.onACPower ? .success : .accent, unit: "%")
@@ -373,6 +414,20 @@ final class StayAwake: StackbarPlugin {
                 self.whilePluggedIn = on
                 await self.apply()
             }
+            Toggle("While an external display is connected", isOn: whileExternalDisplay, key: "display") { on in
+                self.whileExternalDisplay = on
+                await self.apply()
+            }
+            Toggle("While a VPN is connected", isOn: whileVPN, key: "vpn") { on in
+                self.whileVPN = on
+                await self.apply()
+            }
+            Toggle("While a download is running", isOn: whileDownloading, key: "download") { on in
+                self.whileDownloading = on
+                await self.apply()
+            }
+            Text("A download is anything over \(Self.rate(Self.downloadThreshold)); the Mac stays awake until it's been quiet for 2 minutes.").style(.caption).role(.secondary)
+            Text("To work with the lid closed, connect power and a display (macOS calls it clamshell mode), and turn on the display option above so it doesn't idle-sleep.").style(.caption).role(.secondary)
         }
         Section("Schedule") {
             Toggle(scheduleWeekdaysOnly ? "Weekdays \(scheduleStart)–\(scheduleEnd)" : "Every day \(scheduleStart)–\(scheduleEnd)", isOn: scheduleOn, key: "schedule") { on in

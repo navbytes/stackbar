@@ -205,7 +205,42 @@ final class MacSystem: SystemServices, @unchecked Sendable {
                 .compactMap { app in app.bundleIdentifier.map { SystemStatus.App(id: $0, name: app.localizedName ?? $0) } }
         }
         status.keptAwakeBy = lock.withLock { assertions.keys.sorted() }
+        status.externalDisplays = Self.externalDisplayCount()
+        let network = Self.networkCounters()
+        status.networkBytesReceived = network.received
+        status.vpnActive = network.vpn
         return status
+    }
+
+    /// Active displays that aren't the built-in panel.
+    static func externalDisplayCount() -> Int {
+        var count: UInt32 = 0
+        guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return 0 }
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetActiveDisplayList(count, &displays, &count) == .success else { return 0 }
+        return displays.prefix(Int(count)).filter { CGDisplayIsBuiltin($0) == 0 }.count
+    }
+
+    /// Bytes received across physical interfaces since boot, and whether a
+    /// tunnel interface carries an IPv4 address (macOS's own utuns, used by
+    /// iCloud and Handoff, only have IPv6 link-local addresses).
+    static func networkCounters() -> (received: UInt64, vpn: Bool) {
+        var received: UInt64 = 0
+        var vpn = false
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0, let first = list else { return (0, false) }
+        defer { freeifaddrs(list) }
+        for pointer in sequence(first: first, next: { $0.pointee.ifa_next }) {
+            let entry = pointer.pointee
+            guard let address = entry.ifa_addr, entry.ifa_flags & UInt32(IFF_UP) != 0 else { continue }
+            let name = String(cString: entry.ifa_name)
+            let tunnel = name.hasPrefix("utun") || name.hasPrefix("ipsec") || name.hasPrefix("ppp")
+            if tunnel, address.pointee.sa_family == UInt8(AF_INET) { vpn = true }
+            if address.pointee.sa_family == UInt8(AF_LINK), !tunnel, !name.hasPrefix("lo"), let data = entry.ifa_data {
+                received &+= UInt64(data.assumingMemoryBound(to: if_data.self).pointee.ifi_ibytes)
+            }
+        }
+        return (received, vpn)
     }
 
     // MARK: Calendar
