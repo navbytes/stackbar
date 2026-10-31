@@ -29,6 +29,6 @@
     <key>NSCalendarsUsageDescription</key>
     <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Fluid</string>
+    <string>Copyright © 2026 navbytes. MIT License.</string>
 </dict>
 </plist>

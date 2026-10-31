@@ -200,3 +200,7 @@ Still to check on a Mac:
    host in Activity Monitor.
 
 Known gaps are marked `ponytail:` in the code.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Plugins you write against FluidKit are yours to license however you like.
