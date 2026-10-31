@@ -40,6 +40,13 @@
 - [x] 3c.5 Up Next: time left in the current meeting, meetings-today gauge; window: hours in meetings for 7 days with a 4h goal line, today by calendar
 - [x] 3c.6 PR Cockpit window: your PRs by state, review wait times, reviews by repository, queue over time
 
+## 3d. Third gap pass (protocol 6)
+
+- [x] 3d.1 Full-screen alerts (`HostCall.alert`, `Stackbar.alert`): a blurred cover above full-screen apps with the plugin's buttons, Esc dismisses, one a minute
+- [x] 3d.2 `tel:` allowed for `openURL` and buttons
+- [x] 3d.3 Up Next: dial-in numbers (tel: links, +numbers with Zoom's ",,PIN#"), Call in and Copy; "Cover the screen when a meeting starts" setting
+- [x] 3d.4 PR Cockpit: merged and closed alerts for your PRs, a "Closed in the last two days" section, and an optional GitHub notifications inbox tab (classic token with the notifications scope), with mention alerts and mark as read
+
 ## 4. On a Mac
 
 - [ ] 4.1 The app compiles with `MacSystem` (self-hosted runner)
@@ -52,3 +59,5 @@
 - [ ] 4.8 An Up Next reminder's Join button opens the call; clicking the notification opens the panel
 - [ ] 4.9 Clipboard preview shows long text and images for the selected row
 - [ ] 4.10 Charts read well in light and dark mode, in the panel, window and Settings
+- [ ] 4.11 Full-screen alert appears over a full-screen app; Join opens the call; Esc dismisses
+- [ ] 4.12 PR Cockpit inbox with a classic token; mark as read clears it on github.com

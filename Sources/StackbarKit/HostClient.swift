@@ -98,6 +98,7 @@ public final class HostClient: @unchecked Sendable {
         case .oauthToken(let provider, _): return "signing in to \(provider)"
         case .publish(let topic, _): return "publishing to \(topic)"
         case .notify: return "notification"
+        case .alert: return "alert"
         case .openURL(let url): return "opening \(url)"
         case .copy: return "copying"
         case .clipboardRead: return "reading the clipboard"
@@ -192,6 +193,12 @@ public enum Stackbar {
     /// Clicking the notification itself opens your panel.
     public static func notify(_ title: String, body: String? = nil, actions: [NotificationAction] = []) {
         HostClient.shared.fire(.notify(title: title, body: body, actions: actions.isEmpty ? nil : actions))
+    }
+
+    /// A full-screen alert that stays until dismissed, for what must not be
+    /// missed. Buttons open their URLs. At most one a minute.
+    public static func alert(_ title: String, body: String? = nil, actions: [NotificationAction] = []) {
+        HostClient.shared.fire(.alert(title: title, body: body, actions: actions))
     }
 
     public static func open(_ url: String) {

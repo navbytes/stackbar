@@ -12,9 +12,9 @@ final class NotificationRecorder: @unchecked Sendable {
 }
 
 final class ClickNotifyPreviewTests: XCTestCase {
-    private func run(_ plugin: String, system: SimulatedSystem = SimulatedSystem(), recorder: NotificationRecorder = NotificationRecorder()) async throws -> (PluginSupervisor, URL) {
+    private func run(_ plugin: String, system: SimulatedSystem = SimulatedSystem(), recorder: NotificationRecorder = NotificationRecorder(), alerts: NotificationRecorder = NotificationRecorder()) async throws -> (PluginSupervisor, URL) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(notify: recorder.record, system: system))
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(notify: recorder.record, alert: alerts.record, system: system))
         let executable = PluginSupervisorTests.helper(plugin)
         let supervisor = PluginSupervisor(executable: executable, manifest: try PluginProcess.readManifest(executable: executable), services: services)
         await supervisor.start()
@@ -108,5 +108,34 @@ final class ClickNotifyPreviewTests: XCTestCase {
     func testDonutsRenderAsNamedValues() {
         let text = TreeTextRenderer.render(.chart(values: [3, 1], kind: .donut, label: "Kinds", options: ChartOptions(labels: ["Text", "Links"])))
         XCTAssertEqual(text, "Kinds: Text 3, Links 1 (donut)")
+    }
+
+    func testUpNextDialsInAndCoversTheScreen() async throws {
+        let now = Date()
+        let notes = "Join Zoom Meeting\nhttps://acme.zoom.us/j/123456789\n\nOne tap mobile\n+16465588656,,123456789# US (New York)"
+        let system = SimulatedSystem(events: [
+            CalendarEvent(id: "z", title: "Board call", start: now.addingTimeInterval(30), end: now.addingTimeInterval(1800), notes: notes, calendar: "Work", participation: .accepted, attendees: 5),
+        ])
+        let alerts = NotificationRecorder()
+        let (supervisor, directory) = try await run("UpNextPlugin", system: system, alerts: alerts)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let row = await supervisor.views[.panel]?.rows.first { $0.title == "Board call" }
+        XCTAssertTrue(row?.actions.contains { $0.title == "Call in (+16465588656)" } == true, "\(row?.actions.map(\.title) ?? [])")
+        XCTAssertTrue(alerts.all.isEmpty, "the full-screen alert is off by default")
+
+        let toggle = await supervisor.views[.settings]?.actions.first { $0.rawValue.contains("Cover the screen") }
+        guard let toggle else { return XCTFail("no full-screen toggle in settings") }
+        var before = await supervisor.settledCount
+        await supervisor.event(toggle, value: .bool(true))
+        _ = await waitUntil { await supervisor.settledCount > before }
+        before = await supervisor.settledCount
+        await supervisor.refresh()
+        _ = await waitUntil { await supervisor.settledCount > before }
+        let shown = await waitUntil(5) { !alerts.all.isEmpty }
+        XCTAssertTrue(shown, "a meeting starting within a minute covers the screen")
+        XCTAssertEqual(alerts.all.first?.title, "Board call")
+        XCTAssertEqual(alerts.all.first?.actions.map(\.title), ["Join on Zoom", "Call in"])
+        XCTAssertEqual(alerts.all.first?.actions.last?.url, "tel:+16465588656,,123456789%23")
+        await supervisor.stop()
     }
 }

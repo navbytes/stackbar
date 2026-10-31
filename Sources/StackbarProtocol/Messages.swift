@@ -6,7 +6,8 @@ public enum StackbarProtocolVersion {
     /// 3 added the clipboard, keep-awake, system status and calendar calls.
     /// 4 added the settings surface.
     /// 5 added the menu-bar click action, notification buttons and row previews.
-    public static let current = 5
+    /// 6 added full-screen alerts.
+    public static let current = 6
 }
 
 /// Host → plugin.
@@ -110,6 +111,10 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// A user notification, with up to three buttons that open URLs.
     /// Clicking the notification itself opens the plugin's panel.
     case notify(title: String, body: String?, actions: [NotificationAction]? = nil)
+    /// A full-screen alert that stays until dismissed, for what must not be
+    /// missed (a meeting starting). Buttons open URLs, like notification
+    /// buttons; Esc or Dismiss closes it. At most one a minute.
+    case alert(title: String, body: String?, actions: [NotificationAction])
     /// Opens a URL with the default app (https, mailto, or a file URL).
     case openURL(String)
     /// Puts text on the clipboard.

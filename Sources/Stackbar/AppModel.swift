@@ -57,6 +57,7 @@ final class AppModel {
             secrets: StackbarPaths.defaultSecrets(includeEnvironment: false),
             platform: HostServices.Platform(
                 notify: { note in Task { @MainActor in Platform.notify(note) } },
+                alert: { note in Task { @MainActor in AlertPresenter.shared.show(note) } },
                 open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },
                 copy: { text in Task { @MainActor in Platform.copy(text) } },
                 secretMissing: { pluginID, name in secretRouter.route(pluginID, name) },
