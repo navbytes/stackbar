@@ -29,7 +29,7 @@
 - [x] 4.4 Rolling host log; `fluidctl logs`, `doctor`, `version`
 - [x] 4.5 `fluidctl soak` memory gate
 - [x] 4.6 CI: Linux on GitHub, macOS on a self-hosted runner only
-- [ ] 4.7 On a Mac: compile and fix the app, `FluidUI` and the widget
+- [x] 4.7 On a Mac: the app, `FluidUI` and the CryptoKit and Security code compile; Clock runs in the menu bar (the widget project is not built yet)
 - [ ] 4.8 On a Mac: signing, Keychain and sandbox checks (README "Status")
 - [ ] 4.9 App writes plugin logs to the host log and shows `doctor` problems in Settings
 - [ ] 4.10 A day-long soak of PR Cockpit
