@@ -21,6 +21,8 @@ public final class ChildProcess: @unchecked Sendable {
     private var exitStatus: Int32?
     private let exited = DispatchSemaphore(value: 0)
     private var exitHandlers: [@Sendable (Int32) -> Void] = []
+    private var snapshot: [pid_t] = []
+    private var tracker: DispatchSourceTimer?
 
     public enum SpawnError: Error, CustomStringConvertible {
         case failed(String, Int32)
@@ -170,10 +172,44 @@ public final class ChildProcess: @unchecked Sendable {
     }
 
     /// Kills whatever is left in the child's process group after the child
-    /// itself has exited. Called right after the reap, so the group id cannot
-    /// have been recycled while members remain.
+    /// itself has exited, plus any descendant from the last `trackDescendants`
+    /// snapshot that has since been orphaned. Called right after the reap, so
+    /// the group id cannot have been recycled while members remain.
     public func sweepGroup() {
         _ = killpg(pid, SIGKILL)
+        lock.lock()
+        let known = Set(snapshot)
+        tracker?.cancel()
+        tracker = nil
+        lock.unlock()
+        guard !known.isEmpty else { return }
+        for (candidate, parent) in ProcessTable.parentLinks() where known.contains(candidate) {
+            // Still one of ours: orphaned to init, or under another orphan of ours.
+            // Anything else is a recycled pid and is left alone.
+            if parent == 1 || known.contains(parent) {
+                _ = kill(candidate, SIGKILL)
+            }
+        }
+    }
+
+    /// Snapshots the child's descendants every `interval` seconds while it
+    /// runs, so `sweepGroup` can find children that left its process group
+    /// (Foundation's `Process` puts each in a group of its own) even after a
+    /// crash re-parents them.
+    public func trackDescendants(every interval: Double = 3) {
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(500))
+        timer.setEventHandler { [weak self] in
+            guard let self, self.isRunning else { return }
+            let found = ProcessTable.descendants(of: self.pid)
+            self.lock.lock()
+            if self.exitStatus == nil { self.snapshot = found }
+            self.lock.unlock()
+        }
+        lock.lock()
+        tracker = timer
+        lock.unlock()
+        timer.resume()
     }
 
     private static func pipe() throws -> (read: Int32, write: Int32) {

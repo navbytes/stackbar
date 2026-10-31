@@ -284,19 +284,31 @@ final class PluginSupervisorTests: XCTestCase {
         _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
         func panelText() async -> String { await supervisor.views[.panel].map { TreeTextRenderer.render($0) } ?? "" }
 
-        // A crashed helper's `Process` children are re-parented before the host
-        // hears of it (see PluginProcess), so a stop is what is checked here.
-        await supervisor.event("button/Spawn")
-        let spawned = await waitUntil(10) { await panelText().contains("status child ") }
-        XCTAssertTrue(spawned)
-        let text = await panelText()
-        let digits = text.components(separatedBy: "status child ").last?.prefix { $0.isNumber } ?? ""
-        let pid = try XCTUnwrap(Int32(digits))
-        XCTAssertTrue(Self.isAlive(pid))
+        func spawnChild() async throws -> Int32 {
+            await supervisor.event("button/Spawn")
+            let spawned = await waitUntil(10) { await panelText().contains("status child ") }
+            XCTAssertTrue(spawned)
+            let text = await panelText()
+            let digits = text.components(separatedBy: "status child ").last?.prefix { $0.isNumber } ?? ""
+            let pid = try XCTUnwrap(Int32(digits))
+            XCTAssertTrue(Self.isAlive(pid))
+            return pid
+        }
 
+        // A crash: the child is found through the periodic snapshot.
+        let first = try await spawnChild()
+        try await Task.sleep(for: .seconds(4))
+        await supervisor.event("button/Crash")
+        let firstGone = await waitUntil(10) { !Self.isAlive(first) }
+        XCTAssertTrue(firstGone, "a crashed plugin's child outlived it")
+
+        // A stop: the tree is walked before the helper is asked to exit.
+        _ = await waitUntil { await supervisor.restarts == 1 }
+        _ = await waitUntil(10) { !(await panelText().contains("status child")) }
+        let second = try await spawnChild()
         await supervisor.stop()
-        let gone = await waitUntil(10) { !Self.isAlive(pid) }
-        XCTAssertTrue(gone, "a plugin's child outlived it")
+        let secondGone = await waitUntil(10) { !Self.isAlive(second) }
+        XCTAssertTrue(secondGone, "a stopped plugin's child outlived it")
     }
 
     /// True if `pid` exists and is not a zombie waiting for a reaper.

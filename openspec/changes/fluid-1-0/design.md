@@ -14,7 +14,8 @@
   targets beyond the 64 most recent are pruned.
 - **Helpers are process-group leaders started with `posix_spawn`.** Stopping
   a plugin snapshots its descendants first (Foundation's `Process` gives each
-  child its own group), then signals the group and each descendant.
+  child its own group), then signals the group and each descendant. A
+  snapshot every three seconds covers crashes, when the tree is already gone.
 - **Limits per plugin** (calls, HTTP, in-flight calls, notifications, log
   lines, storage, bus payloads, response size) live next to the code they
   guard, with messages that say what the limit is.
@@ -25,5 +26,5 @@
 
 - The app, `FluidUI`, the widget, CryptoKit signing and the Keychain store
   have not been compiled yet; they only build on macOS.
-- A crashed helper's `Process`-spawned children can outlive it (see the
-  `ponytail:` in `PluginProcess`).
+- A child a helper starts less than three seconds before it crashes can
+  outlive it, because descendants are snapshotted every three seconds.

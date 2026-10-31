@@ -17,12 +17,10 @@ import Darwin
 /// Helpers are launched with `posix_spawn` as process-group leaders (see
 /// `ChildProcess`). Stopping one stops everything it started: its group, and
 /// every descendant found by walking the process table (Foundation's `Process`
-/// gives each child a group of its own). When a helper crashes, anything left
-/// in its group is killed.
-///
-/// ponytail: a crashed helper's `Process`-spawned children were in their own
-/// groups and are re-parented before the host learns of the crash, so they
-/// can outlive it. Fix with a periodic descendant snapshot if that bites.
+/// gives each child a group of its own). When a helper crashes, its group is
+/// killed, and so is every descendant from the last snapshot (taken every
+/// few seconds) that was orphaned. A child started less than a snapshot
+/// interval before a crash can still escape.
 public final class PluginProcess: @unchecked Sendable {
     public enum Event: Sendable {
         case message(PluginMessage)
@@ -53,6 +51,7 @@ public final class PluginProcess: @unchecked Sendable {
         Self.ignoreSIGPIPE
         let child = try ChildProcess(executable: executable.path, arguments: arguments, environment: environment)
         self.child = child
+        child.trackDescendants()
 
         let drained = DispatchGroup()
         drained.enter()
