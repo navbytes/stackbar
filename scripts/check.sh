@@ -1,6 +1,6 @@
 #!/bin/sh
 # The full local gate: build, test, and on macOS also the app and the plugin
-# builder. Run it before pushing; the self-hosted Mac runner runs the same.
+# builder. Run it before pushing; the macOS CI job runs the same.
 set -eu
 cd "$(dirname "$0")/.."
 swift build

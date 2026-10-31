@@ -2,44 +2,48 @@
   <!-- Stackbar app icon, the source for Packaging/Assets.xcassets/AppIcon.appiconset and Packaging/AppIcon.icns. Re-render the PNGs at 16 to 1024 px after editing. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
-      <stop offset="0" stop-color="#2B3A8F"/>
-      <stop offset="0.55" stop-color="#1B2160"/>
-      <stop offset="1" stop-color="#0E0F33"/>
+      <stop offset="0" stop-color="#2A2F45"/>
+      <stop offset="1" stop-color="#11131E"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.62" r="0.5">
-      <stop offset="0" stop-color="#3FD3FF" stop-opacity="0.45"/>
-      <stop offset="1" stop-color="#3FD3FF" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="drop" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0" stop-color="#9BF1FF"/>
-      <stop offset="0.45" stop-color="#3CC6F5"/>
-      <stop offset="1" stop-color="#5B5CF0"/>
+    <linearGradient id="b1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFB547"/>
+      <stop offset="1" stop-color="#FF7A3D"/>
     </linearGradient>
-    <linearGradient id="wave" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    <linearGradient id="b2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF6FA8"/>
+      <stop offset="1" stop-color="#C548E8"/>
     </linearGradient>
-    <clipPath id="dropClip">
-      <path id="dropPath" d="M512 196 C 600 318 732 462 732 612 C 732 738 633 832 512 832 C 391 832 292 738 292 612 C 292 462 424 318 512 196 Z"/>
-    </clipPath>
+    <linearGradient id="b3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5FD0FF"/>
+      <stop offset="1" stop-color="#5B6CFF"/>
+    </linearGradient>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity="0.35"/>
     </filter>
-    <filter id="dropShadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#05061F" flood-opacity="0.55"/>
+    <filter id="barShadow" x="-20%" y="-60%" width="140%" height="220%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/>
     </filter>
   </defs>
   <g filter="url(#shadow)">
     <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
   </g>
-  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#glow)"/>
-  <rect x="101.5" y="101.5" width="821" height="821" rx="184.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="3"/>
-  <g filter="url(#dropShadow)">
-    <path d="M512 196 C 600 318 732 462 732 612 C 732 738 633 832 512 832 C 391 832 292 738 292 612 C 292 462 424 318 512 196 Z" fill="url(#drop)"/>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="184.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="3"/>
+  <!-- A menu bar strip along the top of the tile -->
+  <rect x="100" y="100" width="824" height="110" rx="0" fill="#FFFFFF" fill-opacity="0.06" clip-path="inset(0 round 186px 186px 0 0)"/>
+  <circle cx="742" cy="155" r="14" fill="#FFFFFF" fill-opacity="0.55"/>
+  <circle cx="792" cy="155" r="14" fill="#FFFFFF" fill-opacity="0.35"/>
+  <circle cx="692" cy="155" r="14" fill="#FFB547"/>
+  <!-- The stack: three app cards dropping out of the bar -->
+  <g filter="url(#barShadow)">
+    <rect x="232" y="640" width="560" height="140" rx="44" fill="url(#b3)"/>
   </g>
-  <g clip-path="url(#dropClip)">
-    <path d="M250 610 C 330 560 410 560 512 610 C 614 660 694 660 780 610 L 780 860 L 250 860 Z" fill="#2E2FB8" opacity="0.45"/>
-    <path d="M250 640 C 340 600 420 605 512 650 C 604 695 690 690 780 645" fill="none" stroke="url(#wave)" stroke-width="14" stroke-linecap="round"/>
+  <g filter="url(#barShadow)">
+    <rect x="262" y="480" width="500" height="140" rx="44" fill="url(#b2)"/>
   </g>
-  <path d="M452 330 C 410 390 372 460 362 540" fill="none" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="26" stroke-linecap="round"/>
+  <g filter="url(#barShadow)">
+    <rect x="292" y="320" width="440" height="140" rx="44" fill="url(#b1)"/>
+  </g>
+  <rect x="332" y="370" width="150" height="40" rx="20" fill="#FFFFFF" fill-opacity="0.85"/>
+  <rect x="302" y="530" width="210" height="40" rx="20" fill="#FFFFFF" fill-opacity="0.8"/>
+  <rect x="272" y="690" width="270" height="40" rx="20" fill="#FFFFFF" fill-opacity="0.75"/>
 </svg>

@@ -33,7 +33,7 @@ Decided with Naveen on 2026-10-31:
   for Updates…", "Install command-line tool", "Remove all data", a
   move-to-Applications prompt.
 - Safer defaults: the agent gateway off until the user turns it on.
-- Distribution: tag-driven release on the self-hosted Mac runner, Homebrew
+- Distribution: tag-driven release on a GitHub macOS runner, Homebrew
   cask, an official plugin index with a signed revocation list.
 - Docs and policy: a short docs site, privacy statement, issue templates.
 
@@ -42,6 +42,6 @@ Decided with Naveen on 2026-10-31:
 - New dependencies: Sparkle and the Sentry Cocoa SDK, in the app target only.
   StackbarKit, the protocol and plugins don't change.
 - Naveen has to create a Sentry project (for its DSN), an EdDSA key for
-  Sparkle (`generate_keys`, kept in his Keychain), and the notary profile on
-  the runner Mac.
+  Sparkle (`generate_keys`, kept in his Keychain), and notarization
+  credentials stored as repository secrets for the release job.
 - Vee is untouched.

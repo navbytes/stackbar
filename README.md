@@ -169,11 +169,8 @@ STACKBAR_BUILD_TESTS=1 swift test   # also compiles real plugins through PluginB
 ```
 
 Everything except the app, `StackbarUI` and the widget builds and is tested on
-Linux. GitHub Actions runs the Linux job in a Swift container. There are no
-GitHub-hosted macOS jobs, because their minutes cost about ten times as much.
-The macOS job runs only on a self-hosted runner: run
-`scripts/mac-runner.sh <token>` on your Mac once, then
-`gh variable set FLUID_MAC_RUNNER -b true -R navbytes/fluid`.
+Linux. GitHub Actions runs the Linux job in a Swift container. The macOS job runs on GitHub's `macos-26` runner, which is free for public
+repositories.
 
 ## Status
 
@@ -193,7 +190,7 @@ Still to check on a Mac:
    entitlements from its manifest (`STACKBAR_SANDBOX=0` turns this off for
    debugging). `.files` paths become file exceptions and `.network` turns on
    outgoing connections; everything else goes through the host.
-   `SandboxTests` checks this on the Mac runner.
+   `SandboxTests` checks this in the macOS CI job.
 5. **The system services:** clipboard reads and paste (with Accessibility),
    power assertions, battery and EventKit (`openspec/changes/fluid-plugins`).
 6. **The memory gate:** `stackbarctl soak` PR Cockpit for a day, and watch the
