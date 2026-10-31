@@ -201,8 +201,9 @@ public final class LoopbackServer: @unchecked Sendable {
 extension String {
     /// Percent-encodes for a query value or form field.
     var formEncoded: String {
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-._~")
+        // ASCII only: `CharacterSet.alphanumerics` also holds letters like é,
+        // which must be percent-encoded in a URL.
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
         return addingPercentEncoding(withAllowedCharacters: allowed) ?? self
     }
 }

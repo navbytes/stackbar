@@ -51,6 +51,11 @@ public actor PluginSupervisor {
     /// How many host messages the current helper has finished handling. Tools
     /// and tests wait on it instead of guessing with sleeps.
     public private(set) var settledCount = 0
+    /// Messages sent to the current helper that it answers with `settled`.
+    private var sentCount = 0
+    /// `sentCount` right after the last timer and file triggers, so a new one
+    /// is skipped while the plugin hasn't got to the previous one yet.
+    private var triggerMarks: [TriggerReason: Int] = [:]
 
     private var process: PluginProcess?
     private var generation = 0
@@ -110,8 +115,21 @@ public actor PluginSupervisor {
     }
 
     public func send(_ message: HostMessage) {
-        guard state == .running || state == .starting else { return }
-        process?.send(message)
+        guard state == .running || state == .starting, let process else { return }
+        switch message {
+        case .response, .shutdown: break
+        default: sentCount += 1
+        }
+        process.send(message)
+    }
+
+    /// A timer or file trigger, unless the previous one of the same kind is
+    /// still waiting. A refresh slower than its interval would otherwise
+    /// queue triggers without bound and push the user's clicks behind them.
+    private func sendCoalesced(_ reason: TriggerReason) {
+        if let mark = triggerMarks[reason], settledCount < mark { return }
+        send(.trigger(reason: reason))
+        triggerMarks[reason] = sentCount
     }
 
     /// A user event: a click, a toggle, a filtered row.
@@ -144,6 +162,7 @@ public actor PluginSupervisor {
         }
         return await withCheckedContinuation { continuation in
             toolCalls[id] = continuation
+            sentCount += 1
             process.send(.callTool(id: id, name: name, arguments: arguments))
         }
     }
@@ -175,6 +194,8 @@ public actor PluginSupervisor {
         process = helper
         startedAt = .now
         settledCount = 0
+        sentCount = startupMessageCount
+        triggerMarks = [:]
         consumer = Task { [weak self] in
             for await event in events {
                 await self?.handle(event, generation: current)
@@ -203,7 +224,7 @@ public actor PluginSupervisor {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(seconds))
                 guard !Task.isCancelled else { return }
-                await self?.send(.trigger(reason: .interval))
+                await self?.sendCoalesced(.interval)
             }
         }
     }
@@ -222,7 +243,7 @@ public actor PluginSupervisor {
                 let now = FileStamp.stamps(paths)
                 if now != last {
                     last = now
-                    await self?.send(.trigger(reason: .file))
+                    await self?.sendCoalesced(.file)
                 }
             }
         }
@@ -294,8 +315,9 @@ public actor PluginSupervisor {
         }
         inFlight += 1
         let granted = granted
+        let declared = manifest
         Task { [weak self] in
-            let result = await services.handle(call, for: granted)
+            let result = await services.handle(call, for: granted, declared: declared)
             await self?.respond(id, result, generation: callGeneration)
         }
     }
