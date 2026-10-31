@@ -58,6 +58,7 @@ targets:
     info:
       path: Packaging/Widget-Info.generated.plist
       properties:
+        CFBundleShortVersionString: "0.9.0"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
