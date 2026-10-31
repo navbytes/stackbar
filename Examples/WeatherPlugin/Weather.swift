@@ -1,12 +1,12 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// The temperature where you are, from Open-Meteo (no API key), with today's
 /// hourly curve in the panel.
 @main
-final class Weather: FluidPlugin {
+final class Weather: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.example.weather",
+        id: "io.navbytes.stackbar.example.weather",
         name: "Weather",
         summary: "Current temperature and today's curve, from Open-Meteo.",
         surfaces: [.menuBar, .panel, .widget],
@@ -38,7 +38,7 @@ final class Weather: FluidPlugin {
     func refresh() async throws {
         let url = "https://api.open-meteo.com/v1/forecast?latitude=\(place.latitude)&longitude=\(place.longitude)&current=temperature_2m,weather_code&hourly=temperature_2m&forecast_days=1&temperature_unit=\(unit)"
         do {
-            let forecast: Forecast = try await Fluid.getJSON(url)
+            let forecast: Forecast = try await Stackbar.getJSON(url)
             temperature = forecast.current.temperature_2m
             code = forecast.current.weather_code
             hourly = forecast.hourly.temperature_2m
@@ -81,7 +81,7 @@ final class Weather: FluidPlugin {
 
     private func search(_ city: String) async throws {
         let query = city.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? city
-        let result: Geocoding = try await Fluid.getJSON("https://geocoding-api.open-meteo.com/v1/search?count=1&name=\(query)")
+        let result: Geocoding = try await Stackbar.getJSON("https://geocoding-api.open-meteo.com/v1/search?count=1&name=\(query)")
         guard let first = result.results?.first else {
             problem = "No place called \(city)"
             return

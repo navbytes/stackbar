@@ -1,4 +1,4 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// Clipboard history: everything you copy, searchable, pinnable and one
@@ -11,9 +11,9 @@ import Foundation
 /// marks as concealed or transient, and items from password managers (or any
 /// app you add) are ignored. Images are kept by the host and pasted back.
 @main
-final class Clipboard: FluidPlugin {
+final class Clipboard: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.clipboard",
+        id: "io.navbytes.stackbar.clipboard",
         name: "Clipboard History",
         version: "1.0.0",
         summary: "Everything you copy, searchable and one keystroke from pasting back.",
@@ -132,20 +132,20 @@ final class Clipboard: FluidPlugin {
     var entries: [Entry] {
         get {
             if let cached { return cached }
-            let loaded = Fluid.storage.value("history", as: [Entry].self) ?? []
+            let loaded = Stackbar.storage.value("history", as: [Entry].self) ?? []
             cached = loaded
             return loaded
         }
         set {
             cached = newValue
-            Fluid.storage.set("history", newValue)
+            Stackbar.storage.set("history", newValue)
         }
     }
 
     // MARK: Recording
 
     func refresh() async throws {
-        guard let item = try await Fluid.clipboard() else { return }
+        guard let item = try await Stackbar.clipboard() else { return }
         // The first read after a launch records what is on the clipboard
         // now; if it is already in the history it just moves to the top.
         defer { lastChange = item.changeCount }
@@ -174,7 +174,7 @@ final class Clipboard: FluidPlugin {
             existing.lastCopied = item.copiedAt
             existing.contentID = item.contentID ?? existing.contentID
             // Our own paste coming back says nothing new about where it came from.
-            let ownWrite = item.sourceAppID == "dev.fluid.app" || (lastWrite.map { item.copiedAt.timeIntervalSince($0) < 3 } ?? false)
+            let ownWrite = item.sourceAppID == "io.navbytes.stackbar" || (lastWrite.map { item.copiedAt.timeIntervalSince($0) < 3 } ?? false)
             if !ownWrite {
                 existing.count += 1
                 existing.appID = item.sourceAppID ?? existing.appID
@@ -223,11 +223,11 @@ final class Clipboard: FluidPlugin {
         lastWrite = Date()
         do {
             if paste {
-                try await Fluid.paste(content)
+                try await Stackbar.paste(content)
             } else if case .text(let text) = content {
-                Fluid.copy(text)
+                Stackbar.copy(text)
             } else {
-                try await Fluid.setClipboard(content)
+                try await Stackbar.setClipboard(content)
             }
             lastError = nil
         } catch {
@@ -304,7 +304,7 @@ final class Clipboard: FluidPlugin {
         }
     }
 
-    /// Fluid's Settings window, so the panel stays about the history.
+    /// Stackbar's Settings window, so the panel stays about the history.
     var settings: ViewContent {
         Section("Pasting") {
             Toggle("Paste into the app on click", isOn: pasteDirectly) { self.pasteDirectly = $0 }
@@ -335,7 +335,7 @@ final class Clipboard: FluidPlugin {
             guard !app.isEmpty, !self.ignoredApps.contains(app) else { return }
             self.ignoredApps.append(app)
         }
-        if let recent = entries.first(where: { $0.appID != nil && $0.appID != "dev.fluid.app" }), let app = recent.appID, !isIgnored(app: app, name: recent.appName) {
+        if let recent = entries.first(where: { $0.appID != nil && $0.appID != "io.navbytes.stackbar" }), let app = recent.appID, !isIgnored(app: app, name: recent.appName) {
             Button("Ignore \(recent.appName ?? app)", symbol: "hand.raised", key: "ignore-recent") { self.ignoredApps.append(app) }
         }
         ForEach(ignoredApps) { app in
@@ -372,7 +372,7 @@ final class Clipboard: FluidPlugin {
         row = row.action(pasteDirectly ? "Copy" : "Paste") { await self.use(entry, paste: !self.pasteDirectly) }
             .action(entry.pinned ? "Unpin" : "Pin", shortcut: "cmd+p") { self.update(entry.id) { $0.pinned.toggle() } }
         if entry.kind == .url, let url = entry.text {
-            row = row.action("Open link") { Fluid.open(url.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            row = row.action("Open link") { Stackbar.open(url.trimmingCharacters(in: .whitespacesAndNewlines)) }
         }
         return row.action("Delete", shortcut: "option+delete", role: .critical) { self.delete(entry.id) }
     }

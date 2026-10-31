@@ -1,4 +1,4 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// Your next meeting in the menu bar, with a one-click join.
@@ -8,9 +8,9 @@ import Foundation
 /// (Zoom, Meet, Teams, Webex and a dozen more), counts down to it, reminds
 /// you a few minutes before, and can open the call for you when it starts.
 @main
-final class UpNext: FluidPlugin {
+final class UpNext: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.up-next",
+        id: "io.navbytes.stackbar.up-next",
         name: "Up Next",
         version: "1.0.0",
         summary: "Your next meeting in the menu bar, with a countdown and one-click join.",
@@ -111,7 +111,7 @@ final class UpNext: FluidPlugin {
         let start = Calendar.current.startOfDay(for: now)
         guard let end = Calendar.current.date(byAdding: .day, value: 2, to: start) else { return }
         do {
-            let all = try await Fluid.calendarEvents(from: start, to: end)
+            let all = try await Stackbar.calendarEvents(from: start, to: end)
             calendars = Array(Set(all.map(\.calendar))).sorted()
             events = all
             lastError = nil
@@ -158,11 +158,11 @@ final class UpNext: FluidPlugin {
             if remindMinutes > 0, until > 0, until <= remindMinutes * 60 + 15, !reminded.contains(event.id) {
                 reminded.insert(event.id)
                 let link = Self.meetingLink(for: event)
-                Fluid.notify("\(event.title) in \(max(1, Int((until / 60).rounded()))) min", body: link.map { "Join on \($0.service) from the menu bar (⌃⌥J)" } ?? event.location)
+                Stackbar.notify("\(event.title) in \(max(1, Int((until / 60).rounded()))) min", body: link.map { "Join on \($0.service) from the menu bar (⌃⌥J)" } ?? event.location)
             }
             if autoJoin, until <= 30, now < event.start.addingTimeInterval(120), !joined.contains(event.id), let link = Self.meetingLink(for: event) {
                 joined.insert(event.id)
-                Fluid.open(link.url)
+                Stackbar.open(link.url)
             }
         }
         if reminded.count > 200 { reminded = Set(reminded.suffix(50)) }
@@ -172,9 +172,9 @@ final class UpNext: FluidPlugin {
     func join(_ event: CalendarEvent) {
         if let link = Self.meetingLink(for: event) {
             joined.insert(event.id)
-            Fluid.open(openInApps ? Self.appURL(for: link) : link.url)
+            Stackbar.open(openInApps ? Self.appURL(for: link) : link.url)
         } else if let url = event.url {
-            Fluid.open(url)
+            Stackbar.open(url)
         }
     }
 
@@ -275,7 +275,7 @@ final class UpNext: FluidPlugin {
             }
         }
         Picker("Start a meeting now", options: Self.instantMeetings.map(\.name), selection: nil) { name in
-            if let meeting = Self.instantMeetings.first(where: { $0.name == name }) { Fluid.open(meeting.url) }
+            if let meeting = Self.instantMeetings.first(where: { $0.name == name }) { Stackbar.open(meeting.url) }
         }
     }
 
@@ -311,17 +311,17 @@ final class UpNext: FluidPlugin {
         }
         if let link {
             row = row.action("Join on \(link.service)", shortcut: "cmd+return") { self.join(event) }
-                .action("Copy meeting link") { Fluid.copy(link.url) }
+                .action("Copy meeting link") { Stackbar.copy(link.url) }
         }
         if let url = event.url, url != link?.url {
-            row = row.action("Open event link") { Fluid.open(url) }
+            row = row.action("Open event link") { Stackbar.open(url) }
         }
         return row.action("Copy details") {
-            Fluid.copy([event.title, self.subtitle(event), link?.url].compactMap { $0 }.joined(separator: "\n"))
+            Stackbar.copy([event.title, self.subtitle(event), link?.url].compactMap { $0 }.joined(separator: "\n"))
         }
     }
 
-    /// Fluid's Settings window, so the panel stays about the day.
+    /// Stackbar's Settings window, so the panel stays about the day.
     var settings: ViewContent {
         Section("Reminders and joining") {
             Slider(remindMinutes > 0 ? "Remind \(Int(remindMinutes)) min before" : "No reminders", value: remindMinutes, in: 0...15, step: 1, key: "remind") { self.remindMinutes = $0 }

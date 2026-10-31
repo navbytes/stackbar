@@ -1,11 +1,11 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// The latest GitHub Actions runs for the repositories you pick, red first.
 @main
-final class CIStatus: FluidPlugin {
+final class CIStatus: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.example.ci-status",
+        id: "io.navbytes.stackbar.example.ci-status",
         name: "CI Status",
         summary: "Latest GitHub Actions runs for your repositories.",
         surfaces: [.menuBar, .panel, .widget],
@@ -45,7 +45,7 @@ final class CIStatus: FluidPlugin {
 
     func refresh() async throws {
         guard !repos.isEmpty else { return }
-        guard let token = try await Fluid.secret("GITHUB_TOKEN") else {
+        guard let token = try await Stackbar.secret("GITHUB_TOKEN") else {
             problem = "Add a GitHub token to see your runs."
             return
         }
@@ -53,7 +53,7 @@ final class CIStatus: FluidPlugin {
         problem = nil
         for repo in repos {
             do {
-                let runs: Runs = try await Fluid.getJSON(
+                let runs: Runs = try await Stackbar.getJSON(
                     "https://api.github.com/repos/\(repo)/actions/runs?per_page=1",
                     headers: ["Authorization": "Bearer \(token)", "Accept": "application/vnd.github+json"]
                 )
@@ -63,7 +63,7 @@ final class CIStatus: FluidPlugin {
             }
         }
         for repo in Set(failing).subtracting(before) {
-            Fluid.notify("CI failed: \(repo)", body: latest[repo]?.name)
+            Stackbar.notify("CI failed: \(repo)", body: latest[repo]?.name)
         }
     }
 
@@ -113,7 +113,7 @@ final class CIStatus: FluidPlugin {
         let (badge, role): (String, Role) = run.running ? ("Running", .accent) : run.failed ? ("Failed", .critical) : (run.conclusion == "success" ? "Passed" : (run.conclusion ?? "Done").capitalized, run.conclusion == "success" ? .success : .secondary)
         return Row(repo, subtitle: "\(run.name ?? "Run") #\(run.runNumber) · \(run.headBranch ?? "")", symbol: "shippingbox", key: repo)
             .badge(badge, role: role)
-            .action("Open run", shortcut: "cmd+return") { Fluid.open(run.htmlURL) }
+            .action("Open run", shortcut: "cmd+return") { Stackbar.open(run.htmlURL) }
             .action("Remove", role: .critical) { self.repos.removeAll { $0 == repo } }
     }
 }

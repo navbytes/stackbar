@@ -1,4 +1,4 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// Your pull requests and the ones waiting on your review, with CI and review
@@ -12,9 +12,9 @@ import Foundation
 /// enough), and every request goes through the host to the one declared
 /// domain.
 @main
-final class PRCockpit: FluidPlugin {
+final class PRCockpit: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.pr-cockpit",
+        id: "io.navbytes.stackbar.pr-cockpit",
         name: "PR Cockpit",
         version: "1.0.0",
         summary: "Your pull requests and the ones waiting on your review, with CI and review state.",
@@ -119,7 +119,7 @@ final class PRCockpit: FluidPlugin {
     @Stored("hiddenRepos") var hiddenRepos: [String] = []
 
     func refresh() async throws {
-        guard let token = try await Fluid.secret("GITHUB_TOKEN") else {
+        guard let token = try await Stackbar.secret("GITHUB_TOKEN") else {
             lastError = "Add a GitHub token to see your pull requests."
             return
         }
@@ -133,7 +133,7 @@ final class PRCockpit: FluidPlugin {
         """
         do {
             let body = try JSONEncoder().encode(["query": query])
-            let response = try await Fluid.http(HTTPRequest(url: "https://api.github.com/graphql", method: "POST", headers: [
+            let response = try await Stackbar.http(HTTPRequest(url: "https://api.github.com/graphql", method: "POST", headers: [
                 "Authorization": "Bearer \(token)", "Content-Type": "application/json", "Accept": "application/json",
             ], body: body))
             guard (200..<300).contains(response.status) else {
@@ -156,22 +156,22 @@ final class PRCockpit: FluidPlugin {
             let known = Set(toReview.map(\.id))
             let added = review.filter { !known.contains($0.id) }
             if added.count == 1, let pr = added.first {
-                Fluid.notify("Review requested: \(pr.title)", body: "\(pr.id) by \(pr.author?.login ?? "someone")")
+                Stackbar.notify("Review requested: \(pr.title)", body: "\(pr.id) by \(pr.author?.login ?? "someone")")
             } else if added.count > 1 {
-                Fluid.notify("\(added.count) new review requests", body: added.map(\.title).prefix(3).joined(separator: "\n"))
+                Stackbar.notify("\(added.count) new review requests", body: added.map(\.title).prefix(3).joined(separator: "\n"))
             }
             let before = Dictionary(mine.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             for pr in newMine {
                 guard let old = before[pr.id] else { continue }
                 if pr.reviewDecision != old.reviewDecision, pr.reviewDecision == "APPROVED" {
-                    Fluid.notify("Approved: \(pr.title)", body: pr.id)
+                    Stackbar.notify("Approved: \(pr.title)", body: pr.id)
                 } else if pr.reviewDecision != old.reviewDecision, pr.reviewDecision == "CHANGES_REQUESTED" {
-                    Fluid.notify("Changes requested: \(pr.title)", body: pr.id)
+                    Stackbar.notify("Changes requested: \(pr.title)", body: pr.id)
                 }
                 if pr.checksFailed, !old.checksFailed {
-                    Fluid.notify("Checks failed: \(pr.title)", body: pr.id)
+                    Stackbar.notify("Checks failed: \(pr.title)", body: pr.id)
                 } else if pr.readyToMerge, !old.readyToMerge {
-                    Fluid.notify("Ready to merge: \(pr.title)", body: pr.id)
+                    Stackbar.notify("Ready to merge: \(pr.title)", body: pr.id)
                 }
             }
         }
@@ -211,7 +211,7 @@ final class PRCockpit: FluidPlugin {
 
     func open(_ pr: PullRequest, path: String = "") {
         markSeen(pr)
-        Fluid.open(pr.url + path)
+        Stackbar.open(pr.url + path)
     }
 
     // MARK: Words
@@ -251,11 +251,11 @@ final class PRCockpit: FluidPlugin {
             }
             .action("Snooze until it changes", shortcut: "cmd+s") { self.snoozed[pr.url] = pr.updatedAt }
             .action("Hide \(pr.repo)") { if !self.hiddenRepos.contains(pr.repo) { self.hiddenRepos.append(pr.repo) } }
-            .action("Copy link") { Fluid.copy(pr.url) }
+            .action("Copy link") { Stackbar.copy(pr.url) }
         if let branch = pr.headRefName {
-            row = row.action("Copy branch name") { Fluid.copy(branch) }
+            row = row.action("Copy branch name") { Stackbar.copy(branch) }
         }
-        return row.action("Copy as Markdown") { Fluid.copy("[\(pr.title) (\(pr.id))](\(pr.url))") }
+        return row.action("Copy as Markdown") { Stackbar.copy("[\(pr.title) (\(pr.id))](\(pr.url))") }
     }
 
     var failingMine: Int { shownMine.filter(\.checksFailed).count }
@@ -303,7 +303,7 @@ final class PRCockpit: FluidPlugin {
         }
     }
 
-    /// Fluid's Settings window, so the panel stays about the pull requests.
+    /// Stackbar's Settings window, so the panel stays about the pull requests.
     var settings: ViewContent {
         Section("What to show") {
             Toggle("Include requests to my teams", isOn: includeTeams) { on in
