@@ -15,7 +15,7 @@ Decided with Naveen on 2026-10-31:
   GitHub Releases and a Homebrew cask.
 - **License: MIT.**
 - **Crash reports: Sentry, opt-in.** Nothing is sent until the user agrees.
-- **A new name.** "Fluid" collides with the long-standing Fluid.app. The
+- **A new name: Stackbar** (stackbar.app). "Fluid" collides with the long-standing Fluid.app. The
   rename happens before the first public build; until then, code keeps
   saying Fluid.
 

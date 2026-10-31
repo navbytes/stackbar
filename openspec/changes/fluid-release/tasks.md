@@ -3,7 +3,7 @@
 - [x] 1.1 Ship outside the Mac App Store
 - [x] 1.2 MIT license (LICENSE, README, Info.plist copyright)
 - [x] 1.3 Crash reports through Sentry, opt-in
-- [ ] 1.4 Choose the new name (shortlist checked for apps, domains, Homebrew)
+- [x] 1.4 New name: Stackbar (stackbar.app; register stackbar.app and stackbar.dev)
 
 ## 2. Already done elsewhere
 
@@ -49,6 +49,7 @@
 
 - [ ] 7.1 Bundle ids, app group, Keychain service, data directory with a one-time move
 - [ ] 7.2 `fluidctl`, FluidKit (with a deprecated re-export), `.fluidplugin`, docs
+- [ ] 7.3 Rename the GitHub repository to navbytes/stackbar (Naveen)
 
 ## 8. Beta
 
