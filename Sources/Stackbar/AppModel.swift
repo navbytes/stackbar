@@ -37,6 +37,17 @@ final class AppModel {
     @ObservationIgnored private var agentServer: UnixSocketServer?
     @ObservationIgnored var onPluginsChanged: (() -> Void)?
 
+    /// Clipboard images and formatted copies the host keeps for plugins.
+    nonisolated static let clipboardImages = ClipboardImageStore(directory: StackbarPaths.dataDirectory.appendingPathComponent("ClipboardImages", isDirectory: true))
+
+    /// Loads kept clipboard images for a plugin's row previews; only for
+    /// plugins allowed to read the clipboard.
+    static func previewImages(for controller: PluginController) -> (@Sendable (String) -> Data?)? {
+        guard controller.manifest?.capabilities.contains(.clipboard) == true else { return nil }
+        let store = clipboardImages
+        return { id in store.data(for: id) }
+    }
+
     init() {
         indexURLs = UserDefaults.standard.stringArray(forKey: "indexURLs") ?? []
         agentGatewayEnabled = UserDefaults.standard.object(forKey: "agentGateway") as? Bool ?? true
@@ -45,11 +56,11 @@ final class AppModel {
             storage: StorageStore(directory: StackbarPaths.storageDirectory),
             secrets: StackbarPaths.defaultSecrets(includeEnvironment: false),
             platform: HostServices.Platform(
-                notify: { plugin, title, body in Task { @MainActor in Platform.notify(plugin: plugin, title: title, body: body) } },
+                notify: { note in Task { @MainActor in Platform.notify(note) } },
                 open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },
                 copy: { text in Task { @MainActor in Platform.copy(text) } },
                 secretMissing: { pluginID, name in secretRouter.route(pluginID, name) },
-                system: MacSystem(images: ClipboardImageStore(directory: StackbarPaths.dataDirectory.appendingPathComponent("ClipboardImages", isDirectory: true)))
+                system: MacSystem(images: Self.clipboardImages)
             )
         )
         secretRouter.model = self

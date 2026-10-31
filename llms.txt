@@ -62,6 +62,16 @@ people set once go in `settings`, which Stackbar shows on the plugin's page in
 its Settings window (the gear in the panel footer, or ⌘, while the panel is
 open). Quick controls used mid-task, like Pause, stay in the panel.
 
+A left click on the menu-bar item opens the panel. To make it do something
+instead (start or stop a timer), return an action from `menuBarClick`; a
+right click still opens the panel, and the title is the item's tooltip:
+
+```swift
+var menuBarClick: MenuBarAction? {
+    running ? MenuBarAction("Click to stop") { self.stop() } : MenuBarAction("Click to start") { self.start() }
+}
+```
+
 ## Views (ViewContent bodies, SwiftUI-like; `if`, `for`, `switch` work)
 
 - `Text(s).style(.title|.headline|.body|.caption|.monospaced).role(r)`
@@ -72,7 +82,10 @@ open). Quick controls used mid-task, like Pause, stay in the panel.
   The first action is the click; all actions are in the context menu.
   In a searchable list the host adds the keyboard: typing filters, ↑↓ select,
   Return runs the first action, ⌘1–⌘9 the nth row's, and action shortcuts
-  apply to the selected row. Don't declare ⌘1–⌘9 yourself.
+  apply to the selected row. Don't declare ⌘1–⌘9 yourself. Matching is
+  fuzzy ("gthb" finds "GitHub") and plain rows are ranked best first.
+  `.preview(text:imageID:caption:)` shows the full text or a kept clipboard
+  image under the list while the row is selected; search looks through it.
 - `Badge(text, role:)`, `ProgressBar(label, value:, total:)`, `LabeledContent(label, value:)`
 - `Chart(label, values: [Double], kind: .line|.bar)`
 - `Button(title, symbol:, role:) { }`, `Toggle(title, isOn:) { newValue in }`
@@ -95,7 +108,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.secret("NAME")` returns `String?` (nil: the user hasn't entered it; Stackbar asks them) | `.secret(name: "NAME")`; names are letters, digits, `_`, `-`, `.` |
 | `try await Stackbar.oauthToken("github")` | `.oauth(OAuthProvider(name:, authorizeURL:, tokenURL:, clientID:, scopes:))` |
 | `Stackbar.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
-| `Stackbar.notify(title, body:)`, `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
+| `Stackbar.notify(title, body:, actions: [NotificationAction("Join", url:)])`, `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
 | `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing |
 | `try await Stackbar.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
 | `try await Stackbar.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Stackbar.paste(content)` (into the app the user was in; needs Accessibility for Stackbar) | `.clipboard` |

@@ -62,6 +62,7 @@ struct PluginWindowView: View {
             .padding(16)
         }
         .frame(minWidth: 360, minHeight: 240)
+        .environment(\.stackbarImageData, AppModel.previewImages(for: controller))
     }
 }
 #endif

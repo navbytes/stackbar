@@ -12,19 +12,11 @@ enum Platform {
     /// A user notification. Uses UserNotifications in a real app bundle; an
     /// unbundled development build (`swift run Stackbar`) has no bundle id, where
     /// that framework crashes, so it falls back to AppleScript.
-    static func notify(plugin: String, title: String, body: String?) {
+    static func notify(_ note: HostNotification) {
         if Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" {
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.subtitle = plugin
-            if let body { content.body = body }
-            let center = UNUserNotificationCenter.current()
-            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                guard granted else { return }
-                center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
-            }
+            NotificationRouter.shared.post(note)
         } else {
-            let script = "display notification \(appleScriptString(body ?? "")) with title \(appleScriptString(title)) subtitle \(appleScriptString(plugin))"
+            let script = "display notification \(appleScriptString(note.body ?? "")) with title \(appleScriptString(note.title)) subtitle \(appleScriptString(note.pluginName))"
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
             process.arguments = ["-e", script]

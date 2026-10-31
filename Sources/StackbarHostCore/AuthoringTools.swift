@@ -163,6 +163,9 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             var text = wanted.map { surface in
                 "== \(surface.rawValue) ==\n" + (views[surface].map { TreeTextRenderer.render($0) } ?? "(nothing rendered)")
             }.joined(separator: "\n")
+            if wanted.contains(.menuBar), let click = await session.menuBarClick() {
+                text += "\n(click: \(click.title) {\(click.action)})"
+            }
             let tools = await session.tools()
             if !tools.isEmpty { text += "\n== tools ==\n" + tools.map { "\($0.name): \($0.description)" }.joined(separator: "\n") }
             let warnings = await session.logs(last: 10).filter { $0.hasPrefix("[error]") || $0.hasPrefix("[warning]") }

@@ -32,6 +32,11 @@ public protocol StackbarPlugin: AnyObject {
     /// manifest's surfaces to get one; the panel's footer then shows a gear
     /// that opens it. Put preferences here and keep the panel for actions.
     @ViewBuilder var settings: ViewContent { get }
+    /// What a left click on the menu-bar item does. `nil` (the default)
+    /// opens the panel; an action runs instead, and a right click still
+    /// opens the panel. Recomputed on every render, so it can follow a
+    /// setting.
+    var menuBarClick: MenuBarAction? { get }
     /// What agents can call through the host's MCP gateway.
     @ToolBuilder var tools: [AgentTool] { get }
     /// Another plugin published to a topic this plugin's manifest listens to
@@ -46,6 +51,7 @@ extension StackbarPlugin {
     public var window: ViewContent { panel }
     public var widget: ViewContent { panel }
     public var settings: ViewContent { [] }
+    public var menuBarClick: MenuBarAction? { nil }
     public var tools: [AgentTool] { [] }
     public func receive(topic: String, payload: String, from sender: String) async throws {}
 
@@ -62,5 +68,17 @@ extension StackbarPlugin {
         for await message in transport.incoming() {
             if await !runtime.handle(message) { break }
         }
+    }
+}
+
+/// A left-click action for the menu-bar item, like starting or stopping a
+/// keep-awake session. `title` is the item's tooltip ("Start keeping awake").
+public struct MenuBarAction {
+    public var title: String
+    public var perform: @MainActor () async throws -> Void
+
+    public init(_ title: String, perform: @escaping @MainActor () async throws -> Void) {
+        self.title = title
+        self.perform = perform
     }
 }

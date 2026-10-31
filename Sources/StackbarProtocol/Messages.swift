@@ -5,7 +5,8 @@ public enum StackbarProtocolVersion {
     /// 2 added host calls, tools, topics and the stored-values snapshot.
     /// 3 added the clipboard, keep-awake, system status and calendar calls.
     /// 4 added the settings surface.
-    public static let current = 4
+    /// 5 added the menu-bar click action, notification buttons and row previews.
+    public static let current = 5
 }
 
 /// Host → plugin.
@@ -58,6 +59,36 @@ public enum PluginMessage: Codable, Equatable, Sendable {
     case tools([ToolSpec])
     /// The result of a `callTool`.
     case toolResult(id: Int, text: String, isError: Bool)
+    /// What a left click on the status item does: run the plugin's click
+    /// action (`MenuBarClick.action` names it), or open the panel when `nil`.
+    /// A right click always opens the panel. Sent when it changes.
+    case menuBarClick(MenuBarClick?)
+}
+
+/// A plugin's left-click action on its status item, like starting or
+/// stopping a keep-awake session.
+public struct MenuBarClick: Codable, Equatable, Sendable {
+    /// What the click does, as the status item's tooltip says it.
+    public var title: String
+    /// Sent back in an `event` when the user clicks.
+    public var action: ActionID
+
+    public init(title: String, action: ActionID) {
+        self.title = title
+        self.action = action
+    }
+}
+
+/// A button on a notification. The host opens `url` when it is clicked
+/// (the same URLs `openURL` allows), so it works after the plugin moved on.
+public struct NotificationAction: Codable, Equatable, Sendable {
+    public var title: String
+    public var url: String
+
+    public init(_ title: String, url: String) {
+        self.title = title
+        self.url = url
+    }
 }
 
 /// What a plugin can ask the host to do. Every call is checked against the
@@ -76,8 +107,9 @@ public enum HostCall: Codable, Equatable, Sendable {
     case oauthToken(provider: String, forceRefresh: Bool)
     /// Sends `payload` to every plugin listening on `topic`.
     case publish(topic: String, payload: String)
-    /// A user notification.
-    case notify(title: String, body: String?)
+    /// A user notification, with up to three buttons that open URLs.
+    /// Clicking the notification itself opens the plugin's panel.
+    case notify(title: String, body: String?, actions: [NotificationAction]? = nil)
     /// Opens a URL with the default app (https, mailto, or a file URL).
     case openURL(String)
     /// Puts text on the clipboard.

@@ -117,6 +117,7 @@ public struct Row: StackbarView {
     var symbol: String?
     var accessories: [ViewNode] = []
     var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler)] = []
+    var preview: RowPreview?
 
     /// `key` defaults to the title; give one explicitly when titles can repeat
     /// or change (an id from your data is ideal).
@@ -139,6 +140,15 @@ public struct Row: StackbarView {
         return copy
     }
 
+    /// What the host shows under a searchable list while this row is
+    /// selected: the full text (cut to 10,000 characters), a kept clipboard
+    /// image, and a caption. Search also looks through the text.
+    public func preview(text: String? = nil, imageID: String? = nil, caption: String? = nil) -> Row {
+        var copy = self
+        copy.preview = RowPreview(text: text.map { String($0.prefix(10_000)) }, imageID: imageID, caption: caption)
+        return copy
+    }
+
     /// Adds an action. The first one is what a click on the row does.
     public func action(_ title: String, shortcut: String? = nil, role: Role = .primary, perform: @escaping @MainActor () async throws -> Void) -> Row {
         var copy = self
@@ -150,7 +160,7 @@ public struct Row: StackbarView {
         let refs = actions.map { action in
             ActionRef(id: context.register("row/\(key)/\(action.title)", action.handler), title: action.title, shortcut: action.shortcut, role: action.role)
         }
-        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, accessories: accessories, actions: refs))]
+        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, accessories: accessories, actions: refs, preview: preview))]
     }
 }
 

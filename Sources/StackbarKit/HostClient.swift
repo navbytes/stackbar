@@ -187,8 +187,11 @@ public enum Stackbar {
         publish(topic, String(decoding: data, as: UTF8.self))
     }
 
-    public static func notify(_ title: String, body: String? = nil) {
-        HostClient.shared.fire(.notify(title: title, body: body))
+    /// Posts a notification. `actions` become its buttons (up to three); each
+    /// opens its URL, so `NotificationAction("Join", url: link)` joins a call.
+    /// Clicking the notification itself opens your panel.
+    public static func notify(_ title: String, body: String? = nil, actions: [NotificationAction] = []) {
+        HostClient.shared.fire(.notify(title: title, body: body, actions: actions.isEmpty ? nil : actions))
     }
 
     public static func open(_ url: String) {

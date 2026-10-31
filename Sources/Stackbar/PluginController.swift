@@ -21,6 +21,8 @@ final class PluginController: Identifiable {
     private(set) var widget: ViewNode?
     /// The plugin's page in Settings, when its manifest lists `.settings`.
     private(set) var settings: ViewNode?
+    /// What a left click on the status item does, when not the panel.
+    private(set) var menuBarClick: MenuBarClick?
     private(set) var tools: [ToolSpec] = []
     private(set) var problem: String?
     private(set) var building = false
@@ -204,6 +206,8 @@ final class PluginController: Identifiable {
             model?.widgetChanged(self)
         case .render(.settings, let root):
             settings = root
+        case .menuBarClick(let click):
+            menuBarClick = click
         case .tools(let specs):
             tools = specs
         case .log(let level, let message):

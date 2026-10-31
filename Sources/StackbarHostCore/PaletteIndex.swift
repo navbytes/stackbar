@@ -87,23 +87,6 @@ public struct PaletteIndex: Sendable {
     /// Subsequence match with bonuses for word starts and runs; `nil` when
     /// the letters don't appear in order.
     static func score(_ query: String, in text: String) -> Int? {
-        if text.hasPrefix(query) { return 1000 - text.count }
-        if text.contains(query) { return 700 - text.count }
-        var score = 0
-        var run = 0
-        var previous: Character = " "
-        var remaining = Substring(query)
-        for character in text {
-            guard let next = remaining.first else { break }
-            if character == next {
-                remaining = remaining.dropFirst()
-                run += 1
-                score += 10 + run * 5 + (previous == " " || previous == "-" || previous == "/" ? 20 : 0)
-            } else {
-                run = 0
-            }
-            previous = character
-        }
-        return remaining.isEmpty ? score - text.count : nil
+        TextMatch.score(query, in: text)
     }
 }

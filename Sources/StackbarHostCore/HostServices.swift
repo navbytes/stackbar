@@ -8,10 +8,28 @@ import StackbarProtocol
 /// plugin (normally its manifest's, after the install or update sheet). A call
 /// outside them fails with a message naming the capability to add, so an agent
 /// writing the plugin can fix it from the error alone.
+/// A notification as the host posts it, after checking its buttons.
+public struct HostNotification: Equatable, Sendable {
+    public var pluginID: String
+    public var pluginName: String
+    public var title: String
+    public var body: String?
+    /// At most three, each opening an allowed URL.
+    public var actions: [NotificationAction]
+
+    public init(pluginID: String, pluginName: String, title: String, body: String? = nil, actions: [NotificationAction] = []) {
+        self.pluginID = pluginID
+        self.pluginName = pluginName
+        self.title = title
+        self.body = body
+        self.actions = actions
+    }
+}
+
 public final class HostServices: Sendable {
     /// The host's side effects that need a UI or the OS.
     public struct Platform: Sendable {
-        public var notify: @Sendable (_ plugin: String, _ title: String, _ body: String?) -> Void
+        public var notify: @Sendable (HostNotification) -> Void
         public var open: @Sendable (URL) -> Void
         public var copy: @Sendable (String) -> Void
         /// A plugin asked for a declared secret the user hasn't entered.
@@ -20,7 +38,7 @@ public final class HostServices: Sendable {
         public var system: any SystemServices
 
         public init(
-            notify: @escaping @Sendable (String, String, String?) -> Void = { _, _, _ in },
+            notify: @escaping @Sendable (HostNotification) -> Void = { _ in },
             open: @escaping @Sendable (URL) -> Void = { _ in },
             copy: @escaping @Sendable (String) -> Void = { _ in },
             secretMissing: @escaping @Sendable (String, String) -> Void = { _, _ in },
@@ -129,9 +147,16 @@ public final class HostServices: Sendable {
                 return .failure("\(error)")
             }
 
-        case .notify(let title, let body):
+        case .notify(let title, let body, let actions):
             guard notifications.allow(granted.id) else { return .failure("too many notifications; at most 10 a minute") }
-            platform.notify(granted.name, String(title.prefix(200)), body.map { String($0.prefix(1000)) })
+            var buttons: [NotificationAction] = []
+            for action in (actions ?? []).prefix(3) {
+                guard let url = URL(string: action.url), let scheme = url.scheme?.lowercased(), Self.openableSchemes.contains(scheme) else {
+                    return .failure("notification button \"\(action.title)\" opens \(action.url); only https, http, mailto and meeting app URLs can be opened")
+                }
+                buttons.append(NotificationAction(String(action.title.prefix(40)), url: action.url))
+            }
+            platform.notify(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
             return .ok
 
         case .openURL(let string):
@@ -199,7 +224,7 @@ public final class HostServices: Sendable {
 
     /// URL schemes a plugin may open: the web, mail, and the meeting apps
     /// that can't be reached through an https link without a browser tab.
-    static let openableSchemes: Set<String> = ["https", "http", "mailto", "zoommtg", "msteams"]
+    public static let openableSchemes: Set<String> = ["https", "http", "mailto", "zoommtg", "msteams"]
 
     private static func awaitingApproval(_ granted: Manifest, _ what: String) -> HostResult {
         .failure("\(granted.name) needs your approval \(what); open its panel in Stackbar and click Allow")

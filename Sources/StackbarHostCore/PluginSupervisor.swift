@@ -26,6 +26,8 @@ public actor PluginSupervisor {
         case render(Surface, ViewNode)
         case log(LogLevel, String)
         case tools([ToolSpec])
+        /// What a left click on the status item does now (`nil`: the panel).
+        case menuBarClick(MenuBarClick?)
     }
 
     public nonisolated let executable: URL
@@ -43,6 +45,8 @@ public actor PluginSupervisor {
     public private(set) var state: State = .stopped
     public private(set) var views: [Surface: ViewNode] = [:]
     public private(set) var tools: [ToolSpec] = []
+    /// The plugin's left-click action on its status item, if it set one.
+    public private(set) var menuBarClick: MenuBarClick?
     public private(set) var restarts = 0
     /// What the helper's last descendant snapshot found (for tests).
     var trackedDescendants: [Int32] { process?.trackedDescendants ?? [] }
@@ -194,6 +198,7 @@ public actor PluginSupervisor {
         process = helper
         startedAt = .now
         settledCount = 0
+        menuBarClick = nil
         sentCount = startupMessageCount
         triggerMarks = [:]
         consumer = Task { [weak self] in
@@ -293,6 +298,9 @@ public actor PluginSupervisor {
         case .message(.tools(let specs)):
             tools = specs
             onUpdate(.tools(specs))
+        case .message(.menuBarClick(let click)):
+            menuBarClick = click
+            onUpdate(.menuBarClick(click))
         case .message(.toolResult(let id, let text, let isError)):
             finishToolCall(id, text: text, isError: isError, generation: eventGeneration)
         case .stderr(let line):
