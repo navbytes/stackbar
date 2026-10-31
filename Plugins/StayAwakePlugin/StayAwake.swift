@@ -1,4 +1,4 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// Keeps the Mac awake: for a while, until a time, while an app runs, on a
@@ -6,9 +6,9 @@ import Foundation
 /// low, and the host releases the assertion if the plugin ever stops or
 /// crashes, so it can't leave the Mac awake by accident.
 @main
-final class StayAwake: FluidPlugin {
+final class StayAwake: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.stay-awake",
+        id: "io.navbytes.stackbar.stay-awake",
         name: "Stay Awake",
         version: "1.0.0",
         summary: "Keeps your Mac awake for a while, until a time, while an app runs or on a schedule.",
@@ -63,7 +63,7 @@ final class StayAwake: FluidPlugin {
 
     func refresh() async throws {
         do {
-            status = try await Fluid.systemStatus()
+            status = try await Stackbar.systemStatus()
         } catch {
             lastError = "\(error)"
         }
@@ -99,7 +99,7 @@ final class StayAwake: FluidPlugin {
                 finish("Time's up")
             } else if notifyOnEnd, end.timeIntervalSince(now) <= 5 * 60, warnedFor != end, session.total ?? 0 > 10 * 60 {
                 warnedFor = end
-                Fluid.notify("Your Mac can sleep in 5 minutes", body: "Open Stay Awake to add more time.")
+                Stackbar.notify("Your Mac can sleep in 5 minutes", body: "Open Stay Awake to add more time.")
             }
         case .whileRunning(let appID, let name):
             if !status.runningApps.isEmpty, !status.runningApps.contains(where: { $0.id == appID }) { finish("\(name) quit") }
@@ -109,7 +109,7 @@ final class StayAwake: FluidPlugin {
     func finish(_ why: String) {
         session = nil
         lastEnded = why
-        if notifyOnEnd { Fluid.notify("Your Mac can sleep again", body: why) }
+        if notifyOnEnd { Stackbar.notify("Your Mac can sleep again", body: why) }
     }
 
     /// Brings the host's assertion in line with `reason`, and counts awake time.
@@ -124,9 +124,9 @@ final class StayAwake: FluidPlugin {
         guard wanted != held else { return }
         do {
             if let wanted {
-                try await Fluid.keepAwake(display: wanted.display, reason: wanted.reason)
+                try await Stackbar.keepAwake(display: wanted.display, reason: wanted.reason)
             } else {
-                try await Fluid.allowSleep()
+                try await Stackbar.allowSleep()
             }
             held = wanted
             lastError = nil
@@ -281,7 +281,7 @@ final class StayAwake: FluidPlugin {
                 }
                 await self.start(.until(end))
             }
-            let apps = status.runningApps.filter { $0.id != "dev.fluid.app" }.sorted { $0.name < $1.name }
+            let apps = status.runningApps.filter { $0.id != "io.navbytes.stackbar" }.sorted { $0.name < $1.name }
             if !apps.isEmpty {
                 Picker("While an app runs", options: apps.map(\.name), selection: whileRunningName) { name in
                     guard let app = apps.first(where: { $0.name == name }) else { return }
@@ -299,7 +299,7 @@ final class StayAwake: FluidPlugin {
         }
     }
 
-    /// Fluid's Settings window, so the panel stays about starting and stopping.
+    /// Stackbar's Settings window, so the panel stays about starting and stopping.
     var settings: ViewContent {
         Section("Stop or pause") {
             Slider(batteryFloor > 0 ? "Stop below \(Int(batteryFloor))% battery" : "Ignore the battery level", value: batteryFloor, in: 0...50, step: 5, key: "battery") { value in

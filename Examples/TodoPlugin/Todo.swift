@@ -1,13 +1,13 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// A small to-do list kept by the host. It hides finished items while you're
 /// in a Pomodoro focus session (it listens on `focus.state`), and agents can
 /// add to it.
 @main
-final class Todo: FluidPlugin {
+final class Todo: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.example.todo",
+        id: "io.navbytes.stackbar.example.todo",
         name: "To-do",
         summary: "A to-do list that agents can add to.",
         surfaces: [.menuBar, .panel, .window, .widget],

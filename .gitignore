@@ -5,6 +5,6 @@ DerivedData/
 *.xcuserstate
 .DS_Store
 build/
-Fluid.xcodeproj/
+Stackbar.xcodeproj/
 Packaging/*.generated.plist
 Packaging/Widget.entitlements

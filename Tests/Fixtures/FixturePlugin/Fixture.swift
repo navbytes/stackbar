@@ -1,13 +1,13 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// A test plugin that misbehaves on request: its buttons crash the process or
 /// print to stdout, so the supervisor and the stdio guard are tested against a
 /// real process. It also exercises every host service.
 @main
-final class Fixture: FluidPlugin {
+final class Fixture: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.test.fixture",
+        id: "io.navbytes.stackbar.test.fixture",
         name: "Fixture",
         triggers: [.launch, .topic(name: "fixture.inbox")],
         capabilities: [.secret(name: "FIXTURE_SECRET"), .network("127.0.0.1")]
@@ -40,10 +40,10 @@ final class Fixture: FluidPlugin {
             try child.run()
             self.status = "child \(child.processIdentifier)"
         }
-        Button("Secret") { self.status = "secret " + ((try await Fluid.secret("FIXTURE_SECRET")) ?? "missing") }
+        Button("Secret") { self.status = "secret " + ((try await Stackbar.secret("FIXTURE_SECRET")) ?? "missing") }
         Button("Undeclared secret") {
             do {
-                _ = try await Fluid.secret("OTHER")
+                _ = try await Stackbar.secret("OTHER")
                 self.status = "leaked"
             } catch {
                 self.status = "refused"
@@ -51,7 +51,7 @@ final class Fixture: FluidPlugin {
         }
         TextField("URL") { url in
             do {
-                let response = try await Fluid.get(url)
+                let response = try await Stackbar.get(url)
                 self.status = "http \(response.status) \(String(decoding: response.body, as: UTF8.self))"
             } catch {
                 self.status = "http error \(error)"

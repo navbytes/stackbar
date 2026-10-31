@@ -1,13 +1,13 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
-/// The smallest useful Fluid plugin: a menu-bar clock with a panel that shows
+/// The smallest useful Stackbar plugin: a menu-bar clock with a panel that shows
 /// state, a toggle and a button. Needs no network and no secrets; its settings
 /// and laps are `@Stored`, so they survive restarts.
 @main
-final class Clock: FluidPlugin {
+final class Clock: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.example.clock",
+        id: "io.navbytes.stackbar.example.clock",
         name: "Clock",
         surfaces: [.menuBar, .panel],
         triggers: [.launch, .every(.seconds(1))]

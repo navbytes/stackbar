@@ -1,12 +1,12 @@
-import FluidKit
+import StackbarKit
 import Foundation
 
 /// A focus timer in the menu bar. It tells other plugins when a focus session
 /// starts and ends (topic `focus.state`), and keeps today's count.
 @main
-final class Pomodoro: FluidPlugin {
+final class Pomodoro: StackbarPlugin {
     static let manifest = Manifest(
-        id: "dev.fluid.example.pomodoro",
+        id: "io.navbytes.stackbar.example.pomodoro",
         name: "Pomodoro",
         summary: "A focus timer that tells other plugins when you're focusing.",
         surfaces: [.menuBar, .panel, .widget],
@@ -28,10 +28,10 @@ final class Pomodoro: FluidPlugin {
         guard phase != .idle, remaining == 0 else { return }
         if phase == .focus {
             completed[today, default: 0] += 1
-            Fluid.notify("Focus session done", body: "Take \(Int(restMinutes)) minutes.")
+            Stackbar.notify("Focus session done", body: "Take \(Int(restMinutes)) minutes.")
             start(.rest)
         } else {
-            Fluid.notify("Break's over")
+            Stackbar.notify("Break's over")
             stop()
         }
     }
@@ -76,13 +76,13 @@ final class Pomodoro: FluidPlugin {
     private func start(_ next: Phase) {
         phase = next
         endsAt = Date().addingTimeInterval((next == .focus ? focusMinutes : restMinutes) * 60)
-        Fluid.publish("focus.state", next.rawValue)
+        Stackbar.publish("focus.state", next.rawValue)
     }
 
     private func stop() {
         phase = .idle
         endsAt = nil
-        Fluid.publish("focus.state", Phase.idle.rawValue)
+        Stackbar.publish("focus.state", Phase.idle.rawValue)
     }
 
     private func clock(_ seconds: TimeInterval) -> String {

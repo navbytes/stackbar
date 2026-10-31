@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- Fluid app icon, the source for Packaging/Assets.xcassets/AppIcon.appiconset and Packaging/AppIcon.icns. Re-render the PNGs at 16 to 1024 px after editing. -->
+  <!-- Stackbar app icon, the source for Packaging/Assets.xcassets/AppIcon.appiconset and Packaging/AppIcon.icns. Re-render the PNGs at 16 to 1024 px after editing. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
       <stop offset="0" stop-color="#2B3A8F"/>

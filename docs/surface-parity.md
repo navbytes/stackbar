@@ -1,7 +1,7 @@
 # Surface parity
 
 Every node in the view vocabulary, and what each surface does with it. The
-table is generated from `SurfaceParity` (Sources/FluidHostCore/SurfaceParity.swift);
+table is generated from `SurfaceParity` (Sources/StackbarHostCore/SurfaceParity.swift);
 `SurfaceParityTests` fails when the two disagree and prints the table to paste.
 Adding a node to `ViewNode` doesn't compile until `SurfaceParity`, the panel
 renderer and the menu-bar renderer all handle it.
@@ -25,6 +25,6 @@ renderer and the menu-bar renderer all handle it.
 | `textField` | TextField; return submits | TextField; return submits | TextField; return submits | Hidden (click opens the panel) | Drawn disabled | Not listed | `[text____] {id}` |
 | `picker` | Picker | Picker | Picker | Hidden (click opens the panel) | Drawn disabled | Not listed | `title: a | *b* {id}` |
 | `slider` | Slider; sends on release | Slider; sends on release | Slider; sends on release | Hidden (click opens the panel) | Drawn disabled | Not listed | `title: v (min...max) {id}` |
-| `link` | Link; host opens it | Link; host opens it | Link; host opens it | Hidden (click opens the panel) | Link (opens Fluid's URL) | Entry, opens the URL | `<title> url` |
+| `link` | Link; host opens it | Link; host opens it | Link; host opens it | Hidden (click opens the panel) | Link (opens Stackbar's URL) | Entry, opens the URL | `<title> url` |
 | `empty` | ContentUnavailableView | ContentUnavailableView | ContentUnavailableView | Symbol and title | As panel | Not listed | `[symbol] title - message` |
 <!-- ledger:end -->

@@ -4,8 +4,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 swift build
-FLUID_BUILD_TESTS=1 swift test
+STACKBAR_BUILD_TESTS=1 swift test
 if [ "$(uname)" = Darwin ]; then
-    swift build -c release --product Fluid
+    swift build -c release --product Stackbar
 fi
 echo "check: ok"

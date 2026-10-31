@@ -1,4 +1,4 @@
-name: Fluid
+name: Stackbar
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: fluid-${{ github.ref }}
+  group: stackbar-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -28,12 +28,14 @@ jobs:
       - run: swift build
       - run: swift test
         env:
-          FLUID_BUILD_TESTS: '1'
+          STACKBAR_BUILD_TESTS: '1'
 
   # macOS builds run only on a self-hosted runner on a developer's Mac, never on
   # GitHub's macOS runners (billed at about 10x Linux). The job is off until the
   # repository variable FLUID_MAC_RUNNER is "true", so nothing sits queued when
-  # no Mac is online. scripts/mac-runner.sh sets the runner up.
+  # no Mac is online. scripts/mac-runner.sh sets the runner up. The variable and
+  # the runner label `fluid` keep their pre-rename names so the runner already
+  # registered on Naveen's Mac keeps working.
   macos:
     if: vars.FLUID_MAC_RUNNER == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: [self-hosted, macOS, fluid]

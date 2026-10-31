@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>dev.fluid.app</string>
+    <string>io.navbytes.stackbar</string>
     <key>CFBundleName</key>
-    <string>Fluid</string>
+    <string>Stackbar</string>
     <key>CFBundleDisplayName</key>
-    <string>Fluid</string>
+    <string>Stackbar</string>
     <key>CFBundleExecutable</key>
-    <string>Fluid</string>
+    <string>Stackbar</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

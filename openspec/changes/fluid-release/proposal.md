@@ -1,27 +1,27 @@
 ## Why
 
-Naveen wants Fluid shipped to thousands of developers (2026-10-31). The
+Naveen wants Stackbar shipped to thousands of developers (2026-10-31). The
 readiness review
-([Fluid: shipping and App Store readiness](https://claude.ai/artifact/1ch8HnDT62akJxa5x3GWod))
+([Stackbar: shipping and App Store readiness](https://claude.ai/artifact/1ch8HnDT62akJxa5x3GWod))
 found the engine ready and the release machinery missing: no updater, no crash
 reporting, no first-run flow, no release pipeline, and gaps in the app's own
 chrome.
 
 Decided with Naveen on 2026-10-31:
 
-- **No Mac App Store.** Fluid compiles plugin source into executables at
+- **No Mac App Store.** Stackbar compiles plugin source into executables at
   runtime (guideline 2.5.2) and can't run the Xcode toolchain from inside the
-  store's sandbox. Fluid ships as a notarized Developer ID download, through
+  store's sandbox. Stackbar ships as a notarized Developer ID download, through
   GitHub Releases and a Homebrew cask.
 - **License: MIT.**
 - **Crash reports: Sentry, opt-in.** Nothing is sent until the user agrees.
-- **A new name: Stackbar** (stackbar.app). "Fluid" collides with the long-standing Fluid.app. The
+- **A new name: Stackbar** (stackbar.app). The working name "Fluid" collided with the long-standing Fluid.app. The
   rename happens before the first public build; until then, code keeps
-  saying Fluid.
+  saying Stackbar.
 
 ## What Changes
 
-- One release build: app, widget, `fluidctl` and FluidKit, signed with a
+- One release build: app, widget, `stackbarctl` and StackbarKit, signed with a
   secure timestamp, notarized and stapled, as a DMG and a zip.
 - Sparkle 2 updates from an EdDSA-signed appcast; a build number that rises
   on every build.
@@ -40,7 +40,7 @@ Decided with Naveen on 2026-10-31:
 ## Impact
 
 - New dependencies: Sparkle and the Sentry Cocoa SDK, in the app target only.
-  FluidKit, the protocol and plugins don't change.
+  StackbarKit, the protocol and plugins don't change.
 - Naveen has to create a Sentry project (for its DSN), an EdDSA key for
   Sparkle (`generate_keys`, kept in his Keychain), and the notary profile on
   the runner Mac.
