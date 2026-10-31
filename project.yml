@@ -1,0 +1,56 @@
+# XcodeGen spec for the signed app with its widget extension:
+#   brew install xcodegen && xcodegen generate && open Fluid.xcodeproj
+# scripts/bundle.sh builds the app without the widget and needs no Xcode
+# project. The widget needs this project because WidgetKit extensions must be
+# embedded in an app bundle, which SwiftPM can't produce.
+name: Fluid
+options:
+  bundleIdPrefix: dev.fluid
+  deploymentTarget:
+    macOS: "26.0"
+packages:
+  Fluid:
+    path: .
+targets:
+  Fluid:
+    type: application
+    platform: macOS
+    sources: [Sources/Fluid]
+    dependencies:
+      - package: Fluid
+        product: FluidHostCore
+      - package: Fluid
+        product: FluidUI
+      - target: FluidWidget
+        embed: true
+    info:
+      path: Packaging/Info.generated.plist
+      properties:
+        CFBundleShortVersionString: "0.9.0"
+        LSUIElement: true
+        LSMinimumSystemVersion: "26.0"
+    entitlements:
+      path: Packaging/Fluid.entitlements
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: dev.fluid.app
+  FluidWidget:
+    type: app-extension
+    platform: macOS
+    sources: [Widget]
+    dependencies:
+      - package: Fluid
+        product: FluidHostCore
+      - package: Fluid
+        product: FluidUI
+    info:
+      path: Packaging/Widget-Info.generated.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Packaging/Widget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [group.dev.fluid]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: dev.fluid.app.widget
