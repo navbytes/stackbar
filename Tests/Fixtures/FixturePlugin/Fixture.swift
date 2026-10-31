@@ -32,6 +32,14 @@ final class Fixture: FluidPlugin {
             self.count += 10
         }
         Button("Crash") { exit(3) }
+        Button("Spawn") {
+            // A grandchild the host must clean up when this plugin dies.
+            let child = Process()
+            child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+            child.arguments = ["300"]
+            try child.run()
+            self.status = "child \(child.processIdentifier)"
+        }
         Button("Secret") { self.status = "secret " + ((try await Fluid.secret("FIXTURE_SECRET")) ?? "missing") }
         Button("Undeclared secret") {
             do {

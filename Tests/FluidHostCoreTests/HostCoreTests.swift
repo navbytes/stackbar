@@ -276,4 +276,38 @@ final class PluginSupervisorTests: XCTestCase {
         let listeners = await services.bus.listeners(of: "fixture.inbox")
         XCTAssertEqual(listeners, [], "a stopped plugin stops listening")
     }
+
+    func testAPluginsChildrenDieWithIt() async throws {
+        let fast = BackoffPolicy(initialDelay: 0.05, multiplier: 1, maxDelay: 0.05, maxConsecutiveFailures: 3)
+        let supervisor = try PluginSupervisor.make(executable: Self.helper("FixturePlugin"), policy: fast)
+        await supervisor.start()
+        _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
+        func panelText() async -> String { await supervisor.views[.panel].map { TreeTextRenderer.render($0) } ?? "" }
+
+        // A crashed helper's `Process` children are re-parented before the host
+        // hears of it (see PluginProcess), so a stop is what is checked here.
+        await supervisor.event("button/Spawn")
+        let spawned = await waitUntil(10) { await panelText().contains("status child ") }
+        XCTAssertTrue(spawned)
+        let text = await panelText()
+        let digits = text.components(separatedBy: "status child ").last?.prefix { $0.isNumber } ?? ""
+        let pid = try XCTUnwrap(Int32(digits))
+        XCTAssertTrue(Self.isAlive(pid))
+
+        await supervisor.stop()
+        let gone = await waitUntil(10) { !Self.isAlive(pid) }
+        XCTAssertTrue(gone, "a plugin's child outlived it")
+    }
+
+    /// True if `pid` exists and is not a zombie waiting for a reaper.
+    static func isAlive(_ pid: Int32) -> Bool {
+        guard kill(pid, 0) == 0 else { return false }
+        #if os(Linux)
+        if let stat = try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8),
+           let close = stat.lastIndex(of: ")") {
+            return !stat[close...].hasPrefix(") Z")
+        }
+        #endif
+        return true
+    }
 }

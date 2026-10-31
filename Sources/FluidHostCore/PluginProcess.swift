@@ -14,11 +14,15 @@ import Darwin
 /// fail quietly instead of killing the host: `SIGPIPE` is ignored process-wide
 /// the first time a helper starts.
 ///
-/// ponytail: launched with Foundation's `Process`, so a helper is not the
-/// leader of its own process group and a timeout reaps only the helper, not
-/// anything it spawned. Vee's `SystemProcessRunner` already solves this with
-/// `posix_spawn` + `killpg`; it moves into the shared package in phase 1 and
-/// replaces this launch path.
+/// Helpers are launched with `posix_spawn` as process-group leaders (see
+/// `ChildProcess`). Stopping one stops everything it started: its group, and
+/// every descendant found by walking the process table (Foundation's `Process`
+/// gives each child a group of its own). When a helper crashes, anything left
+/// in its group is killed.
+///
+/// ponytail: a crashed helper's `Process`-spawned children were in their own
+/// groups and are re-parented before the host learns of the crash, so they
+/// can outlive it. Fix with a periodic descendant snapshot if that bites.
 public final class PluginProcess: @unchecked Sendable {
     public enum Event: Sendable {
         case message(PluginMessage)
@@ -28,97 +32,113 @@ public final class PluginProcess: @unchecked Sendable {
     }
 
     public let executable: URL
-    private let process = Process()
-    private let stdinPipe = Pipe()
-    private let stdoutPipe = Pipe()
-    private let stderrPipe = Pipe()
+    private let arguments: [String]
+    private let environment: [String: String]?
     private let writeLock = NSLock()
+    private var child: ChildProcess?
 
     public init(executable: URL, arguments: [String] = [], environment: [String: String]? = nil) {
         self.executable = executable
-        process.executableURL = executable
-        process.arguments = arguments
-        if let environment { process.environment = environment }
+        self.arguments = arguments
+        self.environment = environment
     }
 
-    public var processIdentifier: Int32 { process.processIdentifier }
-    public var isRunning: Bool { process.isRunning }
+    public var processIdentifier: Int32 { child?.pid ?? 0 }
+    public var isRunning: Bool { child?.isRunning ?? false }
 
-    /// Starts the helper. `onEvent` is called from background threads, in
-    /// order per pipe; `.exit` comes last, after both pipes reached EOF.
+    /// Starts the helper in its own process group. `onEvent` is called from
+    /// background threads, in order per pipe; `.exit` comes last, after both
+    /// pipes reached EOF and the helper was reaped.
     public func start(onEvent: @escaping @Sendable (Event) -> Void) throws {
         Self.ignoreSIGPIPE
-        process.standardInput = stdinPipe
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
+        let child = try ChildProcess(executable: executable.path, arguments: arguments, environment: environment)
+        self.child = child
 
         let drained = DispatchGroup()
         drained.enter()
         drained.enter()
         drained.enter()
-        process.terminationHandler = { _ in drained.leave() }
-        try process.run()
+        child.onExit { _ in
+            child.sweepGroup()
+            drained.leave()
+        }
 
-        Self.drain(stdoutPipe.fileHandleForReading, group: drained) { line in
+        Self.drain(child.stdout, group: drained) { line in
             if let message = try? LineCodec.decode(PluginMessage.self, from: line) {
                 onEvent(.message(message))
             } else {
                 onEvent(.undecodable(String(decoding: line, as: UTF8.self)))
             }
         }
-        Self.drain(stderrPipe.fileHandleForReading, group: drained) { line in
+        Self.drain(child.stderr, group: drained) { line in
             onEvent(.stderr(String(decoding: line, as: UTF8.self)))
         }
-        let process = process
         drained.notify(queue: .global()) {
-            onEvent(.exit(process.terminationStatus))
+            onEvent(.exit(child.terminationStatus ?? -1))
         }
     }
 
     public func send(_ message: HostMessage) {
-        guard let data = try? LineCodec.encode(message) else { return }
+        guard let child, let data = try? LineCodec.encode(message) else { return }
         writeLock.lock()
         defer { writeLock.unlock() }
-        try? stdinPipe.fileHandleForWriting.write(contentsOf: data)
+        try? child.stdin.write(contentsOf: data)
     }
 
-    /// Asks the helper to exit, then escalates: SIGTERM after `grace`, SIGKILL
-    /// after another `grace`.
+    /// Asks the helper to exit, then escalates: SIGTERM to its whole process
+    /// group after `grace`, SIGKILL after another `grace`. Anything the helper
+    /// spawned goes with it.
     public func terminate(grace: Double = 2) {
+        guard let child else { return }
+        // Remember what the helper started before asking it to exit, while it
+        // is still there to anchor the tree; once it exits, its children are
+        // re-parented and lost.
+        let started = child.descendants()
         send(.shutdown)
-        try? stdinPipe.fileHandleForWriting.close()
-        let pid = process.processIdentifier
-        let process = process
-        DispatchQueue.global().asyncAfter(deadline: .now() + grace) {
-            guard process.isRunning else { return }
-            process.terminate()
-            DispatchQueue.global().asyncAfter(deadline: .now() + grace) {
-                if process.isRunning { kill(pid, SIGKILL) }
+        writeLock.lock()
+        try? child.stdin.close()
+        writeLock.unlock()
+        DispatchQueue.global().async {
+            if !child.wait(timeout: grace) {
+                child.signalTree(SIGTERM)
+                if !child.wait(timeout: grace) { child.signalTree(SIGKILL) }
+            }
+            // Whatever it started and left behind goes too.
+            for pid in started {
+                _ = killpg(pid, SIGKILL)
+                _ = kill(pid, SIGKILL)
             }
         }
     }
 
     /// Runs `executable --manifest` and decodes what it prints.
     public static func readManifest(executable: URL, timeout: Double = 15) throws -> Manifest {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["--manifest"]
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        let exited = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in exited.signal() }
-        try process.run()
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        if exited.wait(timeout: .now() + timeout) == .timedOut {
-            process.terminate()
+        let child = try ChildProcess(executable: executable.path, arguments: ["--manifest"], discardStderr: true)
+        try? child.stdin.close()
+        let collected = Collected()
+        let reader = Thread {
+            collected.set(child.stdout.readDataToEndOfFile())
+        }
+        reader.start()
+        guard child.wait(timeout: timeout) else {
+            child.signalGroup(SIGKILL)
             throw ManifestError.timedOut(executable.path)
         }
+        let data = collected.wait(timeout: 2)
         do {
             return try LineCodec.decode(Manifest.self, from: data)
         } catch {
             throw ManifestError.unreadable(executable.path, String(decoding: data.prefix(500), as: UTF8.self))
+        }
+    }
+
+    private final class Collected: @unchecked Sendable {
+        private var data = Data()
+        private let done = DispatchSemaphore(value: 0)
+        func set(_ value: Data) { data = value; done.signal() }
+        func wait(timeout: Double) -> Data {
+            _ = done.wait(timeout: .now() + timeout)
+            return data
         }
     }
 
