@@ -56,7 +56,7 @@ public struct PluginBuilder: Sendable {
         let code = try Data(contentsOf: source)
         // The key covers FluidKit too: after an update of Fluid, a plugin
         // built against the old FluidKit must be rebuilt, not reused.
-        let key = Self.cacheKey(code + Data("\(configuration)|\(fluidPackage.path)|\(Self.frameworkDigest(fluidPackage))".utf8))
+        let key = Self.cacheKey(code + Data("\(configuration)|\(fluidPackage.path)|\(Self.frameworkDigest(fluidPackage))|\(Self.layoutVersion)".utf8))
         let target = Self.targetName(source.deletingPathExtension().lastPathComponent, key: key)
         let binary = workspace.appendingPathComponent(".build/\(configuration)/\(target)")
         let sourcesDir = workspace.appendingPathComponent("Sources/\(target)", isDirectory: true)
@@ -79,7 +79,9 @@ public struct PluginBuilder: Sendable {
         let copied = sourcesDir.appendingPathComponent("Plugin.swift")
         try code.write(to: copied)
         let targets = try pruneAndList(keeping: target)
-        try Self.manifest(fluidPackage: fluidPackage, targets: targets).write(to: workspace.appendingPathComponent("Package.swift"), atomically: true, encoding: .utf8)
+        let infoPlist = workspace.appendingPathComponent("Info.plist")
+        try Data(Self.placeholderInfoPlist.utf8).write(to: infoPlist, options: .atomic)
+        try Self.manifest(fluidPackage: fluidPackage, targets: targets, infoPlist: infoPlist).write(to: workspace.appendingPathComponent("Package.swift"), atomically: true, encoding: .utf8)
 
         let (status, log) = try Self.run(Self.swift + ["build", "-c", configuration, "--package-path", workspace.path, "--product", target], timeout: timeout)
         guard status == 0, FileManager.default.isExecutableFile(atPath: binary.path) else {
@@ -118,13 +120,20 @@ public struct PluginBuilder: Sendable {
         return keep.sorted()
     }
 
-    static func manifest(fluidPackage: URL, targets: [String]) -> String {
-        let path = fluidPackage.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+    static func manifest(fluidPackage: URL, targets: [String], infoPlist: URL? = nil) -> String {
+        let escape = { (path: String) in path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
+        let path = escape(fluidPackage.path)
+        // On macOS each helper carries an Info.plist in __TEXT,__info_plist:
+        // the App Sandbox refuses to start a bare executable whose signature
+        // has no bundle identifier. `sign` writes the plugin's id into it.
+        let linker = infoPlist.map { plist in
+            ", linkerSettings: [.unsafeFlags([\"-Xlinker\", \"-sectcreate\", \"-Xlinker\", \"__TEXT\", \"-Xlinker\", \"__info_plist\", \"-Xlinker\", \"\(escape(plist.path))\"], .when(platforms: [.macOS]))]"
+        } ?? ""
         // SwiftPM names a path dependency after its folder, whatever the
         // package calls itself.
         let identity = fluidPackage.standardizedFileURL.lastPathComponent.lowercased()
         let lines = targets.map { target in
-            "        .executableTarget(name: \"\(target)\", dependencies: [.product(name: \"FluidKit\", package: \"\(identity)\")], path: \"Sources/\(target)\"),"
+            "        .executableTarget(name: \"\(target)\", dependencies: [.product(name: \"FluidKit\", package: \"\(identity)\")], path: \"Sources/\(target)\"\(linker)),"
         }
         return """
         // swift-tools-version: 6.2
@@ -142,6 +151,47 @@ public struct PluginBuilder: Sendable {
         )
 
         """
+    }
+
+    /// Bumped when what a build produces changes, so cached helpers rebuild
+    /// (2: the embedded Info.plist).
+    static let layoutVersion = 2
+
+    /// The Info.plist linked into every helper. Its bundle identifier is a
+    /// placeholder followed by a comment, so `sign` can write the real id
+    /// into the binary without changing the section's size.
+    static let placeholderID = "dev.fluid.plugin-id-placeholder"
+    static let placeholderSlot = placeholderID + "</string><!--" + String(repeating: "x", count: 200) + "-->"
+    static var placeholderInfoPlist: String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleIdentifier</key>
+            <string>\(placeholderSlot)
+        </dict>
+        </plist>
+
+        """
+    }
+
+    /// Writes `id` over the placeholder bundle identifier in a helper's bytes.
+    static func stampBundleID(_ id: String, into binary: Data) throws -> Data {
+        guard id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == ".") }) else { throw Failure(diagnostics: [], log: "plugin id \(id) can't be a bundle identifier") }
+        let slot = Data(placeholderSlot.utf8)
+        let head = id + "</string><!--"
+        let padding = slot.count - head.utf8.count - 3
+        guard padding >= 0 else { throw Failure(diagnostics: [], log: "plugin id \(id) is too long to sandbox") }
+        let replacement = Data((head + String(repeating: "x", count: padding) + "-->").utf8)
+        guard let range = binary.range(of: slot), binary[range.upperBound...].range(of: slot) == nil else {
+            throw Failure(diagnostics: [], log: "the helper has no Info.plist to stamp; rebuild it")
+        }
+        var stamped = binary
+        stamped.replaceSubrange(range, with: replacement)
+        return stamped
     }
 
     /// A valid, readable module name: `Clock_1a2b3c…`.
@@ -298,7 +348,8 @@ public struct PluginBuilder: Sendable {
         let temporary = folder.appendingPathComponent("\(name).\(UUID().uuidString)")
         let entitlementsFile = folder.appendingPathComponent("\(name).entitlements")
         defer { try? FileManager.default.removeItem(at: temporary) }
-        try FileManager.default.copyItem(at: binary, to: temporary)
+        try Self.stampBundleID(manifest.id, into: Data(contentsOf: binary)).write(to: temporary)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: temporary.path)
         try entitlements.write(to: entitlementsFile)
         let (status, log) = try Self.run(["codesign", "--force", "--sign", "-", "--identifier", manifest.id, "--entitlements", entitlementsFile.path, temporary.path])
         if status != 0 { throw Failure(diagnostics: [], log: log) }

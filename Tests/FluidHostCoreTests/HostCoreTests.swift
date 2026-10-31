@@ -77,13 +77,24 @@ final class PluginBuilderTests: XCTestCase {
         ])
     }
 
-    func testCacheKeysAndNames() {
+    func testCacheKeysAndNames() throws {
         XCTAssertEqual(PluginBuilder.cacheKey(Data("a".utf8)), PluginBuilder.cacheKey(Data("a".utf8)))
         XCTAssertNotEqual(PluginBuilder.cacheKey(Data("a".utf8)), PluginBuilder.cacheKey(Data("b".utf8)))
         XCTAssertEqual(PluginBuilder.sanitizedName("my plugin.v2"), "my-plugin-v2")
         let manifest = PluginBuilder.manifest(fluidPackage: URL(fileURLWithPath: "/src/Fluid"), targets: ["Clock_ab"])
         XCTAssertTrue(manifest.contains(#".package(path: "/src/Fluid")"#))
         XCTAssertTrue(manifest.contains(#".executableTarget(name: "Clock_ab", dependencies: [.product(name: "FluidKit", package: "fluid")], path: "Sources/Clock_ab")"#))
+        let linked = PluginBuilder.manifest(fluidPackage: URL(fileURLWithPath: "/src/Fluid"), targets: ["Clock_ab"], infoPlist: URL(fileURLWithPath: "/w/Info.plist"))
+        XCTAssertTrue(linked.contains(#"path: "Sources/Clock_ab", linkerSettings: [.unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", "/w/Info.plist"], .when(platforms: [.macOS]))]),"#), linked)
+
+        // The id is written over the placeholder without changing the size.
+        let binary = Data("head".utf8) + Data(PluginBuilder.placeholderInfoPlist.utf8) + Data("tail".utf8)
+        let stamped = try PluginBuilder.stampBundleID("dev.fluid.clock", into: binary)
+        XCTAssertEqual(stamped.count, binary.count)
+        let plist = String(decoding: stamped.dropFirst(4).dropLast(4), as: UTF8.self)
+        let parsed = try PropertyListSerialization.propertyList(from: Data(plist.utf8), format: nil) as? [String: String]
+        XCTAssertEqual(parsed?["CFBundleIdentifier"], "dev.fluid.clock")
+        XCTAssertThrowsError(try PluginBuilder.stampBundleID("dev.fluid.clock", into: Data("no plist".utf8)))
         XCTAssertEqual(PluginBuilder.targetName("my plugin", key: "1f"), "myplugin_1f")
         XCTAssertEqual(PluginBuilder.targetName("3d", key: "1f"), "Plugin3d_1f")
     }
