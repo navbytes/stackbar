@@ -60,6 +60,18 @@ never runs concurrently with itself and needs no locks.
 the view vocabulary, triggers, capabilities, host services and agent tools.
 It is written for coding agents, and the authoring MCP server serves it too.
 
+## Bundled plugins
+
+`Plugins/` holds the utilities that ship with the app (install them from the
+Fluid menu or Settings). `Examples/` are small plugins that each teach one idea.
+
+| Plugin | What it does | Needs |
+| --- | --- | --- |
+| Clipboard History | Everything you copy, searchable, with pins, ⌘1–⌘9 to paste into the app you were in, images, ignored apps (password managers by default) and a pause. ⌘⇧V opens it. | `.clipboard` |
+| Stay Awake | Keeps the Mac awake indefinitely, for a while, until a time, while an app runs, or on a weekday schedule. Lets go below a battery level or in Low Power Mode. | `.power` |
+| Up Next | The meeting on now or next in the menu bar with a countdown, one-click join for Zoom, Meet, Teams, Webex and more, reminders, auto-join, calendar filters. ⌃⌥J opens it. | `.calendar` |
+| PR Cockpit | Pull requests waiting on your review and your own, with checks, review decision and conflicts; notifies on new requests, approvals and failing checks. | GitHub token |
+
 ## What the host provides
 
 - **Surfaces:** menu bar, panel (popover), window, desktop widget (WidgetKit,
@@ -69,8 +81,13 @@ It is written for coding agents, and the authoring MCP server serves it too.
 - **Services:** per-plugin storage (`@Stored`), secrets (Keychain), HTTP to
   declared hosts only, an OAuth broker (authorization code with PKCE, refresh,
   tokens in the Keychain), pub/sub between plugins, notifications, opening URLs
-  and the clipboard.
-- **Triggers:** launch, intervals, wake from sleep, watched files, topics.
+  and the clipboard. Behind their own capabilities: clipboard history and
+  paste, keeping the Mac awake with battery and running apps, and calendar
+  events. Outside the app these are simulated, so plugins that use them are
+  tested on Linux too.
+- **Triggers:** launch, intervals, wake from sleep, watched files, topics,
+  clipboard changes. A manifest can also declare a global `hotkey` that opens
+  its panel.
 - **Capabilities are enforced.** A plugin can only reach the hosts, secrets and
   OAuth providers its manifest declares and the user approved. New or changed
   capabilities need approval before they apply, and the network audit shows
@@ -158,8 +175,8 @@ The macOS job runs only on a self-hosted runner: run
 
 Built and tested on Linux: the protocol, SDK, host core, services, OAuth,
 capability enforcement and approvals, MCP servers, bundles and the index, the
-soak runner, and all six examples (Clock, PR Cockpit, Pomodoro, Todo, Weather,
-CI Status).
+soak runner, the five examples (Clock, Pomodoro, Todo, Weather, CI Status) and
+the four bundled plugins against a simulated clipboard, battery and calendar.
 
 Still to check on a Mac:
 
@@ -171,7 +188,9 @@ Still to check on a Mac:
 4. **The sandbox:** with `FLUID_SANDBOX=1`, the helper is signed ad hoc with
    entitlements from its manifest, and a plugin without `.network` cannot reach
    the network.
-5. **The memory gate:** `fluidctl soak` PR Cockpit for a day, and watch the
+5. **The system services:** clipboard reads and paste (with Accessibility),
+   power assertions, battery and EventKit (`openspec/changes/fluid-plugins`).
+6. **The memory gate:** `fluidctl soak` PR Cockpit for a day, and watch the
    host in Activity Monitor.
 
 Known gaps are marked `ponytail:` in the code.

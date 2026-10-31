@@ -43,7 +43,8 @@ final class AppModel {
                 notify: { plugin, title, body in Task { @MainActor in Platform.notify(plugin: plugin, title: title, body: body) } },
                 open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },
                 copy: { text in Task { @MainActor in Platform.copy(text) } },
-                secretMissing: { pluginID, name in secretRouter.route(pluginID, name) }
+                secretMissing: { pluginID, name in secretRouter.route(pluginID, name) },
+                system: MacSystem(images: ClipboardImageStore(directory: FluidPaths.dataDirectory.appendingPathComponent("ClipboardImages", isDirectory: true)))
             )
         )
         secretRouter.model = self
@@ -125,11 +126,14 @@ final class AppModel {
         return sources
     }
 
-    /// Copies the bundled example plugins into the plugins folder.
+    /// Copies the bundled plugins (Plugins/) and examples (Examples/) into the
+    /// plugins folder, skipping any already there.
     @discardableResult
     func installExamples() -> Int {
-        let examples = builder.fluidPackage.appendingPathComponent("Examples", isDirectory: true)
-        let files = FileManager.default.enumerator(at: examples, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
+        let folders = ["Plugins", "Examples"].map { builder.fluidPackage.appendingPathComponent($0, isDirectory: true) }
+        let files = folders.flatMap { folder in
+            FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
+        }
         var count = 0
         for file in files {
             let destination = FluidPaths.pluginsDirectory.appendingPathComponent(file.lastPathComponent)

@@ -88,6 +88,14 @@ public actor PluginSession {
         try await settle()
     }
 
+    /// Fires a trigger (a simulated copy, say) and waits until it is handled.
+    public func trigger(_ reason: TriggerReason) async throws {
+        guard let supervisor else { throw SessionError.notRunning }
+        await supervisor.send(.trigger(reason: reason))
+        expected += 1
+        try await settle()
+    }
+
     public func callTool(_ name: String, arguments: [String: EventValue]) async throws -> (text: String, isError: Bool) {
         guard let supervisor else { throw SessionError.notRunning }
         let result = await supervisor.callTool(name, arguments: arguments)

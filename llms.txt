@@ -82,13 +82,20 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `Fluid.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
 | `Fluid.notify(title, body:)`, `Fluid.open(url)`, `Fluid.copy(text)` | nothing |
 | `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing |
+| `try await Fluid.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
+| `try await Fluid.setClipboard(.text/.files/.image(id:))`, `try await Fluid.paste(content)` (into the app the user was in; needs Accessibility for Fluid) | `.clipboard` |
+| `try await Fluid.keepAwake(display:, reason:)`, `Fluid.allowSleep()`; the host releases it if the plugin stops | `.power` |
+| `try await Fluid.systemStatus()`: batteryLevel, onACPower, lowPowerMode, runningApps | `.power` |
+| `try await Fluid.calendarEvents(from:, to:)` returns `[CalendarEvent]` (title, start, end, location, notes, url, participation), 31 days at most | `.calendar` |
 
 Don't use URLSession, Process or files directly: plugins run sandboxed and
 only host calls are allowed through. Errors from host calls say which
 capability to add.
 
 Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
-`.file(path: "~/x")`, `.topic(name: "t")`.
+`.file(path: "~/x")`, `.topic(name: "t")`, `.clipboard`.
+
+`Manifest(..., hotkey: "cmd+shift+v")` opens the panel from anywhere.
 
 ## Loop
 
@@ -98,4 +105,7 @@ Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
 4. `fluid_logs` when something is off. Stray `print` goes to the log.
 
 From a terminal: `fluidctl build|render|manifest <file.swift>`,
-`fluidctl render <file> --event <id>`.
+`fluidctl render <file> --event <id>`. Outside the app the clipboard, battery
+and calendar are simulated: `fluidctl render <file> --copy "text"` (or the
+`fluid_simulate_copy` tool) pretends the user copied something, and
+`FLUID_CALENDAR=events.json` sets the calendar (a sample day otherwise).

@@ -14,7 +14,10 @@ usage:
   fluidctl build <plugin.swift>
   fluidctl manifest <plugin.swift | helper>
   fluidctl render <plugin.swift | helper> [--surface menuBar|panel|window|widget]
-                  [--event <action-id>[=value]]... [--tool name[:json]] [--json] [--png <dir>] [--verbose]
+                  [--event <action-id>[=value]]... [--tool name[:json]] [--copy <text>]...
+                  [--json] [--png <dir>] [--verbose]
+                  --copy pretends you copied text in another app (clipboard plugins);
+                  the clipboard, battery and calendar are simulated (FLUID_CALENDAR=<events.json>)
   fluidctl mcp                      authoring MCP server on stdio (for coding agents)
   fluidctl agent [<plugin>...]      runtime MCP gateway on stdio: bridges to the running
                                     app, or runs the given plugins itself when it isn't
@@ -49,6 +52,10 @@ func note(_ message: String) {
 
 let builder = PluginBuilder(fluidPackage: FluidPaths.fluidPackage(), cacheRoot: FluidPaths.buildCache)
 
+/// fluidctl runs plugins against a simulated clipboard, battery and calendar
+/// (`FLUID_CALENDAR` points at a JSON file of events; otherwise a sample day).
+let simulatedSystem = SimulatedSystem.fromEnvironment()
+
 func makeServices() -> HostServices {
     HostServices(
         storage: StorageStore(directory: FluidPaths.storageDirectory),
@@ -57,7 +64,8 @@ func makeServices() -> HostServices {
             notify: { plugin, title, body in note("[notify] \(plugin): \(title)" + (body.map { " — \($0)" } ?? "")) },
             open: { url in note("[open] \(url.absoluteString)") },
             copy: { text in note("[copy] \(text.prefix(200))") },
-            secretMissing: { _, name in note("[secret] \(name) is not set; run: fluidctl secret set \(name) <value>") }
+            secretMissing: { _, name in note("[secret] \(name) is not set; run: fluidctl secret set \(name) <value>") },
+            system: simulatedSystem
         )
     )
 }
@@ -111,6 +119,8 @@ func render(_ path: String, options: [String]) async {
             let spec = value(after: "--tool", in: options, at: &index)
             let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
             steps.append(("tool", parts[0], parts.count > 1 ? parts[1] : nil))
+        case "--copy":
+            steps.append(("copy", value(after: "--copy", in: options, at: &index), nil))
         case "--json": asJSON = true
         case "--png": pngDirectory = value(after: "--png", in: options, at: &index)
         case "--verbose": verbose = true
@@ -136,6 +146,8 @@ func render(_ path: String, options: [String]) async {
     for step in steps {
         if step.kind == "event" {
             _ = await run("fluid_send_event", ["action": .string(step.name), "value": step.value.map(JSONValue.string) ?? .null])
+        } else if step.kind == "copy" {
+            _ = await run("fluid_simulate_copy", ["text": .string(step.name)])
         } else {
             let arguments = step.value.flatMap { try? JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) } ?? [:]
             let result = await run("fluid_call_tool", ["name": .string(step.name), "arguments": arguments])

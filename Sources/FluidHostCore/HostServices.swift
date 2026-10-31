@@ -16,17 +16,21 @@ public final class HostServices: Sendable {
         public var copy: @Sendable (String) -> Void
         /// A plugin asked for a declared secret the user hasn't entered.
         public var secretMissing: @Sendable (_ pluginID: String, _ name: String) -> Void
+        /// The clipboard, power and calendar.
+        public var system: any SystemServices
 
         public init(
             notify: @escaping @Sendable (String, String, String?) -> Void = { _, _, _ in },
             open: @escaping @Sendable (URL) -> Void = { _ in },
             copy: @escaping @Sendable (String) -> Void = { _ in },
-            secretMissing: @escaping @Sendable (String, String) -> Void = { _, _ in }
+            secretMissing: @escaping @Sendable (String, String) -> Void = { _, _ in },
+            system: any SystemServices = UnsupportedSystem()
         ) {
             self.notify = notify
             self.open = open
             self.copy = copy
             self.secretMissing = secretMissing
+            self.system = system
         }
     }
 
@@ -123,7 +127,60 @@ public final class HostServices: Sendable {
             guard text.utf8.count <= 1024 * 1024 else { return .failure("text is too large to copy") }
             platform.copy(text)
             return .ok
+
+        case .clipboardRead:
+            guard granted.capabilities.contains(.clipboard) else { return Self.missing(.clipboard, "read the clipboard") }
+            return .value(platform.system.readClipboard().map(SystemCodec.encode))
+
+        case .clipboardWrite(let content), .paste(let content):
+            guard granted.capabilities.contains(.clipboard) else { return Self.missing(.clipboard, "write or paste clipboard content") }
+            if case .text(let text) = content, text.utf8.count > 1024 * 1024 { return .failure("text is too large to copy") }
+            do {
+                if case .paste = call { try await platform.system.paste(content) } else { try platform.system.writeClipboard(content) }
+                return .ok
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .keepAwake(let request):
+            // Releasing never needs the capability, so a revoked plugin can let go.
+            guard request == nil || granted.capabilities.contains(.power) else { return Self.missing(.power, "keep the Mac awake") }
+            do {
+                try platform.system.keepAwake(request.map { KeepAwakeRequest(display: $0.display, reason: "\(granted.name): \($0.reason.prefix(120))") }, pluginID: granted.id)
+                return .ok
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .systemStatus:
+            guard granted.capabilities.contains(.power) else { return Self.missing(.power, "read battery and running apps") }
+            return .value(SystemCodec.encode(platform.system.systemStatus()))
+
+        case .calendarEvents(let from, let to):
+            guard granted.capabilities.contains(.calendar) else { return Self.missing(.calendar, "read calendar events") }
+            guard to > from else { return .failure("calendarEvents needs to > from") }
+            guard to.timeIntervalSince(from) <= 31 * 86400 + 3600 else { return .failure("calendarEvents covers at most 31 days at a time") }
+            do {
+                let events = try await platform.system.calendarEvents(from: from, to: to).prefix(500).map { event -> CalendarEvent in
+                    var event = event
+                    event.notes = event.notes.map { String($0.prefix(4000)) }
+                    return event
+                }
+                return .value(SystemCodec.encode(Array(events)))
+            } catch {
+                return .failure("\(error)")
+            }
         }
+    }
+
+    /// Lets go of anything the plugin holds in the OS (its power assertion).
+    /// The supervisor calls it whenever the helper stops or exits.
+    public func release(pluginID: String) {
+        try? platform.system.keepAwake(nil, pluginID: pluginID)
+    }
+
+    private static func missing(_ capability: Capability, _ what: String) -> HostResult {
+        .failure("to \(what), add .\(capability.caseName) to the manifest's capabilities")
     }
 }
 

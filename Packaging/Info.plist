@@ -22,6 +22,10 @@
     <true/>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.developer-tools</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Fluid</string>
 </dict>

@@ -44,6 +44,10 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             MCPTool(name: "fluid_call_tool", description: "Call one of the plugin's agent tools.", properties: [
                 "path": path, "name": MCPTool.property("string", "Tool name"), "arguments": MCPTool.property("object", "Tool arguments"),
             ], required: ["path", "name"]),
+            MCPTool(name: "fluid_simulate_copy", description: "Pretend the user copied text in another app (the simulated clipboard), fire the plugin's clipboard trigger, and return the new render. For plugins with the .clipboard trigger.", properties: [
+                "path": path, "text": MCPTool.property("string", "What was copied"), "app": MCPTool.property("string", "The app it was copied from (default Safari)"),
+                "concealed": MCPTool.property("boolean", "Marked as a password by the copying app"),
+            ], required: ["path", "text"]),
             MCPTool(name: "fluid_logs", description: "Recent log lines from the plugin: its errors, warnings and stray prints.", properties: [
                 "path": path, "lines": MCPTool.property("number", "How many (default 50)"),
             ], required: ["path"]),
@@ -84,6 +88,14 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
                 let toolArguments = (arguments["arguments"]?.object ?? [:]).compactMapValues(\.eventValue)
                 let result = try await session.callTool(tool, arguments: toolArguments)
                 return .text(result.text, isError: result.isError)
+            case "fluid_simulate_copy":
+                guard let system = services.platform.system as? SimulatedSystem else { return .text("the clipboard is only simulated in fluidctl", isError: true) }
+                let session = session(for: url)
+                try await session.ensureRunning()
+                let app = arguments["app"]?.string ?? "Safari"
+                system.simulateCopy(arguments["text"]?.string ?? "", app: SystemStatus.App(id: "app.\(app.lowercased().filter(\.isLetter))", name: app), concealed: arguments["concealed"]?.bool ?? false)
+                try await session.trigger(.clipboard)
+                return await render(session, surfaces: [.menuBar, .panel], format: "text")
             case "fluid_logs":
                 let count = Int(arguments["lines"]?.number ?? 50)
                 let logs = await existing(url)?.logs(last: count) ?? []

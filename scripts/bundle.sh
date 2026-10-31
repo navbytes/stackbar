@@ -20,7 +20,7 @@ swift build -c release --product fluidctl
 BIN=$(swift build -c release --show-bin-path)
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/FluidKit/Sources" "$APP/Contents/Resources/FluidKit/Examples"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/FluidKit/Sources" "$APP/Contents/Resources/FluidKit/Examples" "$APP/Contents/Resources/FluidKit/Plugins"
 cp "$BIN/Fluid" "$BIN/fluidctl" "$APP/Contents/MacOS/"
 sed "s/@VERSION@/$VERSION/g" Packaging/Info.plist > "$APP/Contents/Info.plist"
 
@@ -28,6 +28,7 @@ sed "s/@VERSION@/$VERSION/g" Packaging/Info.plist > "$APP/Contents/Info.plist"
 cp Packaging/FluidKit-Package.swift "$APP/Contents/Resources/FluidKit/Package.swift"
 cp -R Sources/FluidProtocol Sources/FluidKit "$APP/Contents/Resources/FluidKit/Sources/"
 for example in Examples/*/*.swift; do cp "$example" "$APP/Contents/Resources/FluidKit/Examples/"; done
+for plugin in Plugins/*/*.swift; do cp "$plugin" "$APP/Contents/Resources/FluidKit/Plugins/"; done
 cp llms.txt "$APP/Contents/Resources/"
 
 codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$APP/Contents/MacOS/fluidctl"

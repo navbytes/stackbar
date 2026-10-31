@@ -58,3 +58,42 @@ final class LineBufferTests: XCTestCase {
         XCTAssertEqual(buffer.droppedLines, 2)
     }
 }
+
+final class SystemProtocolTests: XCTestCase {
+    func testSystemCallsRoundTrip() throws {
+        let calls: [PluginMessage] = [
+            .request(id: 1, call: .clipboardRead),
+            .request(id: 2, call: .clipboardWrite(.files(["/tmp/a b.txt"]))),
+            .request(id: 3, call: .paste(.image(id: "abc123"))),
+            .request(id: 4, call: .keepAwake(KeepAwakeRequest(display: false, reason: "build"))),
+            .request(id: 5, call: .keepAwake(nil)),
+            .request(id: 6, call: .systemStatus),
+            .request(id: 7, call: .calendarEvents(from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 3600))),
+        ]
+        for message in calls {
+            XCTAssertEqual(try LineCodec.decode(PluginMessage.self, from: try LineCodec.encode(message).dropLast()), message)
+        }
+        let event = CalendarEvent(id: "e1", title: "Sync", start: Date(timeIntervalSince1970: 1_800_000_000), end: Date(timeIntervalSince1970: 1_800_001_800), notes: "Join https://meet.google.com/a-b-c", participation: .tentative, attendees: 3)
+        XCTAssertEqual(try SystemCodec.decode([CalendarEvent].self, from: SystemCodec.encode([event])), [event])
+        let item = ClipboardItem(changeCount: 4, kind: .url, text: "https://example.com", sourceAppID: "com.apple.Safari", copiedAt: Date(timeIntervalSince1970: 1_800_000_000))
+        XCTAssertEqual(try SystemCodec.decode(ClipboardItem.self, from: SystemCodec.encode(item)), item)
+    }
+
+    func testHotKeysAndManifestProblems() {
+        XCTAssertEqual(HotKeySpec("cmd+shift+v"), HotKeySpec("⌘+⇧+V"))
+        XCTAssertEqual(HotKeySpec("ctrl+option+space")?.key, "space")
+        XCTAssertEqual(HotKeySpec("cmd+f12")?.modifiers, [.command])
+        XCTAssertNil(HotKeySpec("shift+v"), "shift alone would steal typing")
+        XCTAssertNil(HotKeySpec("cmd+v+c"))
+        XCTAssertNil(HotKeySpec("cmd+return"))
+        XCTAssertTrue(Manifest(id: "a.b", name: "A", hotkey: "cmd+shift+v").problems.isEmpty)
+        XCTAssertFalse(Manifest(id: "a.b", name: "A", hotkey: "v").problems.isEmpty)
+        XCTAssertFalse(Manifest(id: "a.b", name: "A", triggers: [.clipboard]).problems.isEmpty, "the clipboard trigger needs the capability")
+        XCTAssertTrue(Manifest(id: "a.b", name: "A", triggers: [.clipboard], capabilities: [.clipboard]).problems.isEmpty)
+    }
+
+    func testOldManifestsWithoutAHotkeyStillDecode() throws {
+        let json = #"{"id":"a.b","name":"A","version":"1","surfaces":["menuBar"],"triggers":[],"capabilities":[]}"#
+        XCTAssertNil(try LineCodec.decode(Manifest.self, from: Data(json.utf8)).hotkey)
+    }
+}

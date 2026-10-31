@@ -19,7 +19,7 @@ final class SandboxEntitlementsTests: XCTestCase {
     func testCapabilitiesMapToEntitlements() throws {
         let quiet = Manifest(id: "a.quiet", name: "Quiet")
         XCTAssertEqual(SandboxEntitlements.entitlements(for: quiet), ["com.apple.security.app-sandbox": true])
-        XCTAssertEqual(SandboxEntitlements.summary(for: quiet), ["No network, files, commands or secrets."])
+        XCTAssertEqual(SandboxEntitlements.summary(for: quiet), ["No network, files, commands, secrets, clipboard, power or calendar."])
 
         let busy = Manifest(id: "a.busy", name: "Busy", capabilities: [.network("api.github.com"), .files(paths: ["~/Notes"]), .secret(name: "TOKEN")])
         XCTAssertEqual(SandboxEntitlements.entitlements(for: busy), [
