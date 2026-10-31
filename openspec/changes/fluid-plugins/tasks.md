@@ -47,6 +47,12 @@
 - [x] 3d.3 Up Next: dial-in numbers (tel: links, +numbers with Zoom's ",,PIN#"), Call in and Copy; "Cover the screen when a meeting starts" setting
 - [x] 3d.4 PR Cockpit: merged and closed alerts for your PRs, a "Closed in the last two days" section, and an optional GitHub notifications inbox tab (classic token with the notifications scope), with mention alerts and mark as read
 
+## 3e. Fourth gap pass
+
+- [x] 3e.1 `SystemStatus` gains `externalDisplays`, `networkBytesReceived` and `vpnActive` (optional, so older plugins decode)
+- [x] 3e.2 Stay Awake: stay awake while an external display or a VPN is connected, or while a download runs (over 100 KB/s, until quiet for 2 minutes), with a download speed chart
+- [x] 3e.3 A pasting plugin's hotkey (one with the clipboard capability) opens its panel at the text cursor, through Accessibility; the menu bar when the app doesn't report a caret
+
 ## 4. On a Mac
 
 - [ ] 4.1 The app compiles with `MacSystem` (self-hosted runner)
@@ -61,3 +67,5 @@
 - [ ] 4.10 Charts read well in light and dark mode, in the panel, window and Settings
 - [ ] 4.11 Full-screen alert appears over a full-screen app; Join opens the call; Esc dismisses
 - [ ] 4.12 PR Cockpit inbox with a classic token; mark as read clears it on github.com
+- [ ] 4.13 Stay Awake holds while a display is plugged in, while a VPN is up and during a large download, and lets go after
+- [ ] 4.14 ⌘⇧V in TextEdit, Notes and Xcode opens Clipboard History under the cursor; in a browser it falls back to the menu bar

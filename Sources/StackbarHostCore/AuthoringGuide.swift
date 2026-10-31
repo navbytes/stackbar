@@ -122,7 +122,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
 | `try await Stackbar.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Stackbar.paste(content)` (into the app the user was in; needs Accessibility for Stackbar) | `.clipboard` |
 | `try await Stackbar.keepAwake(display:, reason:)`, `Stackbar.allowSleep()`; the host releases it if the plugin stops | `.power` |
-| `try await Stackbar.systemStatus()`: batteryLevel, onACPower, lowPowerMode, runningApps | `.power` |
+| `try await Stackbar.systemStatus()`: batteryLevel, onACPower, lowPowerMode, runningApps, externalDisplays, networkBytesReceived, vpnActive | `.power` |
 | `try await Stackbar.calendarEvents(from:, to:)` returns `[CalendarEvent]` (title, start, end, location, notes, url, participation), 31 days at most | `.calendar` |
 
 Don't use URLSession, Process or files directly: plugins run sandboxed and

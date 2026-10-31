@@ -98,14 +98,26 @@ public struct SystemStatus: Codable, Equatable, Sendable {
     public var runningApps: [App]
     /// Plugins currently keeping the Mac awake through the host, by id.
     public var keptAwakeBy: [String]
+    /// Displays other than the built-in one that are connected now.
+    /// Optional so a plugin built against an older host still decodes.
+    public var externalDisplays: Int?
+    /// Bytes received on the network interfaces, a counter: sample it twice
+    /// for a download rate. It can wrap (the per-interface counters are 32
+    /// bits), so treat a sample lower than the last as a fresh start.
+    public var networkBytesReceived: UInt64?
+    /// A VPN tunnel (utun, ipsec or ppp with an IPv4 address) is up.
+    public var vpnActive: Bool?
 
-    public init(batteryLevel: Double? = nil, charging: Bool = false, onACPower: Bool = true, lowPowerMode: Bool = false, runningApps: [App] = [], keptAwakeBy: [String] = []) {
+    public init(batteryLevel: Double? = nil, charging: Bool = false, onACPower: Bool = true, lowPowerMode: Bool = false, runningApps: [App] = [], keptAwakeBy: [String] = [], externalDisplays: Int? = nil, networkBytesReceived: UInt64? = nil, vpnActive: Bool? = nil) {
         self.batteryLevel = batteryLevel
         self.charging = charging
         self.onACPower = onACPower
         self.lowPowerMode = lowPowerMode
         self.runningApps = runningApps
         self.keptAwakeBy = keptAwakeBy
+        self.externalDisplays = externalDisplays
+        self.networkBytesReceived = networkBytesReceived
+        self.vpnActive = vpnActive
     }
 }
 
