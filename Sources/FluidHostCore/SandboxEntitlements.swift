@@ -16,8 +16,9 @@ public enum SandboxEntitlements {
                 result["com.apple.security.network.client"] = true
             case .files:
                 result["com.apple.security.files.user-selected.read-write"] = true
-            case .run, .secret:
-                // Children inherit the sandbox; secrets arrive from the host.
+            case .run, .secret, .clipboard, .power, .calendar:
+                // Children inherit the sandbox; secrets, the clipboard, power
+                // assertions and calendar events all go through the host.
                 break
             }
         }
@@ -31,7 +32,7 @@ public enum SandboxEntitlements {
     /// One line per capability, in words, for the install sheet and `fluidctl`.
     public static func summary(for manifest: Manifest) -> [String] {
         if manifest.capabilities.isEmpty {
-            return ["No network, files, commands or secrets."]
+            return ["No network, files, commands, secrets, clipboard, power or calendar."]
         }
         return manifest.capabilities.map(\.summary)
     }
@@ -47,6 +48,23 @@ extension Capability {
         case .secret(let name): return "Reads the secret \(name)"
         case .oauth(let provider):
             return "Signs in to \(provider.name) (\(URLParts.host(of: provider.authorizeURL) ?? provider.authorizeURL))" + (provider.scopes.isEmpty ? "" : " with scopes " + provider.scopes.joined(separator: " "))
+        case .clipboard: return "Reads everything you copy, and pastes into the app you're using"
+        case .power: return "Keeps the Mac awake, and reads battery and running apps"
+        case .calendar: return "Reads your calendar events"
+        }
+    }
+
+    /// The case's name as written in a manifest, for error messages.
+    public var caseName: String {
+        switch self {
+        case .network: return "network"
+        case .files: return "files"
+        case .run: return "run"
+        case .secret: return "secret"
+        case .oauth: return "oauth"
+        case .clipboard: return "clipboard"
+        case .power: return "power"
+        case .calendar: return "calendar"
         }
     }
 }

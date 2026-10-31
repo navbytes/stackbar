@@ -34,16 +34,21 @@ let package = Package(
         .executableTarget(name: "Fluid", dependencies: ["FluidProtocol", "FluidHostCore", "FluidUI"]),
         .executableTarget(name: "fluidctl", dependencies: ["FluidHostCore", "FluidUI"]),
         .executableTarget(name: "ClockPlugin", dependencies: ["FluidKit"], path: "Examples/ClockPlugin"),
-        .executableTarget(name: "PRCockpitPlugin", dependencies: ["FluidKit"], path: "Examples/PRCockpitPlugin"),
+        .executableTarget(name: "PRCockpitPlugin", dependencies: ["FluidKit"], path: "Plugins/PRCockpitPlugin"),
         .executableTarget(name: "PomodoroPlugin", dependencies: ["FluidKit"], path: "Examples/PomodoroPlugin"),
         .executableTarget(name: "TodoPlugin", dependencies: ["FluidKit"], path: "Examples/TodoPlugin"),
         .executableTarget(name: "WeatherPlugin", dependencies: ["FluidKit"], path: "Examples/WeatherPlugin"),
         .executableTarget(name: "CIStatusPlugin", dependencies: ["FluidKit"], path: "Examples/CIStatusPlugin"),
+        // First-party plugins (Plugins/), shipped with the app. Examples/ are
+        // the small teaching ones.
+        .executableTarget(name: "ClipboardPlugin", dependencies: ["FluidKit"], path: "Plugins/ClipboardPlugin"),
+        .executableTarget(name: "StayAwakePlugin", dependencies: ["FluidKit"], path: "Plugins/StayAwakePlugin"),
+        .executableTarget(name: "UpNextPlugin", dependencies: ["FluidKit"], path: "Plugins/UpNextPlugin"),
         // A plugin that misbehaves on request, so the supervisor's crash and
         // restart handling is tested against a real process.
         .executableTarget(name: "FixturePlugin", dependencies: ["FluidKit"], path: "Tests/Fixtures/FixturePlugin"),
         .testTarget(name: "FluidProtocolTests", dependencies: ["FluidProtocol"]),
         .testTarget(name: "FluidKitTests", dependencies: ["FluidKit"]),
-        .testTarget(name: "FluidHostCoreTests", dependencies: ["FluidHostCore", "ClockPlugin", "FixturePlugin", "PomodoroPlugin", "TodoPlugin"]),
+        .testTarget(name: "FluidHostCoreTests", dependencies: ["FluidHostCore", "ClockPlugin", "FixturePlugin", "PomodoroPlugin", "TodoPlugin", "ClipboardPlugin", "StayAwakePlugin", "UpNextPlugin"]),
     ]
 )

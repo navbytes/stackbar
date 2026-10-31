@@ -61,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "No plugins yet", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(item(title: "Install Example Plugins", action: #selector(installExamples)))
+        menu.addItem(item(title: "Install Bundled Plugins", action: #selector(installExamples)))
         menu.addItem(item(title: "Open Plugins Folder", action: #selector(openPluginsFolder)))
         menu.addItem(item(title: "Settings…", action: #selector(openSettings)))
         menu.addItem(.separator())

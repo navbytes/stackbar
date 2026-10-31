@@ -13,6 +13,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private let hosting: PassthroughHostingView<StatusItemContent>
+    private var hotKey: HotKey?
+    private var hotKeySpec: String?
 
     init(controller: PluginController, model: AppModel, windows: PluginWindows) {
         self.controller = controller
@@ -42,6 +44,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     func remove() {
+        hotKey?.unregister()
+        hotKey = nil
         popover.close()
         NSStatusBar.system.removeStatusItem(statusItem)
     }
@@ -60,6 +64,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             _ = controller.name
             _ = controller.isWaitingForApproval
             _ = controller.missingSecrets
+            _ = controller.manifest
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.resize()
@@ -67,6 +72,19 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             }
         }
         resize()
+        updateHotKey()
+    }
+
+    /// Registers the manifest's `hotkey` to toggle the panel, and follows
+    /// changes to it when the plugin is edited.
+    private func updateHotKey() {
+        let spec = controller.manifest?.hotkey
+        guard spec != hotKeySpec else { return }
+        hotKeySpec = spec
+        hotKey?.unregister()
+        hotKey = spec.flatMap(HotKeySpec.init).flatMap { parsed in
+            HotKey(spec: parsed) { [weak self] in self?.togglePanel(nil) }
+        }
     }
 
     private func resize() {

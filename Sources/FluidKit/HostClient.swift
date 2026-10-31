@@ -100,6 +100,12 @@ public final class HostClient: @unchecked Sendable {
         case .notify: return "notification"
         case .openURL(let url): return "opening \(url)"
         case .copy: return "copying"
+        case .clipboardRead: return "reading the clipboard"
+        case .clipboardWrite: return "writing the clipboard"
+        case .paste: return "pasting"
+        case .keepAwake(let request): return request == nil ? "letting the Mac sleep" : "keeping the Mac awake"
+        case .systemStatus: return "reading system status"
+        case .calendarEvents: return "reading calendar events"
         }
     }
 }
@@ -191,5 +197,67 @@ public enum Fluid {
 
     public static func copy(_ text: String) {
         HostClient.shared.fire(.copy(text))
+    }
+
+    // MARK: System (clipboard, power, calendar)
+
+    /// What is on the clipboard now, or `nil` when it is empty. Needs
+    /// `.clipboard`. Pair it with the `.clipboard` trigger to hear every copy.
+    public static func clipboard() async throws -> ClipboardItem? {
+        guard let json = try await value(.clipboardRead) else { return nil }
+        return try SystemCodec.decode(ClipboardItem.self, from: json)
+    }
+
+    /// Puts text, files or a kept image on the clipboard. Needs `.clipboard`
+    /// (plain text alone can use `Fluid.copy` without it).
+    public static func setClipboard(_ content: ClipboardContent) async throws {
+        try await ok(.clipboardWrite(content))
+    }
+
+    /// Puts the content on the clipboard and pastes it into the app the user
+    /// was in before Fluid's panel opened. Needs `.clipboard`. Throws (after
+    /// copying) when Fluid lacks Accessibility access.
+    public static func paste(_ content: ClipboardContent) async throws {
+        try await ok(.paste(content))
+    }
+
+    /// Keeps the Mac (and with `display`, the screen) awake until
+    /// `allowSleep()`, or until the plugin stops. Needs `.power`.
+    public static func keepAwake(display: Bool = true, reason: String) async throws {
+        try await ok(.keepAwake(KeepAwakeRequest(display: display, reason: reason)))
+    }
+
+    /// Releases `keepAwake`.
+    public static func allowSleep() async throws {
+        try await ok(.keepAwake(nil))
+    }
+
+    /// Battery, power and running apps. Needs `.power`.
+    public static func systemStatus() async throws -> SystemStatus {
+        guard let json = try await value(.systemStatus) else { throw HostError("no system status") }
+        return try SystemCodec.decode(SystemStatus.self, from: json)
+    }
+
+    /// Events overlapping `from..<to` (at most 31 days), sorted by start.
+    /// Needs `.calendar`; the first call asks the user for calendar access.
+    public static func calendarEvents(from: Date, to: Date) async throws -> [CalendarEvent] {
+        guard let json = try await value(.calendarEvents(from: from, to: to)) else { return [] }
+        return try SystemCodec.decode([CalendarEvent].self, from: json)
+    }
+
+    private static func value(_ call: HostCall) async throws -> String? {
+        switch await HostClient.shared.call(call) {
+        case .value(let value): return value
+        case .failure(let message): throw HostError(message)
+        default: throw HostError("unexpected answer to \(HostClient.label(call))")
+        }
+    }
+
+    private static func ok(_ call: HostCall) async throws {
+        switch await HostClient.shared.call(call) {
+        case .ok, .value: return
+        case .failure(let message): throw HostError(message)
+        default: throw HostError("unexpected answer to \(HostClient.label(call))")
+        }
     }
 }

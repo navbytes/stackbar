@@ -17,8 +17,12 @@ public struct Manifest: Codable, Equatable, Sendable {
     public var capabilities: [Capability]
     /// One sentence for the plugin index, the install sheet and the palette.
     public var summary: String?
+    /// A system-wide shortcut that opens the plugin's panel, spelled like
+    /// row shortcuts: `cmd+shift+v`, `ctrl+option+k`. At least one of cmd,
+    /// ctrl or option, plus one letter, digit, `space` or `f1`...`f12`.
+    public var hotkey: String?
 
-    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = []) {
+    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil) {
         self.id = id
         self.name = name
         self.version = version
@@ -26,6 +30,7 @@ public struct Manifest: Codable, Equatable, Sendable {
         self.surfaces = surfaces
         self.triggers = triggers
         self.capabilities = capabilities
+        self.hotkey = hotkey
     }
 
     /// Problems that make the manifest unusable, in words. Empty means valid.
@@ -37,6 +42,12 @@ public struct Manifest: Codable, Equatable, Sendable {
         }
         if name.trimmingCharacters(in: .whitespaces).isEmpty { result.append("name is empty") }
         if surfaces.isEmpty { result.append("surfaces is empty") }
+        if let hotkey, HotKeySpec(hotkey) == nil {
+            result.append("hotkey \"\(hotkey)\" needs cmd, ctrl or option plus one letter, digit, space or f1...f12, like cmd+shift+v")
+        }
+        if triggers.contains(.clipboard), !capabilities.contains(.clipboard) {
+            result.append("the .clipboard trigger needs the .clipboard capability")
+        }
         for capability in capabilities {
             if case .network(let hosts) = capability, hosts.contains(where: { $0.contains("/") || $0.contains(":") }) {
                 result.append("network hosts are bare domain names (api.github.com, *.example.com), not URLs")
@@ -100,6 +111,9 @@ public enum Trigger: Codable, Hashable, Sendable {
     case file(path: String)
     /// When another plugin publishes to this topic (see `Fluid.publish`).
     case topic(name: String)
+    /// When anything new is copied to the clipboard, in any app. Needs the
+    /// `.clipboard` capability; read the item with `Fluid.clipboard()`.
+    case clipboard
 
     public static func every(_ duration: Duration) -> Trigger {
         let (seconds, attoseconds) = duration.components
@@ -125,6 +139,15 @@ public enum Capability: Codable, Hashable, Sendable {
     /// An OAuth 2.0 account the host signs in to for the plugin. The plugin
     /// gets only the access token, through `Fluid.oauthToken(_:)`.
     case oauth(OAuthProvider)
+    /// Reads what the user copies (`Fluid.clipboard()`, the `.clipboard`
+    /// trigger), and puts files and images back or pastes into the
+    /// frontmost app (`Fluid.paste`). Plain `Fluid.copy` needs nothing.
+    case clipboard
+    /// Keeps the Mac awake (`Fluid.keepAwake`) and reads battery, power and
+    /// running apps (`Fluid.systemStatus()`).
+    case power
+    /// Reads events from the user's calendars (`Fluid.calendarEvents`).
+    case calendar
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }
@@ -152,6 +175,43 @@ public struct OAuthProvider: Codable, Hashable, Sendable {
         self.clientSecret = clientSecret
         self.scopes = scopes
     }
+}
+
+/// A parsed hotkey spec: modifiers and one key, all lowercased.
+public struct HotKeySpec: Equatable, Sendable {
+    public enum Modifier: String, Sendable, CaseIterable {
+        case command, control, option, shift
+    }
+
+    public var modifiers: Set<Modifier>
+    /// `a`...`z`, `0`...`9`, `space`, or `f1`...`f12`.
+    public var key: String
+
+    public init?(_ spec: String) {
+        var modifiers: Set<Modifier> = []
+        var key: String?
+        for part in spec.lowercased().split(separator: "+").map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            switch part {
+            case "cmd", "command", "⌘": modifiers.insert(.command)
+            case "ctrl", "control", "⌃": modifiers.insert(.control)
+            case "opt", "option", "alt", "⌥": modifiers.insert(.option)
+            case "shift", "⇧": modifiers.insert(.shift)
+            default:
+                guard key == nil else { return nil }
+                key = part
+            }
+        }
+        guard let key, Self.keys.contains(key), !modifiers.isDisjoint(with: [.command, .control, .option]) else { return nil }
+        self.modifiers = modifiers
+        self.key = key
+    }
+
+    public static let keys: Set<String> = {
+        var keys = Set("abcdefghijklmnopqrstuvwxyz0123456789".map(String.init))
+        keys.insert("space")
+        for number in 1...12 { keys.insert("f\(number)") }
+        return keys
+    }()
 }
 
 /// URL helpers that work the same on every platform without Foundation's URL

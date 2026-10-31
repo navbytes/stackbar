@@ -26,6 +26,8 @@ targets:
     info:
       path: Packaging/Info.generated.plist
       properties:
+        NSCalendarsFullAccessUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
+        NSCalendarsUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
         CFBundleShortVersionString: "0.9.0"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"

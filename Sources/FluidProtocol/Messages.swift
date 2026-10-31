@@ -3,7 +3,8 @@ import Foundation
 /// The protocol version a host and plugin agree on in `hello`/`ready`.
 public enum FluidProtocolVersion {
     /// 2 added host calls, tools, topics and the stored-values snapshot.
-    public static let current = 2
+    /// 3 added the clipboard, keep-awake, system status and calendar calls.
+    public static let current = 3
 }
 
 /// Host → plugin.
@@ -29,7 +30,7 @@ public enum HostMessage: Codable, Equatable, Sendable {
 }
 
 public enum TriggerReason: String, Codable, Sendable {
-    case launch, interval, wake, manual, file, topic
+    case launch, interval, wake, manual, file, topic, clipboard
 }
 
 /// The value that came with an event: a toggle's new state, a slider's number.
@@ -80,6 +81,23 @@ public enum HostCall: Codable, Equatable, Sendable {
     case openURL(String)
     /// Puts text on the clipboard.
     case copy(String)
+    /// What is on the clipboard now (`ClipboardItem` as JSON, or `nil` when
+    /// it is empty). Needs `.clipboard`.
+    case clipboardRead
+    /// Puts text, files or a kept image on the clipboard. Needs `.clipboard`.
+    case clipboardWrite(ClipboardContent)
+    /// Puts the content on the clipboard and pastes it into the app the user
+    /// was in. Needs `.clipboard`, and Accessibility access for the host;
+    /// without it the content is still copied and the call fails saying so.
+    case paste(ClipboardContent)
+    /// Keeps the Mac awake for this plugin until called with `nil`, or until
+    /// the plugin stops or crashes. Needs `.power`.
+    case keepAwake(KeepAwakeRequest?)
+    /// Battery, power and running apps (`SystemStatus` as JSON). Needs `.power`.
+    case systemStatus
+    /// Events overlapping `from..<to`, at most 31 days (`[CalendarEvent]` as
+    /// JSON). Needs `.calendar`; the host asks the user for calendar access.
+    case calendarEvents(from: Date, to: Date)
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

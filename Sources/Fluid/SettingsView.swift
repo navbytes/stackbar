@@ -47,8 +47,8 @@ struct GeneralSettings: View {
                 LabeledContent("Plugins") {
                     Button("Show in Finder") { NSWorkspace.shared.open(FluidPaths.pluginsDirectory) }
                 }
-                LabeledContent("Examples") {
-                    Button("Install Examples") { model.installExamples() }
+                LabeledContent("Bundled plugins") {
+                    Button("Install Plugins and Examples") { model.installExamples() }
                 }
             }
             Section {
