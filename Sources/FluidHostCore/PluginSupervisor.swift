@@ -44,6 +44,8 @@ public actor PluginSupervisor {
     public private(set) var views: [Surface: ViewNode] = [:]
     public private(set) var tools: [ToolSpec] = []
     public private(set) var restarts = 0
+    /// What the helper's last descendant snapshot found (for tests).
+    var trackedDescendants: [Int32] { process?.trackedDescendants ?? [] }
     /// The running helper's process id, for memory sampling.
     public var helperPID: Int32? { process.map(\.processIdentifier).flatMap { $0 > 0 ? $0 : nil } }
     /// How many host messages the current helper has finished handling. Tools

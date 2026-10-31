@@ -192,6 +192,13 @@ public final class ChildProcess: @unchecked Sendable {
         }
     }
 
+    /// The descendants found by the last `trackDescendants` snapshot.
+    var trackedDescendants: [pid_t] {
+        lock.lock()
+        defer { lock.unlock() }
+        return snapshot
+    }
+
     /// Snapshots the child's descendants every `interval` seconds while it
     /// runs, so `sweepGroup` can find children that left its process group
     /// (Foundation's `Process` puts each in a group of its own) even after a

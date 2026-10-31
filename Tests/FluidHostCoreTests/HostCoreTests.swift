@@ -297,7 +297,8 @@ final class PluginSupervisorTests: XCTestCase {
 
         // A crash: the child is found through the periodic snapshot.
         let first = try await spawnChild()
-        try await Task.sleep(for: .seconds(4))
+        let tracked = await waitUntil(15) { await supervisor.trackedDescendants.contains(first) }
+        XCTAssertTrue(tracked, "the descendant snapshot never saw the child")
         await supervisor.event("button/Crash")
         let firstGone = await waitUntil(10) { !Self.isAlive(first) }
         XCTAssertTrue(firstGone, "a crashed plugin's child outlived it")

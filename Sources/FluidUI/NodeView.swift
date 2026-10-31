@@ -64,10 +64,11 @@ public struct NodeView: View {
             Toggle(title, isOn: Binding(get: { isOn }, set: { send(action, .bool($0)) }))
                 .disabled(readOnly)
         case .progress(let value, let total, let label, let role):
-            ProgressView(value: clamp(value, total), total: max(total, .leastNonzeroMagnitude)) {
+            VStack(alignment: .leading, spacing: 4) {
                 if let label { Text(label).font(.caption) }
+                BarView(fraction: total > 0 ? clamp(value, total) / total : 0, color: role.color)
             }
-            .tint(role.color)
+            .accessibilityElement(children: .combine)
         case .divider:
             Divider()
         case .labeled(let label, let value, let role):
@@ -203,8 +204,7 @@ struct RowView: View {
     @ViewBuilder private func accessoryView(_ node: ViewNode) -> some View {
         switch node {
         case .progress(let value, let total, _, let role):
-            ProgressView(value: min(max(value, 0), max(total, 0)), total: max(total, .leastNonzeroMagnitude))
-                .tint(role.color)
+            BarView(fraction: total > 0 ? min(max(value, 0), total) / total : 0, color: role.color)
                 .frame(width: 64)
         case .chart(let values, _, _, let role):
             Sparkline(values: values).stroke(role.color, lineWidth: 1.5).frame(width: 48, height: 16)
@@ -349,4 +349,24 @@ extension TextStyle {
         }
     }
 }
+/// A determinate bar drawn with shapes rather than `ProgressView`, whose
+/// AppKit-backed style renders as a placeholder in `ImageRenderer` snapshots.
+struct BarView: View {
+    var fraction: Double
+    var color: Color
+
+    var body: some View {
+        let clamped = min(max(fraction.isFinite ? fraction : 0, 0), 1)
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.secondary.opacity(0.25))
+                Capsule().fill(color).frame(width: proxy.size.width * clamped)
+            }
+        }
+        .frame(height: 6)
+        .accessibilityElement()
+        .accessibilityValue(Text("\(Int((clamped * 100).rounded())) percent"))
+    }
+}
+
 #endif

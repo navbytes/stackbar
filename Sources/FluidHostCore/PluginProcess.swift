@@ -43,6 +43,7 @@ public final class PluginProcess: @unchecked Sendable {
 
     public var processIdentifier: Int32 { child?.pid ?? 0 }
     public var isRunning: Bool { child?.isRunning ?? false }
+    var trackedDescendants: [Int32] { child?.trackedDescendants ?? [] }
 
     /// Starts the helper in its own process group. `onEvent` is called from
     /// background threads, in order per pipe; `.exit` comes last, after both
