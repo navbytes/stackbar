@@ -84,6 +84,10 @@ final class PluginController: Identifiable {
             }
 
             await supervisor?.stop()
+            // A newer load (the file changed again) or a stop ran while the
+            // old helper was stopping; starting this one too would leave a
+            // helper running that nothing refers to.
+            guard generation == loadGeneration else { return }
             updatesTask?.cancel()
             let (updates, continuation) = AsyncStream.makeStream(of: PluginSupervisor.Update.self)
             let next = PluginSupervisor(executable: binary, manifest: manifest, grantedCapabilities: review.granted, services: model.services) { continuation.yield($0) }
@@ -107,6 +111,9 @@ final class PluginController: Identifiable {
     }
 
     func stop() async {
+        // A build still running for this plugin must not start it afterwards.
+        loadGeneration += 1
+        building = false
         updatesTask?.cancel()
         await supervisor?.stop()
         supervisor = nil
@@ -146,8 +153,11 @@ final class PluginController: Identifiable {
 
     func restart() {
         Task {
-            await supervisor?.stop()
-            await supervisor?.start()
+            guard let current = supervisor else { return }
+            await current.stop()
+            // Restart only the helper that was stopped, not a newer one.
+            guard current === supervisor else { return }
+            await current.start()
         }
     }
 

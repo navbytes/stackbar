@@ -118,7 +118,11 @@ final class RedirectDelegate: NSObject, URLSessionTaskDelegate, Sendable {
     init(policy: RedirectPolicy) { self.policy = policy }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
-        guard let id = task.originalRequest?.value(forHTTPHeaderField: RedirectPolicy.header), let host = request.url?.host?.lowercased(), policy.allows(id, host: host) else {
+        // A redirect may not downgrade to plain http, which the first request
+        // could not have used either (except to loopback).
+        let scheme = request.url?.scheme?.lowercased()
+        guard let id = task.originalRequest?.value(forHTTPHeaderField: RedirectPolicy.header), let host = request.url?.host?.lowercased(),
+              scheme == "https" || (scheme == "http" && HTTPService.isLoopback(host)), policy.allows(id, host: host) else {
             task.cancel()
             completionHandler(nil)
             return

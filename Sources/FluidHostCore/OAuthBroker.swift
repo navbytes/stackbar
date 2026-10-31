@@ -76,8 +76,14 @@ public actor OAuthBroker {
         let received = CallbackBox()
         let server = try LoopbackServer { request in
             guard request.path == "/callback" else { return .text("not found", status: 404) }
+            // Only an answer to this sign-in counts. Anything else that hits
+            // the port (another local process, a stale tab) is turned away
+            // without ending the wait for the real one.
+            guard request.query["state"] == state else {
+                return .html(Self.page("Sign-in failed", "This answer is not for the sign-in Fluid is waiting for."), status: 400)
+            }
             received.set(request.query)
-            if request.query["error"] != nil || request.query["state"] != state {
+            if request.query["error"] != nil {
                 return .html(Self.page("Sign-in failed", "You can close this tab and try again from Fluid."), status: 400)
             }
             return .html(Self.page("Signed in", "You can close this tab and return to Fluid."))

@@ -77,7 +77,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | Call | Needs |
 | --- | --- |
 | `try await Fluid.getJSON(url, as: T.self, headers:)`, `Fluid.get`, `Fluid.http(HTTPRequest)` | `.network("host")`, `*.example.com` for subdomains |
-| `try await Fluid.secret("NAME")` returns `String?` (nil: the user hasn't entered it; Fluid asks them) | `.secret(name: "NAME")` |
+| `try await Fluid.secret("NAME")` returns `String?` (nil: the user hasn't entered it; Fluid asks them) | `.secret(name: "NAME")`; names are letters, digits, `_`, `-`, `.` |
 | `try await Fluid.oauthToken("github")` | `.oauth(OAuthProvider(name:, authorizeURL:, tokenURL:, clientID:, scopes:))` |
 | `Fluid.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
 | `Fluid.notify(title, body:)`, `Fluid.open(url)`, `Fluid.copy(text)` | nothing |

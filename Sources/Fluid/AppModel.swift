@@ -38,7 +38,7 @@ final class AppModel {
         let secretRouter = SecretRouter()
         services = HostServices(
             storage: StorageStore(directory: FluidPaths.storageDirectory),
-            secrets: FluidPaths.defaultSecrets(),
+            secrets: FluidPaths.defaultSecrets(includeEnvironment: false),
             platform: HostServices.Platform(
                 notify: { plugin, title, body in Task { @MainActor in Platform.notify(plugin: plugin, title: title, body: body) } },
                 open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },

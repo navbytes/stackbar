@@ -54,7 +54,9 @@ public struct PluginBuilder: Sendable {
 
     public func build(source: URL) throws -> Output {
         let code = try Data(contentsOf: source)
-        let key = Self.cacheKey(code + Data("\(configuration)|\(fluidPackage.path)".utf8))
+        // The key covers FluidKit too: after an update of Fluid, a plugin
+        // built against the old FluidKit must be rebuilt, not reused.
+        let key = Self.cacheKey(code + Data("\(configuration)|\(fluidPackage.path)|\(Self.frameworkDigest(fluidPackage))".utf8))
         let target = Self.targetName(source.deletingPathExtension().lastPathComponent, key: key)
         let binary = workspace.appendingPathComponent(".build/\(configuration)/\(target)")
         let sourcesDir = workspace.appendingPathComponent("Sources/\(target)", isDirectory: true)
@@ -192,20 +194,49 @@ public struct PluginBuilder: Sendable {
         return result
     }
 
-    /// FNV-1a, 64-bit: a cache key, not a security boundary.
+    /// SHA-256, first 128 bits in hex. A cached binary is run for any source
+    /// with the same key, so the key has to be collision-resistant: with a
+    /// weak hash, a signed bundle could be crafted to match the key of a
+    /// different, already built plugin and run that one instead.
     static func cacheKey(_ data: Data) -> String {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in data {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x0000_0100_0000_01b3
+        String(SHA256.hex(data).prefix(32))
+    }
+
+    /// A digest of the FluidKit and FluidProtocol sources plugins compile
+    /// against (the package's `Sources/FluidKit` and `Sources/FluidProtocol`).
+    static func frameworkDigest(_ fluidPackage: URL) -> String {
+        var data = Data()
+        for module in ["FluidKit", "FluidProtocol"] {
+            let folder = fluidPackage.appendingPathComponent("Sources/\(module)", isDirectory: true)
+            let files = (FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? [])
+                .filter { $0.pathExtension == "swift" }
+                .sorted { $0.path < $1.path }
+            for file in files {
+                data.append(Data(file.lastPathComponent.utf8))
+                data.append((try? Data(contentsOf: file)) ?? Data())
+            }
         }
-        return String(hash, radix: 16)
+        return SHA256.hex(data)
     }
 
     public static func sanitizedName(_ name: String) -> String {
         let allowed = name.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || $0 == "-" ? Character($0) : "-" }
         let result = String(allowed)
         return result.isEmpty ? "plugin" : result
+    }
+
+    /// A file name for per-plugin data (storage, widget snapshots) that is
+    /// unique per id. `sanitizedName` maps `dev.a-b.c` and `dev-a.b.c` to the
+    /// same name, which would let two plugins share one storage file; here
+    /// letters, digits, `-` and `.` stay and every other byte becomes `_XX`.
+    public static func dataFileName(_ pluginID: String) -> String {
+        var result = ""
+        for (index, byte) in pluginID.utf8.enumerated() {
+            let scalar = Unicode.Scalar(byte)
+            let plain = byte < 0x80 && (CharacterSet.alphanumerics.contains(scalar) || byte == UInt8(ascii: "-") || (byte == UInt8(ascii: ".") && index > 0))
+            result += plain ? String(Character(scalar)) : String(format: "_%02X", byte)
+        }
+        return result.isEmpty ? "_" : result
     }
 
     static func run(_ arguments: [String], timeout: Double = 600) throws -> (Int32, String) {
