@@ -109,7 +109,7 @@ final class UpNext: StackbarPlugin {
     func refresh() async throws {
         let now = Date()
         let start = Calendar.current.startOfDay(for: now)
-        guard let end = Calendar.current.date(byAdding: .day, value: 2, to: start) else { return }
+        guard let end = Calendar.current.date(byAdding: .day, value: 7, to: start) else { return }
         do {
             let all = try await Stackbar.calendarEvents(from: start, to: end)
             calendars = Array(Set(all.map(\.calendar))).sorted()
@@ -266,6 +266,9 @@ final class UpNext: StackbarPlugin {
             Text(event.start <= now ? "Now" : "Next").style(.caption).role(.secondary)
             Text(event.title).style(.headline)
             Text("\(subtitle(event)) · \(countdown(event, now: now))").style(.caption).role(.secondary)
+            if event.start <= now, event.end > event.start {
+                ProgressBar("\(Int((event.end.timeIntervalSince(now) / 60).rounded(.up))) min left", value: now.timeIntervalSince(event.start), total: event.end.timeIntervalSince(event.start), role: event.end.timeIntervalSince(now) < 300 ? .warning : .accent)
+            }
             if let link = Self.meetingLink(for: event) {
                 Button("Join on \(link.service)", symbol: "video.fill", role: .accent, key: "join-focus") { self.join(event) }
             }
@@ -278,9 +281,69 @@ final class UpNext: StackbarPlugin {
                 day("Tomorrow", tomorrow, now: now)
             }
         }
+        if loaded {
+            let hours = meetingHours(on: now)
+            ProgressBar("\(Self.hours(hours)) in meetings today", value: min(hours, Self.workday), total: Self.workday, role: hours > 6 ? .warning : .accent)
+        }
         Picker("Start a meeting now", options: Self.instantMeetings.map(\.name), selection: nil) { name in
             if let meeting = Self.instantMeetings.first(where: { $0.name == name }) { Stackbar.open(meeting.url) }
         }
+    }
+
+    /// The window adds the week's meeting load.
+    var window: ViewContent {
+        panel
+        if loaded {
+            Section("Meeting load") {
+                let calendar = Calendar.current
+                let days = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: Date()) }
+                let load = days.map { (meetingHours(on: $0) * 10).rounded() / 10 }
+                Chart("Hours in meetings, next 7 days", values: load, kind: .bar, labels: days.map { calendar.shortWeekdaySymbols[calendar.component(.weekday, from: $0) - 1] }, unit: "h", goal: 4, highlight: 0)
+                LabeledContent("This week", value: Self.hours(load.reduce(0, +)))
+                let today = byCalendar(on: Date())
+                if today.count > 1 {
+                    Chart("Today by calendar", values: today.map(\.hours), kind: .donut, labels: today.map(\.name), unit: "h")
+                }
+            }
+        }
+    }
+
+    /// A working day, for the "in meetings today" gauge.
+    static let workday = 8.0
+
+    static func hours(_ value: Double) -> String {
+        let minutes = Int((value * 60).rounded())
+        return minutes >= 60 ? "\(minutes / 60)h" + (minutes % 60 > 0 ? " \(minutes % 60)m" : "") : "\(minutes)m"
+    }
+
+    /// Timed events you go to (not declined) that overlap the day.
+    func meetings(on date: Date) -> [CalendarEvent] {
+        let start = Calendar.current.startOfDay(for: date)
+        let end = start.addingTimeInterval(86400)
+        return visible.filter { !$0.isAllDay && $0.participation != .declined && $0.start < end && $0.end > start }
+    }
+
+    /// Hours of the day in meetings, overlaps counted once.
+    func meetingHours(on date: Date) -> Double {
+        let start = Calendar.current.startOfDay(for: date)
+        let end = start.addingTimeInterval(86400)
+        let spans = meetings(on: date).map { (max($0.start, start), min($0.end, end)) }.sorted { $0.0 < $1.0 }
+        var total = 0.0
+        var cursor = start
+        for (from, to) in spans where to > cursor {
+            total += to.timeIntervalSince(max(from, cursor))
+            cursor = to
+        }
+        return total / 3600
+    }
+
+    func byCalendar(on date: Date) -> [(name: String, hours: Double)] {
+        let start = Calendar.current.startOfDay(for: date)
+        let end = start.addingTimeInterval(86400)
+        let grouped = Dictionary(grouping: meetings(on: date), by: \.calendar).mapValues { events in
+            events.reduce(0.0) { $0 + min($1.end, end).timeIntervalSince(max($1.start, start)) / 3600 }
+        }
+        return grouped.map { (name: $0.key, hours: ($0.value * 10).rounded() / 10) }.sorted { $0.hours > $1.hours }
     }
 
     @ViewBuilder func day(_ title: String, _ date: Date, now: Date) -> ViewContent {

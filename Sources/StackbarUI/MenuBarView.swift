@@ -72,7 +72,7 @@ struct MenuBarNode: View {
                 Circle().trim(from: 0, to: fraction).stroke(tint(role), style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90))
             }
             .frame(width: 12, height: 12)
-        case .chart(let values, _, _, let role):
+        case .chart(let values, _, _, let role, _):
             Sparkline(values: values).stroke(tint(role), lineWidth: 1.25).frame(width: 32, height: 12)
         case .empty(let title, let symbol, _):
             HStack(spacing: 3) {

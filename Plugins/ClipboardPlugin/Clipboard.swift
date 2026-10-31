@@ -118,6 +118,8 @@ final class Clipboard: StackbarPlugin {
     /// Regular expressions; a copy whose text matches one is not recorded
     /// (tokens, one-time codes).
     @Stored("ignoredPatterns") var ignoredPatterns: [String] = []
+    /// Copies recorded per day (yyyy-MM-dd), for the last 30 days.
+    @Stored("copiesByDay") var copiesByDay: [String: Int] = [:]
 
     /// The history, read from storage once and written back when it changes
     /// (a `@Stored` array would be decoded on every render).
@@ -168,13 +170,13 @@ final class Clipboard: StackbarPlugin {
             firstCopied: item.copiedAt, lastCopied: item.copiedAt
         )
         if entry.kind != .image && entry.kind != .files && (entry.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+        // Our own paste coming back says nothing new about where it came from.
+        let ownWrite = item.sourceAppID == "io.navbytes.stackbar" || (lastWrite.map { item.copiedAt.timeIntervalSince($0) < 3 } ?? false)
         var history = entries
         if let index = history.firstIndex(where: { $0.fingerprint == entry.fingerprint }) {
             var existing = history.remove(at: index)
             existing.lastCopied = item.copiedAt
             existing.contentID = item.contentID ?? existing.contentID
-            // Our own paste coming back says nothing new about where it came from.
-            let ownWrite = item.sourceAppID == "io.navbytes.stackbar" || (lastWrite.map { item.copiedAt.timeIntervalSince($0) < 3 } ?? false)
             if !ownWrite {
                 existing.count += 1
                 existing.appID = item.sourceAppID ?? existing.appID
@@ -184,6 +186,19 @@ final class Clipboard: StackbarPlugin {
         }
         history.insert(entry, at: 0)
         entries = trimmed(history)
+        if !ownWrite { countCopy(on: item.copiedAt) }
+    }
+
+    func countCopy(on date: Date) {
+        var days = copiesByDay
+        days[Self.day(date), default: 0] += 1
+        let oldest = Self.day(date.addingTimeInterval(-29 * 86400))
+        copiesByDay = days.filter { $0.key >= oldest }
+    }
+
+    static func day(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     /// Drops the oldest unpinned items past the limit or the storage budget.
@@ -301,6 +316,29 @@ final class Clipboard: StackbarPlugin {
             Button(paused ? "Resume" : "Pause", symbol: paused ? "play.fill" : "pause.fill") { self.paused.toggle() }
             Button("Ignore next copy", symbol: "eye.slash") { self.ignoreNext = true }
             Button("Clear history", symbol: "trash", role: .critical) { self.clear() }
+        }
+    }
+
+    /// The window has room for the history and what it says about you.
+    var window: ViewContent {
+        panel
+        insights
+    }
+
+    @ViewBuilder var insights: ViewContent {
+        let all = entries
+        if !all.isEmpty {
+            Section("Insights") {
+                let calendar = Calendar.current
+                let dates = (0..<14).reversed().map { Date().addingTimeInterval(Double(-$0) * 86400) }
+                Chart("Copies, last 14 days", values: dates.map { Double(copiesByDay[Self.day($0)] ?? 0) }, kind: .bar, labels: dates.map { String(calendar.component(.day, from: $0)) }, highlight: 13)
+                let byApp = Dictionary(grouping: all, by: { $0.appName ?? "Unknown" }).mapValues { $0.reduce(0) { $0 + $1.count } }.sorted { $0.value > $1.value }
+                let top = byApp.prefix(5)
+                let rest = byApp.dropFirst(5).reduce(0) { $0 + $1.value }
+                Chart("Where your copies come from", values: top.map { Double($0.value) } + (rest > 0 ? [Double(rest)] : []), kind: .donut, labels: top.map(\.key) + (rest > 0 ? ["Other"] : []))
+                let kinds: [(String, Int)] = [("Text", all.filter { $0.kind == .text }.count), ("Links", all.filter { $0.kind == .url }.count), ("Images", all.filter { $0.kind == .image }.count), ("Files", all.filter { $0.kind == .files }.count)].filter { $0.1 > 0 }
+                Chart("What you copy", values: kinds.map { Double($0.1) }, kind: .donut, role: .success, labels: kinds.map(\.0))
+            }
         }
     }
 

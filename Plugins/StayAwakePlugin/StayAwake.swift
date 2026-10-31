@@ -62,6 +62,9 @@ final class StayAwake: StackbarPlugin {
     var lastEnded: String?
     /// The end time the 5-minute warning was sent for.
     var warnedFor: Date?
+    /// Battery percentage once a minute while awake, for the session chart.
+    var batteryTrail: [Double] = []
+    var lastSample: Date?
 
     // MARK: Deciding
 
@@ -124,6 +127,11 @@ final class StayAwake: StackbarPlugin {
             if awakeByDay.count > 14 { awakeByDay = awakeByDay.filter { $0.key >= Self.day(now.addingTimeInterval(-13 * 86400)) } }
         }
         lastTick = now
+        if held != nil, let level = status.batteryLevel, now.timeIntervalSince(lastSample ?? .distantPast) >= 60 {
+            batteryTrail.append((level * 1000).rounded() / 10)
+            if batteryTrail.count > 240 { batteryTrail.removeFirst(batteryTrail.count - 240) }
+            lastSample = now
+        }
         let wanted = reason.map { KeepAwakeRequest(display: keepDisplayOn, reason: $0) }
         guard wanted != held else { return }
         do {
@@ -140,6 +148,7 @@ final class StayAwake: StackbarPlugin {
     }
 
     func start(_ mode: Mode) async {
+        if session == nil { batteryTrail = [] }
         session = Session(mode: mode, started: Date())
         lastEnded = nil
         await apply()
@@ -254,7 +263,7 @@ final class StayAwake: StackbarPlugin {
 
     var panel: ViewContent {
         if let reason, held != nil {
-            Text("Staying awake").style(.headline)
+            Label("Staying awake", symbol: "cup.and.heat.waves.fill").role(.accent)
             Text(reason + (keepDisplayOn ? ", display on" : ", display may sleep")).style(.caption).role(.secondary)
             if let session, let total = session.total, let remaining {
                 ProgressBar("\(Self.clock(remaining)) left", value: total - remaining, total: total, role: .accent)
@@ -268,7 +277,7 @@ final class StayAwake: StackbarPlugin {
                 }
             }
         } else {
-            Text("Your Mac sleeps normally").style(.headline)
+            Label("Your Mac sleeps normally", symbol: "moon.zzz").role(.secondary)
             if let blocker, session != nil {
                 Text("Paused: \(blocker)").role(.warning)
             } else if let lastEnded {
@@ -311,10 +320,33 @@ final class StayAwake: StackbarPlugin {
             self.keepDisplayOn = on
             await self.apply()
         }
-        LabeledContent("Today", value: Self.clock(awakeByDay[Self.day(Date())] ?? 0))
-        if let level = status.batteryLevel {
-            LabeledContent("Battery", value: "\(Int((level * 100).rounded()))%" + (status.onACPower ? ", on power" : ""))
+        Section("This week") {
+            let week = hoursAwake(days: 7)
+            Chart("Hours awake", values: week.values, kind: .bar, labels: week.labels, unit: "h", highlight: 6)
+            HStack {
+                LabeledContent("Today", value: Self.clock(awakeByDay[Self.day(Date())] ?? 0))
+                LabeledContent("Average", value: Self.clock(week.values.reduce(0, +) / 7 * 3600))
+            }
         }
+        if let level = status.batteryLevel {
+            if held != nil, batteryTrail.count >= 3 {
+                Chart("Battery while awake", values: batteryTrail, kind: .area, role: level < 0.2 ? .critical : status.onACPower ? .success : .accent, unit: "%")
+            } else {
+                LabeledContent("Battery", value: "\(Int((level * 100).rounded()))%" + (status.onACPower ? ", on power" : ""))
+            }
+        }
+    }
+
+    /// Hours awake per day for the last `days` days, oldest first, with
+    /// short weekday names (or day numbers past a week).
+    func hoursAwake(days: Int, now: Date = Date()) -> (values: [Double], labels: [String]) {
+        let calendar = Calendar.current
+        let dates = (0..<days).reversed().map { now.addingTimeInterval(Double(-$0) * 86400) }
+        let values = dates.map { ((awakeByDay[Self.day($0)] ?? 0) / 360).rounded() / 10 }
+        let labels = dates.map { date in
+            days <= 7 ? calendar.shortWeekdaySymbols[calendar.component(.weekday, from: date) - 1] : String(calendar.component(.day, from: date))
+        }
+        return (values, labels)
     }
 
     /// Stackbar's Settings window, so the panel stays about starting and stopping.
@@ -354,10 +386,11 @@ final class StayAwake: StackbarPlugin {
                 await self.apply()
             }
         }
-        let week = (0..<7).reversed().map { awakeByDay[Self.day(Date().addingTimeInterval(Double(-$0) * 86400))] ?? 0 }
-        if week.contains(where: { $0 > 0 }) {
+        let fortnight = hoursAwake(days: 14)
+        if fortnight.values.contains(where: { $0 > 0 }) {
             Section("Activity") {
-                Chart("Hours awake, last 7 days", values: week.map { ($0 / 360).rounded() / 10 }, kind: .bar)
+                Chart("Hours awake, last 14 days", values: fortnight.values, kind: .area, labels: fortnight.labels, unit: "h", highlight: 13)
+                LabeledContent("In all", value: Self.clock(fortnight.values.reduce(0, +) * 3600))
             }
         }
     }

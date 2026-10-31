@@ -273,17 +273,24 @@ public struct Chart: StackbarView {
     var kind: ChartKind
     var label: String?
     var role: Role
+    var options: ChartOptions?
 
-    public init(_ label: String? = nil, values: [Double], kind: ChartKind = .line, role: Role = .accent) {
+    /// `labels` name the points (x-axis labels, or donut slices), `unit`
+    /// follows the values ("h"), `goal` draws a target line, and
+    /// `highlight` emphasizes one point (today, say).
+    public init(_ label: String? = nil, values: [Double], kind: ChartKind = .line, role: Role = .accent, labels: [String]? = nil, unit: String? = nil, goal: Double? = nil, highlight: Int? = nil) {
         self.label = label
         self.values = values
         self.kind = kind
         self.role = role
+        if labels != nil || unit != nil || goal != nil || highlight != nil {
+            options = ChartOptions(labels: labels, unit: unit, goal: goal, highlight: highlight)
+        }
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] {
         // Non-finite values would not survive JSON; the host draws gaps as 0.
-        [.chart(values: values.map { $0.isFinite ? $0 : 0 }, kind: kind, label: label, role: role)]
+        [.chart(values: values.map { $0.isFinite ? $0 : 0 }, kind: kind, label: label, role: role, options: options)]
     }
 }
 

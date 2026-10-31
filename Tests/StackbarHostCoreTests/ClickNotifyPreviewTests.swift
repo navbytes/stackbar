@@ -82,4 +82,31 @@ final class ClickNotifyPreviewTests: XCTestCase {
         XCTAssertTrue(row?.preview?.caption?.contains("lines") == true, row?.preview?.caption ?? "no caption")
         await supervisor.stop()
     }
+
+    func testPluginsDrawTheirCharts() async throws {
+        let now = Date()
+        let system = SimulatedSystem(events: [
+            CalendarEvent(id: "a", title: "Planning", start: now.addingTimeInterval(600), end: now.addingTimeInterval(4200), calendar: "Work", participation: .accepted, attendees: 3),
+            CalendarEvent(id: "b", title: "Overlapping", start: now.addingTimeInterval(2400), end: now.addingTimeInterval(6000), calendar: "Home", participation: .accepted, attendees: 2),
+        ])
+        let (upNext, upNextDirectory) = try await run("UpNextPlugin", system: system)
+        defer { try? FileManager.default.removeItem(at: upNextDirectory) }
+        let window = await upNext.views[.window].map { TreeTextRenderer.render($0) } ?? ""
+        XCTAssertTrue(window.contains("Hours in meetings, next 7 days"), window)
+        let panel = await upNext.views[.panel].map { TreeTextRenderer.render($0) } ?? ""
+        // 10 min → 100 min overlapping 40 → 100 min: 1h 30m once, not 2h.
+        XCTAssertTrue(panel.contains("1h 30m in meetings today") || !Calendar.current.isDate(now.addingTimeInterval(6000), inSameDayAs: now), panel)
+        await upNext.stop()
+
+        let (stayAwake, stayAwakeDirectory) = try await run("StayAwakePlugin")
+        defer { try? FileManager.default.removeItem(at: stayAwakeDirectory) }
+        let awake = await stayAwake.views[.panel].map { TreeTextRenderer.render($0) } ?? ""
+        XCTAssertTrue(awake.contains("Hours awake") && awake.contains("(bar)"), awake)
+        await stayAwake.stop()
+    }
+
+    func testDonutsRenderAsNamedValues() {
+        let text = TreeTextRenderer.render(.chart(values: [3, 1], kind: .donut, label: "Kinds", options: ChartOptions(labels: ["Text", "Links"])))
+        XCTAssertEqual(text, "Kinds: Text 3, Links 1 (donut)")
+    }
 }

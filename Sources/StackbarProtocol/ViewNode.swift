@@ -27,8 +27,9 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     case divider
     /// A label and its value on one line, like SwiftUI's `LabeledContent`.
     case labeled(label: String, value: String, role: Role = .primary)
-    /// A small chart of a series: a sparkline in the menu bar, a chart in panels.
-    case chart(values: [Double], kind: ChartKind = .line, label: String? = nil, role: Role = .accent)
+    /// A chart of a series: a sparkline in the menu bar, a chart in panels.
+    /// `options` names the points, gives a unit and a goal line.
+    case chart(values: [Double], kind: ChartKind = .line, label: String? = nil, role: Role = .accent, options: ChartOptions? = nil)
     /// A one-line text input. Submitting sends `.text` with the field's contents.
     case textField(placeholder: String, text: String, action: ActionID)
     /// A choice among a few options. Choosing sends `.text` with the option.
@@ -43,6 +44,29 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
 
 public enum ChartKind: String, Codable, Sendable, CaseIterable {
     case line, bar
+    /// A line with the area under it filled.
+    case area
+    /// Shares of a whole, one slice per value, named by `ChartOptions.labels`.
+    case donut
+}
+
+/// What a chart's points mean, so the host can label them.
+public struct ChartOptions: Codable, Equatable, Sendable {
+    /// One per value: x-axis labels ("Mon"), or slice names for a donut.
+    public var labels: [String]?
+    /// Appended to values on the axis and in the summary ("h", "%").
+    public var unit: String?
+    /// A dashed rule at this value, like a daily target.
+    public var goal: Double?
+    /// Index of the point to emphasize, like today in a week.
+    public var highlight: Int?
+
+    public init(labels: [String]? = nil, unit: String? = nil, goal: Double? = nil, highlight: Int? = nil) {
+        self.labels = labels
+        self.unit = unit
+        self.goal = goal
+        self.highlight = highlight
+    }
 }
 
 /// One entry in a list: the workhorse of most plugin panels.
