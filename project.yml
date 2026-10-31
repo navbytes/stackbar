@@ -11,6 +11,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: 59J9RQXYYP
+    CODE_SIGN_STYLE: Automatic
 packages:
   Fluid:
     path: .
