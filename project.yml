@@ -42,6 +42,9 @@ targets:
       properties:
         com.apple.security.app-sandbox: false
         com.apple.security.application-groups: [group.dev.fluid]
+        # The hardened runtime denies calendar access, without a prompt,
+        # unless the app carries this entitlement (Up Next needs it).
+        com.apple.security.personal-information.calendars: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: dev.fluid.app
     # Without its own scheme, `-scheme Fluid` resolves to the package's Fluid executable.
