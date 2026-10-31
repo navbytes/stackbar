@@ -15,8 +15,9 @@ work and is listed so it isn't forgotten.
 - Already there: search, pins, images, files, ignored apps (password managers
   by default), concealed and transient types skipped, ordering, history size,
   pause and ignore-next, global hotkey, agent tools.
-- Later: a preview pane for long text and images (needs an image/detail node
-  in the vocabulary), opening the list at the text cursor, fuzzy search.
+- Done in the second pass: a preview of the selected item's full text, image
+  or files, and fuzzy, ranked search that also looks through the full text.
+- Later: opening the list at the text cursor.
 
 ### Stay Awake (vs Amphetamine, KeepingYouAwake, Lungo)
 
@@ -25,9 +26,10 @@ work and is listed so it isn't forgotten.
 - Already there: indefinite, presets, until a time, while an app runs, weekday
   schedule, display on or off, battery floor, Low Power Mode, notifications,
   daily stats, agent tools; the host releases the assertion if the plugin dies.
+- Done in the second pass: click the cup to start or stop (a right click
+  opens the panel), with a setting for what a click starts.
 - Later: closed-lid mode (needs a privileged helper), while a download or a
-  process runs, while an external display or a VPN is connected, one-click
-  toggle on the menu-bar icon (needs a "primary action" for the status item).
+  process runs, while an external display or a VPN is connected.
 
 ### Up Next (vs MeetingBar, Dato, Fantastical)
 
@@ -37,8 +39,8 @@ work and is listed so it isn't forgotten.
   cross midnight, next meeting first so ⌃⌥J then Return joins it.
 - Already there: countdown, 18 call services, reminders, auto-join, today and
   tomorrow, calendar filters, declined, all-day, tentative badges, agent tools.
-- Later: a Join button inside the notification (needs notification actions),
-  a full-screen "meeting starting" alert, dial-in numbers.
+- Done in the second pass: a Join button on the reminder notification.
+- Later: a full-screen "meeting starting" alert, dial-in numbers.
 
 ### PR Cockpit (vs Gitify, Trailer, GitHub's web dashboard)
 
@@ -48,6 +50,8 @@ work and is listed so it isn't forgotten.
 - Already there: review queue (with team requests) and your PRs in one
   request, checks, review decision, conflicts, size, drafts, notifications for
   new requests, approvals, changes requested and failing checks, agent tools.
+- Done in the second pass: Review, Open and See checks buttons on its
+  notifications.
 - Later: GitHub notifications inbox (mentions, issues), GitHub Enterprise
   hosts (needs a per-user network host), signing in with OAuth instead of a
   token, merged/closed notifications.

@@ -365,7 +365,8 @@ final class Clipboard: StackbarPlugin {
         let source = [entry.appName, Self.relative(entry.lastCopied), entry.count > 1 ? "×\(entry.count)" : nil, entry.kind == .text ? "\(entry.text?.count ?? 0) chars" : nil]
             .compactMap { $0 }.joined(separator: " · ")
         var row = Row(entry.title, subtitle: source, symbol: entry.pinned ? "pin.fill" : entry.symbol, key: entry.id)
-            .action(pasteDirectly ? "Paste" : "Copy") { await self.use(entry, paste: self.pasteDirectly) }
+        if let preview = preview(entry) { row = preview(row) }
+        row = row.action(pasteDirectly ? "Paste" : "Copy") { await self.use(entry, paste: self.pasteDirectly) }
         if entry.plainText != nil, entry.contentID != nil || entry.kind == .files {
             row = row.action(pasteDirectly ? "Paste as plain text" : "Copy as plain text", shortcut: "option+return") { await self.use(entry, paste: self.pasteDirectly, plain: true) }
         }
@@ -375,6 +376,25 @@ final class Clipboard: StackbarPlugin {
             row = row.action("Open link") { Stackbar.open(url.trimmingCharacters(in: .whitespacesAndNewlines)) }
         }
         return row.action("Delete", shortcut: "option+delete", role: .critical) { self.delete(entry.id) }
+    }
+
+    /// The selected row's preview: the text past its first line, the image,
+    /// or the files, with when and how often it was copied.
+    func preview(_ entry: Entry) -> ((Row) -> Row)? {
+        var caption = ["First copied \(Self.relative(entry.firstCopied))"]
+        if entry.count > 1 { caption.append("copied \(entry.count) times") }
+        switch entry.kind {
+        case .image:
+            if let size = entry.imageSize, size.count == 2 { caption.insert("\(size[0]) × \(size[1])", at: 0) }
+            return { $0.preview(imageID: entry.imageID, caption: caption.joined(separator: " · ")) }
+        case .files:
+            return { $0.preview(text: entry.files.joined(separator: "\n"), caption: caption.joined(separator: " · ")) }
+        case .text, .url:
+            guard let text = entry.text, text.count > 60 || text.contains("\n") else { return nil }
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false).count
+            caption.insert("\(text.count) characters" + (lines > 1 ? ", \(lines) lines" : ""), at: 0)
+            return { $0.preview(text: String(text.prefix(2000)), caption: caption.joined(separator: " · ")) }
+        }
     }
 
     static func relative(_ date: Date, now: Date = Date()) -> String {

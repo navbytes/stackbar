@@ -97,3 +97,23 @@ final class SystemProtocolTests: XCTestCase {
         XCTAssertNil(try LineCodec.decode(Manifest.self, from: Data(json.utf8)).hotkey)
     }
 }
+
+final class TextMatchTests: XCTestCase {
+    func testPrefixBeatsSubstringBeatsLettersInOrder() throws {
+        let prefix = try XCTUnwrap(TextMatch.score("git", in: "GitHub pull requests"))
+        let substring = try XCTUnwrap(TextMatch.score("hub", in: "GitHub pull requests"))
+        let letters = try XCTUnwrap(TextMatch.score("gthb", in: "GitHub"))
+        XCTAssertGreaterThan(prefix, substring)
+        XCTAssertGreaterThan(substring, letters)
+        XCTAssertNil(TextMatch.score("xyz", in: "GitHub"))
+        XCTAssertNotNil(TextMatch.score("pull req", in: "GitHub pull requests"), "spaces in the query are ignored")
+    }
+
+    func testOldMessagesStillDecode() throws {
+        // A protocol 4 plugin's notify, with no actions, and a row with no preview.
+        let notify = try JSONDecoder().decode(HostCall.self, from: Data(#"{"notify":{"title":"Hi","body":null}}"#.utf8))
+        XCTAssertEqual(notify, .notify(title: "Hi", body: nil, actions: nil))
+        let row = try JSONDecoder().decode(RowNode.self, from: Data(#"{"key":"a","title":"A","accessories":[],"actions":[]}"#.utf8))
+        XCTAssertNil(row.preview)
+    }
+}

@@ -65,6 +65,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             _ = controller.isWaitingForApproval
             _ = controller.missingSecrets
             _ = controller.manifest
+            _ = controller.menuBarClick
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.resize()
@@ -92,9 +93,18 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         let width = max(hosting.fittingSize.width, 22)
         statusItem.length = ceil(width)
         statusItem.button?.setAccessibilityLabel(controller.name)
+        statusItem.button?.toolTip = controller.menuBarClick.map { "\($0.title). Right-click for \(controller.name)." }
     }
 
     @objc private func togglePanel(_ sender: Any?) {
+        // A plugin's click action takes a plain left click; a right click,
+        // ⌃ or ⌥ click, or the hotkey (no event) opens the panel.
+        let event = sender == nil ? nil : NSApp.currentEvent
+        let plainClick = event.map { $0.type == .leftMouseUp && $0.modifierFlags.intersection([.control, .option]).isEmpty } ?? false
+        if !popover.isShown, plainClick, let click = controller.menuBarClick {
+            controller.send(click.action, nil)
+            return
+        }
         if popover.isShown {
             popover.performClose(sender)
         } else {

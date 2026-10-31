@@ -65,6 +65,11 @@ public actor PluginSession {
         await supervisor?.tools ?? []
     }
 
+    /// The plugin's left-click action on its menu-bar item, if any.
+    public func menuBarClick() async -> MenuBarClick? {
+        await supervisor?.menuBarClick
+    }
+
     public func state() async -> PluginSupervisor.State {
         await supervisor?.state ?? .stopped
     }
@@ -118,7 +123,7 @@ public actor PluginSession {
         switch update {
         case .log(let level, let message): logLines.append("[\(level.rawValue)] \(message)")
         case .state(let state): logLines.append("[state] \(state)")
-        case .render, .tools: return
+        case .render, .tools, .menuBarClick: return
         }
         if logLines.count > maxLogLines { logLines.removeFirst(logLines.count - maxLogLines) }
     }

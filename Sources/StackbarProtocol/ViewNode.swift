@@ -58,14 +58,33 @@ public struct RowNode: Codable, Equatable, Sendable {
     /// The first action is the row's primary action (a click); the rest are
     /// secondary (a context menu).
     public var actions: [ActionRef]
+    /// What the host shows for the selected row in a searchable list: the
+    /// full text, an image the host keeps, or both.
+    public var preview: RowPreview?
 
-    public init(key: String, title: String, subtitle: String? = nil, symbol: String? = nil, accessories: [ViewNode] = [], actions: [ActionRef] = []) {
+    public init(key: String, title: String, subtitle: String? = nil, symbol: String? = nil, accessories: [ViewNode] = [], actions: [ActionRef] = [], preview: RowPreview? = nil) {
         self.key = key
         self.title = title
         self.subtitle = subtitle
         self.symbol = symbol
         self.accessories = accessories
         self.actions = actions
+        self.preview = preview
+    }
+}
+
+/// A row's preview. `text` is cut to 10,000 characters by the plugin kit;
+/// `imageID` is a `ClipboardItem.imageID` the host still keeps.
+public struct RowPreview: Codable, Equatable, Sendable {
+    public var text: String?
+    public var imageID: String?
+    /// Lines under the preview, like "1,204 characters · copied 3 times".
+    public var caption: String?
+
+    public init(text: String? = nil, imageID: String? = nil, caption: String? = nil) {
+        self.text = text
+        self.imageID = imageID
+        self.caption = caption
     }
 }
 

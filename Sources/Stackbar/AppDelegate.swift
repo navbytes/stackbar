@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import SwiftUI
+import UserNotifications
 import StackbarHostCore
 
 /// Starts the model, gives each plugin a status item, and owns the windows
@@ -18,6 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
+        if Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" {
+            UNUserNotificationCenter.current().delegate = NotificationRouter.shared
+        }
         model.onPluginsChanged = { [weak self] in self?.syncItems() }
         model.start()
         _ = palette
@@ -86,6 +90,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         showSettings()
+    }
+
+    /// Opens a plugin's panel, as clicking its notification does.
+    func showPanel(pluginID: String) {
+        guard let controller = model.controllers.first(where: { $0.pluginID == pluginID }) else { return }
+        items[controller.id]?.showPanel()
     }
 
     /// Opens Settings, on a plugin's page when one is given.

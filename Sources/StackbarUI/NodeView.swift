@@ -1,4 +1,7 @@
 #if canImport(SwiftUI)
+#if canImport(AppKit)
+import AppKit
+#endif
 import Charts
 import SwiftUI
 import StackbarProtocol
@@ -7,6 +10,8 @@ import StackbarProtocol
 public typealias SendAction = @MainActor (ActionID, EventValue?) -> Void
 
 extension EnvironmentValues {
+    /// Loads an image the host keeps (a clipboard image) for row previews.
+    @Entry public var stackbarImageData: (@Sendable (String) -> Data?)?
     /// Widgets draw controls but can't act on them.
     @Entry public var stackbarReadOnly: Bool = false
     /// The row a keyboard-driven list has selected, drawn highlighted.
@@ -164,6 +169,9 @@ struct ListNodeView: View {
             if visible.isEmpty && !query.isEmpty {
                 Text("No matches").foregroundStyle(.secondary)
             }
+            if searchable, !readOnly, let preview = selected?.preview {
+                PreviewPane(preview: preview)
+            }
         }
         .environment(\.stackbarSelectedRow, searchable && !readOnly ? selected?.key : nil)
         .environment(\.stackbarRowNumbers, searchable && !readOnly ? numbers : [:])
@@ -246,6 +254,42 @@ struct ListNodeView: View {
     }
 }
 
+/// The selected row's full text or image, under a searchable list.
+struct PreviewPane: View {
+    let preview: RowPreview
+    @Environment(\.stackbarImageData) private var imageData
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+            #if canImport(AppKit)
+            if let id = preview.imageID, let data = imageData?(id), let image = NSImage(data: data) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            #endif
+            if let text = preview.text, !text.isEmpty {
+                ScrollView {
+                    Text(text)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 140)
+                .padding(6)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+            }
+            if let caption = preview.caption {
+                Text(caption).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
 /// A row action's shortcut (`cmd+return`, `cmd+1`, `cmd+shift+k`) matched
 /// against a key press.
 struct KeyShortcut: Equatable {
@@ -297,13 +341,37 @@ struct KeyShortcut: Equatable {
 
 /// The host's list filter, shared by panels and the palette.
 public enum RowFilter {
+    /// The children whose rows match `query`. Sections are filtered inside
+    /// and dropped when empty. Plain rows come back best match first.
     public static func filter(_ children: [ViewNode], query: String) -> [ViewNode] {
         let query = query.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return children }
-        return children.filter { child in
-            child.rows.contains { row in
-                row.title.localizedCaseInsensitiveContains(query) || (row.subtitle?.localizedCaseInsensitiveContains(query) ?? false)
+        return scored(children, query: query).map(\.node)
+    }
+
+    static func scored(_ children: [ViewNode], query: String) -> [(node: ViewNode, score: Int)] {
+        let matches = children.compactMap { child -> (node: ViewNode, score: Int)? in
+            if case .section(let title, let inner) = child {
+                let kept = scored(inner, query: query)
+                guard let best = kept.map(\.score).max() else { return nil }
+                return (.section(title: title, children: kept.map(\.node)), best)
             }
+            let best = child.rows.compactMap(score(query)).max()
+            return best.map { (child, $0) }
+        }
+        let allRows = matches.allSatisfy { if case .row = $0.node { return true } else { return false } }
+        guard allRows else { return matches }
+        return matches.enumerated()
+            .sorted { $0.element.score != $1.element.score ? $0.element.score > $1.element.score : $0.offset < $1.offset }
+            .map(\.element)
+    }
+
+    static func score(_ query: String) -> (RowNode) -> Int? {
+        { row in
+            let title = TextMatch.score(query, in: row.title)
+            let subtitle = row.subtitle.flatMap { TextMatch.score(query, in: $0) }.map { $0 - 50 }
+            let preview = row.preview?.text.flatMap { $0.lowercased().contains(query.lowercased()) ? 300 : nil }
+            return [title, subtitle, preview].compactMap { $0 }.max()
         }
     }
 }

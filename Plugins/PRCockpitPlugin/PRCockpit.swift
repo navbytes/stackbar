@@ -156,7 +156,7 @@ final class PRCockpit: StackbarPlugin {
             let known = Set(toReview.map(\.id))
             let added = review.filter { !known.contains($0.id) }
             if added.count == 1, let pr = added.first {
-                Stackbar.notify("Review requested: \(pr.title)", body: "\(pr.id) by \(pr.author?.login ?? "someone")")
+                Stackbar.notify("Review requested: \(pr.title)", body: "\(pr.id) by \(pr.author?.login ?? "someone")", actions: [NotificationAction("Review", url: pr.url + "/files")])
             } else if added.count > 1 {
                 Stackbar.notify("\(added.count) new review requests", body: added.map(\.title).prefix(3).joined(separator: "\n"))
             }
@@ -164,14 +164,14 @@ final class PRCockpit: StackbarPlugin {
             for pr in newMine {
                 guard let old = before[pr.id] else { continue }
                 if pr.reviewDecision != old.reviewDecision, pr.reviewDecision == "APPROVED" {
-                    Stackbar.notify("Approved: \(pr.title)", body: pr.id)
+                    Stackbar.notify("Approved: \(pr.title)", body: pr.id, actions: [NotificationAction("Open", url: pr.url)])
                 } else if pr.reviewDecision != old.reviewDecision, pr.reviewDecision == "CHANGES_REQUESTED" {
-                    Stackbar.notify("Changes requested: \(pr.title)", body: pr.id)
+                    Stackbar.notify("Changes requested: \(pr.title)", body: pr.id, actions: [NotificationAction("Open", url: pr.url)])
                 }
                 if pr.checksFailed, !old.checksFailed {
-                    Stackbar.notify("Checks failed: \(pr.title)", body: pr.id)
+                    Stackbar.notify("Checks failed: \(pr.title)", body: pr.id, actions: [NotificationAction("See checks", url: pr.url + "/checks")])
                 } else if pr.readyToMerge, !old.readyToMerge {
-                    Stackbar.notify("Ready to merge: \(pr.title)", body: pr.id)
+                    Stackbar.notify("Ready to merge: \(pr.title)", body: pr.id, actions: [NotificationAction("Open", url: pr.url)])
                 }
             }
         }

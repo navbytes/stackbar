@@ -15,6 +15,7 @@ public final class PluginRuntime {
     private var surfaces: [Surface] = []
     private var lastSent: [Surface: ViewNode] = [:]
     private var lastTools: [ToolSpec]?
+    private var lastClick: MenuBarClick?
     private var handlers: [ActionID: RenderContext.Handler] = [:]
 
     public init(plugin: any StackbarPlugin, send: @escaping Send) {
@@ -75,6 +76,15 @@ public final class PluginRuntime {
                 lastSent[surface] = root
                 send(.render(surface: surface, root: root))
             }
+        }
+        var click: MenuBarClick?
+        if surfaces.contains(.menuBar), let action = plugin.menuBarClick {
+            let perform = action.perform
+            click = MenuBarClick(title: action.title, action: context.register("menubar/click", { _ in try await perform() }))
+        }
+        if click != lastClick {
+            lastClick = click
+            send(.menuBarClick(click))
         }
         handlers = context.handlers
         let tools = plugin.tools.map(\.spec)

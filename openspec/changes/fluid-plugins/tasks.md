@@ -24,6 +24,13 @@
 - [x] 3.5 PR Cockpit: new-activity markers, snooze until changed, hide repositories, comment counts, ready to merge
 - [x] 3.6 App signed with the calendar entitlement (hardened runtime)
 
+## 3b. Second gap pass (protocol 5)
+
+- [x] 3b.1 Menu-bar click action (`menuBarClick`, `MenuBarAction`); right click opens the panel. Stay Awake: click the cup to start or stop, with a setting
+- [x] 3b.2 Notification buttons that open URLs (`NotificationAction`, at most three, same schemes as `openURL`); clicking a notification opens the plugin's panel. Up Next: Join; PR Cockpit: Review, Open, See checks
+- [x] 3b.3 Row previews (`RowPreview`): full text or a kept clipboard image under a searchable list for the selected row; images only for plugins with `.clipboard`. Clipboard History previews long text, images and files
+- [x] 3b.4 Fuzzy, ranked list filtering (`TextMatch`, shared with the palette); sections filtered inside; search covers preview text
+
 ## 4. On a Mac
 
 - [ ] 4.1 The app compiles with `MacSystem` (self-hosted runner)
@@ -32,3 +39,6 @@
 - [ ] 4.4 Up Next asks for calendar access once and shows real events
 - [ ] 4.5 PR Cockpit with a real token
 - [ ] 4.6 Keyboard: ⌘⇧V, type, ↓↓, Return pastes; ⌘2 pastes the second row; the filter has focus each time the panel opens
+- [ ] 4.7 Left click on the cup toggles Stay Awake, right click opens the panel
+- [ ] 4.8 An Up Next reminder's Join button opens the call; clicking the notification opens the panel
+- [ ] 4.9 Clipboard preview shows long text and images for the selected row

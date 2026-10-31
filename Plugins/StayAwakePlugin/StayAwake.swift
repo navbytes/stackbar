@@ -42,6 +42,10 @@ final class StayAwake: StackbarPlugin {
     @Stored("notifyOnEnd") var notifyOnEnd = true
     @Stored("scheduleOn") var scheduleOn = false
     @Stored("whilePluggedIn") var whilePluggedIn = false
+    /// What a click on the menu-bar cup does: -1 opens the panel, 0 starts
+    /// until stopped, otherwise starts for that many minutes. Clicking again
+    /// stops; a right click always opens the panel.
+    @Stored("clickMinutes") var clickMinutes = 0.0
     @Stored("scheduleStart") var scheduleStart = "09:00"
     @Stored("scheduleEnd") var scheduleEnd = "18:00"
     @Stored("scheduleWeekdaysOnly") var scheduleWeekdaysOnly = true
@@ -224,6 +228,20 @@ final class StayAwake: StackbarPlugin {
 
     // MARK: Surfaces
 
+    static let clickChoices: [(title: String, minutes: Double)] = [("Opens the panel", -1), ("Starts until I stop it", 0)] + durations.map { ("Starts for \($0.title)", $0.minutes) }
+
+    var menuBarClick: MenuBarAction? {
+        guard clickMinutes >= 0 else { return nil }
+        if session != nil {
+            return MenuBarAction("Click to stop keeping awake") { await self.stop() }
+        }
+        let minutes = clickMinutes
+        let label = minutes == 0 ? "until you stop it" : "for \(Self.durations.first { $0.minutes == minutes }?.title ?? "\(Int(minutes)) min")"
+        return MenuBarAction("Click to keep awake \(label)") {
+            await self.start(minutes == 0 ? .indefinitely : .until(Date().addingTimeInterval(minutes * 60)))
+        }
+    }
+
     var menuBar: ViewContent {
         if held != nil {
             Label(remaining.map(Self.clock) ?? "", symbol: "cup.and.heat.waves.fill").role(.accent)
@@ -301,6 +319,12 @@ final class StayAwake: StackbarPlugin {
 
     /// Stackbar's Settings window, so the panel stays about starting and stopping.
     var settings: ViewContent {
+        Section("Menu bar") {
+            Picker("Clicking the cup", options: Self.clickChoices.map(\.title), selection: Self.clickChoices.first { $0.minutes == clickMinutes }?.title ?? Self.clickChoices[1].title, key: "click") { title in
+                self.clickMinutes = Self.clickChoices.first { $0.title == title }?.minutes ?? 0
+            }
+            Text("A right click always opens the panel.").style(.caption).role(.secondary)
+        }
         Section("Stop or pause") {
             Slider(batteryFloor > 0 ? "Stop below \(Int(batteryFloor))% battery" : "Ignore the battery level", value: batteryFloor, in: 0...50, step: 5, key: "battery") { value in
                 self.batteryFloor = value

@@ -158,7 +158,11 @@ final class UpNext: StackbarPlugin {
             if remindMinutes > 0, until > 0, until <= remindMinutes * 60 + 15, !reminded.contains(event.id) {
                 reminded.insert(event.id)
                 let link = Self.meetingLink(for: event)
-                Stackbar.notify("\(event.title) in \(max(1, Int((until / 60).rounded()))) min", body: link.map { "Join on \($0.service) from the menu bar (⌃⌥J)" } ?? event.location)
+                Stackbar.notify(
+                    "\(event.title) in \(max(1, Int((until / 60).rounded()))) min",
+                    body: link.map { "On \($0.service)" } ?? event.location,
+                    actions: link.map { [NotificationAction("Join", url: openInApps ? Self.appURL(for: $0) : $0.url)] } ?? []
+                )
             }
             if autoJoin, until <= 30, now < event.start.addingTimeInterval(120), !joined.contains(event.id), let link = Self.meetingLink(for: event) {
                 joined.insert(event.id)
