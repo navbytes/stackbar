@@ -36,6 +36,29 @@ final class SandboxTests: XCTestCase {
     }
     """
 
+    /// What a helper that wouldn't start says when run directly, and how it
+    /// is signed, for the failure message.
+    static func diagnose(_ executable: URL) -> String {
+        func capture(_ path: String, _ arguments: [String]) -> String {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: path)
+            process.arguments = arguments
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            process.standardInput = FileHandle.nullDevice
+            do { try process.run() } catch { return "could not run \(path): \(error)" }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return "$ \(([path] + arguments).joined(separator: " ")) -> \(process.terminationStatus) (\(process.terminationReason == .uncaughtSignal ? "signal" : "exit"))\n" + String(decoding: data.prefix(4000), as: UTF8.self)
+        }
+        return [
+            capture(executable.path, ["--manifest"]),
+            capture("/usr/bin/codesign", ["-d", "--entitlements", "-", "--verbose=2", executable.path]),
+            capture("/usr/bin/log", ["show", "--last", "2m", "--style", "compact", "--predicate", "eventMessage CONTAINS[c] \"sandbox-probe\" OR eventMessage CONTAINS[c] \"\(executable.lastPathComponent)\""]),
+        ].joined(separator: "\n")
+    }
+
     func testASignedHelperIsSandboxed() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["FLUID_BUILD_TESTS"] == "1", "set FLUID_BUILD_TESTS=1 to compile plugins")
         let package = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -60,14 +83,18 @@ final class SandboxTests: XCTestCase {
         let manifest = try PluginProcess.readManifest(executable: binary)
 
         func run(_ executable: URL, _ body: (PluginSupervisor) async -> Void) async {
-            let supervisor = PluginSupervisor(executable: executable, manifest: manifest)
+            let log = Log()
+            let supervisor = PluginSupervisor(executable: executable, manifest: manifest, policy: BackoffPolicy(initialDelay: 60, multiplier: 1, maxDelay: 60, maxConsecutiveFailures: 1)) { update in
+                log.add(update)
+                if case .state(let state) = update { log.add(.log(.info, "state \(state)")) }
+            }
             await supervisor.start()
             let ready = await waitUntil(20) {
                 let state = await supervisor.state
                 let settled = await supervisor.settledCount
                 return state == .running && settled >= 1
             }
-            XCTAssertTrue(ready, "the helper starts and speaks the protocol")
+            XCTAssertTrue(ready, "the helper starts and speaks the protocol; \(executable.lastPathComponent) said:\n" + log.all.joined(separator: "\n") + "\n" + Self.diagnose(executable))
             await body(supervisor)
             await supervisor.stop()
         }
