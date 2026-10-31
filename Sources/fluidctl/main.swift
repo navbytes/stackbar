@@ -19,6 +19,12 @@ usage:
   fluidctl agent [<plugin>...]      runtime MCP gateway on stdio: bridges to the running
                                     app, or runs the given plugins itself when it isn't
   fluidctl secret set|get|delete <NAME> [value]
+  fluidctl keygen [--key <file>]                   an Ed25519 publisher key (macOS)
+  fluidctl sign <plugin.swift> --publisher <name> [--key <file>] [-o <out.fluidplugin>]
+  fluidctl verify <bundle.fluidplugin>
+  fluidctl install <bundle.fluidplugin | https://…> | --index <url> <plugin-id>
+  fluidctl index build <dir> [--name <name>]       writes <dir>/index.json
+  fluidctl index search <url> [query]
   fluidctl docs                     the plugin authoring reference
   fluidctl parity                   the surface parity ledger
 
@@ -195,6 +201,92 @@ case "agent":
         let server = MCPServer(name: "fluid", version: FluidVersion.current, instructions: "Tools from running Fluid plugins. Call fluid_plugins to see them.", provider: RuntimeTools { running })
         await server.serveStdio()
         for supervisor in supervisors { await supervisor.stop() }
+    }
+case "keygen":
+    let keyFile = URL(fileURLWithPath: flag("--key", in: rest) ?? FluidPaths.dataDirectory.appendingPathComponent("publisher.key").path)
+    if FileManager.default.fileExists(atPath: keyFile.path) { fail("\(keyFile.path) already exists") }
+    do {
+        let key = try Signing.generateKey()
+        try FileManager.default.createDirectory(at: keyFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try key.privateKey.base64EncodedString().write(to: keyFile, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyFile.path)
+        print("private key: \(keyFile.path)\npublic key: \(key.publicKey.base64EncodedString())")
+    } catch {
+        fail("\(error)")
+    }
+case "sign":
+    guard let path = rest.first, let publisher = flag("--publisher", in: rest) else { fail(usage) }
+    let keyFile = flag("--key", in: rest) ?? FluidPaths.dataDirectory.appendingPathComponent("publisher.key").path
+    do {
+        guard let key = Data(base64Encoded: try String(contentsOfFile: keyFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) else { fail("\(keyFile) is not a key; run fluidctl keygen") }
+        let source = try String(contentsOfFile: path, encoding: .utf8)
+        let manifest = try PluginProcess.readManifest(executable: helper(for: path))
+        let bundle = try Signing.bundle(source: source, manifest: manifest, publisherName: publisher, privateKey: key)
+        let out = URL(fileURLWithPath: flag("-o", in: rest) ?? (PluginBuilder.sanitizedName(manifest.id) + "." + PluginBundle.fileExtension))
+        try bundle.encoded().write(to: out)
+        print(out.path)
+    } catch {
+        fail("\(error)")
+    }
+case "verify":
+    guard let path = rest.first else { fail(usage) }
+    do {
+        let bundle = try PluginBundle.decode(Data(contentsOf: URL(fileURLWithPath: path)))
+        try bundle.verify()
+        print("valid: \(bundle.manifest.name) \(bundle.manifest.version) (\(bundle.manifest.id)), signed by \(bundle.publisher.name)")
+        for line in SandboxEntitlements.summary(for: bundle.manifest) { print("- \(line)") }
+    } catch {
+        fail("\(error)")
+    }
+case "install":
+    let installer = PluginInstaller(pluginsDirectory: FluidPaths.pluginsDirectory, publishers: PublisherStore(file: FluidPaths.publishersFile), recordFile: FluidPaths.dataDirectory.appendingPathComponent("installed.json"))
+    do {
+        let bundle: PluginBundle
+        if let index = flag("--index", in: rest) {
+            guard let id = rest.last, id != index, let url = URL(string: index) else { fail(usage) }
+            let catalog = try await PluginIndex.fetch(url)
+            guard let entry = catalog.plugins.first(where: { $0.id == id }) else { fail("\(id) is not in \(catalog.name)") }
+            bundle = try await PluginIndex.bundle(for: entry, indexURL: url)
+        } else if let target = rest.first, target.hasPrefix("https://"), let url = URL(string: target) {
+            bundle = try PluginBundle.decode(try await PluginIndex.download(url))
+        } else if let target = rest.first {
+            bundle = try PluginBundle.decode(Data(contentsOf: URL(fileURLWithPath: target)))
+        } else {
+            fail(usage)
+        }
+        let file = try installer.install(bundle)
+        let built = try PluginProcess.readManifest(executable: helper(for: file.path))
+        try installer.confirm(built, matches: bundle, file: file)
+        print("installed \(bundle.manifest.name) \(bundle.manifest.version) to \(file.path)")
+        for line in SandboxEntitlements.summary(for: bundle.manifest) { print("- \(line)") }
+        print("Fluid asks you to approve these the first time it runs the plugin.")
+    } catch {
+        fail("\(error)")
+    }
+case "index":
+    guard rest.count >= 2 else { fail(usage) }
+    do {
+        switch rest[0] {
+        case "build":
+            let directory = URL(fileURLWithPath: rest[1])
+            let bundles = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == PluginBundle.fileExtension }
+            let index = try PluginIndex.build(name: flag("--name", in: rest) ?? directory.lastPathComponent, bundles: bundles)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            let out = directory.appendingPathComponent("index.json")
+            try encoder.encode(index).write(to: out)
+            print("\(out.path): \(index.plugins.count) plugins")
+        case "search":
+            guard let url = URL(string: rest[1]) else { fail(usage) }
+            let index = try await PluginIndex.fetch(url)
+            for entry in index.search(rest.count > 2 ? rest[2] : "") {
+                print("\(entry.id)  \(entry.name) \(entry.version) by \(entry.publisher)" + (entry.summary.map { " — \($0)" } ?? ""))
+            }
+        default:
+            fail(usage)
+        }
+    } catch {
+        fail("\(error)")
     }
 case "new":
     guard let path = rest.first else { fail(usage) }

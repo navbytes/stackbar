@@ -33,14 +33,20 @@ public enum SandboxEntitlements {
         if manifest.capabilities.isEmpty {
             return ["No network, files, commands or secrets."]
         }
-        return manifest.capabilities.map { capability in
-            switch capability {
-            case .network(let hosts): return "Connects to " + (hosts.isEmpty ? "the network" : hosts.joined(separator: ", "))
-            case .files(let paths): return "Reads and writes " + paths.joined(separator: ", ")
-            case .run(let commands): return "Runs " + commands.joined(separator: ", ")
-            case .secret(let name): return "Reads the secret \(name)"
-            case .oauth(let provider): return "Signs in to \(provider.name) (\(URLParts.host(of: provider.authorizeURL) ?? provider.authorizeURL))" + (provider.scopes.isEmpty ? "" : " with scopes " + provider.scopes.joined(separator: " "))
-            }
+        return manifest.capabilities.map(\.summary)
+    }
+}
+
+extension Capability {
+    /// The capability in words, for install and update sheets.
+    public var summary: String {
+        switch self {
+        case .network(let hosts): return "Connects to " + (hosts.isEmpty ? "the network" : hosts.joined(separator: ", "))
+        case .files(let paths): return "Reads and writes " + paths.joined(separator: ", ")
+        case .run(let commands): return "Runs " + commands.joined(separator: ", ")
+        case .secret(let name): return "Reads the secret \(name)"
+        case .oauth(let provider):
+            return "Signs in to \(provider.name) (\(URLParts.host(of: provider.authorizeURL) ?? provider.authorizeURL))" + (provider.scopes.isEmpty ? "" : " with scopes " + provider.scopes.joined(separator: " "))
         }
     }
 }

@@ -114,7 +114,7 @@ public struct PluginBuilder: Sendable {
         return String(hash, radix: 16)
     }
 
-    static func sanitizedName(_ name: String) -> String {
+    public static func sanitizedName(_ name: String) -> String {
         let allowed = name.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || $0 == "-" ? Character($0) : "-" }
         let result = String(allowed)
         return result.isEmpty ? "plugin" : result
