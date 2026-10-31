@@ -107,6 +107,7 @@ On a Mac with Xcode 26 or its Command Line Tools:
 swift run Fluid                          # the menu-bar app; offers to install the examples
 scripts/bundle.sh                        # build/Fluid.app with fluidctl and FluidKit inside
 xcodegen generate                        # the Xcode project, needed for the widget extension
+xcodebuild -project Fluid.xcodeproj -scheme Fluid -destination 'platform=macOS' -allowProvisioningUpdates build   # signed app + widget (team 59J9RQXYYP)
 ```
 
 Plugins live in `~/Library/Application Support/Fluid/Plugins/*.swift`. All
