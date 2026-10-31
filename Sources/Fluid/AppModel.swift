@@ -12,6 +12,9 @@ final class AppModel {
     private(set) var controllers: [PluginController] = []
     private(set) var palette = PaletteIndex()
     private(set) var agentGatewayError: String?
+    /// Which Settings tab is showing, and which plugin's page.
+    var settingsTab = SettingsTab.general
+    var settingsPlugin: PluginController.ID?
     var indexURLs: [String] {
         didSet { UserDefaults.standard.set(indexURLs, forKey: "indexURLs") }
     }

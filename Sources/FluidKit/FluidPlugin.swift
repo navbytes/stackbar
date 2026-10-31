@@ -28,6 +28,10 @@ public protocol FluidPlugin: AnyObject {
     /// The widget surface: read-only, so controls in it do nothing. Defaults
     /// to the panel's content.
     @ViewBuilder var widget: ViewContent { get }
+    /// The plugin's page in Fluid's Settings window. List `.settings` in the
+    /// manifest's surfaces to get one; the panel's footer then shows a gear
+    /// that opens it. Put preferences here and keep the panel for actions.
+    @ViewBuilder var settings: ViewContent { get }
     /// What agents can call through the host's MCP gateway.
     @ToolBuilder var tools: [AgentTool] { get }
     /// Another plugin published to a topic this plugin's manifest listens to
@@ -41,6 +45,7 @@ extension FluidPlugin {
     public var panel: ViewContent { [] }
     public var window: ViewContent { panel }
     public var widget: ViewContent { panel }
+    public var settings: ViewContent { [] }
     public var tools: [AgentTool] { [] }
     public func receive(topic: String, payload: String, from sender: String) async throws {}
 

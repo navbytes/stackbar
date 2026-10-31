@@ -19,6 +19,8 @@ final class PluginController: Identifiable {
     private(set) var panel: ViewNode?
     private(set) var window: ViewNode?
     private(set) var widget: ViewNode?
+    /// The plugin's page in Settings, when its manifest lists `.settings`.
+    private(set) var settings: ViewNode?
     private(set) var tools: [ToolSpec] = []
     private(set) var problem: String?
     private(set) var building = false
@@ -200,6 +202,8 @@ final class PluginController: Identifiable {
         case .render(.widget, let root):
             widget = root
             model?.widgetChanged(self)
+        case .render(.settings, let root):
+            settings = root
         case .tools(let specs):
             tools = specs
         case .log(let level, let message):

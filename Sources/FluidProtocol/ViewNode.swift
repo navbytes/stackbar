@@ -131,6 +131,10 @@ public enum Surface: String, Codable, Sendable, CaseIterable {
     case window
     /// A desktop or Notification Center widget: read-only, refreshed by the host.
     case widget
+    /// The plugin's page in Fluid's Settings window: preferences people set
+    /// once, kept out of the panel so it stays about doing things. The host
+    /// draws it as a grouped form and puts a gear in the panel's footer.
+    case settings
 }
 
 extension ViewNode {

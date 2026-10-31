@@ -17,7 +17,7 @@ final class Clipboard: FluidPlugin {
         name: "Clipboard History",
         version: "1.0.0",
         summary: "Everything you copy, searchable and one keystroke from pasting back.",
-        surfaces: [.menuBar, .panel, .window],
+        surfaces: [.menuBar, .panel, .window, .settings],
         triggers: [.launch, .clipboard],
         capabilities: [.clipboard],
         hotkey: "cmd+shift+v"
@@ -265,12 +265,7 @@ final class Clipboard: FluidPlugin {
         Label("", symbol: paused ? "pause.circle" : "list.clipboard").role(paused ? .warning : .primary)
     }
 
-    var panel: ViewContent { content(full: false) }
-
-    /// The window adds managing the ignored apps.
-    var window: ViewContent { content(full: true) }
-
-    @ViewBuilder func content(full: Bool) -> ViewContent {
+    var panel: ViewContent {
         let all = sorted
         let pinned = all.filter(\.pinned)
         let history = all.filter { !$0.pinned }
@@ -307,28 +302,34 @@ final class Clipboard: FluidPlugin {
             Button("Ignore next copy", symbol: "eye.slash") { self.ignoreNext = true }
             Button("Clear history", symbol: "trash", role: .critical) { self.clear() }
         }
-        settings(full: full)
     }
 
-    @ViewBuilder func settings(full: Bool) -> ViewContent {
-        Section("Settings") {
+    /// Fluid's Settings window, so the panel stays about the history.
+    var settings: ViewContent {
+        Section("Pasting") {
             Toggle("Paste into the app on click", isOn: pasteDirectly) { self.pasteDirectly = $0 }
             Toggle("Always paste as plain text", isOn: plainByDefault) { self.plainByDefault = $0 }
+        }
+        Section("History") {
             Picker("Order", options: Order.allCases.map(\.rawValue), selection: order.rawValue) { self.order = Order(rawValue: $0) ?? .recent }
             Slider("Keep \(Int(limit)) items", value: limit, in: 25...1000, step: 25) { value in
                 self.limit = value
                 self.entries = self.trimmed(self.entries)
             }
             Toggle("Keep images", isOn: keepImages) { self.keepImages = $0 }
-            if full {
-                ignoredAppSettings
-            } else {
-                LabeledContent("Ignored apps and patterns", value: "\(ignoredApps.count + ignoredPatterns.count); manage them in the window").role(.secondary)
-            }
+        }
+        Section("Ignored apps") {
+            ignoredAppsContent
+        }
+        Section("Ignored text") {
+            ignoredText
+        }
+        Section {
+            Button("Clear everything, including pinned", symbol: "trash.slash", role: .critical) { self.clear(keepPinned: false) }
         }
     }
 
-    @ViewBuilder var ignoredAppSettings: ViewContent {
+    @ViewBuilder var ignoredAppsContent: ViewContent {
         TextField("Ignore an app (bundle id or name)") { app in
             let app = app.trimmingCharacters(in: .whitespaces)
             guard !app.isEmpty, !self.ignoredApps.contains(app) else { return }
@@ -341,6 +342,9 @@ final class Clipboard: FluidPlugin {
             Row(app, subtitle: "Ignored", symbol: "hand.raised", key: "ignored-\(app)")
                 .action("Stop ignoring") { self.ignoredApps.removeAll { $0 == app } }
         }
+    }
+
+    @ViewBuilder var ignoredText: ViewContent {
         TextField("Ignore copies matching a pattern (regex)") { pattern in
             let pattern = pattern.trimmingCharacters(in: .whitespaces)
             guard !pattern.isEmpty, !self.ignoredPatterns.contains(pattern) else { return }
@@ -355,7 +359,6 @@ final class Clipboard: FluidPlugin {
             Row(pattern, subtitle: "Copies matching this aren't recorded", symbol: "line.3.horizontal.decrease", key: "pattern-\(pattern)")
                 .action("Remove") { self.ignoredPatterns.removeAll { $0 == pattern } }
         }
-        Button("Clear everything, including pinned", symbol: "trash.slash", role: .critical) { self.clear(keepPinned: false) }
     }
 
     func row(_ entry: Entry) -> Row {

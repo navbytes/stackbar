@@ -12,12 +12,13 @@ public enum SurfaceParity {
     /// The surfaces the ledger covers: the plugin surfaces plus the two the
     /// host derives (the palette from panel rows, the agent from text).
     public enum Column: String, CaseIterable, Sendable {
-        case panel, window, menuBar, widget, palette, agent
+        case panel, window, settings, menuBar, widget, palette, agent
 
         var title: String {
             switch self {
             case .panel: return "Panel"
             case .window: return "Window"
+            case .settings: return "Settings"
             case .menuBar: return "Menu bar"
             case .widget: return "Widget"
             case .palette: return "Palette"
@@ -57,7 +58,7 @@ public enum SurfaceParity {
 
     public static func treatment(_ kind: Kind, on column: Column) -> String {
         switch column {
-        case .panel, .window: return panel(kind)
+        case .panel, .window, .settings: return panel(kind)
         case .menuBar: return menuBar(kind)
         case .widget: return widget(kind)
         case .palette: return palette(kind)

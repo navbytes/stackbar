@@ -4,20 +4,25 @@ import ServiceManagement
 import SwiftUI
 import FluidHostCore
 import FluidProtocol
+import FluidUI
 
 /// Settings: general options, the installed plugins and what they may do,
 /// and the plugin store.
 struct SettingsView: View {
-    let model: AppModel
+    @Bindable var model: AppModel
 
     var body: some View {
-        TabView {
-            GeneralSettings(model: model).tabItem { Label("General", systemImage: "gearshape") }
-            PluginsSettings(model: model).tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }
-            StoreView(model: model).tabItem { Label("Store", systemImage: "bag") }
+        TabView(selection: $model.settingsTab) {
+            GeneralSettings(model: model).tabItem { Label("General", systemImage: "gearshape") }.tag(SettingsTab.general)
+            PluginsSettings(model: model).tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }.tag(SettingsTab.plugins)
+            StoreView(model: model).tabItem { Label("Store", systemImage: "bag") }.tag(SettingsTab.store)
         }
-        .frame(width: 620, height: 460)
+        .frame(minWidth: 680, minHeight: 520)
     }
+}
+
+enum SettingsTab: Hashable {
+    case general, plugins, store
 }
 
 struct GeneralSettings: View {
@@ -70,12 +75,11 @@ struct GeneralSettings: View {
 }
 
 struct PluginsSettings: View {
-    let model: AppModel
-    @State private var selection: PluginController.ID?
+    @Bindable var model: AppModel
 
     var body: some View {
         HSplitView {
-            List(model.controllers, selection: $selection) { controller in
+            List(model.controllers, selection: $model.settingsPlugin) { controller in
                 HStack {
                     Circle().fill(color(controller.state)).frame(width: 8, height: 8)
                     Text(controller.name)
@@ -83,8 +87,8 @@ struct PluginsSettings: View {
                 }
             }
             .frame(minWidth: 180, maxWidth: 220)
-            if let controller = model.controllers.first(where: { $0.id == selection }) {
-                PluginDetail(controller: controller, model: model)
+            if let controller = model.controllers.first(where: { $0.id == model.settingsPlugin }) {
+                PluginPage(controller: controller, model: model).id(controller.id)
             } else {
                 Text(model.controllers.isEmpty ? "No plugins yet." : "Select a plugin").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -98,6 +102,49 @@ struct PluginsSettings: View {
         case .failed: return .red
         case .stopped: return .gray
         }
+    }
+}
+
+/// A plugin's page: its own settings (the `settings` surface) and what
+/// Fluid knows about it.
+struct PluginPage: View {
+    let controller: PluginController
+    let model: AppModel
+    @State private var showingAbout = false
+
+    private var hasSettings: Bool { controller.manifest?.surfaces.contains(.settings) == true }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if hasSettings {
+                Picker("", selection: $showingAbout) {
+                    Text("Settings").tag(false)
+                    Text("About").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .padding(.vertical, 10)
+            }
+            if hasSettings && !showingAbout {
+                ScrollView {
+                    Group {
+                        if let node = controller.settings {
+                            NodeView(node: node, send: controller.send)
+                        } else if controller.state == .running {
+                            Text("\(controller.name) has no settings yet.").foregroundStyle(.secondary)
+                        } else {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(20)
+                }
+            } else {
+                PluginDetail(controller: controller, model: model)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

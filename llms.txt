@@ -2,7 +2,8 @@
 
 A Fluid plugin is one Swift file that imports FluidKit. Fluid builds it, runs
 it in its own process, and draws what it declares natively in the macOS menu
-bar, a panel, a window and a widget. Agents can call its tools.
+bar, a panel, a window, a widget and its own page in Settings. Agents can
+call its tools.
 
 ## Shape
 
@@ -16,7 +17,7 @@ final class Weather: FluidPlugin {
         id: "dev.example.weather",          // reverse-DNS, stable forever
         name: "Weather",
         summary: "Today's temperature.",
-        surfaces: [.menuBar, .panel],        // also .window, .widget
+        surfaces: [.menuBar, .panel, .settings], // also .window, .widget
         triggers: [.launch, .minutes(15), .wake],
         capabilities: [.network("api.open-meteo.com")]
     )
@@ -36,7 +37,13 @@ final class Weather: FluidPlugin {
 
     var panel: ViewContent {
         Text("Berlin").style(.headline)
-        Picker("Unit", options: ["C", "F"], selection: unit) { self.unit = $0 }
+        Text(temperature.map { "\(Int($0))°\(unit)" } ?? "–").style(.title)
+    }
+
+    var settings: ViewContent {             // Fluid Settings → Plugins → Weather
+        Section("Units") {
+            Picker("Unit", options: ["C", "F"], selection: unit) { self.unit = $0 }
+        }
     }
 
     var tools: [AgentTool] {
@@ -49,6 +56,11 @@ State is ordinary properties. After `refresh()`, an action, a tool call or a
 topic message, Fluid re-renders and sends only surfaces that changed. Code
 never runs concurrently with itself, so no locks. Throwing from `refresh()`
 logs the error and keeps the last render.
+
+Keep the panel for doing things: it opens many times a day. Preferences
+people set once go in `settings`, which Fluid shows on the plugin's page in
+its Settings window (the gear in the panel footer, or ⌘, while the panel is
+open). Quick controls used mid-task, like Pause, stay in the panel.
 
 ## Views (ViewContent bodies, SwiftUI-like; `if`, `for`, `switch` work)
 

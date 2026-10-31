@@ -4,7 +4,8 @@ import Foundation
 public enum FluidProtocolVersion {
     /// 2 added host calls, tools, topics and the stored-values snapshot.
     /// 3 added the clipboard, keep-awake, system status and calendar calls.
-    public static let current = 3
+    /// 4 added the settings surface.
+    public static let current = 4
 }
 
 /// Host → plugin.
