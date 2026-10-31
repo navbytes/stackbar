@@ -147,7 +147,9 @@ final class UpNext: FluidPlugin {
             if let next = soon.first(where: { $0.start > now }), next.start.timeIntervalSince(now) <= 5 * 60, current.end.timeIntervalSince(now) <= 5 * 60 { return next }
             return current
         }
-        return soon.first { Calendar.current.isDate($0.start, inSameDayAs: now) }
+        // Today's next one, or one soon after midnight (a late-night call
+        // shouldn't vanish because the date changes first).
+        return soon.first { Calendar.current.isDate($0.start, inSameDayAs: now) || $0.start.timeIntervalSince(now) <= 3 * 3600 }
     }
 
     func remindAndJoin(now: Date) {
