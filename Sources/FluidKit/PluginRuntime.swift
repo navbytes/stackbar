@@ -90,6 +90,7 @@ public final class PluginRuntime {
         case .panel: return plugin.panel
         case .window: return plugin.window
         case .widget: return plugin.widget
+        case .settings: return plugin.settings
         }
     }
 

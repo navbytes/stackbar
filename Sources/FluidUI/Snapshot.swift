@@ -13,7 +13,7 @@ public enum Snapshot {
         switch surface {
         case .menuBar:
             content = AnyView(MenuBarView(node: node, fallbackTitle: "").padding(4).frame(height: 24))
-        case .panel, .window:
+        case .panel, .window, .settings:
             content = AnyView(NodeView(node: node, send: { _, _ in }).padding(12).frame(width: surface == .panel ? 360 : 520, alignment: .leading))
         case .widget:
             content = AnyView(WidgetContentView(node: node).frame(width: 330, height: 155))

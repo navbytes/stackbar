@@ -88,9 +88,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showSettings()
     }
 
-    func showSettings() {
+    /// Opens Settings, on a plugin's page when one is given.
+    func showSettings(plugin: PluginController? = nil) {
+        if let plugin {
+            model.settingsTab = .plugins
+            model.settingsPlugin = plugin.id
+        }
         if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 460), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 560), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
             window.title = "Fluid Settings"
             window.isReleasedWhenClosed = false
             window.contentViewController = NSHostingController(rootView: SettingsView(model: model))

@@ -18,7 +18,7 @@ final class PRCockpit: FluidPlugin {
         name: "PR Cockpit",
         version: "1.0.0",
         summary: "Your pull requests and the ones waiting on your review, with CI and review state.",
-        surfaces: [.menuBar, .panel, .window, .widget],
+        surfaces: [.menuBar, .panel, .window, .widget, .settings],
         triggers: [.launch, .minutes(2), .wake],
         capabilities: [.network("api.github.com"), .secret(name: "GITHUB_TOKEN")]
     )
@@ -300,16 +300,28 @@ final class PRCockpit: FluidPlugin {
             if let updatedAt {
                 Text("Updated \(updatedAt.formatted(date: .omitted, time: .shortened))").style(.caption).role(.secondary)
             }
-            Section("Settings") {
-                Toggle("Include requests to my teams", isOn: includeTeams) { on in
-                    self.includeTeams = on
-                    try await self.refresh()
-                }
-                Toggle("Include drafts to review", isOn: includeDrafts) { on in
-                    self.includeDrafts = on
-                    try await self.refresh()
-                }
-                Toggle("Notify me about changes", isOn: notifyChanges) { self.notifyChanges = $0 }
+        }
+    }
+
+    /// Fluid's Settings window, so the panel stays about the pull requests.
+    var settings: ViewContent {
+        Section("What to show") {
+            Toggle("Include requests to my teams", isOn: includeTeams) { on in
+                self.includeTeams = on
+                try await self.refresh()
+            }
+            Toggle("Include drafts to review", isOn: includeDrafts) { on in
+                self.includeDrafts = on
+                try await self.refresh()
+            }
+        }
+        Section("Notifications") {
+            Toggle("Notify me about changes", isOn: notifyChanges) { self.notifyChanges = $0 }
+        }
+        Section("Hidden repositories") {
+            if hiddenRepos.isEmpty { Text("None. Hide one from a pull request's menu.").role(.secondary) }
+            ForEach(hiddenRepos) { repo in
+                Row(repo, symbol: "eye.slash", key: "hidden-\(repo)").action("Show again") { self.hiddenRepos.removeAll { $0 == repo } }
             }
         }
     }
@@ -323,13 +335,6 @@ final class PRCockpit: FluidPlugin {
             }
             Section("Yours (\(shownMine.count))") {
                 ForEach(shownMine) { pr in row(pr, showAuthor: false) }
-            }
-        }
-        if !hiddenRepos.isEmpty {
-            Section("Hidden repositories") {
-                ForEach(hiddenRepos) { repo in
-                    Row(repo, symbol: "eye.slash", key: "hidden-\(repo)").action("Show again") { self.hiddenRepos.removeAll { $0 == repo } }
-                }
             }
         }
     }

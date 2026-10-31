@@ -12,7 +12,7 @@ final class StayAwake: FluidPlugin {
         name: "Stay Awake",
         version: "1.0.0",
         summary: "Keeps your Mac awake for a while, until a time, while an app runs or on a schedule.",
-        surfaces: [.menuBar, .panel, .widget],
+        surfaces: [.menuBar, .panel, .widget, .settings],
         triggers: [.launch, .every(.seconds(15)), .wake],
         capabilities: [.power]
     )
@@ -289,11 +289,19 @@ final class StayAwake: FluidPlugin {
                 }
             }
         }
-        Section("Options") {
-            Toggle("Keep the display on", isOn: keepDisplayOn) { on in
-                self.keepDisplayOn = on
-                await self.apply()
-            }
+        Toggle("Keep the display on", isOn: keepDisplayOn) { on in
+            self.keepDisplayOn = on
+            await self.apply()
+        }
+        LabeledContent("Today", value: Self.clock(awakeByDay[Self.day(Date())] ?? 0))
+        if let level = status.batteryLevel {
+            LabeledContent("Battery", value: "\(Int((level * 100).rounded()))%" + (status.onACPower ? ", on power" : ""))
+        }
+    }
+
+    /// Fluid's Settings window, so the panel stays about starting and stopping.
+    var settings: ViewContent {
+        Section("Stop or pause") {
             Slider(batteryFloor > 0 ? "Stop below \(Int(batteryFloor))% battery" : "Ignore the battery level", value: batteryFloor, in: 0...50, step: 5, key: "battery") { value in
                 self.batteryFloor = value
                 await self.apply()
@@ -303,6 +311,8 @@ final class StayAwake: FluidPlugin {
                 await self.apply()
             }
             Toggle("Notify 5 minutes before and when a session ends", isOn: notifyOnEnd, key: "notify") { self.notifyOnEnd = $0 }
+        }
+        Section("Automatically") {
             Toggle("Always stay awake while plugged in", isOn: whilePluggedIn) { on in
                 self.whilePluggedIn = on
                 await self.apply()
@@ -322,11 +332,9 @@ final class StayAwake: FluidPlugin {
         }
         let week = (0..<7).reversed().map { awakeByDay[Self.day(Date().addingTimeInterval(Double(-$0) * 86400))] ?? 0 }
         if week.contains(where: { $0 > 0 }) {
-            Chart("Hours awake, last 7 days", values: week.map { ($0 / 360).rounded() / 10 }, kind: .bar)
-        }
-        LabeledContent("Today", value: Self.clock(awakeByDay[Self.day(Date())] ?? 0))
-        if let level = status.batteryLevel {
-            LabeledContent("Battery", value: "\(Int((level * 100).rounded()))%" + (status.onACPower ? ", on power" : ""))
+            Section("Activity") {
+                Chart("Hours awake, last 7 days", values: week.map { ($0 / 360).rounded() / 10 }, kind: .bar)
+            }
         }
     }
 

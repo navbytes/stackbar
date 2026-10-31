@@ -14,7 +14,7 @@ final class UpNext: FluidPlugin {
         name: "Up Next",
         version: "1.0.0",
         summary: "Your next meeting in the menu bar, with a countdown and one-click join.",
-        surfaces: [.menuBar, .panel, .window, .widget],
+        surfaces: [.menuBar, .panel, .window, .widget, .settings],
         triggers: [.launch, .every(.seconds(30)), .wake],
         capabilities: [.calendar],
         hotkey: "ctrl+option+j"
@@ -277,7 +277,6 @@ final class UpNext: FluidPlugin {
         Picker("Start a meeting now", options: Self.instantMeetings.map(\.name), selection: nil) { name in
             if let meeting = Self.instantMeetings.first(where: { $0.name == name }) { Fluid.open(meeting.url) }
         }
-        settings
     }
 
     @ViewBuilder func day(_ title: String, _ date: Date, now: Date) -> ViewContent {
@@ -322,21 +321,29 @@ final class UpNext: FluidPlugin {
         }
     }
 
-    @ViewBuilder var settings: ViewContent {
-        Section("Settings") {
+    /// Fluid's Settings window, so the panel stays about the day.
+    var settings: ViewContent {
+        Section("Reminders and joining") {
             Slider(remindMinutes > 0 ? "Remind \(Int(remindMinutes)) min before" : "No reminders", value: remindMinutes, in: 0...15, step: 1, key: "remind") { self.remindMinutes = $0 }
             Toggle("Open the call when it starts", isOn: autoJoin) { self.autoJoin = $0 }
             Toggle("Open Zoom and Teams in their apps", isOn: openInApps) { self.openInApps = $0 }
+        }
+        Section("Menu bar") {
             Toggle("Show the title in the menu bar", isOn: showTitle) { self.showTitle = $0 }
             Slider(menuBarHours == 0 ? "Menu bar: any meeting today" : "Menu bar: meetings within \(Int(menuBarHours))h", value: menuBarHours, in: 0...8, step: 1, key: "menu-hours") { self.menuBarHours = $0 }
             if showTitle {
                 Slider("Menu bar title: \(Int(titleLength)) characters", value: titleLength, in: 8...60, step: 4, key: "title-length") { self.titleLength = $0 }
             }
+        }
+        Section("Which events") {
             Toggle("Show all-day events", isOn: showAllDay) { self.showAllDay = $0 }
             Toggle("Show declined events", isOn: showDeclined) { self.showDeclined = $0 }
             Toggle("Only meetings with a call link", isOn: onlyWithLinks) { self.onlyWithLinks = $0 }
             Toggle("Only events with other people", isOn: onlyWithPeople) { self.onlyWithPeople = $0 }
             Toggle("Show finished events", isOn: showFinished) { self.showFinished = $0 }
+        }
+        Section("Calendars") {
+            if calendars.isEmpty { Text("No calendars yet.").role(.secondary) }
             ForEach(calendars) { name in
                 Toggle(name, isOn: !hiddenCalendars.contains(name), key: "calendar-\(name)") { on in
                     if on { self.hiddenCalendars.removeAll { $0 == name } } else if !self.hiddenCalendars.contains(name) { self.hiddenCalendars.append(name) }

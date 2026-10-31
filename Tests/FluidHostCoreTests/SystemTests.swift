@@ -163,6 +163,35 @@ final class SystemServicesTests: XCTestCase {
     }
 }
 
+final class SettingsSurfaceTests: XCTestCase {
+    /// Preferences live on the settings surface, not in the panel, and their
+    /// controls still work from there.
+    func testBundledPluginsKeepPreferencesOutOfThePanel() async throws {
+        let cases: [(plugin: String, preference: String)] = [
+            ("ClipboardPlugin", "Paste into the app on click"),
+            ("StayAwakePlugin", "Pause in Low Power Mode"),
+            ("UpNextPlugin", "Open the call when it starts"),
+            ("PRCockpitPlugin", "Include drafts to review"),
+        ]
+        for (plugin, preference) in cases {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(system: SimulatedSystem()))
+            let executable = PluginSupervisorTests.helper(plugin)
+            let manifest = try PluginProcess.readManifest(executable: executable)
+            XCTAssertTrue(manifest.surfaces.contains(.settings), plugin)
+            let supervisor = PluginSupervisor(executable: executable, manifest: manifest, services: services)
+            await supervisor.start()
+            _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
+            let panel = await supervisor.views[.panel].map { TreeTextRenderer.render($0) } ?? ""
+            let settings = await supervisor.views[.settings].map { TreeTextRenderer.render($0) } ?? ""
+            XCTAssertFalse(panel.contains(preference), "\(plugin)'s panel still has \(preference)")
+            XCTAssertTrue(settings.contains(preference), "\(plugin)'s settings lack \(preference): \(settings)")
+            await supervisor.stop()
+        }
+    }
+}
+
 final class OpenURLTests: XCTestCase {
     func testMeetingAppSchemesOpenButOthersDont() async {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

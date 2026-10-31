@@ -140,6 +140,16 @@ struct PanelFooter: View {
             }
             .buttonStyle(.borderless)
             .help("Refresh")
+            if controller.manifest?.surfaces.contains(.settings) == true {
+                Button {
+                    AppDelegate.shared?.showSettings(plugin: controller)
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.borderless)
+                .keyboardShortcut(",", modifiers: .command)
+                .help("\(controller.name) Settings (⌘,)")
+            }
             Menu {
                 Button("Restart Plugin") { controller.restart() }
                 Button("Rebuild") { controller.reload() }
@@ -154,7 +164,7 @@ struct PanelFooter: View {
                 Button("Copy Recent Log") { Platform.copy(controller.logs.joined(separator: "\n")) }
                 Divider()
                 Button("Command Palette") { AppDelegate.shared?.palette.toggle() }
-                Button("Settings…") { AppDelegate.shared?.showSettings() }
+                Button("Fluid Settings…") { AppDelegate.shared?.showSettings() }
                 Button("Quit Fluid") { NSApp.terminate(nil) }
             } label: {
                 Image(systemName: "ellipsis.circle")
