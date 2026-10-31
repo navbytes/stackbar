@@ -15,20 +15,24 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    if controller.isWaitingForApproval {
-                        ApprovalBanner(controller: controller)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if controller.isWaitingForApproval {
+                            ApprovalBanner(controller: controller)
+                        }
+                        ForEach(controller.missingSecrets, id: \.self) { secret in
+                            SecretPrompt(controller: controller, secret: secret)
+                        }
+                        content
                     }
-                    ForEach(controller.missingSecrets, id: \.self) { secret in
-                        SecretPrompt(controller: controller, secret: secret)
-                    }
-                    content
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
+                .frame(maxHeight: 560)
+                .environment(\.fluidScrollTo, { key in proxy.scrollTo(key) })
+                .environment(\.fluidShownCount, controller.panelShownCount)
             }
-            .frame(maxHeight: 560)
             Divider()
             PanelFooter(controller: controller, model: model, windows: windows)
                 .padding(.horizontal, 12)

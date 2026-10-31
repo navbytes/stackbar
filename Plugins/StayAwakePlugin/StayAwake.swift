@@ -41,6 +41,7 @@ final class StayAwake: FluidPlugin {
     @Stored("pauseOnLowPower") var pauseOnLowPower = true
     @Stored("notifyOnEnd") var notifyOnEnd = true
     @Stored("scheduleOn") var scheduleOn = false
+    @Stored("whilePluggedIn") var whilePluggedIn = false
     @Stored("scheduleStart") var scheduleStart = "09:00"
     @Stored("scheduleEnd") var scheduleEnd = "18:00"
     @Stored("scheduleWeekdaysOnly") var scheduleWeekdaysOnly = true
@@ -55,6 +56,8 @@ final class StayAwake: FluidPlugin {
     var lastTick: Date?
     var lastError: String?
     var lastEnded: String?
+    /// The end time the 5-minute warning was sent for.
+    var warnedFor: Date?
 
     // MARK: Deciding
 
@@ -73,6 +76,7 @@ final class StayAwake: FluidPlugin {
         if blocker != nil { return nil }
         if let session { return describe(session.mode) }
         if scheduleOn, inSchedule(Date()) { return "Schedule until \(scheduleEnd)" }
+        if whilePluggedIn, status.onACPower { return "While plugged in" }
         return nil
     }
 
@@ -91,7 +95,12 @@ final class StayAwake: FluidPlugin {
         case .indefinitely:
             return
         case .until(let end):
-            if now >= end { finish("Time's up") }
+            if now >= end {
+                finish("Time's up")
+            } else if notifyOnEnd, end.timeIntervalSince(now) <= 5 * 60, warnedFor != end, session.total ?? 0 > 10 * 60 {
+                warnedFor = end
+                Fluid.notify("Your Mac can sleep in 5 minutes", body: "Open Stay Awake to add more time.")
+            }
         case .whileRunning(let appID, let name):
             if !status.runningApps.isEmpty, !status.runningApps.contains(where: { $0.id == appID }) { finish("\(name) quit") }
         }
@@ -172,6 +181,17 @@ final class StayAwake: FluidPlugin {
         return hour * 60 + minute
     }
 
+    /// `"90"`, `"90m"`, `"2h"`, `"1h30"` or `"1:30"` as seconds.
+    static func duration(_ text: String) -> Double? {
+        let text = text.lowercased().replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "min", with: "m")
+        if let minutes = Double(text.hasSuffix("m") ? String(text.dropLast()) : text), minutes > 0 { return minutes * 60 }
+        let parts = text.split(whereSeparator: { $0 == "h" || $0 == ":" }).map(String.init)
+        guard text.contains("h") || text.contains(":"), let hours = parts.first.flatMap(Double.init) else { return nil }
+        let minutes = parts.count > 1 ? Double(parts[1].replacingOccurrences(of: "m", with: "")) : 0
+        guard let minutes, hours * 60 + minutes > 0 else { return nil }
+        return (hours * 60 + minutes) * 60
+    }
+
     /// The next time `text` (a clock time) happens, today or tomorrow.
     static func next(_ text: String, after now: Date = Date()) -> Date? {
         guard let minutes = minutes(text) else { return nil }
@@ -247,6 +267,13 @@ final class StayAwake: FluidPlugin {
                 Row("For \(option.title)", symbol: "timer", key: "for-\(Int(option.minutes))")
                     .action("Start") { await self.start(.until(Date().addingTimeInterval(option.minutes * 60))) }
             }
+            TextField("For a while, like 90m or 1h30") { text in
+                guard let seconds = Self.duration(text) else {
+                    self.lastError = "\"\(text)\" isn't a duration; try 45m, 2h or 1h30"
+                    return
+                }
+                await self.start(.until(Date().addingTimeInterval(seconds)))
+            }
             TextField("Until a time, like 17:30") { text in
                 guard let end = Self.next(text) else {
                     self.lastError = "\"\(text)\" isn't a time; try 17:30 or 5:30pm"
@@ -275,7 +302,11 @@ final class StayAwake: FluidPlugin {
                 self.pauseOnLowPower = on
                 await self.apply()
             }
-            Toggle("Notify when a session ends", isOn: notifyOnEnd) { self.notifyOnEnd = $0 }
+            Toggle("Notify 5 minutes before and when a session ends", isOn: notifyOnEnd, key: "notify") { self.notifyOnEnd = $0 }
+            Toggle("Always stay awake while plugged in", isOn: whilePluggedIn) { on in
+                self.whilePluggedIn = on
+                await self.apply()
+            }
         }
         Section("Schedule") {
             Toggle(scheduleWeekdaysOnly ? "Weekdays \(scheduleStart)–\(scheduleEnd)" : "Every day \(scheduleStart)–\(scheduleEnd)", isOn: scheduleOn, key: "schedule") { on in

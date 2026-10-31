@@ -9,6 +9,16 @@ public typealias SendAction = @MainActor (ActionID, EventValue?) -> Void
 extension EnvironmentValues {
     /// Widgets draw controls but can't act on them.
     @Entry public var fluidReadOnly: Bool = false
+    /// The row a keyboard-driven list has selected, drawn highlighted.
+    @Entry var fluidSelectedRow: String? = nil
+    /// ⌘1–⌘9 positions of the first rows in a keyboard-driven list.
+    @Entry var fluidRowNumbers: [String: Int] = [:]
+    /// Scrolls the enclosing panel to a row key. Set by the host's scroll
+    /// view so keyboard selection stays visible.
+    @Entry public var fluidScrollTo: (@MainActor (String) -> Void)? = nil
+    /// Changes every time the host shows the surface again (the popover
+    /// reopens), so lists reset their filter and take focus.
+    @Entry public var fluidShownCount: Int = 0
 }
 
 /// Draws one `ViewNode` for the panel and window surfaces. Every case of the
@@ -118,11 +128,24 @@ struct NodeList: View {
 
 /// A list, with the optional filter field `searchable` asks for. Filtering is
 /// done here, by the host, so it works the same for every plugin.
+///
+/// A searchable list is also driven from the keyboard: the filter field takes
+/// focus when the surface opens, so typing filters at once; ↑ and ↓ move the
+/// selection across rows (the first row is selected to start), Return runs
+/// the selected row's first action, and every action shortcut works, on the
+/// selected row first (⌘P, ⌘⌫) and then on whichever row declares it.
+/// ⌘1–⌘9 run the first action of the first nine rows shown, which follow the
+/// filter.
 struct ListNodeView: View {
     let searchable: Bool
     let children: [ViewNode]
     let send: SendAction
     @State private var query = ""
+    @State private var selectedKey: String?
+    @FocusState private var focused: Bool
+    @Environment(\.fluidReadOnly) private var readOnly
+    @Environment(\.fluidScrollTo) private var scrollTo
+    @Environment(\.fluidShownCount) private var shownCount
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -130,6 +153,10 @@ struct ListNodeView: View {
                 TextField("Filter", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .padding(.bottom, 4)
+                    .focused($focused)
+                    .onSubmit { runSelected() }
+                    .onKeyPress(phases: [.down, .repeat]) { press in handle(press) }
+                    .onChange(of: query) { _, _ in select(rows.first?.key) }
             }
             ForEach(Array(visible.enumerated()), id: \.offset) { _, child in
                 NodeView(node: child, send: send)
@@ -138,10 +165,133 @@ struct ListNodeView: View {
                 Text("No matches").foregroundStyle(.secondary)
             }
         }
+        .environment(\.fluidSelectedRow, searchable && !readOnly ? selected?.key : nil)
+        .environment(\.fluidRowNumbers, searchable && !readOnly ? numbers : [:])
+        .onAppear { reset() }
+        .onChange(of: shownCount) { _, _ in reset() }
     }
 
     private var visible: [ViewNode] {
         RowFilter.filter(children, query: query)
+    }
+
+    private var rows: [RowNode] { visible.flatMap(\.rows) }
+
+    /// The first nine rows that do something, numbered from 1.
+    private var numbers: [String: Int] {
+        let actionable = rows.filter { !$0.actions.isEmpty }.prefix(9)
+        return Dictionary(actionable.enumerated().map { ($1.key, $0 + 1) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// The chosen row, or the first one when nothing (still visible) is.
+    private var selected: RowNode? {
+        let rows = rows
+        return rows.first { $0.key == selectedKey } ?? rows.first
+    }
+
+    private func reset() {
+        guard searchable, !readOnly else { return }
+        query = ""
+        selectedKey = nil
+        // Focus after the popover's window is key, or it doesn't take.
+        DispatchQueue.main.async { focused = true }
+    }
+
+    private func select(_ key: String?) {
+        selectedKey = key
+        if let key { scrollTo?(key) }
+    }
+
+    private func move(_ delta: Int) {
+        let rows = rows
+        guard !rows.isEmpty else { return }
+        let current = rows.firstIndex { $0.key == selected?.key } ?? 0
+        select(rows[min(max(current + delta, 0), rows.count - 1)].key)
+    }
+
+    private func runSelected() {
+        guard !readOnly, let action = selected?.actions.first else { return }
+        send(action.id, nil)
+    }
+
+    private func handle(_ press: KeyPress) -> KeyPress.Result {
+        guard !readOnly else { return .ignored }
+        switch press.key {
+        case .downArrow where press.modifiers.isDisjoint(with: [.command, .option, .control]):
+            move(1)
+            return .handled
+        case .upArrow where press.modifiers.isDisjoint(with: [.command, .option, .control]):
+            move(-1)
+            return .handled
+        default:
+            break
+        }
+        // A shortcut on the selected row wins, then any row's (⌘1 is "this row").
+        let candidates = (selected.map { [$0] } ?? []) + rows
+        for row in candidates {
+            if let action = row.actions.first(where: { $0.shortcut.map { KeyShortcut($0)?.matches(press) ?? false } ?? false }) {
+                select(row.key)
+                send(action.id, nil)
+                return .handled
+            }
+        }
+        if press.modifiers.intersection([.command, .shift, .option, .control]) == .command, let digit = press.key.character.wholeNumberValue, (1...9).contains(digit) {
+            let actionable = rows.filter { !$0.actions.isEmpty }
+            guard actionable.indices.contains(digit - 1), let action = actionable[digit - 1].actions.first else { return .handled }
+            select(actionable[digit - 1].key)
+            send(action.id, nil)
+            return .handled
+        }
+        return .ignored
+    }
+}
+
+/// A row action's shortcut (`cmd+return`, `cmd+1`, `cmd+shift+k`) matched
+/// against a key press.
+struct KeyShortcut: Equatable {
+    var key: KeyEquivalent
+    var modifiers: EventModifiers
+
+    init?(_ spec: String) {
+        var modifiers: EventModifiers = []
+        var key: KeyEquivalent?
+        for part in spec.lowercased().split(separator: "+").map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            switch part {
+            case "cmd", "command": modifiers.insert(.command)
+            case "shift": modifiers.insert(.shift)
+            case "opt", "option", "alt": modifiers.insert(.option)
+            case "ctrl", "control": modifiers.insert(.control)
+            case "return", "enter": key = .return
+            case "delete", "backspace": key = .delete
+            case "forwarddelete": key = .deleteForward
+            case "escape", "esc": key = .escape
+            case "space": key = .space
+            case "tab": key = .tab
+            case "up": key = .upArrow
+            case "down": key = .downArrow
+            case "left": key = .leftArrow
+            case "right": key = .rightArrow
+            default:
+                guard part.count == 1, let character = part.first else { return nil }
+                key = KeyEquivalent(character)
+            }
+        }
+        guard let key else { return nil }
+        self.key = key
+        self.modifiers = modifiers
+    }
+
+    static func == (lhs: KeyShortcut, rhs: KeyShortcut) -> Bool {
+        lhs.key.character == rhs.key.character && lhs.modifiers == rhs.modifiers
+    }
+
+    func matches(_ press: KeyPress) -> Bool {
+        let relevant: EventModifiers = [.command, .shift, .option, .control]
+        guard press.modifiers.intersection(relevant) == modifiers else { return false }
+        if press.key.character == key.character { return true }
+        // With ⌘ held, `characters` can be the shifted or unmodified glyph;
+        // compare letters and digits case-insensitively.
+        return String(press.key.character).lowercased() == String(key.character).lowercased()
     }
 }
 
@@ -163,6 +313,13 @@ struct RowView: View {
     let send: SendAction
     @State private var hovering = false
     @Environment(\.fluidReadOnly) private var readOnly
+    @Environment(\.fluidSelectedRow) private var selectedRow
+    @Environment(\.fluidRowNumbers) private var rowNumbers
+
+    private var highlight: Color {
+        if selectedRow == row.key { return Color.accentColor.opacity(0.22) }
+        return hovering && !row.actions.isEmpty && !readOnly ? Color.primary.opacity(0.08) : .clear
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -179,10 +336,14 @@ struct RowView: View {
             ForEach(Array(row.accessories.enumerated()), id: \.offset) { _, accessory in
                 accessoryView(accessory)
             }
+            if let number = rowNumbers[row.key] {
+                Text("⌘\(number)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+            }
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hovering && !row.actions.isEmpty && !readOnly ? Color.primary.opacity(0.08) : .clear))
+        .background(RoundedRectangle(cornerRadius: 6).fill(highlight))
+        .id(row.key)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture {
@@ -192,7 +353,12 @@ struct RowView: View {
         .contextMenu {
             if !readOnly {
                 ForEach(row.actions, id: \.id) { action in
-                    Button(action.title, role: action.role == .critical ? .destructive : nil) { send(action.id, nil) }
+                    if let shortcut = action.shortcut.flatMap(KeyShortcut.init) {
+                        Button(action.title, role: action.role == .critical ? .destructive : nil) { send(action.id, nil) }
+                            .keyboardShortcut(shortcut.key, modifiers: shortcut.modifiers)
+                    } else {
+                        Button(action.title, role: action.role == .critical ? .destructive : nil) { send(action.id, nil) }
+                    }
                 }
             }
         }

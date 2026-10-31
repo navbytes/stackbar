@@ -62,9 +62,9 @@ final class SystemServicesTests: XCTestCase {
 
         // The host polls twice a second, like other clipboard managers, so
         // copies further apart than that are each recorded.
-        func copy(_ text: String, app: SystemStatus.App? = SystemStatus.App(id: "com.apple.Safari", name: "Safari"), concealed: Bool = false) async {
+        func copy(_ text: String, app: SystemStatus.App? = SystemStatus.App(id: "com.apple.Safari", name: "Safari"), concealed: Bool = false, formatted: Bool = false) async {
             let before = await supervisor.settledCount
-            system.simulateCopy(text, app: app, concealed: concealed)
+            system.simulateCopy(text, app: app, concealed: concealed, formatted: formatted)
             _ = await waitUntil(5) { await supervisor.settledCount > before }
         }
         await copy("first thing")
@@ -87,6 +87,18 @@ final class SystemServicesTests: XCTestCase {
         let moved = await waitUntil(10) { await supervisor.views[.panel]?.rows.first?.title == "first thing" }
         text = await panel()
         XCTAssertTrue(moved, "a pasted item moves to the top:\n\(text)")
+
+        // Formatted text is pasted back as it was copied, or as plain text on request.
+        await copy("**bold**", formatted: true)
+        _ = await waitUntil(10) { await supervisor.views[.panel]?.rows.first?.title == "**bold**" }
+        guard let rich = await supervisor.views[.panel]?.rows.first(where: { $0.title == "**bold**" }) else { return XCTFail("no formatted row") }
+        XCTAssertTrue(rich.actions.map(\.title).contains("Paste as plain text"))
+        await supervisor.event(ActionID("row/\(rich.key)/Paste"))
+        _ = await waitUntil(5) { system.pasted.count == 2 }
+        guard case .stored = system.pasted.last else { return XCTFail("formatted copies paste their stored original: \(system.pasted)") }
+        await supervisor.event(ActionID("row/\(rich.key)/Paste as plain text"))
+        _ = await waitUntil(5) { system.pasted.count == 3 }
+        XCTAssertEqual(system.pasted.last, .text("**bold**"))
         await supervisor.stop()
     }
 
@@ -117,6 +129,13 @@ final class SystemServicesTests: XCTestCase {
         _ = await waitUntil(10) { !system.keptAwake.isEmpty }
         XCTAssertFalse(system.keptAwake.isEmpty, "the session resumes once the battery is fine")
 
+        await supervisor.event("field/For a while, like 90m or 1h30", value: .text("1h30"))
+        let custom = await waitUntil(10) {
+            let status = await supervisor.callTool("awake_status").text
+            return status.contains("1h 29m left") || status.contains("1h 30m left")
+        }
+        XCTAssertTrue(custom, "a typed duration starts a session")
+
         await supervisor.stop()
         XCTAssertTrue(system.keptAwake.isEmpty, "stopping a plugin releases its assertion")
     }
@@ -138,6 +157,23 @@ final class SystemServicesTests: XCTestCase {
         let next = await supervisor.callTool("next_meeting")
         XCTAssertTrue(next.text.contains("https://acme.zoom.us/j/987654321?pwd=xyz"), "trailing punctuation is trimmed: \(next.text)")
         XCTAssertTrue(next.text.contains("Zoom"))
+        let menuRows = await supervisor.views[.panel]?.rows.map(\.title) ?? []
+        XCTAssertEqual(menuRows.first, "Planning", "the next meeting is the first row, so Return joins it: \(menuRows)")
         await supervisor.stop()
+    }
+}
+
+final class OpenURLTests: XCTestCase {
+    func testMeetingAppSchemesOpenButOthersDont() async {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]))
+        let manifest = Manifest(id: "dev.test.open", name: "Open")
+        for url in ["https://example.com", "zoommtg://acme.zoom.us/join?action=join&confno=1", "msteams:/l/meetup-join/x"] {
+            guard case .ok = await services.handle(.openURL(url), for: manifest) else { return XCTFail("\(url) should open") }
+        }
+        for url in ["file:///etc/passwd", "javascript:alert(1)", "x-apple.systempreferences:"] {
+            guard case .failure = await services.handle(.openURL(url), for: manifest) else { return XCTFail("\(url) must not open") }
+        }
     }
 }

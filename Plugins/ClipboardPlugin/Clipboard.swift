@@ -4,9 +4,10 @@ import Foundation
 /// Clipboard history: everything you copy, searchable, pinnable and one
 /// keystroke from being pasted back.
 ///
-/// ⌘⇧V opens it from anywhere. Type to filter, click (or ⌘1...⌘9) to paste
-/// into the app you were in. Pinned items stay at the top and are never
-/// trimmed. Passwords are skipped: the host never hands out items an app
+/// ⌘⇧V opens it from anywhere. Type to filter, ↑↓ and Return (or ⌘1...⌘9)
+/// to paste into the app you were in, ⌥Return to paste as plain text, ⌘P to
+/// pin, ⌥⌫ to delete. Formatted text keeps its formatting. Pinned items stay
+/// at the top and are never trimmed. Passwords are skipped: the host never hands out items an app
 /// marks as concealed or transient, and items from password managers (or any
 /// app you add) are ignored. Images are kept by the host and pasted back.
 @main
@@ -29,6 +30,8 @@ final class Clipboard: FluidPlugin {
         var files: [String] = []
         var imageID: String?
         var imageSize: [Int]?
+        /// The host's copy of the original, formatting included.
+        var contentID: String?
         var appID: String?
         var appName: String?
         var firstCopied: Date
@@ -49,7 +52,14 @@ final class Clipboard: FluidPlugin {
             switch kind {
             case .image: return .image(id: imageID ?? "")
             case .files: return .files(files)
-            case .text, .url: return .text(text ?? "")
+            case .text, .url: return contentID.map { .stored(id: $0) } ?? .text(text ?? "")
+            }
+        }
+
+        var plainText: String? {
+            switch kind {
+            case .text, .url, .files: return text
+            case .image: return nil
             }
         }
 
@@ -71,7 +81,7 @@ final class Clipboard: FluidPlugin {
 
         var symbol: String {
             switch kind {
-            case .text: return "doc.plaintext"
+            case .text: return contentID == nil ? "doc.plaintext" : "doc.richtext"
             case .url: return "link"
             case .files: return "doc.on.doc"
             case .image: return "photo"
@@ -104,12 +114,19 @@ final class Clipboard: FluidPlugin {
     @Stored("keepImages") var keepImages = true
     @Stored("ignoredApps") var ignoredApps = Clipboard.defaultIgnored
     @Stored("paused") var paused = false
+    @Stored("plainByDefault") var plainByDefault = false
+    /// Regular expressions; a copy whose text matches one is not recorded
+    /// (tokens, one-time codes).
+    @Stored("ignoredPatterns") var ignoredPatterns: [String] = []
 
     /// The history, read from storage once and written back when it changes
     /// (a `@Stored` array would be decoded on every render).
     private var cached: [Entry]?
     private var lastChange: Int?
     private var ignoreNext = false
+    /// When this plugin last put something on the clipboard, so its own
+    /// writes don't count as new copies from whichever app is frontmost.
+    private var lastWrite: Date?
     var lastError: String?
 
     var entries: [Entry] {
@@ -140,13 +157,14 @@ final class Clipboard: FluidPlugin {
         guard !paused, !item.concealed else { return }
         if let app = item.sourceAppID, isIgnored(app: app, name: item.sourceAppName) { return }
         if item.kind == .image && !keepImages { return }
+        if let text = item.text, matchesIgnoredPattern(text) { return }
         record(item)
     }
 
     func record(_ item: ClipboardItem) {
         var entry = Entry(
             id: UUID().uuidString, kind: item.kind, text: item.text.map { String($0.prefix(Self.maxEntryCharacters)) }, files: item.files,
-            imageID: item.imageID, imageSize: item.imageSize, appID: item.sourceAppID, appName: item.sourceAppName,
+            imageID: item.imageID, imageSize: item.imageSize, contentID: item.contentID, appID: item.sourceAppID, appName: item.sourceAppName,
             firstCopied: item.copiedAt, lastCopied: item.copiedAt
         )
         if entry.kind != .image && entry.kind != .files && (entry.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
@@ -154,9 +172,11 @@ final class Clipboard: FluidPlugin {
         if let index = history.firstIndex(where: { $0.fingerprint == entry.fingerprint }) {
             var existing = history.remove(at: index)
             existing.lastCopied = item.copiedAt
-            existing.count += 1
-            // Keep the original source; a re-copy from Fluid itself says nothing new.
-            if item.sourceAppID != "dev.fluid.app" {
+            existing.contentID = item.contentID ?? existing.contentID
+            // Our own paste coming back says nothing new about where it came from.
+            let ownWrite = item.sourceAppID == "dev.fluid.app" || (lastWrite.map { item.copiedAt.timeIntervalSince($0) < 3 } ?? false)
+            if !ownWrite {
+                existing.count += 1
                 existing.appID = item.sourceAppID ?? existing.appID
                 existing.appName = item.sourceAppName ?? existing.appName
             }
@@ -184,6 +204,12 @@ final class Clipboard: FluidPlugin {
         return kept
     }
 
+    func matchesIgnoredPattern(_ text: String) -> Bool {
+        ignoredPatterns.contains { pattern in
+            (try? Regex(pattern)).map { text.contains($0) } ?? false
+        }
+    }
+
     func isIgnored(app id: String, name: String?) -> Bool {
         ignoredApps.contains { ignored in
             ignored.caseInsensitiveCompare(id) == .orderedSame || (name.map { ignored.caseInsensitiveCompare($0) == .orderedSame } ?? false)
@@ -192,14 +218,16 @@ final class Clipboard: FluidPlugin {
 
     // MARK: Acting on an entry
 
-    func use(_ entry: Entry, paste: Bool) async {
+    func use(_ entry: Entry, paste: Bool, plain: Bool = false) async {
+        let content: ClipboardContent = plain || plainByDefault ? entry.plainText.map { .text($0) } ?? entry.content : entry.content
+        lastWrite = Date()
         do {
             if paste {
-                try await Fluid.paste(entry.content)
-            } else if case .text(let text) = entry.content {
+                try await Fluid.paste(content)
+            } else if case .text(let text) = content {
                 Fluid.copy(text)
             } else {
-                try await Fluid.setClipboard(entry.content)
+                try await Fluid.setClipboard(content)
             }
             lastError = nil
         } catch {
@@ -261,20 +289,15 @@ final class Clipboard: FluidPlugin {
                 if !pinned.isEmpty {
                     Section("Pinned") {
                         ForEach(Array(pinned.enumerated())) { index, entry in
-                            row(entry, shortcut: index < 9 ? "cmd+\(index + 1)" : nil)
+                            row(entry)
                         }
                     }
                 }
                 if pinned.isEmpty {
-                    ForEach(Array(history.enumerated())) { index, entry in
-                        row(entry, shortcut: index < 9 ? "cmd+\(index + 1)" : nil)
-                    }
+                    ForEach(history) { entry in row(entry) }
                 } else {
                     Section("History") {
-                        ForEach(Array(history.enumerated())) { index, entry in
-                            let position = pinned.count + index
-                            row(entry, shortcut: position < 9 ? "cmd+\(position + 1)" : nil)
-                        }
+                        ForEach(history) { entry in row(entry) }
                     }
                 }
             }
@@ -290,6 +313,7 @@ final class Clipboard: FluidPlugin {
     @ViewBuilder func settings(full: Bool) -> ViewContent {
         Section("Settings") {
             Toggle("Paste into the app on click", isOn: pasteDirectly) { self.pasteDirectly = $0 }
+            Toggle("Always paste as plain text", isOn: plainByDefault) { self.plainByDefault = $0 }
             Picker("Order", options: Order.allCases.map(\.rawValue), selection: order.rawValue) { self.order = Order(rawValue: $0) ?? .recent }
             Slider("Keep \(Int(limit)) items", value: limit, in: 25...1000, step: 25) { value in
                 self.limit = value
@@ -299,7 +323,7 @@ final class Clipboard: FluidPlugin {
             if full {
                 ignoredAppSettings
             } else {
-                LabeledContent("Ignored apps", value: "\(ignoredApps.count); manage them in the window").role(.secondary)
+                LabeledContent("Ignored apps and patterns", value: "\(ignoredApps.count + ignoredPatterns.count); manage them in the window").role(.secondary)
             }
         }
     }
@@ -317,19 +341,37 @@ final class Clipboard: FluidPlugin {
             Row(app, subtitle: "Ignored", symbol: "hand.raised", key: "ignored-\(app)")
                 .action("Stop ignoring") { self.ignoredApps.removeAll { $0 == app } }
         }
+        TextField("Ignore copies matching a pattern (regex)") { pattern in
+            let pattern = pattern.trimmingCharacters(in: .whitespaces)
+            guard !pattern.isEmpty, !self.ignoredPatterns.contains(pattern) else { return }
+            guard (try? Regex(pattern)) != nil else {
+                self.lastError = "\"\(pattern)\" isn't a valid regular expression"
+                return
+            }
+            self.ignoredPatterns.append(pattern)
+            self.entries = self.entries.filter { $0.pinned || !self.matchesIgnoredPattern($0.text ?? "") }
+        }
+        ForEach(ignoredPatterns) { pattern in
+            Row(pattern, subtitle: "Copies matching this aren't recorded", symbol: "line.3.horizontal.decrease", key: "pattern-\(pattern)")
+                .action("Remove") { self.ignoredPatterns.removeAll { $0 == pattern } }
+        }
+        Button("Clear everything, including pinned", symbol: "trash.slash", role: .critical) { self.clear(keepPinned: false) }
     }
 
-    func row(_ entry: Entry, shortcut: String?) -> Row {
+    func row(_ entry: Entry) -> Row {
         let source = [entry.appName, Self.relative(entry.lastCopied), entry.count > 1 ? "×\(entry.count)" : nil, entry.kind == .text ? "\(entry.text?.count ?? 0) chars" : nil]
             .compactMap { $0 }.joined(separator: " · ")
         var row = Row(entry.title, subtitle: source, symbol: entry.pinned ? "pin.fill" : entry.symbol, key: entry.id)
-            .action(pasteDirectly ? "Paste" : "Copy", shortcut: shortcut) { await self.use(entry, paste: self.pasteDirectly) }
-            .action(pasteDirectly ? "Copy" : "Paste") { await self.use(entry, paste: !self.pasteDirectly) }
+            .action(pasteDirectly ? "Paste" : "Copy") { await self.use(entry, paste: self.pasteDirectly) }
+        if entry.plainText != nil, entry.contentID != nil || entry.kind == .files {
+            row = row.action(pasteDirectly ? "Paste as plain text" : "Copy as plain text", shortcut: "option+return") { await self.use(entry, paste: self.pasteDirectly, plain: true) }
+        }
+        row = row.action(pasteDirectly ? "Copy" : "Paste") { await self.use(entry, paste: !self.pasteDirectly) }
             .action(entry.pinned ? "Unpin" : "Pin", shortcut: "cmd+p") { self.update(entry.id) { $0.pinned.toggle() } }
         if entry.kind == .url, let url = entry.text {
             row = row.action("Open link") { Fluid.open(url.trimmingCharacters(in: .whitespacesAndNewlines)) }
         }
-        return row.action("Delete", shortcut: "cmd+delete", role: .critical) { self.delete(entry.id) }
+        return row.action("Delete", shortcut: "option+delete", role: .critical) { self.delete(entry.id) }
     }
 
     static func relative(_ date: Date, now: Date = Date()) -> String {

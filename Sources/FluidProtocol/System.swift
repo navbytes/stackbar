@@ -26,6 +26,10 @@ public struct ClipboardItem: Codable, Equatable, Sendable {
     public var imageID: String?
     /// Width and height in pixels, for `.image`.
     public var imageSize: [Int]?
+    /// For text copied with formatting (rich text, HTML, an app's own
+    /// types): an id the host keeps the complete original under, to put it
+    /// back exactly with `ClipboardContent.stored(id:)`. `nil` for plain text.
+    public var contentID: String?
     /// The app that was frontmost when the copy happened.
     public var sourceAppID: String?
     public var sourceAppName: String?
@@ -35,13 +39,14 @@ public struct ClipboardItem: Codable, Equatable, Sendable {
     public var concealed: Bool
     public var copiedAt: Date
 
-    public init(changeCount: Int, kind: Kind, text: String? = nil, files: [String] = [], imageID: String? = nil, imageSize: [Int]? = nil, sourceAppID: String? = nil, sourceAppName: String? = nil, concealed: Bool = false, copiedAt: Date = Date()) {
+    public init(changeCount: Int, kind: Kind, text: String? = nil, files: [String] = [], imageID: String? = nil, imageSize: [Int]? = nil, contentID: String? = nil, sourceAppID: String? = nil, sourceAppName: String? = nil, concealed: Bool = false, copiedAt: Date = Date()) {
         self.changeCount = changeCount
         self.kind = kind
         self.text = text
         self.files = files
         self.imageID = imageID
         self.imageSize = imageSize
+        self.contentID = contentID
         self.sourceAppID = sourceAppID
         self.sourceAppName = sourceAppName
         self.concealed = concealed
@@ -55,6 +60,9 @@ public enum ClipboardContent: Codable, Equatable, Sendable {
     case files([String])
     /// An image the host handed out as `ClipboardItem.imageID`.
     case image(id: String)
+    /// Everything that was copied, formatting included, as the host kept it
+    /// under `ClipboardItem.contentID`.
+    case stored(id: String)
 }
 
 /// Asks the host to keep the Mac awake for this plugin.
