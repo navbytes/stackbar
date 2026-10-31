@@ -104,11 +104,14 @@ Fluid menu or Settings). `Examples/` are small plugins that each teach one idea.
 On a Mac with Xcode 26 or its Command Line Tools:
 
 ```sh
-swift run Fluid                          # the menu-bar app; offers to install the examples
-scripts/bundle.sh                        # build/Fluid.app with fluidctl and FluidKit inside
-xcodegen generate                        # the Xcode project, needed for the widget extension
-xcodebuild -project Fluid.xcodeproj -scheme Fluid -destination 'platform=macOS' -allowProvisioningUpdates build   # signed app + widget (team 59J9RQXYYP)
+scripts/install.sh                       # signed app + widget into /Applications, fluidctl, bundled plugins
+swift run Fluid                          # run from source; offers to install the examples
+scripts/bundle.sh                        # build/Fluid.app and a zip for distribution (no widget)
 ```
+
+`install.sh` needs xcodegen and Xcode signed in to the team in `project.yml`
+(59J9RQXYYP). The first run on a new Mac may need
+`FLUID_ALLOW_PROVISIONING=1` so Xcode can register the App IDs.
 
 Plugins live in `~/Library/Application Support/Fluid/Plugins/*.swift`. All
 plugins build in one shared workspace, so FluidKit compiles once and each new

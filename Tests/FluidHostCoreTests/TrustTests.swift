@@ -47,6 +47,26 @@ final class CapabilityLedgerTests: XCTestCase {
         XCTAssertTrue(granted)
         await supervisor.stop()
     }
+
+    func testDeclaredButUnapprovedSaysWaitingForApproval() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore(["TOKEN": "t"]))
+        let declared = Manifest(id: "dev.test.waiting", name: "Waiting", capabilities: [.power, .secret(name: "TOKEN"), .network("example.com")])
+        var granted = declared
+        granted.capabilities = []
+
+        func message(_ call: HostCall, declared: Manifest?) async -> String {
+            if case .failure(let text) = await services.handle(call, for: granted, declared: declared) { return text }
+            return "not refused"
+        }
+        for call: HostCall in [.systemStatus, .secret(name: "TOKEN"), .http(HTTPRequest(url: "https://example.com/x"))] {
+            let waiting = await message(call, declared: declared)
+            XCTAssertTrue(waiting.contains("needs your approval"), waiting)
+            let undeclared = await message(call, declared: nil)
+            XCTAssertTrue(undeclared.contains("manifest's capabilities"), undeclared)
+        }
+    }
 }
 
 final class ForkTests: XCTestCase {
