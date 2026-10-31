@@ -91,6 +91,8 @@ final class UpNext: StackbarPlugin {
     @Stored("onlyWithLinks") var onlyWithLinks = false
     @Stored("remindMinutes") var remindMinutes = 2.0
     @Stored("autoJoin") var autoJoin = false
+    /// Cover the screen when a meeting starts, so it can't be missed.
+    @Stored("fullScreenAlert") var fullScreenAlert = false
     @Stored("titleLength") var titleLength = 24.0
     @Stored("showTitle") var showTitle = true
     @Stored("openInApps") var openInApps = true
@@ -105,6 +107,7 @@ final class UpNext: StackbarPlugin {
     var loaded = false
     private var reminded: Set<String> = []
     private var joined: Set<String> = []
+    private var alerted: Set<String> = []
 
     func refresh() async throws {
         let now = Date()
@@ -164,6 +167,13 @@ final class UpNext: StackbarPlugin {
                     actions: link.map { [NotificationAction("Join", url: openInApps ? Self.appURL(for: $0) : $0.url)] } ?? []
                 )
             }
+            if fullScreenAlert, until <= 60, until > -60, !alerted.contains(event.id) {
+                alerted.insert(event.id)
+                let link = Self.meetingLink(for: event)
+                var actions = link.map { [NotificationAction("Join on \($0.service)", url: openInApps ? Self.appURL(for: $0) : $0.url)] } ?? []
+                if let dial = Self.dialIn(for: event) { actions.append(NotificationAction("Call in", url: dial.tel)) }
+                Stackbar.alert(event.title, body: until > 0 ? "Starts at \(Self.time(event.start))" + (event.organizer.map { " · \($0)" } ?? "") : "Started at \(Self.time(event.start))", actions: actions)
+            }
             if autoJoin, until <= 30, now < event.start.addingTimeInterval(120), !joined.contains(event.id), let link = Self.meetingLink(for: event) {
                 joined.insert(event.id)
                 Stackbar.open(link.url)
@@ -171,6 +181,7 @@ final class UpNext: StackbarPlugin {
         }
         if reminded.count > 200 { reminded = Set(reminded.suffix(50)) }
         if joined.count > 200 { joined = Set(joined.suffix(50)) }
+        if alerted.count > 200 { alerted = Set(alerted.suffix(50)) }
     }
 
     func join(_ event: CalendarEvent) {
@@ -180,6 +191,25 @@ final class UpNext: StackbarPlugin {
         } else if let url = event.url {
             Stackbar.open(url)
         }
+    }
+
+    /// A phone dial-in from the event: a `tel:` link, or a number starting
+    /// with + (Zoom's "+16465588656,,123456789#" included). `tel` keeps the
+    /// pauses and PIN so the call dials straight in.
+    static func dialIn(for event: CalendarEvent) -> (display: String, tel: String)? {
+        for text in [event.location, event.notes].compactMap({ $0 }) {
+            if let match = text.firstMatch(of: /tel:(\+?[0-9,;#*]{7,})/) {
+                let number = String(match.1)
+                return (number.replacingOccurrences(of: ",", with: " ").trimmingCharacters(in: .whitespaces), "tel:" + number.replacingOccurrences(of: "#", with: "%23"))
+            }
+            if let match = text.firstMatch(of: /\+\d[\d \-().]{6,}\d(?:,,\d+#?)?/) {
+                let raw = String(match.0)
+                let digits = raw.filter { $0.isNumber || $0 == "+" || $0 == "," || $0 == "#" }
+                guard digits.filter(\.isNumber).count >= 8 else { continue }
+                return (raw.components(separatedBy: ",,").first ?? raw, "tel:" + digits.replacingOccurrences(of: "#", with: "%23"))
+            }
+        }
+        return nil
     }
 
     /// The meeting app's own URL for Zoom and Teams links, so joining opens
@@ -383,6 +413,10 @@ final class UpNext: StackbarPlugin {
         if let url = event.url, url != link?.url {
             row = row.action("Open event link") { Stackbar.open(url) }
         }
+        if let dial = Self.dialIn(for: event) {
+            row = row.action("Call in (\(dial.display))") { Stackbar.open(dial.tel) }
+                .action("Copy dial-in number") { Stackbar.copy(dial.display) }
+        }
         return row.action("Copy details") {
             Stackbar.copy([event.title, self.subtitle(event), link?.url].compactMap { $0 }.joined(separator: "\n"))
         }
@@ -394,6 +428,7 @@ final class UpNext: StackbarPlugin {
             Slider(remindMinutes > 0 ? "Remind \(Int(remindMinutes)) min before" : "No reminders", value: remindMinutes, in: 0...15, step: 1, key: "remind") { self.remindMinutes = $0 }
             Toggle("Open the call when it starts", isOn: autoJoin) { self.autoJoin = $0 }
             Toggle("Open Zoom and Teams in their apps", isOn: openInApps) { self.openInApps = $0 }
+            Toggle("Cover the screen when a meeting starts", isOn: fullScreenAlert) { self.fullScreenAlert = $0 }
         }
         Section("Menu bar") {
             Toggle("Show the title in the menu bar", isOn: showTitle) { self.showTitle = $0 }

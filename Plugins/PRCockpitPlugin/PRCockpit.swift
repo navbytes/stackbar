@@ -38,6 +38,8 @@ final class PRCockpit: StackbarPlugin {
         let deletions: Int?
         let commits: Commits?
         let comments: Count?
+        /// OPEN, CLOSED or MERGED.
+        let state: String?
 
         struct Count: Decodable, Equatable { let totalCount: Int }
 
@@ -69,6 +71,62 @@ final class PRCockpit: StackbarPlugin {
     enum Tab: String, CaseIterable {
         case review = "To review"
         case mine = "Mine"
+        case inbox = "Inbox"
+    }
+
+    /// One thread from GitHub's notifications inbox (REST).
+    struct InboxItem: Decodable, Equatable {
+        struct Subject: Decodable, Equatable {
+            let title: String
+            let url: String?
+            let type: String
+        }
+        struct Repository: Decodable, Equatable {
+            let full_name: String
+            let html_url: String
+        }
+        let id: String
+        let reason: String
+        let unread: Bool
+        let updated_at: Date
+        let subject: Subject
+        let repository: Repository
+
+        /// The page on github.com: the API URL turned into the web one.
+        var webURL: String {
+            guard let api = subject.url, api.hasPrefix("https://api.github.com/repos/") else {
+                return subject.type == "Release" ? repository.html_url + "/releases" : repository.html_url
+            }
+            return "https://github.com/" + api.dropFirst("https://api.github.com/repos/".count)
+                .replacingOccurrences(of: "/pulls/", with: "/pull/")
+                .replacingOccurrences(of: "/commits/", with: "/commit/")
+        }
+
+        var reasonText: String {
+            switch reason {
+            case "mention": return "mentioned you"
+            case "team_mention": return "mentioned your team"
+            case "review_requested": return "review requested"
+            case "assign": return "assigned to you"
+            case "author": return "you opened it"
+            case "comment": return "new comment"
+            case "ci_activity": return "CI activity"
+            case "state_change": return "state changed"
+            case "subscribed", "manual": return "watching"
+            default: return reason.replacingOccurrences(of: "_", with: " ")
+            }
+        }
+
+        var symbol: String {
+            switch subject.type {
+            case "PullRequest": return "arrow.triangle.pull"
+            case "Issue": return "smallcircle.filled.circle"
+            case "Release": return "tag"
+            case "Discussion": return "bubble.left.and.bubble.right"
+            case "CheckSuite": return "checkmark.seal"
+            default: return "bell"
+            }
+        }
     }
 
     private struct Reply: Decodable {
@@ -91,6 +149,8 @@ final class PRCockpit: StackbarPlugin {
             }
             let review: Search
             let mine: Search
+            /// Yours closed or merged in the last two days.
+            let closed: Search?
         }
         struct Problem: Decodable { let message: String }
         let data: Data?
@@ -98,7 +158,7 @@ final class PRCockpit: StackbarPlugin {
     }
 
     static let fragment = """
-    fragment pr on PullRequest { number title url isDraft updatedAt repository { nameWithOwner } author { login } \
+    fragment pr on PullRequest { number title url isDraft updatedAt state repository { nameWithOwner } author { login } \
     reviewDecision mergeable headRefName additions deletions comments { totalCount } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }
     """
 
@@ -117,6 +177,10 @@ final class PRCockpit: StackbarPlugin {
     /// Hidden until they change: URL to the update time they were snoozed at.
     @Stored("snoozed") var snoozed: [String: Date] = [:]
     @Stored("hiddenRepos") var hiddenRepos: [String] = []
+    @Stored("showInbox") var showInbox = false
+    var inbox: [InboxItem] = []
+    var inboxError: String?
+    var recentlyClosed: [PullRequest] = []
 
     func refresh() async throws {
         guard let token = try await Stackbar.secret("GITHUB_TOKEN") else {
@@ -125,10 +189,12 @@ final class PRCockpit: StackbarPlugin {
         }
         let requested = includeTeams ? "review-requested:@me" : "user-review-requested:@me"
         let draft = includeDrafts ? "" : " draft:false"
+        let since = ISO8601DateFormatter.string(from: Date().addingTimeInterval(-2 * 86400), timeZone: .gmt, formatOptions: [.withFullDate])
         let query = """
         query { \
         review: search(query: "is:pr is:open archived:false \(requested)\(draft)", type: ISSUE, first: 40) { nodes { ...pr } } \
         mine: search(query: "is:pr is:open archived:false author:@me", type: ISSUE, first: 40) { nodes { ...pr } } \
+        closed: search(query: "is:pr is:closed archived:false author:@me closed:>=\(since)", type: ISSUE, first: 20) { nodes { ...pr } } \
         } \(Self.fragment)
         """
         do {
@@ -143,16 +209,69 @@ final class PRCockpit: StackbarPlugin {
             decoder.dateDecodingStrategy = .iso8601
             let reply = try decoder.decode(Reply.self, from: response.body)
             guard let data = reply.data else { throw HostError(reply.errors?.map(\.message).joined(separator: "; ") ?? "GitHub sent no data") }
-            update(review: data.review.nodes, mine: data.mine.nodes)
+            update(review: data.review.nodes, mine: data.mine.nodes, closed: data.closed?.nodes ?? [])
             lastError = nil
         } catch {
             lastError = "\(error)"
         }
+        if showInbox { await refreshInbox(token: token) }
+    }
+
+    /// GitHub's notifications inbox. The REST API takes a classic token with
+    /// the `notifications` scope; fine-grained tokens can't read it.
+    func refreshInbox(token: String) async {
+        do {
+            let response = try await Stackbar.http(HTTPRequest(url: "https://api.github.com/notifications?per_page=40", headers: [
+                "Authorization": "Bearer \(token)", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
+            ]))
+            guard (200..<300).contains(response.status) else {
+                throw HostError(response.status == 403 || response.status == 404
+                    ? "GitHub won't share notifications with this token. The inbox needs a classic token with the notifications scope."
+                    : "GitHub answered \(response.status) for notifications")
+            }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let items = try decoder.decode([InboxItem].self, from: response.body)
+            if notifyChanges, !inbox.isEmpty || inboxError != nil {
+                let known = Set(inbox.map(\.id))
+                for item in items where item.unread && !known.contains(item.id) && (item.reason == "mention" || item.reason == "team_mention") {
+                    Stackbar.notify("Mentioned: \(item.subject.title)", body: item.repository.full_name, actions: [NotificationAction("Open", url: item.webURL)])
+                }
+            }
+            inbox = items.sorted { $0.updated_at > $1.updated_at }
+            inboxError = nil
+        } catch {
+            inboxError = "\(error)"
+        }
+    }
+
+    func markRead(_ item: InboxItem) async {
+        guard let token = try? await Stackbar.secret("GITHUB_TOKEN") else { return }
+        inbox.removeAll { $0.id == item.id }
+        _ = try? await Stackbar.http(HTTPRequest(url: "https://api.github.com/notifications/threads/\(item.id)", method: "PATCH", headers: [
+            "Authorization": "Bearer \(token)", "Accept": "application/vnd.github+json",
+        ]))
+    }
+
+    func inboxRow(_ item: InboxItem) -> Row {
+        var row = Row(item.subject.title, subtitle: [item.repository.full_name, item.reasonText, Self.ago(item.updated_at)].joined(separator: " · "), symbol: item.symbol, key: "inbox-\(item.id)")
+        if item.unread { row = row.badge("Unread", role: .accent) }
+        if item.reason == "mention" || item.reason == "team_mention" { row = row.badge("@", role: .warning) }
+        return row.action("Open", shortcut: "cmd+return") {
+            Stackbar.open(item.webURL)
+            await self.markRead(item)
+        }
+        .action("Mark as read", shortcut: "cmd+u") { await self.markRead(item) }
+        .action("Copy link") { Stackbar.copy(item.webURL) }
     }
 
     /// Takes the new lists, telling the user what changed since last time.
-    func update(review: [PullRequest], mine newMine: [PullRequest]) {
+    func update(review: [PullRequest], mine newMine: [PullRequest], closed: [PullRequest] = []) {
         if notifyChanges, updatedAt != nil {
+            let wasOpen = Set(mine.map(\.id))
+            for pr in closed where wasOpen.contains(pr.id) {
+                Stackbar.notify(pr.state == "MERGED" ? "Merged: \(pr.title)" : "Closed: \(pr.title)", body: pr.id, actions: [NotificationAction("Open", url: pr.url)])
+            }
             let known = Set(toReview.map(\.id))
             let added = review.filter { !known.contains($0.id) }
             if added.count == 1, let pr = added.first {
@@ -175,6 +294,7 @@ final class PRCockpit: StackbarPlugin {
                 }
             }
         }
+        recentlyClosed = closed.sorted { $0.updatedAt > $1.updatedAt }
         toReview = review.sorted { $0.updatedAt > $1.updatedAt }
         mine = newMine.sorted { $0.updatedAt > $1.updatedAt }
         let current = Set((toReview + mine).map(\.url))
@@ -274,13 +394,20 @@ final class PRCockpit: StackbarPlugin {
 
     var panel: ViewContent {
         VStack(spacing: 8) {
-            Picker("Show", options: [Tab.review, Tab.mine].map { "\($0.rawValue) (\($0 == .review ? shownReview.count : shownMine.count))" }, selection: selectedLabel) { label in
-                self.tab = label.hasPrefix(Tab.mine.rawValue) ? Tab.mine.rawValue : Tab.review.rawValue
+            Picker("Show", options: tabs.map(label), selection: label(currentTab)) { chosen in
+                self.tab = (self.tabs.first { chosen.hasPrefix($0.rawValue) } ?? .review).rawValue
             }
             if let lastError {
                 Text(lastError).role(.warning)
             }
-            if tab == Tab.mine.rawValue {
+            if currentTab == .inbox {
+                if let inboxError { Text(inboxError).style(.caption).role(.warning) }
+                if inbox.isEmpty {
+                    if inboxError == nil { ContentUnavailableView("Inbox zero", symbol: "tray", message: "No GitHub notifications.") }
+                } else {
+                    List(inbox, searchable: true) { item in inboxRow(item) }
+                }
+            } else if currentTab == .mine {
                 list(shownMine, showAuthor: false, empty: ("No open pull requests", "You have nothing open right now."))
             } else {
                 if history.count > 1 { Chart("Review queue", values: history, kind: .area, role: shownReview.isEmpty ? .success : .accent) }
@@ -317,6 +444,15 @@ final class PRCockpit: StackbarPlugin {
         }
         Section("Notifications") {
             Toggle("Notify me about changes", isOn: notifyChanges) { self.notifyChanges = $0 }
+            Text("Review requests, approvals, changes requested, failing checks, ready to merge, merged and closed, and mentions in the inbox.").style(.caption).role(.secondary)
+        }
+        Section("GitHub inbox") {
+            Toggle("Show the notifications inbox", isOn: showInbox) { on in
+                self.showInbox = on
+                if on { try await self.refresh() } else { self.inbox = [] }
+            }
+            Text("Mentions, issues and everything else GitHub notifies you about. Needs a classic token with the notifications scope.").style(.caption).role(.secondary)
+            if let inboxError { Text(inboxError).style(.caption).role(.warning) }
         }
         Section("Hidden repositories") {
             if hiddenRepos.isEmpty { Text("None. Hide one from a pull request's menu.").role(.secondary) }
@@ -335,6 +471,15 @@ final class PRCockpit: StackbarPlugin {
             }
             Section("Yours (\(shownMine.count))") {
                 ForEach(shownMine) { pr in row(pr, showAuthor: false) }
+            }
+        }
+        if !recentlyClosed.isEmpty {
+            Section("Closed in the last two days") {
+                ForEach(recentlyClosed) { pr in
+                    Row(pr.title, subtitle: "\(pr.id) · \(Self.ago(pr.updatedAt))", symbol: pr.state == "MERGED" ? "arrow.triangle.merge" : "xmark.circle", key: "closed-\(pr.url)")
+                        .badge(pr.state == "MERGED" ? "Merged" : "Closed", role: pr.state == "MERGED" ? .success : .secondary)
+                        .action("Open in browser") { Stackbar.open(pr.url) }
+                }
             }
         }
         if !(shownReview + shownMine).isEmpty {
@@ -391,9 +536,19 @@ final class PRCockpit: StackbarPlugin {
         ForEach(shownReview.prefix(3)) { pr in Text(pr.title).style(.caption) }
     }
 
-    var selectedLabel: String {
-        let current = tab == Tab.mine.rawValue ? Tab.mine : Tab.review
-        return "\(current.rawValue) (\(current == .review ? shownReview.count : shownMine.count))"
+    var tabs: [Tab] { showInbox ? Tab.allCases : [.review, .mine] }
+
+    var currentTab: Tab {
+        let chosen = Tab(rawValue: tab) ?? .review
+        return tabs.contains(chosen) ? chosen : .review
+    }
+
+    func label(_ tab: Tab) -> String {
+        switch tab {
+        case .review: return "\(tab.rawValue) (\(shownReview.count))"
+        case .mine: return "\(tab.rawValue) (\(shownMine.count))"
+        case .inbox: return "\(tab.rawValue) (\(inbox.filter(\.unread).count))"
+        }
     }
 
     @ViewBuilder func list(_ prs: [PullRequest], showAuthor: Bool, empty: (String, String)) -> ViewContent {

@@ -30,6 +30,8 @@ public final class HostServices: Sendable {
     /// The host's side effects that need a UI or the OS.
     public struct Platform: Sendable {
         public var notify: @Sendable (HostNotification) -> Void
+        /// A full-screen alert; `actions` are already checked.
+        public var alert: @Sendable (HostNotification) -> Void
         public var open: @Sendable (URL) -> Void
         public var copy: @Sendable (String) -> Void
         /// A plugin asked for a declared secret the user hasn't entered.
@@ -39,12 +41,14 @@ public final class HostServices: Sendable {
 
         public init(
             notify: @escaping @Sendable (HostNotification) -> Void = { _ in },
+            alert: @escaping @Sendable (HostNotification) -> Void = { _ in },
             open: @escaping @Sendable (URL) -> Void = { _ in },
             copy: @escaping @Sendable (String) -> Void = { _ in },
             secretMissing: @escaping @Sendable (String, String) -> Void = { _, _ in },
             system: any SystemServices = UnsupportedSystem()
         ) {
             self.notify = notify
+            self.alert = alert
             self.open = open
             self.copy = copy
             self.secretMissing = secretMissing
@@ -60,6 +64,7 @@ public final class HostServices: Sendable {
     public let bus: PluginBus
     public let platform: Platform
     private let notifications = RateLimiter(limit: 10, per: 60)
+    private let alerts = RateLimiter(limit: 1, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
     private let calls = RateLimiter(limit: 1200, per: 60)
@@ -149,19 +154,25 @@ public final class HostServices: Sendable {
 
         case .notify(let title, let body, let actions):
             guard notifications.allow(granted.id) else { return .failure("too many notifications; at most 10 a minute") }
-            var buttons: [NotificationAction] = []
-            for action in (actions ?? []).prefix(3) {
-                guard let url = URL(string: action.url), let scheme = url.scheme?.lowercased(), Self.openableSchemes.contains(scheme) else {
-                    return .failure("notification button \"\(action.title)\" opens \(action.url); only https, http, mailto and meeting app URLs can be opened")
-                }
-                buttons.append(NotificationAction(String(action.title.prefix(40)), url: action.url))
+            switch Self.checked(actions ?? []) {
+            case .failure(let message): return .failure(message)
+            case .success(let buttons):
+                platform.notify(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
+                return .ok
             }
-            platform.notify(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
-            return .ok
+
+        case .alert(let title, let body, let actions):
+            guard alerts.allow(granted.id) else { return .failure("too many alerts; at most one a minute") }
+            switch Self.checked(actions) {
+            case .failure(let message): return .failure(message)
+            case .success(let buttons):
+                platform.alert(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
+                return .ok
+            }
 
         case .openURL(let string):
             guard let url = URL(string: string), let scheme = url.scheme?.lowercased(), Self.openableSchemes.contains(scheme) else {
-                return .failure("only https, http, mailto and meeting app (zoommtg, msteams) URLs can be opened")
+                return .failure("only https, http, mailto, tel and meeting app (zoommtg, msteams) URLs can be opened")
             }
             platform.open(url)
             return .ok
@@ -224,7 +235,24 @@ public final class HostServices: Sendable {
 
     /// URL schemes a plugin may open: the web, mail, and the meeting apps
     /// that can't be reached through an https link without a browser tab.
-    public static let openableSchemes: Set<String> = ["https", "http", "mailto", "zoommtg", "msteams"]
+    public static let openableSchemes: Set<String> = ["https", "http", "mailto", "tel", "zoommtg", "msteams"]
+
+    /// At most three buttons, each opening an allowed URL, titles cut to 40.
+    static func checked(_ actions: [NotificationAction]) -> CheckedButtons {
+        var buttons: [NotificationAction] = []
+        for action in actions.prefix(3) {
+            guard let url = URL(string: action.url), let scheme = url.scheme?.lowercased(), openableSchemes.contains(scheme) else {
+                return .failure("button \"\(action.title)\" opens \(action.url); only https, http, mailto, tel and meeting app URLs can be opened")
+            }
+            buttons.append(NotificationAction(String(action.title.prefix(40)), url: action.url))
+        }
+        return .success(buttons)
+    }
+
+    enum CheckedButtons {
+        case success([NotificationAction])
+        case failure(String)
+    }
 
     private static func awaitingApproval(_ granted: Manifest, _ what: String) -> HostResult {
         .failure("\(granted.name) needs your approval \(what); open its panel in Stackbar and click Allow")

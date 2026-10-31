@@ -40,7 +40,8 @@ work and is listed so it isn't forgotten.
 - Already there: countdown, 18 call services, reminders, auto-join, today and
   tomorrow, calendar filters, declined, all-day, tentative badges, agent tools.
 - Done in the second pass: a Join button on the reminder notification.
-- Later: a full-screen "meeting starting" alert, dial-in numbers.
+- Done in the third pass: a full-screen "meeting starting" alert (opt-in) and
+  dial-in numbers with Call in.
 
 ### PR Cockpit (vs Gitify, Trailer, GitHub's web dashboard)
 
@@ -52,6 +53,7 @@ work and is listed so it isn't forgotten.
   new requests, approvals, changes requested and failing checks, agent tools.
 - Done in the second pass: Review, Open and See checks buttons on its
   notifications.
-- Later: GitHub notifications inbox (mentions, issues), GitHub Enterprise
-  hosts (needs a per-user network host), signing in with OAuth instead of a
-  token, merged/closed notifications.
+- Done in the third pass: merged and closed alerts, a GitHub notifications
+  inbox with mention alerts and mark as read.
+- Later: GitHub Enterprise hosts (needs a per-user network host), signing in
+  with OAuth instead of a token.

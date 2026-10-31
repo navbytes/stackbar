@@ -111,7 +111,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.secret("NAME")` returns `String?` (nil: the user hasn't entered it; Stackbar asks them) | `.secret(name: "NAME")`; names are letters, digits, `_`, `-`, `.` |
 | `try await Stackbar.oauthToken("github")` | `.oauth(OAuthProvider(name:, authorizeURL:, tokenURL:, clientID:, scopes:))` |
 | `Stackbar.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
-| `Stackbar.notify(title, body:, actions: [NotificationAction("Join", url:)])`, `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
+| `Stackbar.notify(title, body:, actions: [NotificationAction("Join", url:)])`, `Stackbar.alert(title, body:, actions:)` (full screen, one a minute), `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
 | `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing |
 | `try await Stackbar.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
 | `try await Stackbar.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Stackbar.paste(content)` (into the app the user was in; needs Accessibility for Stackbar) | `.clipboard` |
