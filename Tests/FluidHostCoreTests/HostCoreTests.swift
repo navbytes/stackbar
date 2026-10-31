@@ -310,4 +310,20 @@ final class PluginSupervisorTests: XCTestCase {
         #endif
         return true
     }
+
+    func testSoakSamplesMemoryAndSkipsDestructiveButtons() async throws {
+        let panel = ViewNode.section(title: nil, children: [
+            .button(title: "Save", action: "button/Save"),
+            .button(title: "Crash", action: "button/Crash"),
+            .button(title: "Clear laps", action: "button/Clear laps"),
+            .toggle(title: "On", isOn: true, action: "toggle/On"),
+        ])
+        XCTAssertEqual(Soak.safeActions(in: panel), ["button/Save"])
+
+        let supervisor = try PluginSupervisor.make(executable: Self.helper("ClockPlugin"))
+        let report = await Soak(duration: 2, interval: 0.1, pressEvents: true).run(supervisor)
+        XCTAssertGreaterThan(report.samples.count, 5, "\(report)")
+        XCTAssertEqual(report.restarts, 0)
+        XCTAssertTrue(report.passed, "\(report)")
+    }
 }

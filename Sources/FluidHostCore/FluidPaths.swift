@@ -35,6 +35,15 @@ public enum FluidPaths {
     public static var ledgerFile: URL { dataDirectory.appendingPathComponent("approvals.json") }
     public static var publishersFile: URL { dataDirectory.appendingPathComponent("publishers.json") }
     public static var agentSocket: URL { dataDirectory.appendingPathComponent("agent.sock") }
+    /// The host log. macOS: `~/Library/Logs/Fluid/fluid.log`.
+    public static var logFile: URL {
+        #if os(macOS)
+        if ProcessInfo.processInfo.environment["FLUID_HOME"] == nil {
+            return FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("Logs/Fluid/fluid.log")
+        }
+        #endif
+        return dataDirectory.appendingPathComponent("Logs/fluid.log")
+    }
     public static var widgetSnapshots: URL { dataDirectory.appendingPathComponent("Widgets", isDirectory: true) }
 
     /// The Keychain on macOS (shared with the app), a 0600 file elsewhere;

@@ -27,6 +27,11 @@ usage:
   fluidctl index search <url> [query]
   fluidctl docs                     the plugin authoring reference
   fluidctl parity                   the surface parity ledger
+  fluidctl soak <plugin> [--minutes 10] [--interval 1] [--press] [--growth 15]
+                                    runs a plugin under load and fails if its memory grows
+  fluidctl logs [-n <lines>]        the end of the host log (the app's and fluidctl's)
+  fluidctl doctor                   checks the toolchain, FluidKit and data directories
+  fluidctl version
 
 A .swift path is built first (cached by content); anything else is run as an
 already-built helper. FLUID_PACKAGE overrides where FluidKit is found, and
@@ -172,6 +177,54 @@ case "docs":
     print(AuthoringGuide.text)
 case "parity":
     print(SurfaceParity.ledger())
+case "version", "--version":
+    print("fluidctl \(FluidVersion.current), protocol \(FluidProtocolVersion.current)")
+case "soak":
+    guard let path = rest.first else { fail(usage) }
+    let minutes = flag("--minutes", in: rest).flatMap(Double.init) ?? 10
+    let soak = Soak(
+        duration: minutes * 60,
+        interval: flag("--interval", in: rest).flatMap(Double.init) ?? 1,
+        pressEvents: rest.contains("--press"),
+        allowedGrowth: (flag("--growth", in: rest).flatMap(Double.init) ?? 15) / 100
+    )
+    let executable = helper(for: path)
+    let supervisor: PluginSupervisor
+    do {
+        supervisor = try PluginSupervisor.make(executable: executable, services: makeServices()) { update in
+            if case .log(let level, let message) = update, level != .debug { note("[\(level.rawValue)] \(message)") }
+        }
+    } catch {
+        fail("\(error)")
+    }
+    note("soaking \(executable.lastPathComponent) for \(minutes) minutes")
+    let report = await soak.run(supervisor) { tick, bytes in
+        if tick % 30 == 0 { note(String(format: "tick %d: %.1f MB", tick, Double(bytes) / 1_048_576)) }
+    }
+    print(report)
+    exit(report.passed ? 0 : 1)
+case "logs":
+    let count = flag("-n", in: rest).flatMap(Int.init) ?? 100
+    print("\(HostLog.shared.file.path)\n")
+    for line in HostLog.shared.tail(count) { print(line) }
+case "doctor":
+    var healthy = true
+    func check(_ name: String, _ problem: String?) {
+        if let problem {
+            healthy = false
+            print("✗ \(name): \(problem)")
+        } else {
+            print("✓ \(name)")
+        }
+    }
+    check("Swift toolchain", PluginBuilder.toolchainProblem())
+    let package = FluidPaths.fluidPackage()
+    check("FluidKit at \(package.path)", FileManager.default.fileExists(atPath: package.appendingPathComponent("Package.swift").path) ? nil : "no Package.swift there; set FLUID_PACKAGE")
+    for directory in [FluidPaths.dataDirectory, FluidPaths.cacheDirectory] {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        check("writable \(directory.path)", FileManager.default.isWritableFile(atPath: directory.path) ? nil : "not writable")
+    }
+    exit(healthy ? 0 : 1)
 case "mcp":
     let tools = AuthoringTools(builder: builder, services: makeServices(), png: pngRenderer())
     let server = MCPServer(name: "fluid-authoring", version: FluidVersion.current, instructions: "Tools for writing Fluid plugins: call fluid_docs first, then fluid_new/fluid_build/fluid_render/fluid_send_event.", provider: tools)

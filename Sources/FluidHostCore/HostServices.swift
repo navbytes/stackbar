@@ -38,6 +38,10 @@ public final class HostServices: Sendable {
     public let bus: PluginBus
     public let platform: Platform
     private let notifications = RateLimiter(limit: 10, per: 60)
+    /// Every call a plugin makes, so a loop that hammers the host is cut off
+    /// instead of starving the others.
+    private let calls = RateLimiter(limit: 1200, per: 60)
+    private let requests = RateLimiter(limit: 300, per: 60)
 
     public init(storage: StorageStore, secrets: any SecretStore, platform: Platform = Platform(), audit: NetworkAudit = NetworkAudit(), bus: PluginBus = PluginBus(), oauthTimeout: Double = 300) {
         self.storage = storage
@@ -59,6 +63,7 @@ public final class HostServices: Sendable {
     /// Handles one call for a plugin whose granted capabilities are those of
     /// `granted` (its manifest with the approved capability list).
     public func handle(_ call: HostCall, for granted: Manifest) async -> HostResult {
+        guard calls.allow(granted.id) else { return .failure("too many host calls; at most 1200 a minute") }
         switch call {
         case .storageSet(let key, let value):
             do {
@@ -81,6 +86,7 @@ public final class HostServices: Sendable {
             }
 
         case .http(let request):
+            guard requests.allow(granted.id) else { return .failure("too many HTTP requests; at most 300 a minute") }
             return await http.perform(request, pluginID: granted.id, allowedHosts: granted.networkHosts)
 
         case .oauthToken(let name, let forceRefresh):

@@ -33,6 +33,8 @@ public actor PluginSupervisor {
     private let policy: BackoffPolicy
     private let environment: [String: String]?
     private let services: HostServices?
+    private var inFlight = 0
+    private var logBudget = LogBudget()
     private let onUpdate: @Sendable (Update) -> Void
     /// The capabilities the user approved; host calls are checked against
     /// these, not against whatever the manifest asks for.
@@ -42,6 +44,8 @@ public actor PluginSupervisor {
     public private(set) var views: [Surface: ViewNode] = [:]
     public private(set) var tools: [ToolSpec] = []
     public private(set) var restarts = 0
+    /// The running helper's process id, for memory sampling.
+    public var helperPID: Int32? { process.map(\.processIdentifier).flatMap { $0 > 0 ? $0 : nil } }
     /// How many host messages the current helper has finished handling. Tools
     /// and tests wait on it instead of guessing with sleeps.
     public private(set) var settledCount = 0
@@ -230,7 +234,7 @@ public actor PluginSupervisor {
             views[surface] = root
             onUpdate(.render(surface, root))
         case .message(.log(let level, let message)):
-            onUpdate(.log(level, message))
+            emitPluginLog(level, message)
         case .message(.settled):
             settledCount += 1
         case .message(.request(let id, let call)):
@@ -241,7 +245,7 @@ public actor PluginSupervisor {
         case .message(.toolResult(let id, let text, let isError)):
             finishToolCall(id, text: text, isError: isError, generation: eventGeneration)
         case .stderr(let line):
-            onUpdate(.log(.debug, line))
+            emitPluginLog(.debug, line)
         case .undecodable(let line):
             onUpdate(.log(.warning, "unreadable message from plugin: \(line.prefix(200))"))
         case .exit(let status):
@@ -254,6 +258,11 @@ public actor PluginSupervisor {
             process?.send(.response(id: id, result: .failure("host services are not available here")))
             return
         }
+        guard inFlight < Self.maxInFlight else {
+            process?.send(.response(id: id, result: .failure("too many host calls in flight; at most \(Self.maxInFlight)")))
+            return
+        }
+        inFlight += 1
         let granted = granted
         Task { [weak self] in
             let result = await services.handle(call, for: granted)
@@ -261,7 +270,24 @@ public actor PluginSupervisor {
         }
     }
 
+    /// Passes a plugin's own log line on, at most `LogBudget.limit` lines per
+    /// window; past that, lines are counted and summarised once the window
+    /// ends, so a plugin stuck printing in a loop cannot flood the host log.
+    private func emitPluginLog(_ level: LogLevel, _ message: String) {
+        switch logBudget.take() {
+        case .allow(let suppressed):
+            if suppressed > 0 { onUpdate(.log(.warning, "suppressed \(suppressed) log lines from this plugin")) }
+            onUpdate(.log(level, String(message.prefix(4000))))
+        case .drop:
+            break
+        }
+    }
+
+    /// Host calls one plugin may have outstanding at once.
+    static let maxInFlight = 32
+
     private func respond(_ id: Int, _ result: HostResult, generation callGeneration: Int) {
+        inFlight = max(0, inFlight - 1)
         guard callGeneration == generation else { return }
         process?.send(.response(id: id, result: result))
     }
@@ -341,5 +367,34 @@ enum FileStamp {
         let date = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
         let size = (attributes[.size] as? NSNumber)?.intValue ?? 0
         return "\(date)-\(size)"
+    }
+}
+
+/// At most `limit` log lines per `window` seconds; the rest are counted.
+struct LogBudget {
+    static let limit = 200
+    static let window: Double = 10
+    enum Outcome: Equatable {
+        /// Pass the line; `suppressed` lines were dropped since the last one passed.
+        case allow(suppressed: Int)
+        case drop
+    }
+
+    private var windowStart = Date.distantPast
+    private var used = 0
+    private var dropped = 0
+
+    mutating func take(now: Date = Date()) -> Outcome {
+        if now.timeIntervalSince(windowStart) >= Self.window {
+            windowStart = now
+            used = 0
+        }
+        guard used < Self.limit else {
+            dropped += 1
+            return .drop
+        }
+        used += 1
+        defer { dropped = 0 }
+        return .allow(suppressed: dropped)
     }
 }

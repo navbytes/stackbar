@@ -197,3 +197,40 @@ final class ChallengeBox: @unchecked Sendable {
         set { lock.withLock { stored = newValue } }
     }
 }
+
+final class HardeningTests: XCTestCase {
+    func testHostLogRollsOverAndTails() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = HostLog(file: directory.appendingPathComponent("Logs/fluid.log"), maxBytes: 400)
+        for index in 0..<20 { log.write(.info, "entry \(index)\nsecond line", plugin: "dev.test") }
+        let size = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: log.file.path)[.size] as? Int)
+        XCTAssertLessThanOrEqual(size, 400)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: log.rolledFile.path))
+        let tail = log.tail(3)
+        XCTAssertEqual(tail.count, 3)
+        XCTAssertTrue(tail[2].hasSuffix("INFO [dev.test] entry 19\\nsecond line"), tail[2])
+        let mode = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: log.file.path)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode, 0o600)
+    }
+
+    func testLogBudgetDropsThenSummarises() {
+        var budget = LogBudget()
+        let start = Date()
+        for _ in 0..<LogBudget.limit { XCTAssertEqual(budget.take(now: start), .allow(suppressed: 0)) }
+        XCTAssertEqual(budget.take(now: start), .drop)
+        XCTAssertEqual(budget.take(now: start), .drop)
+        XCTAssertEqual(budget.take(now: start.addingTimeInterval(LogBudget.window)), .allow(suppressed: 2))
+        XCTAssertEqual(budget.take(now: start.addingTimeInterval(LogBudget.window)), .allow(suppressed: 0))
+    }
+
+    func testRateLimiterSlides() {
+        let limiter = RateLimiter(limit: 2, per: 10)
+        let start = Date()
+        XCTAssertTrue(limiter.allow("a", now: start))
+        XCTAssertTrue(limiter.allow("a", now: start))
+        XCTAssertFalse(limiter.allow("a", now: start.addingTimeInterval(5)))
+        XCTAssertTrue(limiter.allow("b", now: start), "limits are per plugin")
+        XCTAssertTrue(limiter.allow("a", now: start.addingTimeInterval(10.1)))
+    }
+}
