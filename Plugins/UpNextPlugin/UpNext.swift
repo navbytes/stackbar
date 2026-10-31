@@ -93,6 +93,11 @@ final class UpNext: FluidPlugin {
     @Stored("autoJoin") var autoJoin = false
     @Stored("titleLength") var titleLength = 24.0
     @Stored("showTitle") var showTitle = true
+    @Stored("openInApps") var openInApps = true
+    @Stored("onlyWithPeople") var onlyWithPeople = false
+    @Stored("showFinished") var showFinished = false
+    /// Show the next meeting in the menu bar only this many hours ahead (0: any time today).
+    @Stored("menuBarHours") var menuBarHours = 0.0
 
     var events: [CalendarEvent] = []
     var calendars: [String] = []
@@ -125,6 +130,7 @@ final class UpNext: FluidPlugin {
                 && (showAllDay || !event.isAllDay)
                 && (showDeclined || event.participation != .declined)
                 && (!onlyWithLinks || event.isAllDay || Self.meetingLink(for: event) != nil)
+                && (!onlyWithPeople || event.isAllDay || event.attendees > 1)
         }
     }
 
@@ -164,11 +170,38 @@ final class UpNext: FluidPlugin {
     func join(_ event: CalendarEvent) {
         if let link = Self.meetingLink(for: event) {
             joined.insert(event.id)
-            Fluid.open(link.url)
+            Fluid.open(openInApps ? Self.appURL(for: link) : link.url)
         } else if let url = event.url {
             Fluid.open(url)
         }
     }
+
+    /// The meeting app's own URL for Zoom and Teams links, so joining opens
+    /// the app without leaving a browser tab behind. Other links stay https.
+    static func appURL(for link: MeetingLink) -> String {
+        guard let url = URLComponents(string: link.url), let host = url.host?.lowercased() else { return link.url }
+        if link.service == "Zoom", url.path.hasPrefix("/j/") {
+            let number = url.path.dropFirst(3).prefix { $0.isNumber }
+            guard !number.isEmpty else { return link.url }
+            var app = URLComponents()
+            app.scheme = "zoommtg"
+            app.host = host
+            app.path = "/join"
+            app.queryItems = [URLQueryItem(name: "action", value: "join"), URLQueryItem(name: "confno", value: String(number))]
+                + (url.queryItems ?? []).filter { $0.name == "pwd" }
+            return app.string ?? link.url
+        }
+        if link.service == "Teams", link.url.lowercased().hasPrefix("https://teams.microsoft.com/") {
+            return "msteams:" + link.url.dropFirst("https://teams.microsoft.com".count)
+        }
+        return link.url
+    }
+
+    static let instantMeetings: [(name: String, url: String)] = [
+        ("Google Meet", "https://meet.google.com/new"),
+        ("Zoom", "https://zoom.us/start/videomeeting"),
+        ("Teams", "https://teams.microsoft.com/l/meeting/new"),
+    ]
 
     // MARK: Words
 
@@ -209,7 +242,7 @@ final class UpNext: FluidPlugin {
     var menuBar: ViewContent {
         if lastError != nil && !loaded {
             Label("", symbol: "calendar.badge.exclamationmark").role(.warning)
-        } else if let event = focus() {
+        } else if let event = focus(), menuBarHours == 0 || event.start.timeIntervalSinceNow <= menuBarHours * 3600 {
             let soon = event.start.timeIntervalSinceNow < 5 * 60
             let title = showTitle ? "\(shortTitle(event.title)) · \(countdown(event))" : countdown(event)
             Label(title, symbol: Self.meetingLink(for: event) != nil ? "video" : "calendar").role(event.start <= Date() ? .accent : soon ? .warning : .primary)
@@ -239,12 +272,18 @@ final class UpNext: FluidPlugin {
                 day("Tomorrow", tomorrow, now: now)
             }
         }
+        Picker("Start a meeting now", options: Self.instantMeetings.map(\.name), selection: nil) { name in
+            if let meeting = Self.instantMeetings.first(where: { $0.name == name }) { Fluid.open(meeting.url) }
+        }
         settings
     }
 
     @ViewBuilder func day(_ title: String, _ date: Date, now: Date) -> ViewContent {
-        let items = visible.filter { Calendar.current.isDate($0.start, inSameDayAs: date) || ($0.isAllDay && $0.start <= date && $0.end > date) }
-            .sorted { ($0.isAllDay ? 0 : 1, $0.start) < ($1.isAllDay ? 0 : 1, $1.start) }
+        let dayStart = Calendar.current.startOfDay(for: date)
+        let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86400)
+        // Timed events first (soonest on top, so Return joins it), all-day ones after.
+        let items = visible.filter { $0.start < dayEnd && $0.end > dayStart && (showFinished || $0.isAllDay || $0.end > now) }
+            .sorted { ($0.isAllDay ? 1 : 0, $0.start) < ($1.isAllDay ? 1 : 0, $1.start) }
         if !items.isEmpty {
             Section(title) {
                 ForEach(items) { event in row(event, now: now) }
@@ -285,13 +324,17 @@ final class UpNext: FluidPlugin {
         Section("Settings") {
             Slider(remindMinutes > 0 ? "Remind \(Int(remindMinutes)) min before" : "No reminders", value: remindMinutes, in: 0...15, step: 1, key: "remind") { self.remindMinutes = $0 }
             Toggle("Open the call when it starts", isOn: autoJoin) { self.autoJoin = $0 }
+            Toggle("Open Zoom and Teams in their apps", isOn: openInApps) { self.openInApps = $0 }
             Toggle("Show the title in the menu bar", isOn: showTitle) { self.showTitle = $0 }
+            Slider(menuBarHours == 0 ? "Menu bar: any meeting today" : "Menu bar: meetings within \(Int(menuBarHours))h", value: menuBarHours, in: 0...8, step: 1, key: "menu-hours") { self.menuBarHours = $0 }
             if showTitle {
                 Slider("Menu bar title: \(Int(titleLength)) characters", value: titleLength, in: 8...60, step: 4, key: "title-length") { self.titleLength = $0 }
             }
             Toggle("Show all-day events", isOn: showAllDay) { self.showAllDay = $0 }
             Toggle("Show declined events", isOn: showDeclined) { self.showDeclined = $0 }
             Toggle("Only meetings with a call link", isOn: onlyWithLinks) { self.onlyWithLinks = $0 }
+            Toggle("Only events with other people", isOn: onlyWithPeople) { self.onlyWithPeople = $0 }
+            Toggle("Show finished events", isOn: showFinished) { self.showFinished = $0 }
             ForEach(calendars) { name in
                 Toggle(name, isOn: !hiddenCalendars.contains(name), key: "calendar-\(name)") { on in
                     if on { self.hiddenCalendars.removeAll { $0 == name } } else if !self.hiddenCalendars.contains(name) { self.hiddenCalendars.append(name) }

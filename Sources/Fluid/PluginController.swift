@@ -28,6 +28,8 @@ final class PluginController: Identifiable {
     private(set) var isNewInstall = false
     /// Declared secrets the plugin asked for that aren't set.
     private(set) var missingSecrets: [String] = []
+    /// Counts popover openings, so searchable lists reset and take focus.
+    private(set) var panelShownCount = 0
 
     @ObservationIgnored private(set) var supervisor: PluginSupervisor?
     @ObservationIgnored private weak var model: AppModel?
@@ -133,6 +135,7 @@ final class PluginController: Identifiable {
     }
 
     func setVisible(_ surface: Surface, _ visible: Bool) {
+        if surface == .panel && visible { panelShownCount += 1 }
         Task { await supervisor?.setVisible(surface, visible) }
     }
 

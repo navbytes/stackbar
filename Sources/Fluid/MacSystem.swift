@@ -66,6 +66,11 @@ final class MacSystem: SystemServices, @unchecked Sendable {
                 let isURL = !trimmed.contains(where: \.isWhitespace) && (trimmed.hasPrefix("https://") || trimmed.hasPrefix("http://"))
                 item.kind = isURL ? .url : .text
                 item.text = String(string.prefix(200_000))
+                // Keep formatting (rich text, HTML, an app's own types) so a
+                // paste puts back exactly what was copied.
+                if !types.subtracting(Self.plainTypes).isEmpty, let snapshot = Self.snapshot(board) {
+                    item.contentID = try? images.save(snapshot)
+                }
                 return item
             }
             if let data = board.data(forType: .png) ?? board.data(forType: .tiff), data.count < 32 * 1024 * 1024, let bitmap = NSBitmapImageRep(data: data), let png = bitmap.representation(using: .png, properties: [:]) {
@@ -78,11 +83,43 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         }
     }
 
+    /// Types that carry nothing beyond the plain string itself.
+    private static let plainTypes: Set<NSPasteboard.PasteboardType> = [
+        .string, .init("NSStringPboardType"), .init("public.utf16-external-plain-text"), .init("public.utf16-plain-text"),
+        .init("org.nspasteboard.source"), .URL, .init("public.url-name"), .init("NSURLPboardType"),
+    ]
+
+    /// Every type of every pasteboard item, as a property list, up to 20 MB.
+    private static func snapshot(_ board: NSPasteboard) -> Data? {
+        var items: [[String: Data]] = []
+        var total = 0
+        for pasteboardItem in board.pasteboardItems ?? [] {
+            var entry: [String: Data] = [:]
+            for type in pasteboardItem.types {
+                guard let data = pasteboardItem.data(forType: type) else { continue }
+                total += data.count
+                guard total <= 20 * 1024 * 1024 else { return nil }
+                entry[type.rawValue] = data
+            }
+            items.append(entry)
+        }
+        return items.isEmpty ? nil : try? PropertyListEncoder().encode(items)
+    }
+
     func writeClipboard(_ content: ClipboardContent) throws {
         var imageData: Data?
-        if case .image(let id) = content {
+        var storedItems: [[String: Data]]?
+        switch content {
+        case .image(let id):
             guard let data = images.data(for: id) else { throw SystemServiceError("that image is no longer kept; copy it again") }
             imageData = data
+        case .stored(let id):
+            guard let data = images.data(for: id), let items = try? PropertyListDecoder().decode([[String: Data]].self, from: data) else {
+                throw SystemServiceError("that item's formatting is no longer kept; paste it as plain text")
+            }
+            storedItems = items
+        case .text, .files:
+            break
         }
         onMain {
             let board = NSPasteboard.general
@@ -91,6 +128,13 @@ final class MacSystem: SystemServices, @unchecked Sendable {
             case .text(let text): board.setString(text, forType: .string)
             case .files(let paths): board.writeObjects(paths.map { URL(fileURLWithPath: $0) as NSURL })
             case .image: if let imageData { board.setData(imageData, forType: .png) }
+            case .stored:
+                let items = (storedItems ?? []).map { types -> NSPasteboardItem in
+                    let item = NSPasteboardItem()
+                    for (type, data) in types { item.setData(data, forType: NSPasteboard.PasteboardType(type)) }
+                    return item
+                }
+                board.writeObjects(items)
             }
         }
     }

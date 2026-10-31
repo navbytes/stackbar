@@ -117,8 +117,8 @@ public final class HostServices: Sendable {
             return .ok
 
         case .openURL(let string):
-            guard let url = URL(string: string), let scheme = url.scheme?.lowercased(), ["https", "http", "mailto"].contains(scheme) else {
-                return .failure("only https, http and mailto URLs can be opened")
+            guard let url = URL(string: string), let scheme = url.scheme?.lowercased(), Self.openableSchemes.contains(scheme) else {
+                return .failure("only https, http, mailto and meeting app (zoommtg, msteams) URLs can be opened")
             }
             platform.open(url)
             return .ok
@@ -178,6 +178,10 @@ public final class HostServices: Sendable {
     public func release(pluginID: String) {
         try? platform.system.keepAwake(nil, pluginID: pluginID)
     }
+
+    /// URL schemes a plugin may open: the web, mail, and the meeting apps
+    /// that can't be reached through an https link without a browser tab.
+    static let openableSchemes: Set<String> = ["https", "http", "mailto", "zoommtg", "msteams"]
 
     private static func missing(_ capability: Capability, _ what: String) -> HostResult {
         .failure("to \(what), add .\(capability.caseName) to the manifest's capabilities")

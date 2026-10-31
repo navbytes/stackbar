@@ -58,6 +58,9 @@ logs the error and keeps the last render.
 - `List(items, searchable: true) { item in Row(...) }`, `ForEach(items) { }`
 - `Row(title, subtitle:, symbol:, key: stableID).badge(text, role:).progress(v).action("Open", shortcut: "cmd+return") { }`
   The first action is the click; all actions are in the context menu.
+  In a searchable list the host adds the keyboard: typing filters, ↑↓ select,
+  Return runs the first action, ⌘1–⌘9 the nth row's, and action shortcuts
+  apply to the selected row. Don't declare ⌘1–⌘9 yourself.
 - `Badge(text, role:)`, `ProgressBar(label, value:, total:)`, `LabeledContent(label, value:)`
 - `Chart(label, values: [Double], kind: .line|.bar)`
 - `Button(title, symbol:, role:) { }`, `Toggle(title, isOn:) { newValue in }`
@@ -82,8 +85,8 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `Fluid.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
 | `Fluid.notify(title, body:)`, `Fluid.open(url)`, `Fluid.copy(text)` | nothing |
 | `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing |
-| `try await Fluid.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
-| `try await Fluid.setClipboard(.text/.files/.image(id:))`, `try await Fluid.paste(content)` (into the app the user was in; needs Accessibility for Fluid) | `.clipboard` |
+| `try await Fluid.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
+| `try await Fluid.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Fluid.paste(content)` (into the app the user was in; needs Accessibility for Fluid) | `.clipboard` |
 | `try await Fluid.keepAwake(display:, reason:)`, `Fluid.allowSleep()`; the host releases it if the plugin stops | `.power` |
 | `try await Fluid.systemStatus()`: batteryLevel, onACPower, lowPowerMode, runningApps | `.power` |
 | `try await Fluid.calendarEvents(from:, to:)` returns `[CalendarEvent]` (title, start, end, location, notes, url, participation), 31 days at most | `.calendar` |

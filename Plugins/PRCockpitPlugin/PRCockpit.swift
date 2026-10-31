@@ -37,6 +37,9 @@ final class PRCockpit: FluidPlugin {
         let additions: Int?
         let deletions: Int?
         let commits: Commits?
+        let comments: Count?
+
+        struct Count: Decodable, Equatable { let totalCount: Int }
 
         struct Repository: Decodable, Equatable { let nameWithOwner: String }
         struct Author: Decodable, Equatable { let login: String }
@@ -57,6 +60,10 @@ final class PRCockpit: FluidPlugin {
         /// SUCCESS, FAILURE, ERROR, PENDING, EXPECTED, or nil without checks.
         var checks: String? { commits?.nodes.last?.commit.statusCheckRollup?.state }
         var checksFailed: Bool { checks == "FAILURE" || checks == "ERROR" }
+        /// Approved (or needing no review), checks green, no conflicts.
+        var readyToMerge: Bool {
+            !isDraft && (reviewDecision == "APPROVED" || reviewDecision == nil) && checks == "SUCCESS" && mergeable == "MERGEABLE"
+        }
     }
 
     enum Tab: String, CaseIterable {
@@ -92,7 +99,7 @@ final class PRCockpit: FluidPlugin {
 
     static let fragment = """
     fragment pr on PullRequest { number title url isDraft updatedAt repository { nameWithOwner } author { login } \
-    reviewDecision mergeable headRefName additions deletions commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }
+    reviewDecision mergeable headRefName additions deletions comments { totalCount } commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }
     """
 
     var toReview: [PullRequest] = []
@@ -104,6 +111,12 @@ final class PRCockpit: FluidPlugin {
     @Stored("includeDrafts") var includeDrafts = false
     @Stored("notify") var notifyChanges = true
     @Stored("history") var history: [Double] = []
+    /// When you last looked at each pull request (by URL), to mark new activity.
+    @Stored("seen") var seen: [String: Date] = [:]
+    @Stored("seenStarted") var seenStarted = false
+    /// Hidden until they change: URL to the update time they were snoozed at.
+    @Stored("snoozed") var snoozed: [String: Date] = [:]
+    @Stored("hiddenRepos") var hiddenRepos: [String] = []
 
     func refresh() async throws {
         guard let token = try await Fluid.secret("GITHUB_TOKEN") else {
@@ -157,13 +170,48 @@ final class PRCockpit: FluidPlugin {
                 }
                 if pr.checksFailed, !old.checksFailed {
                     Fluid.notify("Checks failed: \(pr.title)", body: pr.id)
+                } else if pr.readyToMerge, !old.readyToMerge {
+                    Fluid.notify("Ready to merge: \(pr.title)", body: pr.id)
                 }
             }
         }
         toReview = review.sorted { $0.updatedAt > $1.updatedAt }
         mine = newMine.sorted { $0.updatedAt > $1.updatedAt }
+        let current = Set((toReview + mine).map(\.url))
+        if !seenStarted {
+            seenStarted = true
+            // First run: what is already there isn't news.
+            seen = Dictionary((toReview + mine).map { ($0.url, $0.updatedAt) }, uniquingKeysWith: { first, _ in first })
+        } else {
+            seen = seen.filter { current.contains($0.key) }
+        }
+        snoozed = snoozed.filter { current.contains($0.key) }
         history = Array((history + [Double(review.count)]).suffix(48))
         updatedAt = Date()
+    }
+
+    // MARK: Filtering and attention
+
+    func isShown(_ pr: PullRequest) -> Bool {
+        if hiddenRepos.contains(pr.repo) { return false }
+        if let at = snoozed[pr.url], pr.updatedAt <= at { return false }
+        return true
+    }
+
+    var shownReview: [PullRequest] { toReview.filter(isShown) }
+    var shownMine: [PullRequest] { mine.filter(isShown) }
+    var hiddenCount: Int { toReview.count + mine.count - shownReview.count - shownMine.count }
+
+    func isNew(_ pr: PullRequest) -> Bool {
+        guard let at = seen[pr.url] else { return true }
+        return pr.updatedAt > at
+    }
+
+    func markSeen(_ pr: PullRequest) { seen[pr.url] = pr.updatedAt }
+
+    func open(_ pr: PullRequest, path: String = "") {
+        markSeen(pr)
+        Fluid.open(pr.url + path)
     }
 
     // MARK: Words
@@ -177,8 +225,11 @@ final class PRCockpit: FluidPlugin {
 
     func row(_ pr: PullRequest, showAuthor: Bool) -> Row {
         let size = pr.additions.map { "+\($0) −\(pr.deletions ?? 0)" }
-        let subtitle = [pr.id, showAuthor ? pr.author.map { "by \($0.login)" } : nil, size, Self.ago(pr.updatedAt)].compactMap { $0 }.joined(separator: " · ")
-        var row = Row(pr.title, subtitle: subtitle, symbol: pr.isDraft ? "pencil.circle" : "arrow.triangle.pull", key: pr.url)
+        let comments = (pr.comments?.totalCount ?? 0) > 0 ? "\(pr.comments?.totalCount ?? 0) comments" : nil
+        let subtitle = [pr.id, showAuthor ? pr.author.map { "by \($0.login)" } : nil, size, comments, Self.ago(pr.updatedAt)].compactMap { $0 }.joined(separator: " · ")
+        var row = Row(pr.title, subtitle: subtitle, symbol: isNew(pr) ? "circle.fill" : pr.isDraft ? "pencil.circle" : "arrow.triangle.pull", key: pr.url)
+        if isNew(pr) { row = row.badge("New", role: .accent) }
+        if !showAuthor, pr.readyToMerge { row = row.badge("Ready to merge", role: .success) }
         switch pr.checks {
         case "SUCCESS": row = row.badge("Checks pass", role: .success)
         case "FAILURE", "ERROR": row = row.badge("Checks fail", role: .critical)
@@ -193,16 +244,21 @@ final class PRCockpit: FluidPlugin {
         }
         if pr.mergeable == "CONFLICTING" { row = row.badge("Conflicts", role: .warning) }
         if pr.isDraft { row = row.badge("Draft") }
-        row = row.action("Open in browser", shortcut: "cmd+return") { Fluid.open(pr.url) }
-            .action("Open files changed") { Fluid.open(pr.url + "/files") }
-            .action("Copy link", shortcut: "cmd+c") { Fluid.copy(pr.url) }
+        row = row.action("Open in browser", shortcut: "cmd+return") { self.open(pr) }
+            .action("Open files changed") { self.open(pr, path: "/files") }
+            .action(isNew(pr) ? "Mark as seen" : "Mark as new", shortcut: "cmd+u") {
+                if self.isNew(pr) { self.markSeen(pr) } else { self.seen[pr.url] = .distantPast }
+            }
+            .action("Snooze until it changes", shortcut: "cmd+s") { self.snoozed[pr.url] = pr.updatedAt }
+            .action("Hide \(pr.repo)") { if !self.hiddenRepos.contains(pr.repo) { self.hiddenRepos.append(pr.repo) } }
+            .action("Copy link") { Fluid.copy(pr.url) }
         if let branch = pr.headRefName {
             row = row.action("Copy branch name") { Fluid.copy(branch) }
         }
         return row.action("Copy as Markdown") { Fluid.copy("[\(pr.title) (\(pr.id))](\(pr.url))") }
     }
 
-    var failingMine: Int { mine.filter(\.checksFailed).count }
+    var failingMine: Int { shownMine.filter(\.checksFailed).count }
 
     // MARK: Surfaces
 
@@ -210,25 +266,36 @@ final class PRCockpit: FluidPlugin {
         if lastError != nil && toReview.isEmpty && mine.isEmpty {
             Label("PRs", symbol: "exclamationmark.triangle").role(.warning)
         } else if failingMine > 0 {
-            Label("\(toReview.count) · \(failingMine)✗", symbol: "arrow.triangle.pull").role(.critical)
+            Label("\(shownReview.count) · \(failingMine) failing", symbol: "arrow.triangle.pull").role(.critical)
         } else {
-            Label("\(toReview.count)", symbol: "arrow.triangle.pull").role(toReview.isEmpty ? .secondary : .primary)
+            Label("\(shownReview.count)", symbol: "arrow.triangle.pull").role(shownReview.isEmpty ? .secondary : shownReview.contains(where: isNew) ? .accent : .primary)
         }
     }
 
     var panel: ViewContent {
         VStack(spacing: 8) {
-            Picker("Show", options: [Tab.review, Tab.mine].map { "\($0.rawValue) (\($0 == .review ? toReview.count : mine.count))" }, selection: selectedLabel) { label in
+            Picker("Show", options: [Tab.review, Tab.mine].map { "\($0.rawValue) (\($0 == .review ? shownReview.count : shownMine.count))" }, selection: selectedLabel) { label in
                 self.tab = label.hasPrefix(Tab.mine.rawValue) ? Tab.mine.rawValue : Tab.review.rawValue
             }
             if let lastError {
                 Text(lastError).role(.warning)
             }
             if tab == Tab.mine.rawValue {
-                list(mine, showAuthor: false, empty: ("No open pull requests", "You have nothing open right now."))
+                list(shownMine, showAuthor: false, empty: ("No open pull requests", "You have nothing open right now."))
             } else {
                 if history.count > 1 { Chart("Review queue", values: history) }
-                list(toReview, showAuthor: true, empty: ("Nothing to review", "You're all caught up."))
+                list(shownReview, showAuthor: true, empty: ("Nothing to review", "You're all caught up."))
+            }
+            HStack {
+                if (shownReview + shownMine).contains(where: isNew) {
+                    Button("Mark all as seen", symbol: "checkmark.circle") { (self.toReview + self.mine).forEach(self.markSeen) }
+                }
+                if hiddenCount > 0 || !hiddenRepos.isEmpty {
+                    Button("Show \(hiddenCount) hidden", symbol: "eye", key: "unhide") {
+                        self.snoozed = [:]
+                        self.hiddenRepos = []
+                    }
+                }
             }
             if let updatedAt {
                 Text("Updated \(updatedAt.formatted(date: .omitted, time: .shortened))").style(.caption).role(.secondary)
@@ -251,25 +318,32 @@ final class PRCockpit: FluidPlugin {
     var window: ViewContent {
         if let lastError { Text(lastError).role(.warning) }
         List(searchable: true) {
-            Section("Waiting on your review (\(toReview.count))") {
-                ForEach(toReview) { pr in row(pr, showAuthor: true) }
+            Section("Waiting on your review (\(shownReview.count))") {
+                ForEach(shownReview) { pr in row(pr, showAuthor: true) }
             }
-            Section("Yours (\(mine.count))") {
-                ForEach(mine) { pr in row(pr, showAuthor: false) }
+            Section("Yours (\(shownMine.count))") {
+                ForEach(shownMine) { pr in row(pr, showAuthor: false) }
+            }
+        }
+        if !hiddenRepos.isEmpty {
+            Section("Hidden repositories") {
+                ForEach(hiddenRepos) { repo in
+                    Row(repo, symbol: "eye.slash", key: "hidden-\(repo)").action("Show again") { self.hiddenRepos.removeAll { $0 == repo } }
+                }
             }
         }
     }
 
     var widget: ViewContent {
-        LabeledContent("To review", value: "\(toReview.count)")
-        LabeledContent("Mine open", value: "\(mine.count)")
+        LabeledContent("To review", value: "\(shownReview.count)")
+        LabeledContent("Mine open", value: "\(shownMine.count)")
         if failingMine > 0 { LabeledContent("Failing checks", value: "\(failingMine)").role(.critical) }
-        ForEach(toReview.prefix(3)) { pr in Text(pr.title).style(.caption) }
+        ForEach(shownReview.prefix(3)) { pr in Text(pr.title).style(.caption) }
     }
 
     var selectedLabel: String {
         let current = tab == Tab.mine.rawValue ? Tab.mine : Tab.review
-        return "\(current.rawValue) (\(current == .review ? toReview.count : mine.count))"
+        return "\(current.rawValue) (\(current == .review ? shownReview.count : shownMine.count))"
     }
 
     @ViewBuilder func list(_ prs: [PullRequest], showAuthor: Bool, empty: (String, String)) -> ViewContent {
