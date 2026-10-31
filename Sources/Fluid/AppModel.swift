@@ -27,7 +27,9 @@ final class AppModel {
     @ObservationIgnored let installer = PluginInstaller(pluginsDirectory: FluidPaths.pluginsDirectory, publishers: PublisherStore(file: FluidPaths.publishersFile), recordFile: FluidPaths.dataDirectory.appendingPathComponent("installed.json"))
     @ObservationIgnored let builder = PluginBuilder(fluidPackage: FluidPaths.fluidPackage(), cacheRoot: FluidPaths.buildCache)
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
-    @ObservationIgnored let sandbox = ProcessInfo.processInfo.environment["FLUID_SANDBOX"] == "1"
+    /// Plugins run in the App Sandbox unless `FLUID_SANDBOX=0` (for
+    /// debugging a plugin that needs more than its manifest declares).
+    @ObservationIgnored let sandbox = ProcessInfo.processInfo.environment["FLUID_SANDBOX"] != "0"
     @ObservationIgnored private var watcher: DirectoryWatcher?
     @ObservationIgnored private var agentServer: UnixSocketServer?
     @ObservationIgnored var onPluginsChanged: (() -> Void)?
@@ -38,7 +40,7 @@ final class AppModel {
         let secretRouter = SecretRouter()
         services = HostServices(
             storage: StorageStore(directory: FluidPaths.storageDirectory),
-            secrets: FluidPaths.defaultSecrets(),
+            secrets: FluidPaths.defaultSecrets(includeEnvironment: false),
             platform: HostServices.Platform(
                 notify: { plugin, title, body in Task { @MainActor in Platform.notify(plugin: plugin, title: title, body: body) } },
                 open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },

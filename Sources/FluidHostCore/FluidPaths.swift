@@ -44,16 +44,23 @@ public enum FluidPaths {
         #endif
         return dataDirectory.appendingPathComponent("Logs/fluid.log")
     }
+    /// Held by the running app; see `InstanceLock`.
+    public static var instanceLockFile: URL { dataDirectory.appendingPathComponent("fluid.lock") }
     public static var widgetSnapshots: URL { dataDirectory.appendingPathComponent("Widgets", isDirectory: true) }
 
-    /// The Keychain on macOS (shared with the app), a 0600 file elsewhere;
-    /// environment variables are read as a fallback either way.
-    public static func defaultSecrets() -> any SecretStore {
+    /// The Keychain on macOS (shared with the app), a 0600 file elsewhere.
+    /// `fluidctl` also reads environment variables as a fallback, so
+    /// `GITHUB_TOKEN=… fluidctl render` works; the app does not, because a
+    /// plugin could then declare any variable of the app's environment (an
+    /// `AWS_SECRET_ACCESS_KEY` inherited from the shell that ran it) as a
+    /// secret and read it without the user ever entering it.
+    public static func defaultSecrets(includeEnvironment: Bool = true) -> any SecretStore {
         #if canImport(Security)
-        return ChainedSecretStore([KeychainSecretStore(), EnvironmentSecretStore()])
+        let primary: any SecretStore = KeychainSecretStore()
         #else
-        return ChainedSecretStore([FileSecretStore(file: dataDirectory.appendingPathComponent("secrets.json")), EnvironmentSecretStore()])
+        let primary: any SecretStore = FileSecretStore(file: dataDirectory.appendingPathComponent("secrets.json"))
         #endif
+        return ChainedSecretStore(includeEnvironment ? [primary, EnvironmentSecretStore()] : [primary])
     }
 
     /// The package that provides FluidKit to plugin builds: `FLUID_PACKAGE`,

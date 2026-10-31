@@ -38,6 +38,20 @@ final class URLPartsTests: XCTestCase {
         XCTAssertFalse(Manifest(id: "nodots", name: "x").problems.isEmpty)
         XCTAssertFalse(Manifest(id: "a.b", name: " ").problems.isEmpty)
         XCTAssertFalse(Manifest(id: "a.b", name: "x", capabilities: [.network("https://api.github.com")]).problems.isEmpty)
+        XCTAssertEqual(Manifest(id: "a.b", name: "x", capabilities: [.secret(name: "GITHUB_TOKEN"), .secret(name: "api-key.v2")]).problems, [])
+        // OAuth tokens live in the same store under oauth/<plugin>/<provider>.
+        XCTAssertFalse(Manifest(id: "a.b", name: "x", capabilities: [.secret(name: "oauth/dev.other/github")]).problems.isEmpty)
+        XCTAssertFalse(Manifest(id: "a.b", name: "x", capabilities: [.secret(name: "")]).problems.isEmpty)
+    }
+
+    func testASecretNameCannotReachAnotherPluginsOAuthToken() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemorySecretStore(["oauth/dev.victim/github": #"{"accessToken":"stolen"}"#])
+        let services = HostServices.local(directory: directory, secrets: secrets)
+        let thief = Manifest(id: "dev.thief", name: "Thief", capabilities: [.secret(name: "oauth/dev.victim/github")])
+        let result = await services.handle(.secret(name: "oauth/dev.victim/github"), for: thief)
+        guard case .failure = result else { return XCTFail("read another plugin's token: \(result)") }
     }
 }
 
@@ -60,6 +74,35 @@ final class StorageStoreTests: XCTestCase {
         } catch {}
         let unchanged = await reopened.snapshot(for: "p.one")
         XCTAssertEqual(unchanged, ["b": "\"x\""])
+    }
+
+    func testIDsThatLookAlikeGetTheirOwnFiles() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // Both ids sanitize to dev-a-b-c.
+        XCTAssertNotEqual(PluginBuilder.dataFileName("dev.a-b.c"), PluginBuilder.dataFileName("dev-a.b.c"))
+        XCTAssertNotEqual(PluginBuilder.dataFileName("a_b.c"), PluginBuilder.dataFileName("a_5F.c"))
+        XCTAssertEqual(PluginBuilder.dataFileName("dev.fluid.clock"), "dev.fluid.clock")
+        XCTAssertFalse(PluginBuilder.dataFileName("../x").contains("/"))
+        XCTAssertFalse(PluginBuilder.dataFileName("..").hasPrefix("."))
+        let store = StorageStore(directory: directory)
+        try await store.set("token", "\"mine\"", for: "dev.a-b.c")
+        let other = await StorageStore(directory: directory).snapshot(for: "dev-a.b.c")
+        XCTAssertEqual(other, [:])
+    }
+
+    func testReadsValuesSavedUnderTheOldFileName() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(#"{"count":"3"}"#.utf8).write(to: directory.appendingPathComponent("dev-fluid-clock.json"))
+        let store = StorageStore(directory: directory)
+        let migrated = await store.snapshot(for: "dev.fluid.clock")
+        XCTAssertEqual(migrated, ["count": "3"])
+        try await store.set("count", "4", for: "dev.fluid.clock")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("dev-fluid-clock.json").path))
+        let reopened = await StorageStore(directory: directory).snapshot(for: "dev.fluid.clock")
+        XCTAssertEqual(reopened, ["count": "4"])
     }
 }
 
@@ -143,6 +186,28 @@ final class HostServicesTests: XCTestCase {
 
         let wrongHost = await services.handle(.http(HTTPRequest(url: "http://localhost:\(server.port)/hello")), for: manifest)
         guard case .failure = wrongHost else { return XCTFail("localhost is not 127.0.0.1") }
+    }
+
+    func testOAuthIgnoresACallbackForAnotherSignIn() async throws {
+        let tokenServer = try LoopbackServer { request in
+            request.form["code"] == "real" ? .json(#"{"access_token":"ok"}"#) : .json(#"{"error":"invalid_grant"}"#, status: 400)
+        }
+        defer { tokenServer.stop() }
+        // Something else hits the callback first with a wrong state; the real
+        // answer that follows must still sign in.
+        let browser: @Sendable (URL) -> Void = { url in
+            let query = LoopbackServer.parseQuery(url.query ?? "")
+            guard let redirect = query["redirect_uri"], let state = query["state"] else { return }
+            Task.detached {
+                _ = try? await URLSession.shared.data(from: URL(string: "\(redirect)?code=forged&state=wrong")!)
+                _ = try? await URLSession.shared.data(from: URL(string: "\(redirect)?code=real&state=\(state)")!)
+            }
+        }
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore(), platform: .init(open: browser))
+        let provider = OAuthProvider(name: "test", authorizeURL: "http://127.0.0.1:1/authorize", tokenURL: "\(tokenServer.baseURL)/token", clientID: "client")
+        let manifest = Manifest(id: "dev.test.p", name: "P", capabilities: [.oauth(provider)])
+        let token = await services.handle(.oauthToken(provider: "test", forceRefresh: false), for: manifest)
+        XCTAssertEqual(token, .value("ok"))
     }
 
     func testOAuthSignsInWithPKCEThenRefreshes() async throws {
@@ -232,5 +297,17 @@ final class HardeningTests: XCTestCase {
         XCTAssertFalse(limiter.allow("a", now: start.addingTimeInterval(5)))
         XCTAssertTrue(limiter.allow("b", now: start), "limits are per plugin")
         XCTAssertTrue(limiter.allow("a", now: start.addingTimeInterval(10.1)))
+    }
+}
+
+final class InstanceLockTests: XCTestCase {
+    func testOnlyOneHolderAtATime() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("fluid-lock-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: file) }
+        var first = InstanceLock.acquire(file)
+        XCTAssertNotNil(first)
+        XCTAssertNil(InstanceLock.acquire(file), "a second app is refused while the first runs")
+        first = nil
+        XCTAssertNotNil(InstanceLock.acquire(file), "and allowed once it is gone")
     }
 }

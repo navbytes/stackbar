@@ -44,6 +44,9 @@ targets:
       properties:
         com.apple.security.app-sandbox: false
         com.apple.security.application-groups: [group.dev.fluid]
+        # The hardened runtime denies calendar access, without a prompt,
+        # unless the app carries this entitlement (Up Next needs it).
+        com.apple.security.personal-information.calendars: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: dev.fluid.app
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -61,6 +64,7 @@ targets:
     info:
       path: Packaging/Widget-Info.generated.plist
       properties:
+        CFBundleShortVersionString: "0.9.0"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

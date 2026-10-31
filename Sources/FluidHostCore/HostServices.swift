@@ -65,8 +65,16 @@ public final class HostServices: Sendable {
     }
 
     /// Handles one call for a plugin whose granted capabilities are those of
-    /// `granted` (its manifest with the approved capability list).
-    public func handle(_ call: HostCall, for granted: Manifest) async -> HostResult {
+    /// `granted` (its manifest with the approved capability list). `declared`
+    /// is the manifest as written: a call it covers but `granted` does not is
+    /// refused as waiting for approval, not as undeclared.
+    public func handle(_ call: HostCall, for granted: Manifest, declared: Manifest? = nil) async -> HostResult {
+        let declared = declared ?? granted
+        func missing(_ capability: Capability, _ what: String) -> HostResult {
+            declared.capabilities.contains(capability)
+                ? Self.awaitingApproval(granted, "to \(what)")
+                : Self.missing(capability, what)
+        }
         guard calls.allow(granted.id) else { return .failure("too many host calls; at most 1200 a minute") }
         switch call {
         case .storageSet(let key, let value):
@@ -78,7 +86,11 @@ public final class HostServices: Sendable {
             }
 
         case .secret(let name):
+            guard Manifest.isValidSecretName(name) else {
+                return .failure("secret names are 1 to 100 letters, digits, _, - or .")
+            }
             guard granted.secretNames.contains(name) else {
+                if declared.secretNames.contains(name) { return Self.awaitingApproval(granted, "to read secret \(name)") }
                 return .failure("secret \(name) is not declared; add .secret(name: \"\(name)\") to the manifest's capabilities")
             }
             do {
@@ -91,10 +103,16 @@ public final class HostServices: Sendable {
 
         case .http(let request):
             guard requests.allow(granted.id) else { return .failure("too many HTTP requests; at most 300 a minute") }
-            return await http.perform(request, pluginID: granted.id, allowedHosts: granted.networkHosts)
+            let result = await http.perform(request, pluginID: granted.id, allowedHosts: granted.networkHosts)
+            if case .failure = result, let host = URLParts.host(of: request.url),
+               !URLParts.host(host, matches: granted.networkHosts), URLParts.host(host, matches: declared.networkHosts) {
+                return Self.awaitingApproval(granted, "to reach \(host)")
+            }
+            return result
 
         case .oauthToken(let name, let forceRefresh):
             guard let provider = granted.oauthProviders.first(where: { $0.name == name }) else {
+                if declared.oauthProviders.contains(where: { $0.name == name }) { return Self.awaitingApproval(granted, "to sign in with \(name)") }
                 return .failure("OAuth provider \(name) is not declared; add .oauth(OAuthProvider(name: \"\(name)\", ...)) to the manifest's capabilities")
             }
             do {
@@ -129,11 +147,11 @@ public final class HostServices: Sendable {
             return .ok
 
         case .clipboardRead:
-            guard granted.capabilities.contains(.clipboard) else { return Self.missing(.clipboard, "read the clipboard") }
+            guard granted.capabilities.contains(.clipboard) else { return missing(.clipboard, "read the clipboard") }
             return .value(platform.system.readClipboard().map(SystemCodec.encode))
 
         case .clipboardWrite(let content), .paste(let content):
-            guard granted.capabilities.contains(.clipboard) else { return Self.missing(.clipboard, "write or paste clipboard content") }
+            guard granted.capabilities.contains(.clipboard) else { return missing(.clipboard, "write or paste clipboard content") }
             if case .text(let text) = content, text.utf8.count > 1024 * 1024 { return .failure("text is too large to copy") }
             do {
                 if case .paste = call { try await platform.system.paste(content) } else { try platform.system.writeClipboard(content) }
@@ -144,7 +162,7 @@ public final class HostServices: Sendable {
 
         case .keepAwake(let request):
             // Releasing never needs the capability, so a revoked plugin can let go.
-            guard request == nil || granted.capabilities.contains(.power) else { return Self.missing(.power, "keep the Mac awake") }
+            guard request == nil || granted.capabilities.contains(.power) else { return missing(.power, "keep the Mac awake") }
             do {
                 try platform.system.keepAwake(request.map { KeepAwakeRequest(display: $0.display, reason: "\(granted.name): \($0.reason.prefix(120))") }, pluginID: granted.id)
                 return .ok
@@ -153,11 +171,11 @@ public final class HostServices: Sendable {
             }
 
         case .systemStatus:
-            guard granted.capabilities.contains(.power) else { return Self.missing(.power, "read battery and running apps") }
+            guard granted.capabilities.contains(.power) else { return missing(.power, "read battery and running apps") }
             return .value(SystemCodec.encode(platform.system.systemStatus()))
 
         case .calendarEvents(let from, let to):
-            guard granted.capabilities.contains(.calendar) else { return Self.missing(.calendar, "read calendar events") }
+            guard granted.capabilities.contains(.calendar) else { return missing(.calendar, "read calendar events") }
             guard to > from else { return .failure("calendarEvents needs to > from") }
             guard to.timeIntervalSince(from) <= 31 * 86400 + 3600 else { return .failure("calendarEvents covers at most 31 days at a time") }
             do {
@@ -177,6 +195,10 @@ public final class HostServices: Sendable {
     /// The supervisor calls it whenever the helper stops or exits.
     public func release(pluginID: String) {
         try? platform.system.keepAwake(nil, pluginID: pluginID)
+    }
+
+    private static func awaitingApproval(_ granted: Manifest, _ what: String) -> HostResult {
+        .failure("\(granted.name) needs your approval \(what); open its panel in Fluid and click Allow")
     }
 
     private static func missing(_ capability: Capability, _ what: String) -> HostResult {

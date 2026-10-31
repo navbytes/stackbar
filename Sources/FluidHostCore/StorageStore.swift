@@ -34,23 +34,36 @@ public actor StorageStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(values).write(to: file(for: pluginID), options: .atomic)
+        removeLegacyFile(for: pluginID)
     }
 
     /// Forgets everything a plugin saved (when it is removed).
     public func erase(_ pluginID: String) {
         cache[pluginID] = [:]
         try? FileManager.default.removeItem(at: file(for: pluginID))
+        removeLegacyFile(for: pluginID)
     }
 
     private func load(_ pluginID: String) -> [String: String] {
         if let values = cache[pluginID] { return values }
-        let values = (try? Data(contentsOf: file(for: pluginID))).flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+        // Values saved before per-id file names are read from the old file.
+        let data = (try? Data(contentsOf: file(for: pluginID))) ?? (try? Data(contentsOf: legacyFile(for: pluginID)))
+        let values = data.flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
         cache[pluginID] = values
         return values
     }
 
     private func file(for pluginID: String) -> URL {
+        directory.appendingPathComponent(PluginBuilder.dataFileName(pluginID) + ".json")
+    }
+
+    private func legacyFile(for pluginID: String) -> URL {
         directory.appendingPathComponent(PluginBuilder.sanitizedName(pluginID) + ".json")
+    }
+
+    private func removeLegacyFile(for pluginID: String) {
+        let legacy = legacyFile(for: pluginID)
+        if legacy != file(for: pluginID) { try? FileManager.default.removeItem(at: legacy) }
     }
 
     public enum StorageError: Error, CustomStringConvertible {

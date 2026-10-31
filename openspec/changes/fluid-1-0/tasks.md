@@ -33,3 +33,4 @@
 - [ ] 4.8 On a Mac: signing, Keychain and sandbox checks (README "Status")
 - [ ] 4.9 App writes plugin logs to the host log and shows `doctor` problems in Settings
 - [ ] 4.10 A day-long soak of PR Cockpit
+- [x] 4.11 Audit fixes: secret names can't reach OAuth tokens, per-id storage files, no environment secrets in the app, no http redirect downgrade, OAuth callback state check, reload races, coalesced timer triggers, a single app instance, SHA-256 build keys that cover FluidKit
