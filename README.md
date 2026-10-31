@@ -189,9 +189,11 @@ Still to check on a Mac:
 2. **The widget** shows snapshots after `xcodegen generate`.
 3. **Signing:** Ed25519 bundles and the Keychain store (CryptoKit and Security
    only exist on Apple platforms).
-4. **The sandbox:** with `FLUID_SANDBOX=1`, the helper is signed ad hoc with
-   entitlements from its manifest, and a plugin without `.network` cannot reach
-   the network.
+4. **The sandbox:** every helper is signed ad hoc with App Sandbox
+   entitlements from its manifest (`FLUID_SANDBOX=0` turns this off for
+   debugging). `.files` paths become file exceptions and `.network` turns on
+   outgoing connections; everything else goes through the host.
+   `SandboxTests` checks this on the Mac runner.
 5. **The system services:** clipboard reads and paste (with Accessibility),
    power assertions, battery and EventKit (`openspec/changes/fluid-plugins`).
 6. **The memory gate:** `fluidctl soak` PR Cockpit for a day, and watch the

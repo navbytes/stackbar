@@ -25,11 +25,16 @@ final class SandboxEntitlementsTests: XCTestCase {
         XCTAssertEqual(SandboxEntitlements.entitlements(for: busy), [
             "com.apple.security.app-sandbox": true,
             "com.apple.security.network.client": true,
-            "com.apple.security.files.user-selected.read-write": true,
         ])
         let plist = try SandboxEntitlements.propertyList(for: busy)
-        let decoded = try PropertyListSerialization.propertyList(from: plist, format: nil) as? [String: Bool]
-        XCTAssertEqual(decoded, SandboxEntitlements.entitlements(for: busy))
+        let decoded = try XCTUnwrap(try PropertyListSerialization.propertyList(from: plist, format: nil) as? [String: Any])
+        XCTAssertEqual(decoded["com.apple.security.app-sandbox"] as? Bool, true)
+        XCTAssertEqual(decoded["com.apple.security.temporary-exception.files.home-relative-path.read-write"] as? [String], ["/Notes/"])
+
+        let files = Manifest(id: "a.files", name: "Files", capabilities: [.files(paths: ["~/Notes", "~/todo.txt", "/opt/data/", "relative"])])
+        let exceptions = SandboxEntitlements.fileExceptions(for: files) { $0.hasSuffix(".txt") }
+        XCTAssertEqual(exceptions.homeRelative, ["/Notes/", "/todo.txt"])
+        XCTAssertEqual(exceptions.absolute, ["/opt/data/"])
         XCTAssertEqual(SandboxEntitlements.summary(for: busy).first, "Connects to api.github.com")
     }
 }

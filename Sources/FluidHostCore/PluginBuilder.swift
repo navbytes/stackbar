@@ -271,17 +271,40 @@ public struct PluginBuilder: Sendable {
     }
 
     #if os(macOS)
-    /// Signs the helper ad hoc with entitlements generated from its manifest,
-    /// so the App Sandbox applies when it launches.
+    /// Signs a copy of the helper ad hoc with App Sandbox entitlements
+    /// generated from its manifest, and returns the copy to launch.
     ///
-    /// ponytail: unverified whether an ad-hoc-signed bare executable gets the
-    /// full sandbox when launched by the host; that is the phase 0 Mac spike.
-    /// The app only calls this when `FLUID_SANDBOX=1`.
-    public func sign(binary: URL, manifest: Manifest) throws {
-        let entitlementsFile = binary.deletingLastPathComponent().appendingPathComponent("Plugin.entitlements")
-        try SandboxEntitlements.propertyList(for: manifest).write(to: entitlementsFile)
-        let (status, log) = try Self.run(["codesign", "--force", "--sign", "-", "--identifier", manifest.id, "--entitlements", entitlementsFile.path, binary.path])
+    /// `SandboxTests` checks on a Mac that a helper signed this way can't read
+    /// the user's files or open connections beyond its manifest. The app
+    /// signs every plugin unless `FLUID_SANDBOX=0`.
+    ///
+    /// The copy lives in `Sandboxed/` in the build cache, one per plugin id,
+    /// and is replaced by a rename rather than re-signed in place: macOS
+    /// caches a binary's signature, and rewriting a signed file that is
+    /// running (a reload) can get the next launch killed. An unchanged binary
+    /// with unchanged entitlements is not signed again.
+    public func sign(binary: URL, manifest: Manifest) throws -> URL {
+        let folder = cacheRoot.appendingPathComponent("Sandboxed", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let name = Self.dataFileName(manifest.id)
+        let signed = folder.appendingPathComponent(name)
+        let stampFile = folder.appendingPathComponent(name + ".stamp")
+        let entitlements = try SandboxEntitlements.propertyList(for: manifest)
+        let attributes = try FileManager.default.attributesOfItem(atPath: binary.path)
+        let stamp = Data("\(binary.path)|\((attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)|\((attributes[.size] as? NSNumber)?.intValue ?? 0)|\(SHA256.hex(entitlements))".utf8)
+        if FileManager.default.isExecutableFile(atPath: signed.path), (try? Data(contentsOf: stampFile)) == stamp {
+            return signed
+        }
+        let temporary = folder.appendingPathComponent("\(name).\(UUID().uuidString)")
+        let entitlementsFile = folder.appendingPathComponent("\(name).entitlements")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try FileManager.default.copyItem(at: binary, to: temporary)
+        try entitlements.write(to: entitlementsFile)
+        let (status, log) = try Self.run(["codesign", "--force", "--sign", "-", "--identifier", manifest.id, "--entitlements", entitlementsFile.path, temporary.path])
         if status != 0 { throw Failure(diagnostics: [], log: log) }
+        guard rename(temporary.path, signed.path) == 0 else { throw CocoaError(.fileWriteUnknown) }
+        try stamp.write(to: stampFile)
+        return signed
     }
     #endif
 }

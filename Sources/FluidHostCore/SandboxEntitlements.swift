@@ -14,9 +14,8 @@ public enum SandboxEntitlements {
             switch capability {
             case .network, .oauth:
                 result["com.apple.security.network.client"] = true
-            case .files:
-                result["com.apple.security.files.user-selected.read-write"] = true
-            case .run, .secret, .clipboard, .power, .calendar:
+            case .files, .run, .secret, .clipboard, .power, .calendar:
+                // Files are opened up path by path (`fileExceptions`).
                 // Children inherit the sandbox; secrets, the clipboard, power
                 // assertions and calendar events all go through the host.
                 break
@@ -25,8 +24,41 @@ public enum SandboxEntitlements {
         return result
     }
 
+    /// The `.files` paths as sandbox file exceptions: `~/x` paths relative
+    /// to the home folder, the rest absolute. A path that is a folder (or
+    /// doesn't exist yet) ends in a slash, which covers everything inside it.
+    public static func fileExceptions(for manifest: Manifest, isFile: (String) -> Bool = SandboxEntitlements.isExistingFile) -> (homeRelative: [String], absolute: [String]) {
+        var home: [String] = []
+        var absolute: [String] = []
+        for case .files(let paths) in manifest.capabilities {
+            for path in paths {
+                let expanded = NSString(string: path).expandingTildeInPath
+                let entry = isFile(expanded) || path.hasSuffix("/") ? path : path + "/"
+                if path == "~" || path.hasPrefix("~/") {
+                    home.append(String(entry.dropFirst()))
+                } else if path.hasPrefix("/") {
+                    absolute.append(entry)
+                }
+            }
+        }
+        return (home, absolute)
+    }
+
+    public static func isExistingFile(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && !isDirectory.boolValue
+    }
+
     public static func propertyList(for manifest: Manifest) throws -> Data {
-        try PropertyListSerialization.data(fromPropertyList: entitlements(for: manifest), format: .xml, options: 0)
+        var plist: [String: Any] = entitlements(for: manifest)
+        let exceptions = fileExceptions(for: manifest)
+        if !exceptions.homeRelative.isEmpty {
+            plist["com.apple.security.temporary-exception.files.home-relative-path.read-write"] = exceptions.homeRelative
+        }
+        if !exceptions.absolute.isEmpty {
+            plist["com.apple.security.temporary-exception.files.absolute-path.read-write"] = exceptions.absolute
+        }
+        return try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     }
 
     /// One line per capability, in words, for the install sheet and `fluidctl`.
