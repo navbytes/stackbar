@@ -299,3 +299,15 @@ final class HardeningTests: XCTestCase {
         XCTAssertTrue(limiter.allow("a", now: start.addingTimeInterval(10.1)))
     }
 }
+
+final class InstanceLockTests: XCTestCase {
+    func testOnlyOneHolderAtATime() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("fluid-lock-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: file) }
+        var first = InstanceLock.acquire(file)
+        XCTAssertNotNil(first)
+        XCTAssertNil(InstanceLock.acquire(file), "a second app is refused while the first runs")
+        first = nil
+        XCTAssertNotNil(InstanceLock.acquire(file), "and allowed once it is gone")
+    }
+}

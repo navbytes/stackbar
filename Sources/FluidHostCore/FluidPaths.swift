@@ -44,6 +44,8 @@ public enum FluidPaths {
         #endif
         return dataDirectory.appendingPathComponent("Logs/fluid.log")
     }
+    /// Held by the running app; see `InstanceLock`.
+    public static var instanceLockFile: URL { dataDirectory.appendingPathComponent("fluid.lock") }
     public static var widgetSnapshots: URL { dataDirectory.appendingPathComponent("Widgets", isDirectory: true) }
 
     /// The Keychain on macOS (shared with the app), a 0600 file elsewhere.
