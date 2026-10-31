@@ -59,9 +59,11 @@ final class PluginController: Identifiable {
         let sandbox = model.sandbox
         do {
             let (binary, manifest) = try await Task.detached {
-                let binary = source.pathExtension == "swift" ? try builder.build(source: source).binary : source
-                let manifest = try PluginProcess.readManifest(executable: binary)
-                if sandbox { try builder.sign(binary: binary, manifest: manifest) }
+                let built = source.pathExtension == "swift" ? try builder.build(source: source).binary : source
+                let manifest = try PluginProcess.readManifest(executable: built)
+                // The sandboxed copy is what runs; the manifest was read from
+                // the unsigned build, which has the same code.
+                let binary = sandbox ? try builder.sign(binary: built, manifest: manifest) : built
                 return (binary, manifest)
             }.value
             guard generation == loadGeneration else { return }

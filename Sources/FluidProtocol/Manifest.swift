@@ -51,6 +51,9 @@ public struct Manifest: Codable, Equatable, Sendable {
         for name in secretNames where !Self.isValidSecretName(name) {
             result.append("secret name \"\(name)\" must be 1 to 100 letters, digits, _, - or . (like GITHUB_TOKEN)")
         }
+        for case .files(let paths) in capabilities where paths.contains(where: { !($0 == "~" || $0.hasPrefix("~/") || $0.hasPrefix("/")) }) {
+            result.append("file paths start with ~/ or /, like ~/Notes")
+        }
         for capability in capabilities {
             if case .network(let hosts) = capability, hosts.contains(where: { $0.contains("/") || $0.contains(":") }) {
                 result.append("network hosts are bare domain names (api.github.com, *.example.com), not URLs")
