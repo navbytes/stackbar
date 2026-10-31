@@ -24,6 +24,8 @@ mkdir -p "$APP/Contents/MacOS"
 cp "$BIN/Fluid" "$APP/Contents/MacOS/"
 sed "s/@VERSION@/$VERSION/g" Packaging/Info.plist > "$APP/Contents/Info.plist"
 scripts/embed-fluidkit.sh "$APP" "$BIN"
+mkdir -p "$APP/Contents/Resources"
+cp Packaging/AppIcon.icns "$APP/Contents/Resources/"
 
 codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$APP/Contents/MacOS/fluidctl"
 codesign --force --options runtime --timestamp=none --entitlements Packaging/Fluid.entitlements --sign "$IDENTITY" "$APP"
