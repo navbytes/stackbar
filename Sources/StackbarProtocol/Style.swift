@@ -239,6 +239,8 @@ public struct Border: Codable, Equatable, Sendable {
     }
 }
 
+/// With a background, the background's shape casts the shadow, like a CSS
+/// box shadow; without one, the content does.
 public struct Shadow: Codable, Equatable, Sendable {
     /// Black at 25% when `nil`.
     public var color: HexColor?

@@ -212,7 +212,7 @@ the order written:
 - `.font(size:, weight: .heavy, design: .rounded, monospacedDigit: true)`, `.foreground(paint)`
 - `.padding(8)`, `.padding(horizontal:, vertical:)`, `.frame(width:, height:, fillWidth: true, alignment: .center)`
 - `.background(paint, in: .capsule | .circle | .rectangle | .roundedRectangle(cornerRadius: 12))`, `.border(paint, width:, in:)`
-- `.clipShape(shape)`, `.cornerRadius(12)`, `.shadow(radius:, x:, y:)`, `.opacity(0.5)`, `.animation(.spring)`
+- `.clipShape(shape)`, `.cornerRadius(12)`, `.shadow(radius:, x:, y:)` (cast by the background's shape when there is one), `.opacity(0.5)`, `.animation(.spring)`
 - `.accessibilityLabel("Start")`: give one to every button without text
 - Paints: `.hex("#F28C38", dark: "#FF9F4F")` (always give a dark variant for
   backgrounds), `.role(.accent)`, `.gradient(["#F28C38", "#FFB36B"], angle: 90)`
@@ -227,7 +227,8 @@ the order written:
 - `Stackbar.play(.glass)` plays a system sound (at most 10 a minute).
 
 `stackbarctl render` flags text under 4.5:1 contrast in light or dark mode
-and buttons without text. The menu bar ignores styling so the bar stays
+and buttons without text. `render --png <dir>` draws it on a Mac, and
+`--dark` draws dark mode. The menu bar ignores styling so the bar stays
 legible, but shows symbols, timers and timed rings.
 
 Action ids come from content: `button/<title>`, `toggle/<title>`,
