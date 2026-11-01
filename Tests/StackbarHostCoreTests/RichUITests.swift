@@ -44,5 +44,6 @@ final class RichUITests: XCTestCase {
         let unnamed = ViewNode.tappable(.image(.symbol("gearshape")), action: "button/settings")
         XCTAssertEqual(StyleLint.warnings(unnamed), ["button {button/settings} has no text; give it .accessibilityLabel(...)"])
         XCTAssertEqual(StyleLint.warnings(.tappable(.image(.symbol("gearshape")).styled(Style(accessibilityLabel: "Settings")), action: "button/settings")), [])
+        XCTAssertEqual(StyleLint.warnings(unnamed.styled(Style(accessibilityLabel: "Settings"))), [], "a label outside the button names it too")
     }
 }

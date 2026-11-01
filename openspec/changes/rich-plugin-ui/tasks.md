@@ -15,8 +15,9 @@
 - [ ] 1.12 Look at the Pomodoro panel on a Mac (stackbarctl render --png)
 
 ## Tier 2 spike
-- [ ] 2.1 Build an `.appex` in a container app, ad-hoc signed
-- [ ] 2.2 Register and discover it through ExtensionKit
-- [ ] 2.3 Host its scene in a popover with `EXHostViewController`
-- [ ] 2.4 Sandbox, enablement, latency and memory
-- [ ] 2.5 Write `spike.md` with the go/no-go
+- [x] 2.1 Build an `.appex` in a container app, ad-hoc signed
+- [x] 2.2 Register and discover it through ExtensionKit
+- [x] 2.3 Host its scene in a popover with `EXHostViewController`
+- [x] 2.4 Sandbox, enablement, latency and memory
+- [x] 2.5 Write `spike.md` with the go/no-go (go; one Enable switch per native plugin)
+- [ ] 2.6 Confirm a separate-app extension renders once switched on (one manual click)
