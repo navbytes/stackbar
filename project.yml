@@ -35,7 +35,7 @@ targets:
       properties:
         NSCalendarsFullAccessUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
         NSCalendarsUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
-        NSAppleEventsUsageDescription: Plugins you approve to read what you're working on can see the files you select in Finder.
+        NSAppleEventsUsageDescription: Plugins you approve can see the files you select in Finder, or control the apps they name, like Music.
         CFBundleShortVersionString: "0.11.0"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"

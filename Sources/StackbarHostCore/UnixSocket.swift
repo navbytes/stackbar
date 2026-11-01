@@ -147,11 +147,12 @@ public enum UnixSocket {
             done.signal()
         }.start()
         Thread {
-            while true {
+            while withAutoreleasePool({ () -> Bool in
                 let data = FileHandle.standardInput.availableData
-                if data.isEmpty { break }
+                if data.isEmpty { return false }
                 writeAll(data, to: fd)
-            }
+                return true
+            }) {}
             shutdown(fd, Int32(SHUT_WR))
         }.start()
         done.wait()

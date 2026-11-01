@@ -161,11 +161,13 @@ public final class PluginProcess: @unchecked Sendable {
     private static func drain(_ handle: FileHandle, group: DispatchGroup, onLine: @escaping @Sendable (Data) -> Void) {
         let thread = Thread {
             var buffer = LineBuffer()
-            while true {
+            // A pool per read: see `withAutoreleasePool`.
+            while withAutoreleasePool({ () -> Bool in
                 let chunk = handle.availableData
-                if chunk.isEmpty { break }
+                if chunk.isEmpty { return false }
                 for line in buffer.append(chunk) { onLine(line) }
-            }
+                return true
+            }) {}
             group.leave()
         }
         thread.start()
