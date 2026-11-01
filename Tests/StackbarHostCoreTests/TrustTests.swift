@@ -111,7 +111,7 @@ final class ForkTests: XCTestCase {
 }
 
 final class BundleTests: XCTestCase {
-    let manifest = Manifest(id: "dev.t.bundle", name: "Bundle", version: "1.0.0", capabilities: [.network("api.example.com")])
+    let manifest = Manifest(id: "dev.t.bundle", name: "Bundle", version: "1.0.0", summary: "A bundle.", capabilities: [.network("api.example.com")], minimumStackbar: "0.10.0")
 
     func fakeBundle(source: String = "print(1)", key: String = "AAAA") -> PluginBundle {
         PluginBundle(manifest: manifest, source: source, sourceDigest: SHA256.hex(Data(source.utf8)), publisher: .init(name: "Pub", publicKey: key), signature: "AAAA")

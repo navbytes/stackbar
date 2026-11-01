@@ -311,6 +311,8 @@ Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
 `minimumStackbar: "0.10.0"` names the oldest Stackbar whose StackbarKit the
 source compiles against; a plugin index hides Install on older apps.
 `homepage: "https://..."` links the plugin's README from the store.
+To publish (`stackbarctl sign`, `index build`) a plugin also needs an `x.y.z`
+`version`, a `summary` and a `minimumStackbar`.
 
 ## Loop
 
@@ -322,7 +324,8 @@ source compiles against; a plugin index hides Install on older apps.
    a form's value is an object of its fields).
 4. `stackbar_logs` when something is off. Stray `print` goes to the log.
 
-From a terminal: `stackbarctl build|render|manifest <file.swift>`,
+From a terminal: `stackbarctl build|render|manifest <file.swift>`
+(`manifest <file> --json` prints `{manifest, problems, publishingProblems}` for scripts),
 `stackbarctl render <file> --event <id>`, `stackbarctl commands <file>`,
 `stackbarctl run <file> <command> --arg name=value`,
 `stackbarctl render <file> --command <id> --query <text>`. Outside the app the clipboard, battery
