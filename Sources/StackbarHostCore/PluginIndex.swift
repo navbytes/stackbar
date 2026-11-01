@@ -346,6 +346,16 @@ public final class PluginInstaller: @unchecked Sendable {
         }
     }
 
+    /// Drops the record of where a plugin came from, leaving its file alone
+    /// (the app moves that to the Trash itself).
+    public func forget(_ pluginID: String) throws {
+        try lock.withLock {
+            var records = load()
+            records.removeAll { $0.id == pluginID }
+            try save(records)
+        }
+    }
+
     public func uninstall(_ pluginID: String) throws {
         try lock.withLock {
             var records = load()

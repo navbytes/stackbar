@@ -165,7 +165,13 @@ struct PluginDetail: View {
                     if let summary = manifest.summary { Text(summary) }
                 }
                 LabeledContent("File", value: controller.source.path).textSelection(.enabled)
-                if controller.manifest?.surfaces.contains(.menuBar) == true {
+                Toggle("Turned on", isOn: Binding(get: { controller.isEnabled }, set: { controller.isEnabled = $0 }))
+                if !controller.isEnabled {
+                    Text("\(controller.name) doesn't run, and isn't in the menu bar, the palette or widgets, until you turn it on.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if controller.isEnabled, controller.manifest?.surfaces.contains(.menuBar) == true {
                     Toggle("Show in menu bar", isOn: Binding(get: { !controller.hiddenFromMenuBar }, set: { controller.hiddenFromMenuBar = !$0 }))
                     if controller.hiddenFromMenuBar {
                         Text("Open its panel from the command palette" + (controller.manifest?.hotkey.map { " or with \($0)" } ?? "") + ".")
@@ -266,6 +272,8 @@ struct StoreView: View {
                             ForEach(group.entries) { entry in
                                 StoreRow(entry: entry, indexURL: catalog.source.url, state: state(of: entry)) {
                                     Task { await install(entry, from: catalog) }
+                                } uninstall: {
+                                    Task { await uninstall(entry) }
                                 }
                             }
                         }
@@ -296,7 +304,7 @@ struct StoreView: View {
 
     private func state(of entry: PluginIndex.Entry) -> StoreRow.Availability {
         if let needed = entry.requiredStackbar() { return .needsStackbar(needed) }
-        if let record = model.installer.installed.first(where: { $0.id == entry.id }) {
+        if let record = model.installedPlugins.first(where: { $0.id == entry.id }) {
             return entry.isNewer(than: record.version) ? .update(from: record.version) : .installed
         }
         return model.controller(for: entry.id) != nil ? .installed : .available
@@ -305,6 +313,7 @@ struct StoreView: View {
     private func load() async {
         loading = true
         defer { loading = false }
+        model.refreshInstalled()
         let result = await PluginStore.load(model.storeSources)
         catalogs = result.catalogs
         status = result.problems.isEmpty ? nil : result.problems.joined(separator: "\n")
@@ -316,10 +325,24 @@ struct StoreView: View {
             let bundle = try await PluginIndex.bundle(for: entry, indexURL: catalog.source.url)
             let file = try model.installer.install(bundle)
             if let controller = model.controller(for: entry.id) { controller.reload() } else { model.add(file) }
+            model.refreshInstalled()
             status = "Installed \(entry.name) \(entry.version). Open it from the menu bar to allow what it asks for."
         } catch {
             status = "Could not install \(entry.name): \(error)"
         }
+    }
+}
+
+extension StoreView {
+    private func uninstall(_ entry: PluginIndex.Entry) async {
+        if let controller = model.controller(for: entry.id) {
+            await model.uninstall(controller)
+        } else if let record = model.installedPlugins.first(where: { $0.id == entry.id }) {
+            try? FileManager.default.trashItem(at: URL(fileURLWithPath: record.file), resultingItemURL: nil)
+            try? model.installer.forget(entry.id)
+            model.refreshInstalled()
+        }
+        status = "Moved \(entry.name) to the Trash."
     }
 }
 
@@ -335,6 +358,7 @@ struct StoreRow: View {
     let indexURL: URL
     let state: Availability
     let install: () -> Void
+    let uninstall: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -360,8 +384,13 @@ struct StoreRow: View {
             Spacer()
             switch state {
             case .available: Button("Install", action: install)
-            case .installed: Button("Installed", action: {}).disabled(true)
-            case .update(let from): Button("Update", action: install).help("Installed: \(from)")
+            case .installed:
+                Button("Uninstall", role: .destructive, action: uninstall)
+            case .update(let from):
+                VStack(alignment: .trailing) {
+                    Button("Update", action: install).help("Installed: \(from)")
+                    Button("Uninstall", role: .destructive, action: uninstall).buttonStyle(.link)
+                }
             case .needsStackbar(let version): Text("Needs Stackbar \(version)").font(.caption).foregroundStyle(.secondary)
             }
         }
