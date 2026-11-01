@@ -30,6 +30,7 @@ struct GeneralSettings: View {
     @Bindable var model: AppModel
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @AppStorage(PluginWindows.dockIconKey) private var dockIcon = true
 
     var body: some View {
         Form {
@@ -37,6 +38,8 @@ struct GeneralSettings: View {
                 Toggle("Open Stackbar at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
                 if let loginError { Text(loginError).font(.caption).foregroundStyle(.red) }
+                Toggle("Show in the Dock while a plugin window is open", isOn: $dockIcon)
+                    .onChange(of: dockIcon) { AppDelegate.shared?.windows.updatePresence() }
                 LabeledContent("Command palette", value: "⌃⌥Space")
             }
             Section("Agents") {

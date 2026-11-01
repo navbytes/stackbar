@@ -53,6 +53,13 @@
 - [x] 3e.2 Stay Awake: stay awake while an external display or a VPN is connected, or while a download runs (over 100 KB/s, until quiet for 2 minutes), with a download speed chart
 - [x] 3e.3 A pasting plugin's hotkey (one with the clipboard capability) opens its panel at the text cursor, through Accessibility; the menu bar when the app doesn't report a caret
 
+## 3f. Windows that don't get lost
+
+- [x] 3f.1 Stackbar shows in the Dock and ⌘Tab while a plugin window or Settings is open, back to menu-bar only when the last closes; a General setting turns it off. A main menu (Edit, Window) comes with it
+- [x] 3f.2 Clicking a plugin's icon brings its buried or minimized window to the front; with the window in front, or a right click, opens the panel
+- [x] 3f.3 The panel's window button reads "Show Window" while the window is open
+- [x] 3f.4 A per-window "Keep on top" pin, remembered per plugin
+
 ## 4. On a Mac
 
 - [ ] 4.1 The app compiles with `MacSystem` (self-hosted runner)
@@ -68,4 +75,6 @@
 - [ ] 4.11 Full-screen alert appears over a full-screen app; Join opens the call; Esc dismisses
 - [ ] 4.12 PR Cockpit inbox with a classic token; mark as read clears it on github.com
 - [ ] 4.13 Stay Awake holds while a display is plugged in, while a VPN is up and during a large download, and lets go after
+- [x] 4.15 Open PR Cockpit's window, switch apps: ⌘Tab and the Dock find it; closing it removes the Dock icon; the icon click brings it back
+- [x] 4.16 Pin a plugin window: it stays above Safari after you click into Safari; unpinning lets it fall behind; the pin is remembered next time
 - [ ] 4.14 ⌘⇧V in TextEdit, Notes and Xcode opens Clipboard History under the cursor; in a browser it falls back to the menu bar

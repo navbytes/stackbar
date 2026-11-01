@@ -11,6 +11,7 @@ import StackbarUI
 @MainActor
 final class StatusItemController: NSObject, NSPopoverDelegate {
     let controller: PluginController
+    private let windows: PluginWindows
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private let hosting: PassthroughHostingView<StatusItemContent>
@@ -35,6 +36,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     init(controller: PluginController, model: AppModel, windows: PluginWindows) {
         self.controller = controller
+        self.windows = windows
         hosting = PassthroughHostingView(rootView: StatusItemContent(controller: controller))
         super.init()
         statusItem.autosaveName = "stackbar." + controller.source.lastPathComponent
@@ -176,6 +178,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         }
         if popover.isShown {
             popover.close()
+        } else if plainClick, let window = windows.buried(controller) {
+            // The icon that opened a window brings it back; click again
+            // (with the window in front), or right-click, for the panel.
+            windows.show(window)
         } else {
             showPanel()
         }

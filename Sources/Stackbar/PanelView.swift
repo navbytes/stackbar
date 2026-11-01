@@ -126,13 +126,14 @@ struct PanelFooter: View {
             Text(controller.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             Spacer()
             if controller.manifest?.surfaces.contains(.window) == true {
+                let isOpen = windows.isOpen(controller.pluginID)
                 Button {
                     windows.open(controller)
                 } label: {
-                    Image(systemName: "macwindow")
+                    Image(systemName: isOpen ? "macwindow.on.rectangle" : "macwindow")
                 }
                 .buttonStyle(.borderless)
-                .help("Open in a Window")
+                .help(isOpen ? "Show Window" : "Open in a Window")
             }
             Button {
                 controller.refresh()
