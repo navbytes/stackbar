@@ -61,6 +61,9 @@ final class PluginController: Identifiable {
     private(set) var missingSecrets: [String] = []
     /// Counts popover openings, so searchable lists reset and take focus.
     private(set) var panelShownCount = 0
+    /// Goes up each time remote images the trees name finish loading, so
+    /// the surfaces that show them draw again.
+    private(set) var imageGeneration = 0
 
     @ObservationIgnored private(set) var supervisor: PluginSupervisor?
     @ObservationIgnored private weak var model: AppModel?
@@ -276,6 +279,28 @@ final class PluginController: Identifiable {
         return model.services.audit.report(for: manifest).lines
     }
 
+    /// Loads a tree's remote images for the panel, window and settings
+    /// surfaces, from the domains the user approved the plugin to reach.
+    var remoteImages: (@Sendable (String) -> Data?)? {
+        _ = imageGeneration
+        guard let images = model?.services.images else { return nil }
+        return { images.data(for: $0) }
+    }
+
+    private func loadImages(_ root: ViewNode) {
+        guard let manifest, let images = model?.services.images, !root.imageURLs.isEmpty else { return }
+        let pending = Set(pendingApproval.flatMap { capability -> [String] in
+            if case .network(let hosts) = capability { return hosts }
+            return []
+        })
+        let hosts = manifest.networkHosts.filter { !pending.contains($0) }
+        let pluginID = manifest.id
+        Task { [weak self] in
+            let loaded = await images.load(root, pluginID: pluginID, allowedHosts: hosts)
+            if !loaded.isEmpty { self?.imageGeneration += 1 }
+        }
+    }
+
     private func apply(_ update: PluginSupervisor.Update) {
         switch update {
         case .state(let newState):
@@ -286,13 +311,16 @@ final class PluginController: Identifiable {
         case .render(.panel, let root):
             panel = root
             model?.panelChanged(self)
+            loadImages(root)
         case .render(.window, let root):
             window = root
+            loadImages(root)
         case .render(.widget, let root):
             widget = root
             model?.widgetChanged(self)
         case .render(.settings, let root):
             settings = root
+            loadImages(root)
         case .menuBarClick(let click):
             menuBarClick = click
         case .tools(let specs):

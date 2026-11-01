@@ -25,7 +25,7 @@ public enum TreeTextRenderer {
         case .stack(.horizontal, _, _, let children):
             let parts = children.map { lines($0, depth: 0, showActions: showActions, now: now).joined(separator: " ") }.filter { !$0.isEmpty }
             return [pad + parts.joined(separator: "  ")]
-        case .stack(.vertical, _, _, let children), .stack(.depth, _, _, let children):
+        case .stack(.vertical, _, _, let children), .stack(.depth, _, _, let children), .grid(_, _, let children):
             return children.flatMap { lines($0, depth: depth, showActions: showActions, now: now) }
         case .list(let searchable, let children):
             let header = pad + (searchable ? "List (searchable)" : "List")
@@ -110,6 +110,8 @@ public enum TreeTextRenderer {
             return []
         case .image(.symbol(let symbol)):
             return [pad + "[\(symbol)]"]
+        case .image(.url):
+            return [pad + "[image]"]
         case .timer(let range, let countsDown):
             return [pad + range.clock(at: now, countsDown: countsDown)]
         case .tappable(let content, let action):

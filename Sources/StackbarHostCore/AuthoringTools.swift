@@ -9,7 +9,9 @@ import StackbarProtocol
 /// followed by a render shows the new state. Rendering a file whose source
 /// changed rebuilds and restarts it.
 public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
-    public typealias PNGRenderer = @Sendable (ViewNode, Surface) async -> Data?
+    /// Draws a surface; the closure it gets loads the remote images the
+    /// tree names, fetched beforehand.
+    public typealias PNGRenderer = @Sendable (ViewNode, Surface, @escaping @Sendable (String) -> Data?) async -> Data?
 
     private let loader: PluginLoader
     private let services: HostServices
@@ -194,8 +196,12 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
         case "png":
             guard let png else { return .text("PNG rendering needs macOS", isError: true) }
             var content: [MCPToolResult.Content] = []
+            let manifest = await session.manifest
+            let images = services.images
             for surface in wanted {
-                guard let node = views[surface], let data = await png(node, surface) else { continue }
+                guard let node = views[surface] else { continue }
+                if let manifest { await images.load(node, pluginID: manifest.id, allowedHosts: manifest.networkHosts) }
+                guard let data = await png(node, surface, { images.data(for: $0) }) else { continue }
                 content.append(.text(surface.rawValue))
                 content.append(.image(data, mimeType: "image/png"))
             }

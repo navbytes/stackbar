@@ -291,24 +291,45 @@ public struct Card: StackbarView {
 /// awake state, the next meeting): the theme's wash, rounded, padded. One per
 /// panel, right under the header.
 public struct HeroCard: StackbarView {
+    /// How the stage is lit.
+    public enum Look: Sendable {
+        /// The theme's wash.
+        case tint
+        /// The wash with a soft light of the hue in the top corner.
+        /// Stackbar 0.14.0.
+        case glow
+        /// The hue itself, deepening on a diagonal, with text in `onSolid`.
+        /// Stackbar 0.14.0.
+        case vivid
+    }
+
     var theme: Theme
+    var look: Look
     var alignment: StackAlignment?
     var spacing: Double
     var content: ViewContent
 
-    public init(theme: Theme, alignment: StackAlignment? = nil, spacing: Double = Space.m, @ViewBuilder content: () -> ViewContent) {
+    public init(theme: Theme, look: Look = .tint, alignment: StackAlignment? = nil, spacing: Double = Space.m, @ViewBuilder content: () -> ViewContent) {
         self.theme = theme
+        self.look = look
         self.alignment = alignment
         self.spacing = spacing
         self.content = content()
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] {
-        VStack(alignment: alignment, spacing: spacing) { content }
+        let shape = ShapeKind.roundedRectangle(cornerRadius: Radius.large + 2)
+        let stage = VStack(alignment: alignment, spacing: spacing) { content }
             .padding(Space.l)
             .frame(fillWidth: true, alignment: alignment == .center ? .center : .leading)
-            .background(theme.tintPaint, in: .roundedRectangle(cornerRadius: Radius.large + 2))
-            .resolve(in: context)
+        switch look {
+        case .tint:
+            return stage.background(theme.tintPaint, in: shape).resolve(in: context)
+        case .glow:
+            return stage.background(theme.glow, in: shape).background(theme.tintPaint, in: shape).resolve(in: context)
+        case .vivid:
+            return stage.foreground(theme.onSolidPaint).background(theme.vivid, in: shape).resolve(in: context)
+        }
     }
 }
 
@@ -655,6 +676,9 @@ public struct IconButton: StackbarView {
         case tinted
         /// The hue's fill: the main action.
         case filled
+        /// White on a light veil, for controls over album art, a `Backdrop`
+        /// or a `GlassBar`. Protocol 12 looks; Stackbar 0.14.0.
+        case onMedia
     }
 
     var symbol: String
@@ -681,6 +705,7 @@ public struct IconButton: StackbarView {
         case .plain: (fill, ink) = (.raised, .role(.primary))
         case .tinted: (fill, ink) = (theme.tintPaint, theme.textPaint)
         case .filled: (fill, ink) = (theme.gradient, theme.onSolidPaint)
+        case .onMedia: (fill, ink) = (.hex("#FFFFFF24"), .onMedia)
         }
         return Button(key: key ?? label, action: action) {
             Image(systemName: symbol)
@@ -689,6 +714,7 @@ public struct IconButton: StackbarView {
                 .frame(width: size, height: size)
                 .background(fill, in: .circle)
         }
+        .hover(scale: 1.08, lift: false)
         .accessibilityLabel(label)
         .resolve(in: context)
     }
@@ -791,7 +817,12 @@ public struct TagChips: StackbarView {
                 Chip(tag, theme: theme, selected: selection == tag, key: "tag/\(tag)") { try await onSelect(tag) }
             }
             if !rest.isEmpty {
-                Picker("More", options: rest, selection: selection.flatMap { rest.contains($0) ? $0 : nil }, key: "tag/More") { try await onSelect($0) }
+                // No label: the menu itself reads "More…" until a tag in it is picked.
+                let more = "More…"
+                Picker("", options: [more] + rest, selection: selection.flatMap { rest.contains($0) ? $0 : nil } ?? more, key: "tag/More") { choice in
+                    if choice != more { try await onSelect(choice) }
+                }
+                .frame(width: 96)
             }
             Spacer()
         }

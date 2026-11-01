@@ -348,14 +348,15 @@ public struct Chart: StackbarView {
 
     /// `labels` name the points (x-axis labels, or donut slices), `unit`
     /// follows the values ("h"), `goal` draws a target line, and
-    /// `highlight` emphasizes one point (today, say).
-    public init(_ label: String? = nil, values: [Double], kind: ChartKind = .line, role: Role = .accent, labels: [String]? = nil, unit: String? = nil, goal: Double? = nil, highlight: Int? = nil) {
+    /// `highlight` emphasizes one point (today, say). `compact` draws the
+    /// marks alone, filling the frame you give it: a sparkline (protocol 12).
+    public init(_ label: String? = nil, values: [Double], kind: ChartKind = .line, role: Role = .accent, labels: [String]? = nil, unit: String? = nil, goal: Double? = nil, highlight: Int? = nil, compact: Bool = false) {
         self.label = label
         self.values = values
         self.kind = kind
         self.role = role
-        if labels != nil || unit != nil || goal != nil || highlight != nil {
-            options = ChartOptions(labels: labels, unit: unit, goal: goal, highlight: highlight)
+        if labels != nil || unit != nil || goal != nil || highlight != nil || compact {
+            options = ChartOptions(labels: labels, unit: unit, goal: goal, highlight: highlight, compact: compact ? true : nil)
         }
     }
 

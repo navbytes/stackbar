@@ -13,7 +13,9 @@ public enum StackbarProtocolVersion {
     /// 10 added paste options (restoring the clipboard, the cursor) and storage grants.
     /// 11 added styling, shapes, images, timers, tappable content, layered
     /// stacks, segmented pickers, ring and timed progress, and system sounds.
-    public static let current = 11
+    /// 12 added radial, angular and glass paints, remote images, blur, symbol
+    /// effects, numeric transitions, hover and grids.
+    public static let current = 12
 }
 
 /// Host → plugin.

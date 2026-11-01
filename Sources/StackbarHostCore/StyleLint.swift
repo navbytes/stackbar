@@ -36,7 +36,9 @@ public enum StyleLint {
                     }
                 }
             }
-            if case .color(let color)? = style.background?.paint {
+            // What is inside sees this background: a color, or a gradient's
+            // first stop (its lightest or darkest end is checked above).
+            if let color = style.background.flatMap({ colors(of: $0.paint).first }) {
                 backdrop = HexColor(opaque(color.light, over: backdrop, dark: false), dark: opaque(color.hex(dark: true), over: backdrop, dark: true))
             }
         case .tappable(let content, let action) where !labeled && content.plainText.isEmpty:
@@ -53,12 +55,10 @@ public enum StyleLint {
     static let panelBackground = (light: "#E2E2E2", dark: "#363636")
 
     /// The hex colors a background shows: one, or each stop of a gradient.
+    /// A material shows what is behind it, so it is checked as the backdrop
+    /// it sits on (the panel when nothing else is behind).
     private static func colors(of paint: Paint) -> [HexColor] {
-        switch paint {
-        case .color(let color): return [color]
-        case .linearGradient(let colors, _): return colors
-        case .role: return []
-        }
+        paint.stops
     }
 
     /// A `#RRGGBBAA` color as it looks over `backdrop`, or over the panel.

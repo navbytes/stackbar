@@ -137,6 +137,7 @@ struct PluginPage: View {
                     Group {
                         if let node = controller.settings {
                             NodeView(node: node, send: controller.send)
+                                .environment(\.stackbarRemoteImage, controller.remoteImages)
                         } else if controller.state == .running {
                             Text("\(controller.name) has no settings yet.").foregroundStyle(.secondary)
                         } else {

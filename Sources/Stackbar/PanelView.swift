@@ -33,6 +33,7 @@ struct PanelView: View {
                 .environment(\.stackbarScrollTo, { key in proxy.scrollTo(key) })
                 .environment(\.stackbarShownCount, controller.panelShownCount)
                 .environment(\.stackbarImageData, AppModel.previewImages(for: controller))
+                .environment(\.stackbarRemoteImage, controller.remoteImages)
             }
             Divider()
             PanelFooter(controller: controller, model: model, windows: windows)

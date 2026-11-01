@@ -88,7 +88,7 @@ struct MenuBarNode: View {
             Image(systemName: symbol)
         case .timer(let range, let countsDown):
             Text(timerInterval: range.start...range.end, countsDown: countsDown).font(.system(size: 13).monospacedDigit())
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable:
+        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable, .grid, .image(.url):
             EmptyView()
         }
     }

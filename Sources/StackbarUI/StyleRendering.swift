@@ -6,45 +6,87 @@ import SwiftUI
 import StackbarProtocol
 
 /// Applies a `Style` in its fixed order: font and foreground, padding,
-/// frame, background, border, clip, shadow, opacity, then the accessibility
-/// label and animation. Font and foreground also go into the environment,
+/// frame, background, border, clip, shadow, blur, opacity, hover, then the
+/// accessibility label and animation. Font and foreground also go into the environment,
 /// where `NodeView` uses them in place of text styles and role colors.
 struct StyleModifier: ViewModifier {
     let style: Style
     /// What the animation watches: the styled child.
     let animationValue: ViewNode
+    /// False in widgets and snapshots, which draw no hover.
+    var interactive = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.stackbarSnapshot) private var snapshot
 
     func body(content: Content) -> some View {
-        content
+        // In three steps, each type-erased, so the chain stays small enough
+        // for the type checker.
+        finish(decorate(environment(content)))
+    }
+
+    /// Font, foreground, symbol style and numeric transitions.
+    private func environment(_ content: Content) -> AnyView {
+        AnyView(content
             .transformEnvironment(\.stackbarFont) { if let font = style.font { $0 = font } }
             .transformEnvironment(\.font) { if let font = style.font { $0 = font.font(for: .body) } }
             .transformEnvironment(\.stackbarForeground) { if let paint = style.foreground { $0 = paint } }
-            .ifLet(style.foreground) { $0.foregroundStyle($1.shapeStyle) }
+            .transformEnvironment(\.stackbarSymbol) { if let symbol = style.symbol { $0 = symbol } }
+            .ifLet(style.numericTransition) { view, rolls in view.contentTransition(rolls ? .numericText() : .identity) }
+            .ifLet(style.foreground) { $0.foregroundStyle($1.shapeStyle) })
+    }
+
+    /// Padding, frame, background, border and clip.
+    private func decorate(_ view: AnyView) -> AnyView {
+        AnyView(view
             .ifLet(style.padding) { $0.padding(SwiftUI.EdgeInsets(top: $1.top, leading: $1.leading, bottom: $1.bottom, trailing: $1.trailing)) }
             .ifLet(style.frame) { view, frame in
                 view
                     .frame(width: frame.width.map { CGFloat($0) }, height: frame.height.map { CGFloat($0) }, alignment: frame.alignment?.alignment ?? .center)
                     .frame(maxWidth: frame.fillWidth == true ? .infinity : nil, maxHeight: frame.fillHeight == true ? .infinity : nil, alignment: frame.alignment?.alignment ?? .center)
             }
-            .ifLet(style.background) { view, fill in view.background { fill.shape.view(fill: fill.paint.shapeStyle, stroke: nil, lineWidth: 0) } }
+            .ifLet(style.background) { view, fill in Self.fill(view, fill, snapshot: snapshot) }
             .ifLet(style.border) { view, border in view.overlay { border.shape.view(fill: nil, stroke: border.paint.shapeStyle, lineWidth: border.width) } }
-            .ifLet(style.clip) { $0.clipShape($1.anyShape) }
-            .ifLet(style.shadow) { view, shadow in
-                let color = shadow.color?.color ?? .black.opacity(0.25)
-                if let fill = style.background {
-                    // Cast by the background shape, like a box shadow, so the
-                    // border and content inside are not drawn twice.
-                    view.background {
-                        fill.shape.anyShape.fill(color).offset(x: shadow.x, y: shadow.y).blur(radius: shadow.radius)
-                    }
-                } else {
-                    view.shadow(color: color, radius: shadow.radius, x: shadow.x, y: shadow.y)
-                }
+            .ifLet(style.clip) { $0.clipShape($1.anyShape) })
+    }
+
+    /// A background: Liquid Glass as a glass effect, any other paint drawn
+    /// in its shape behind the view. A snapshot draws glass as a light veil
+    /// with a rim, since `ImageRenderer` draws no glass effect at all.
+    private static func fill(_ view: some View, _ fill: Fill, snapshot: Bool) -> AnyView {
+        if case .material(.glass) = fill.paint {
+            if snapshot {
+                return AnyView(view.background {
+                    fill.shape.view(fill: AnyShapeStyle(Color.white.opacity(0.16)), stroke: AnyShapeStyle(Color.white.opacity(0.28)), lineWidth: 0.5)
+                })
             }
-            .ifLet(style.opacity) { $0.opacity($1) }
+            return AnyView(view.glassEffect(.regular, in: fill.shape.anyShape))
+        }
+        return AnyView(view.background { fill.shape.view(fill: fill.paint.shapeStyle, stroke: nil, lineWidth: 0) })
+    }
+
+    /// Shadow, blur, opacity, hover, the accessibility label and animation.
+    private func finish(_ view: AnyView) -> AnyView {
+        let hoverShape = style.background?.shape ?? style.clip ?? .roundedRectangle(cornerRadius: 8)
+        let motion = style.animation ?? (style.numericTransition == true ? .spring : nil)
+        return AnyView(view
+            .ifLet(style.shadow) { view, shadow in Self.cast(view, shadow, background: style.background) }
+            .ifLet(style.blur) { view, radius in view.blur(radius: radius, opaque: false) }
+            .ifLet(style.opacity) { view, value in view.opacity(value) }
+            .ifLet(style.hover) { view, hover in view.modifier(HoverModifier(hover: hover, shape: hoverShape, enabled: interactive)) }
             .ifLet(style.accessibilityLabel) { $0.accessibilityElement(children: .combine).accessibilityLabel($1) }
-            .ifLet(style.animation) { view, motion in view.animation(reduceMotion ? nil : motion.animation, value: animationValue) }
+            .ifLet(motion) { view, motion in view.animation(reduceMotion ? nil : motion.animation, value: animationValue) })
+    }
+
+    /// With a background, its shape casts the shadow, like a box shadow, so
+    /// the border and content inside are not drawn twice.
+    private static func cast(_ view: some View, _ shadow: Shadow, background: Fill?) -> AnyView {
+        let color = shadow.color?.color ?? .black.opacity(0.25)
+        if let fill = background {
+            return AnyView(view.background {
+                fill.shape.anyShape.fill(color).offset(x: shadow.x, y: shadow.y).blur(radius: shadow.radius)
+            })
+        }
+        return AnyView(view.shadow(color: color, radius: shadow.radius, x: shadow.x, y: shadow.y))
     }
 }
 
@@ -116,7 +158,9 @@ extension Paint {
         switch self {
         case .role(let role): return role.color
         case .color(let color): return color.color
-        case .linearGradient(let colors, _): return colors.first?.color ?? .accentColor
+        case .linearGradient(let colors, _), .radialGradient(let colors, _, _, _), .angularGradient(let colors, _):
+            return colors.first?.color ?? .accentColor
+        case .material: return .secondary
         }
     }
 
@@ -130,6 +174,27 @@ extension Paint {
             let radians = angle * .pi / 180
             let dx = cos(radians) / 2, dy = sin(radians) / 2
             return AnyShapeStyle(LinearGradient(colors: colors.map(\.color), startPoint: UnitPoint(x: 0.5 - dx, y: 0.5 - dy), endPoint: UnitPoint(x: 0.5 + dx, y: 0.5 + dy)))
+        case .radialGradient(let colors, let x, let y, let radius):
+            return AnyShapeStyle(RadialGradient(colors: colors.map(\.color), center: UnitPoint(x: x, y: y), startRadius: 0, endRadius: max(radius, 1)))
+        case .angularGradient(let colors, let angle):
+            // Back to the first color at the end, so a full ring has no seam.
+            let stops = colors.map(\.color)
+            return AnyShapeStyle(AngularGradient(colors: stops, center: .center, startAngle: .degrees(angle), endAngle: .degrees(angle + 360)))
+        case .material(let material):
+            return material.shapeStyle
+        }
+    }
+}
+
+extension MaterialKind {
+    /// The system material; glass draws as one where it can't be a glass
+    /// effect (a shape's fill, a border).
+    var shapeStyle: AnyShapeStyle {
+        switch self {
+        case .ultraThin: return AnyShapeStyle(.ultraThinMaterial)
+        case .thin: return AnyShapeStyle(.thinMaterial)
+        case .regular, .glass: return AnyShapeStyle(.regularMaterial)
+        case .thick: return AnyShapeStyle(.thickMaterial)
         }
     }
 }

@@ -28,6 +28,12 @@ extension EnvironmentValues {
     @Entry var stackbarFont: FontSpec? = nil
     /// A `styled` foreground, used in place of role colors.
     @Entry var stackbarForeground: Paint? = nil
+    /// A `styled` symbol style, used by SF Symbol images inside.
+    @Entry var stackbarSymbol: SymbolStyle? = nil
+    /// The bytes of a remote image (`ImageSource.url`) the host has fetched
+    /// for this plugin, or `nil` while it hasn't. Set by the app and by
+    /// `Snapshot`.
+    @Entry public var stackbarRemoteImage: (@Sendable (String) -> Data?)? = nil
     /// Drawing for `Snapshot`: AppKit-backed controls (text fields, pickers)
     /// don't render off screen, so they draw as SwiftUI look-alikes.
     @Entry public var stackbarSnapshot: Bool = false
@@ -44,6 +50,7 @@ public struct NodeView: View {
     @Environment(\.stackbarSnapshot) private var snapshot
     @Environment(\.stackbarFont) private var font
     @Environment(\.stackbarForeground) private var foreground
+    @Environment(\.stackbarSymbol) private var symbolStyle
 
     public init(node: ViewNode, send: @escaping SendAction) {
         self.node = node
@@ -102,9 +109,9 @@ public struct NodeView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let label { Text(label).font(.caption) }
                     if case .ring(let lineWidth) = style {
-                        RingView(fraction: fraction, paint: tint(role), lineWidth: lineWidth ?? 4)
+                        RingView(fraction: fraction, paint: tint(role), lineWidth: lineWidth ?? 4, track: track(0.2))
                     } else {
-                        BarView(fraction: fraction, paint: tint(role))
+                        BarView(fraction: fraction, paint: tint(role), track: track(0.25))
                     }
                 }
                 .accessibilityElement(children: .combine)
@@ -138,6 +145,7 @@ public struct NodeView: View {
             .disabled(readOnly)
         case .slider(let title, let value, let low, let high, let step, let action):
             SliderNodeView(title: title, value: value, range: low...max(high, low), step: step, action: action, send: send)
+                .tint(foreground?.flatColor)
                 .disabled(readOnly)
         case .link(let title, let url):
             if let destination = URL(string: url) {
@@ -155,11 +163,15 @@ public struct NodeView: View {
             FormNodeView(form: form, send: send)
                 .disabled(readOnly)
         case .styled(let child, let style):
-            NodeView(node: child, send: send).modifier(StyleModifier(style: style, animationValue: child))
+            NodeView(node: child, send: send).modifier(StyleModifier(style: style, animationValue: child, interactive: !readOnly && !snapshot))
         case .shape(let shape):
             shape.kind.view(fill: (shape.fill ?? (shape.stroke == nil ? foreground ?? .role(.primary) : nil))?.shapeStyle, stroke: shape.stroke?.shapeStyle, lineWidth: shape.lineWidth ?? 1)
         case .image(.symbol(let symbol)):
-            Image(systemName: symbol)
+            SymbolView(name: symbol, style: symbolStyle)
+        case .image(.url(let url, let placeholder)):
+            RemoteImageView(url: url, placeholder: placeholder)
+        case .grid(let columns, let spacing, let children):
+            GridNodeView(columns: columns, spacing: spacing, children: children, send: send)
         case .timer(let range, let countsDown):
             Text(timerInterval: range.start...range.end, countsDown: countsDown)
                 .font(textFont(.body))
@@ -180,6 +192,20 @@ public struct NodeView: View {
 
     /// A styled foreground when one is set, else the role's color.
     private func tint(_ role: Role) -> AnyShapeStyle { foreground?.shapeStyle ?? AnyShapeStyle(role.color) }
+
+    /// A progress track: a faint copy of the foreground, so a bar styled
+    /// white on a photo keeps a visible track and a gradient ring sits on
+    /// its own hue. A gradient's track is its last stop, a little fainter.
+    private func track(_ opacity: Double) -> Color {
+        switch foreground {
+        case .color(let color):
+            return color.color.opacity(opacity)
+        case .linearGradient(let colors, _), .radialGradient(let colors, _, _, _), .angularGradient(let colors, _):
+            return (colors.last?.color ?? .secondary).opacity(opacity * 0.75)
+        default:
+            return .secondary.opacity(opacity)
+        }
+    }
 }
 
 /// Children of a stack or section, in order.
@@ -214,10 +240,13 @@ struct ListNodeView: View {
     @Environment(\.stackbarReadOnly) private var readOnly
     @Environment(\.stackbarScrollTo) private var scrollTo
     @Environment(\.stackbarShownCount) private var shownCount
+    @Environment(\.stackbarSnapshot) private var snapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if searchable {
+            if searchable && snapshot {
+                SnapshotField(placeholder: "Filter", text: "").padding(.bottom, 4)
+            } else if searchable {
                 TextField("Filter", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .padding(.bottom, 4)
@@ -321,6 +350,7 @@ struct ListNodeView: View {
 struct PreviewPane: View {
     let preview: RowPreview
     @Environment(\.stackbarImageData) private var imageData
+    @Environment(\.stackbarSnapshot) private var snapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -335,13 +365,19 @@ struct PreviewPane: View {
             }
             #endif
             if let text = preview.text, !text.isEmpty {
-                ScrollView {
-                    Text(text)
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                // ImageRenderer draws a scroll view empty, so a snapshot shows
+                // the first lines instead.
+                Group {
+                    if snapshot {
+                        Text(text).lineLimit(8)
+                    } else {
+                        ScrollView {
+                            Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
                 }
-                .frame(maxHeight: 140)
+                .font(.system(.caption, design: .monospaced))
+                .frame(maxWidth: .infinity, maxHeight: 140, alignment: .topLeading)
                 .padding(6)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
             }
@@ -551,6 +587,47 @@ struct ChartNodeView: View {
     }
 
     var body: some View {
+        if options.compact == true, kind != .donut, kind != .heatmap {
+            sparkline
+        } else {
+            full
+        }
+    }
+
+    /// Marks alone, filling the frame, with the latest value dotted.
+    private var sparkline: some View {
+        Chart {
+            ForEach(points) { point in
+                if kind == .bar {
+                    BarMark(x: .value("Point", String(point.index)), y: .value("Value", point.value))
+                        .foregroundStyle(point.index == values.count - 1 ? main : main.opacity(0.45))
+                        .cornerRadius(2)
+                } else {
+                    if kind == .area {
+                        AreaMark(x: .value("Point", point.index), y: .value("Value", point.value))
+                            .foregroundStyle(LinearGradient(colors: [main.opacity(0.4), main.opacity(0)], startPoint: .top, endPoint: .bottom))
+                            .interpolationMethod(.monotone)
+                    }
+                    LineMark(x: .value("Point", point.index), y: .value("Value", point.value))
+                        .foregroundStyle(main)
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .interpolationMethod(.monotone)
+                }
+            }
+            if kind != .bar, let last = points.last {
+                PointMark(x: .value("Point", last.index), y: .value("Value", last.value))
+                    .foregroundStyle(main)
+                    .symbolSize(28)
+            }
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartLegend(.hidden)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text([label, summary].compactMap { $0 }.joined(separator: ", ")))
+    }
+
+    private var full: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 if let label { Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary) }
@@ -805,12 +882,13 @@ extension TextStyle {
 struct BarView: View {
     var fraction: Double
     var paint: AnyShapeStyle
+    var track: Color = .secondary.opacity(0.25)
 
     var body: some View {
         let clamped = min(max(fraction.isFinite ? fraction : 0, 0), 1)
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.secondary.opacity(0.25))
+                Capsule().fill(track)
                 Capsule().fill(paint).frame(width: proxy.size.width * clamped)
             }
         }
@@ -829,11 +907,30 @@ enum AppIcons {
     static func icon(_ bundleID: String) -> NSImage? {
         if let cached = cache[bundleID] { return cached }
         let image = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { url in
-            let icon = NSWorkspace.shared.icon(forFile: url.path)
-            icon.size = NSSize(width: 32, height: 32)
-            return icon
+            flattened(NSWorkspace.shared.icon(forFile: url.path))
         }
         cache[bundleID] = image
+        return image
+    }
+
+    /// The icon drawn once into a plain bitmap. Workspace icons are lazy,
+    /// many-sized images that `ImageRenderer` draws as a grey veil over the
+    /// whole snapshot; a bitmap draws like any other picture.
+    private static func flattened(_ icon: NSImage) -> NSImage {
+        let points = NSSize(width: 32, height: 32)
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: bitmap) else {
+            icon.size = points
+            return icon
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        icon.draw(in: NSRect(x: 0, y: 0, width: 64, height: 64), from: .zero, operation: .copy, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
+        bitmap.size = points
+        let image = NSImage(size: points)
+        image.addRepresentation(bitmap)
         return image
     }
 }

@@ -85,4 +85,41 @@ final class StyleTests: XCTestCase {
         let deep = (0..<RenderLimits.maxDepth).reduce(ViewNode.divider) { node, _ in .styled(node, style: Style(opacity: 1)) }
         XCTAssertEqual(RenderLimits.violation(deep), "the view is 65 levels deep; at most 64 are allowed")
     }
+
+    func testProtocol12FieldsFoldInOrder() {
+        let blurred = Style(blur: 20)
+        XCTAssertEqual(Style(shadow: Shadow(radius: 4)).folding(blurred), Style(shadow: Shadow(radius: 4), blur: 20), "blur after shadow fits one style")
+        XCTAssertNil(Style(opacity: 0.5).folding(blurred), "blur after opacity needs its own node")
+        let hover = Style(hover: Hover(scale: 1.05))
+        XCTAssertEqual(Style(opacity: 0.5).folding(hover)?.hover, Hover(scale: 1.05), "hover comes last")
+        XCTAssertNil(hover.folding(Style(padding: EdgeInsets(2))))
+        let inner = Style(symbol: SymbolStyle(effect: .pulse), numericTransition: true)
+        let outer = Style(symbol: SymbolStyle(effect: .bounce), numericTransition: false)
+        XCTAssertEqual(inner.folding(outer)?.symbol?.effect, .pulse, "the innermost symbol style wins")
+        XCTAssertEqual(inner.folding(outer)?.numericTransition, true)
+    }
+
+    func testProtocol12NodesRoundTrip() throws {
+        let tree = ViewNode.grid(columns: 3, spacing: 6, children: [
+            .image(.url("https://example.com/a.png", placeholder: "photo")),
+            .image(.url("https://example.com/b.png", placeholder: nil)),
+            .image(.symbol("wifi")).styled(Style(symbol: SymbolStyle(rendering: .palette, palette: [HexColor("#FF0000")], effect: .variableColor, repeats: false))),
+            .shape(ShapeNode(.circle, fill: .radial(["#FF000080", "#FF000000"], x: 0.2, y: 0, radius: 120))),
+            .shape(ShapeNode(.circle, stroke: .angular(["#FFAA00", "#FF5500"]), lineWidth: 8)),
+            .text("Now").styled(Style(background: Fill(.material(.glass), in: .capsule), blur: 2, numericTransition: true, hover: Hover(scale: 1.02, highlight: .hex("#0000000A"), shadow: Shadow(radius: 6)))),
+            .chart(values: [1, 2, 3], kind: .area, options: ChartOptions(compact: true)),
+        ])
+        XCTAssertEqual(try LineCodec.decode(ViewNode.self, from: try LineCodec.encode(tree)), tree)
+        XCTAssertEqual(tree.imageURLs, ["https://example.com/a.png", "https://example.com/b.png"])
+        XCTAssertEqual(tree.children.count, 7)
+        XCTAssertTrue(tree.isBlankInMenuBar)
+    }
+
+    func testPaintStops() {
+        XCTAssertEqual(Paint.gradient(["#000000", "#FFFFFF"]).stops.map(\.light), ["#000000", "#FFFFFF"])
+        XCTAssertEqual(Paint.radial(["#111111"], radius: 10).stops.map(\.light), ["#111111"])
+        XCTAssertEqual(Paint.angular(["#222222", "#333333"]).stops.count, 2)
+        XCTAssertEqual(Paint.material(.thin).stops, [])
+        XCTAssertEqual(Paint.role(.accent).stops, [])
+    }
 }

@@ -73,6 +73,8 @@ public final class HostServices: Sendable {
     public let secrets: any SecretStore
     public let audit: NetworkAudit
     public let http: HTTPService
+    /// The remote images plugins draw, fetched through `http`.
+    public let images: RemoteImageStore
     public let oauth: OAuthBroker
     public let bus: PluginBus
     public let platform: Platform
@@ -98,6 +100,7 @@ public final class HostServices: Sendable {
         self.secrets = secrets
         self.audit = audit
         self.http = HTTPService(audit: audit)
+        self.images = RemoteImageStore(http: http)
         self.oauth = OAuthBroker(secrets: secrets, timeout: oauthTimeout, openURL: platform.open)
         self.bus = bus
         self.platform = platform
