@@ -36,7 +36,9 @@ public enum StyleLint {
                     }
                 }
             }
-            if case .color(let color)? = style.background?.paint {
+            // What is inside sees this background: a color, or a gradient's
+            // first stop (its lightest or darkest end is checked above).
+            if let color = style.background.flatMap({ colors(of: $0.paint).first }) {
                 backdrop = HexColor(opaque(color.light, over: backdrop, dark: false), dark: opaque(color.hex(dark: true), over: backdrop, dark: true))
             }
         case .tappable(let content, let action) where !labeled && content.plainText.isEmpty:

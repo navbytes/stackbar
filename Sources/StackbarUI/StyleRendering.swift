@@ -18,47 +18,68 @@ struct StyleModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content
+        // In three steps, each type-erased, so the chain stays small enough
+        // for the type checker.
+        finish(decorate(environment(content)))
+    }
+
+    /// Font, foreground, symbol style and numeric transitions.
+    private func environment(_ content: Content) -> AnyView {
+        AnyView(content
             .transformEnvironment(\.stackbarFont) { if let font = style.font { $0 = font } }
             .transformEnvironment(\.font) { if let font = style.font { $0 = font.font(for: .body) } }
             .transformEnvironment(\.stackbarForeground) { if let paint = style.foreground { $0 = paint } }
             .transformEnvironment(\.stackbarSymbol) { if let symbol = style.symbol { $0 = symbol } }
             .ifLet(style.numericTransition) { view, rolls in view.contentTransition(rolls ? .numericText() : .identity) }
-            .ifLet(style.foreground) { $0.foregroundStyle($1.shapeStyle) }
+            .ifLet(style.foreground) { $0.foregroundStyle($1.shapeStyle) })
+    }
+
+    /// Padding, frame, background, border and clip.
+    private func decorate(_ view: AnyView) -> AnyView {
+        AnyView(view
             .ifLet(style.padding) { $0.padding(SwiftUI.EdgeInsets(top: $1.top, leading: $1.leading, bottom: $1.bottom, trailing: $1.trailing)) }
             .ifLet(style.frame) { view, frame in
                 view
                     .frame(width: frame.width.map { CGFloat($0) }, height: frame.height.map { CGFloat($0) }, alignment: frame.alignment?.alignment ?? .center)
                     .frame(maxWidth: frame.fillWidth == true ? .infinity : nil, maxHeight: frame.fillHeight == true ? .infinity : nil, alignment: frame.alignment?.alignment ?? .center)
             }
-            .ifLet(style.background) { view, fill in
-                if case .material(.glass) = fill.paint {
-                    view.glassEffect(.regular, in: fill.shape.anyShape)
-                } else {
-                    view.background { fill.shape.view(fill: fill.paint.shapeStyle, stroke: nil, lineWidth: 0) }
-                }
-            }
+            .ifLet(style.background) { view, fill in Self.fill(view, fill) }
             .ifLet(style.border) { view, border in view.overlay { border.shape.view(fill: nil, stroke: border.paint.shapeStyle, lineWidth: border.width) } }
-            .ifLet(style.clip) { $0.clipShape($1.anyShape) }
-            .ifLet(style.shadow) { view, shadow in
-                let color = shadow.color?.color ?? .black.opacity(0.25)
-                if let fill = style.background {
-                    // Cast by the background shape, like a box shadow, so the
-                    // border and content inside are not drawn twice.
-                    view.background {
-                        fill.shape.anyShape.fill(color).offset(x: shadow.x, y: shadow.y).blur(radius: shadow.radius)
-                    }
-                } else {
-                    view.shadow(color: color, radius: shadow.radius, x: shadow.x, y: shadow.y)
-                }
-            }
-            .ifLet(style.blur) { $0.blur(radius: $1, opaque: false) }
-            .ifLet(style.opacity) { $0.opacity($1) }
-            .ifLet(style.hover) { view, hover in
-                view.modifier(HoverModifier(hover: hover, shape: style.background?.shape ?? style.clip ?? .roundedRectangle(cornerRadius: 8), enabled: interactive))
-            }
+            .ifLet(style.clip) { $0.clipShape($1.anyShape) })
+    }
+
+    /// A background: Liquid Glass as a glass effect, any other paint drawn
+    /// in its shape behind the view.
+    private static func fill(_ view: some View, _ fill: Fill) -> AnyView {
+        if case .material(.glass) = fill.paint {
+            return AnyView(view.glassEffect(.regular, in: fill.shape.anyShape))
+        }
+        return AnyView(view.background { fill.shape.view(fill: fill.paint.shapeStyle, stroke: nil, lineWidth: 0) })
+    }
+
+    /// Shadow, blur, opacity, hover, the accessibility label and animation.
+    private func finish(_ view: AnyView) -> AnyView {
+        let hoverShape = style.background?.shape ?? style.clip ?? .roundedRectangle(cornerRadius: 8)
+        let motion = style.animation ?? (style.numericTransition == true ? .spring : nil)
+        return AnyView(view
+            .ifLet(style.shadow) { view, shadow in Self.cast(view, shadow, background: style.background) }
+            .ifLet(style.blur) { view, radius in view.blur(radius: radius, opaque: false) }
+            .ifLet(style.opacity) { view, value in view.opacity(value) }
+            .ifLet(style.hover) { view, hover in view.modifier(HoverModifier(hover: hover, shape: hoverShape, enabled: interactive)) }
             .ifLet(style.accessibilityLabel) { $0.accessibilityElement(children: .combine).accessibilityLabel($1) }
-            .ifLet(style.animation ?? (style.numericTransition == true ? .spring : nil)) { view, motion in view.animation(reduceMotion ? nil : motion.animation, value: animationValue) }
+            .ifLet(motion) { view, motion in view.animation(reduceMotion ? nil : motion.animation, value: animationValue) })
+    }
+
+    /// With a background, its shape casts the shadow, like a box shadow, so
+    /// the border and content inside are not drawn twice.
+    private static func cast(_ view: some View, _ shadow: Shadow, background: Fill?) -> AnyView {
+        let color = shadow.color?.color ?? .black.opacity(0.25)
+        if let fill = background {
+            return AnyView(view.background {
+                fill.shape.anyShape.fill(color).offset(x: shadow.x, y: shadow.y).blur(radius: shadow.radius)
+            })
+        }
+        return AnyView(view.shadow(color: color, radius: shadow.radius, x: shadow.x, y: shadow.y))
     }
 }
 
