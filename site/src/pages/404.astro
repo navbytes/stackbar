@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/Base.astro';
+import Button from '../components/Button.astro';
+import { href } from '../lib/site';
+---
+<Base title="Not found" description="This page isn't here.">
+  <section class="stage box">
+    <div class="wrap inner">
+      <p class="eyebrow">404</p>
+      <h1>Nothing in this <span class="gradient-text">menu.</span></h1>
+      <div class="ctas"><Button href={href('/')}>Home</Button><Button href={href('/plugins/')} variant="ghost">Plugins</Button></div>
+    </div>
+  </section>
+</Base>
+<style>
+  .box { min-height: 70svh; display: grid; place-items: center; }
+  .inner { display: grid; gap: 24px; justify-items: center; text-align: center; }
+  h1 { font-size: var(--step-5); font-weight: 800; letter-spacing: -0.04em; }
+  .ctas { display: flex; gap: 12px; }
+</style>

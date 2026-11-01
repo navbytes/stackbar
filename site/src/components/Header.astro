@@ -1,0 +1,71 @@
+---
+import Button from './Button.astro';
+import { href, repo } from '../lib/site';
+const path = Astro.url.pathname;
+const links = [
+  { label: 'Plugins', to: href('/plugins/') },
+  { label: 'Build one', to: href('/#build') },
+  { label: 'Safety', to: href('/#safety') },
+];
+---
+<header class="header" transition:persist>
+  <nav class="wrap bar" aria-label="Main">
+    <a class="logo" href={href('/')}>
+      <img src={href('/icon.svg')} alt="" width="32" height="32" />
+      <span>Stackbar</span>
+    </a>
+    <ul class="links">
+      {links.map((l) => <li><a href={l.to} aria-current={path.startsWith(l.to) && l.to !== href('/') ? 'page' : undefined}>{l.label}</a></li>)}
+      <li><a href={repo} rel="noopener">GitHub</a></li>
+    </ul>
+    <div class="actions">
+      <button class="theme" type="button" aria-label="Switch light or dark" data-theme-toggle>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 0 18V3Z" /><circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
+      </button>
+      <Button href={href('/download/')}>Download</Button>
+    </div>
+  </nav>
+</header>
+
+<script>
+  function wire() {
+    const button = document.querySelector<HTMLButtonElement>('[data-theme-toggle]');
+    if (!button || button.dataset.wired) return;
+    button.dataset.wired = '1';
+    button.addEventListener('click', () => {
+      const root = document.documentElement;
+      const dark = root.dataset.theme !== 'light';
+      root.dataset.theme = dark ? 'light' : 'dark';
+      try { localStorage.setItem('theme', root.dataset.theme); } catch {}
+    });
+  }
+  wire();
+  document.addEventListener('astro:page-load', wire);
+  // Keep a chosen theme across client-side navigations.
+  document.addEventListener('astro:after-swap', () => {
+    try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+  });
+</script>
+
+<style>
+  .header {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: saturate(180%) blur(18px);
+    -webkit-backdrop-filter: saturate(180%) blur(18px);
+    background: light-dark(#FBFAFFCC, #0A0B14B3);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar { display: flex; align-items: center; gap: 24px; height: 68px; }
+  .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 700 1.25rem/1 var(--font-display); letter-spacing: -0.02em; }
+  .links { display: flex; gap: 4px; list-style: none; margin: 0 auto 0 16px; padding: 0; }
+  .links a { display: block; padding: 8px 12px; border-radius: 999px; text-decoration: none; color: var(--ink-2); font-weight: 500; }
+  .links a:hover, .links a[aria-current] { color: var(--ink); background: var(--line); }
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .theme { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2); cursor: pointer; }
+  .theme:hover { background: var(--line); color: var(--ink); }
+  .theme svg { width: 20px; height: 20px; }
+  @media (max-width: 760px) {
+    .links { display: none; }
+    .actions { margin-left: auto; }
+  }
+</style>

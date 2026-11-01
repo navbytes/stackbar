@@ -1,0 +1,211 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Button from '../../components/Button.astro';
+import Glyph from '../../components/Glyph.astro';
+import MenuBarScene from '../../components/MenuBarScene.astro';
+import PluginCard from '../../components/PluginCard.astro';
+import PluginIcon from '../../components/PluginIcon.astro';
+import Screenshot from '../../components/Screenshot.astro';
+import { byName, categorySlug, hueOf, surfaceNames } from '../../lib/plugins';
+import { href, store, version as stackbarVersion } from '../../lib/site';
+
+export async function getStaticPaths() {
+  const plugins = await getCollection('plugins');
+  return plugins.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const plugin = entry.data;
+const { Content } = await render(entry);
+const hue = hueOf(plugin);
+const all = await getCollection('plugins');
+const related = all.filter((p) => p.data.category === plugin.category && p.id !== entry.id).sort(byName).slice(0, 3);
+
+// README facts the page shows elsewhere (needs → privacy card, surfaces and
+// requirements → details) are left out of the feature tiles.
+const shownElsewhere = new Set(['Needs', 'Surfaces', 'Requires']);
+const features = plugin.readme.facts.filter((f) => !shownElsewhere.has(f.label));
+const needs = plugin.readme.facts.find((f) => f.label === 'Needs')?.text;
+const inline = (text: string) => text
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  .replace(/`([^`]+)`/g, '<code>$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+const surfaces = plugin.surfaces.filter((s) => s !== 'settings');
+const installCommand = `stackbarctl install --index ${store.indexURL} ${plugin.id}`;
+const details: [string, string][] = [
+  ['Version', plugin.version],
+  ['Updated', new Date(`${plugin.updated}T00:00:00Z`).toLocaleDateString('en', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })],
+  ['Category', plugin.category],
+  ['Shows in', plugin.surfaces.map((s) => surfaceNames[s] ?? s).join(', ')],
+  ['Requires', `Stackbar ${plugin.minimumStackbar ?? stackbarVersion} or later`],
+  ['Publisher', plugin.publisher],
+];
+---
+<Base title={plugin.name} description={`${plugin.name} for Stackbar: ${plugin.summary}`} hue={hue} image={plugin.screenshot}>
+  <section class="hero stage" style={`--h: var(--kit-${hue}-dark); --h-deep: var(--kit-${hue}-light)`}>
+    <div class="glow" aria-hidden="true"></div>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <a class="back" href={href('/plugins/')}>← All plugins</a>
+        <span transition:name={`icon-${plugin.slug}`}><PluginIcon name={plugin.name} hue={hue} size={96} /></span>
+        <div class="title">
+          <a class="eyebrow cat" href={href(`/plugins/category/${categorySlug(plugin.category)}/`)}>{plugin.category}</a>
+          <h1 transition:name={`name-${plugin.slug}`}>{plugin.name}</h1>
+          <p class="lede">{plugin.summary}</p>
+        </div>
+        <div class="ctas">
+          <Button href="#install" variant="accent" size="l">Get it in Stackbar</Button>
+          <Button href={plugin.homepage} variant="ghost" size="l">View source</Button>
+        </div>
+        <ul class="badges">
+          <li><Glyph name="check" /> Signed by {plugin.publisher}</li>
+          <li><Glyph name="shield" /> Runs in its own sandbox</li>
+          <li>v{plugin.version}</li>
+        </ul>
+      </div>
+      <MenuBarScene label={`${plugin.name} open from the menu bar`} hues={[hue, hue, 'graphite']} compact
+        items={[{ text: plugin.name, glyph: 'bolt', active: true }, { text: '23%', glyph: 'cpu' }]}>
+        <Screenshot src={plugin.screenshot} alt={`${plugin.name}'s panel`} eager>Screenshot coming with the next release</Screenshot>
+      </MenuBarScene>
+    </div>
+  </section>
+
+  <section class="section about">
+    <div class="wrap about-grid">
+      <div class="prose">
+        <p class="eyebrow">About</p>
+        <Content />
+      </div>
+      <aside class="privacy" aria-labelledby="asks">
+        <h2 id="asks">What it asks for</h2>
+        {plugin.capabilities.length === 0
+          ? <p class="nothing"><Glyph name="check" /> Nothing. No network, files or secrets.</p>
+          : <ul>{plugin.capabilities.map((c) => <li><Glyph name="lock" /> {c}</li>)}</ul>}
+        {needs && plugin.capabilities.length > 0 && <p class="needs" set:html={inline(needs)} />}
+        <p class="fine">Stackbar shows you this list and asks before the plugin can use any of it.</p>
+      </aside>
+    </div>
+  </section>
+
+  {features.length > 0 && (
+    <section class="section features">
+      <div class="wrap">
+        <div class="section-head"><p class="eyebrow">Inside</p><h2>Everything it does.</h2></div>
+        <div class="tiles">
+          {features.map((f) => (
+            <article class="tile">
+              <h3>{f.label}</h3>
+              <p set:html={inline(f.text)} />
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <section class="section install" id="install">
+    <div class="wrap install-grid">
+      <div class="section-head">
+        <p class="eyebrow">Install</p>
+        <h2>Two clicks in Stackbar.</h2>
+        <ol class="steps">
+          <li>Open <strong>Stackbar → Settings → Store</strong>.</li>
+          <li>Find <strong>{plugin.name}</strong> and choose <strong>Install</strong>.</li>
+          {surfaces.length > 0 && <li>It appears in your {surfaces.map((s) => (surfaceNames[s] ?? s).toLowerCase()).join(', ')}.</li>}
+        </ol>
+        <p class="fine">Don't have Stackbar yet? <a href={href('/download/')}>Download it free</a>.</p>
+      </div>
+      <div class="side">
+        <div class="cmd">
+          <div class="cmd-head"><span>Or from a terminal</span><button type="button" data-copy={installCommand}>Copy</button></div>
+          <pre><code>{installCommand}</code></pre>
+        </div>
+        <dl class="details">
+          {details.map(([k, v]) => <div><dt>{k}</dt><dd>{v}</dd></div>)}
+          <div class="full"><dt>Bundle</dt><dd><a href={plugin.bundle}>sha256 {plugin.sha256.slice(0, 12)}…</a></dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  {related.length > 0 && (
+    <section class="section more">
+      <div class="wrap">
+        <div class="section-head"><p class="eyebrow">More {plugin.category.toLowerCase()}</p><h2>You might also like</h2></div>
+        <div class="cards">{related.map((p) => <PluginCard plugin={p.data} />)}</div>
+      </div>
+    </section>
+  )}
+</Base>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
+      button.onclick = async () => {
+        try { await navigator.clipboard.writeText(button.dataset.copy!); button.textContent = 'Copied'; }
+        catch { button.textContent = 'Select and copy'; }
+        setTimeout(() => (button.textContent = 'Copy'), 1600);
+      };
+    });
+  });
+</script>
+
+<style>
+  .hero { position: relative; overflow: hidden; padding-block: clamp(40px, 6vw, 88px) clamp(56px, 8vw, 112px); }
+  .glow { position: absolute; inset: -40% -10% auto; height: 130%; pointer-events: none; filter: blur(50px);
+    background: radial-gradient(40% 50% at 15% 30%, color-mix(in srgb, var(--h) 45%, transparent), transparent 70%),
+      radial-gradient(40% 50% at 85% 10%, color-mix(in srgb, var(--h-deep) 55%, transparent), transparent 70%); }
+  .hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
+  .hero-copy { display: grid; gap: 24px; justify-items: start; }
+  .back { color: var(--ink-2); text-decoration: none; font-size: var(--step--1); }
+  .back:hover { color: var(--ink); }
+  .title { display: grid; gap: 12px; }
+  .cat { text-decoration: none; color: var(--h); }
+  h1 { font-size: clamp(2.6rem, 1.6rem + 3.6vw, 4.6rem); font-weight: 800; letter-spacing: -0.045em; overflow-wrap: anywhere; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+  .hero :global(.accent) { color: #0E0F1A; background: var(--h); box-shadow: 0 12px 34px -12px var(--h); }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px 18px; list-style: none; padding: 0; margin: 0; color: var(--ink-2); font-size: var(--step--1); }
+  .badges li { display: flex; align-items: center; gap: 6px; }
+  .badges :global(svg) { width: 16px; height: 16px; color: var(--h); }
+  @media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr; } }
+
+  .about-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start; }
+  .prose { display: grid; gap: 16px; font-size: var(--step-1); line-height: 1.6; }
+  .prose :global(p) { color: var(--ink); }
+  .prose :global(code) { padding: 2px 6px; border-radius: 6px; background: var(--page-2); }
+  .privacy { display: grid; gap: 14px; padding: 28px; border-radius: var(--radius-m); background: var(--accent-soft); border: 1px solid var(--line); }
+  .privacy h2 { font-size: var(--step-2); }
+  .privacy ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .privacy li, .nothing { display: flex; gap: 10px; align-items: start; }
+  .privacy :global(svg) { width: 20px; height: 20px; flex: none; margin-top: 3px; color: var(--accent); }
+  .needs { color: var(--ink-2); }
+  .fine { color: var(--ink-2); font-size: var(--step--1); }
+  @media (max-width: 860px) { .about-grid { grid-template-columns: 1fr; } }
+
+  .features { background: var(--page-2); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .tile { display: grid; gap: 10px; align-content: start; padding: 28px; border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--accent); }
+  .tile h3 { font-size: var(--step-1); }
+  .tile p { color: var(--ink-2); }
+  .tile :global(code) { font-size: 0.85em; padding: 1px 5px; border-radius: 5px; background: var(--page-2); }
+
+  .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 5vw, 80px); align-items: start; }
+  .install .section-head { margin: 0; }
+  .install h2 { font-size: var(--step-3); }
+  .steps { display: grid; gap: 12px; padding-left: 1.4em; margin: 8px 0 0; font-size: var(--step-1); }
+  .steps li::marker { color: var(--accent); font-weight: 700; }
+  .side { display: grid; gap: 20px; }
+  .cmd { border-radius: var(--radius-m); background: #0D0F18; color: var(--stage-ink); overflow: hidden; }
+  .cmd-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #FFFFFF14; font-size: 12px; color: var(--stage-ink-2); }
+  .cmd button { border: 0; border-radius: 999px; padding: 6px 12px; background: #FFFFFF1A; color: var(--stage-ink); font: 600 12px/1 var(--font-text); cursor: pointer; }
+  .cmd pre { margin: 0; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  .details { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; border-radius: var(--radius-m); overflow: hidden; background: var(--line); border: 1px solid var(--line); }
+  .details div { padding: 14px 16px; background: var(--card); }
+  .details dt { font: 600 0.72rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); margin-bottom: 6px; }
+  .details dd { margin: 0; font-weight: 500; }
+  .details .full { grid-column: 1 / -1; }
+  @media (max-width: 860px) { .install-grid { grid-template-columns: 1fr; } }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+</style>

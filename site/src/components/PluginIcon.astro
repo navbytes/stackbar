@@ -1,0 +1,19 @@
+---
+// A plugin's tile until manifests carry their own symbol (task 3.1): its
+// initials on its hue, shaped like a macOS app icon.
+interface Props { name: string; hue: string; size?: number; }
+const { name, hue, size = 64 } = Astro.props;
+const initials = name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+---
+<span class="icon" style={`--hue: var(--kit-${hue}-dark); --hue-deep: var(--kit-${hue}-light); --size: ${size}px`} aria-hidden="true">{initials}</span>
+
+<style>
+  .icon {
+    display: inline-grid; place-items: center; flex: none;
+    width: var(--size); height: var(--size); border-radius: calc(var(--size) * 0.23);
+    background: radial-gradient(120% 120% at 20% 0%, var(--hue) 0%, var(--hue-deep) 70%);
+    color: #FFFFFF; font: 800 calc(var(--size) * 0.38) / 1 var(--font-display); letter-spacing: -0.04em;
+    box-shadow: inset 0 1px 0 #FFFFFF59, inset 0 -2px 6px #00000033, 0 6px 16px -6px var(--hue-deep);
+    text-shadow: 0 1px 2px #0000004D;
+  }
+</style>

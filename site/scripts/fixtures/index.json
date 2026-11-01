@@ -1,0 +1,424 @@
+{
+  "format" : 2,
+  "generated" : "2026-11-01T13:27:24Z",
+  "homepage" : "https://github.com/navbytes/stackbar-plugins",
+  "name" : "Stackbar Plugins by navbytes",
+  "plugins" : [
+    {
+      "bundle" : "Productivity/io.navbytes.stackbar.clipboard-1.1.1.stackbarplugin",
+      "capabilities" : [
+        "Reads everything you copy, and pastes into the app you're using"
+      ],
+      "category" : "Productivity",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Productivity/Clipboard",
+      "id" : "io.navbytes.stackbar.clipboard",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Clipboard History",
+      "publisher" : "navbytes",
+      "screenshot" : "Productivity/io.navbytes.stackbar.clipboard.png",
+      "sha256" : "315d8c80d9f60f7422ffb3e908386d2b821469e73356753883e193677484227e",
+      "summary" : "Everything you copy, searchable and one keystroke from pasting back.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "window",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.1.1"
+    },
+    {
+      "bundle" : "Developer/io.navbytes.stackbar.plugins.docker-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Runs docker (not installed)"
+      ],
+      "category" : "Developer",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Developer/Docker",
+      "id" : "io.navbytes.stackbar.plugins.docker",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Docker",
+      "publisher" : "navbytes",
+      "screenshot" : "Developer/io.navbytes.stackbar.plugins.docker.png",
+      "sha256" : "7acc107acbb1b4935d7a97b12996be834a379fc417a2fe021c65e38f3ed8b414",
+      "summary" : "Your containers, with start, stop, restart and logs a click away.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Developer/io.navbytes.stackbar.plugins.github-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Connects to api.github.com",
+        "Reads the secret GITHUB_TOKEN"
+      ],
+      "category" : "Developer",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Developer/GitHub",
+      "id" : "io.navbytes.stackbar.plugins.github",
+      "minimumStackbar" : "0.11.0",
+      "name" : "GitHub",
+      "publisher" : "navbytes",
+      "screenshot" : "Developer/io.navbytes.stackbar.plugins.github.png",
+      "sha256" : "151f27c92f73c39e1b50ca925737bb9d18300683f3e0698f5d47e8fca1e7fb90",
+      "summary" : "Your repositories and issues from the palette, and new issues without a browser.",
+      "surfaces" : [
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Developer/io.navbytes.stackbar.plugins.homebrew-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Runs /opt/homebrew/bin/brew"
+      ],
+      "category" : "Developer",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Developer/Homebrew",
+      "id" : "io.navbytes.stackbar.plugins.homebrew",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Homebrew",
+      "publisher" : "navbytes",
+      "screenshot" : "Developer/io.navbytes.stackbar.plugins.homebrew.png",
+      "sha256" : "accd161bc150eebd974314e7707ddb7a3730e36763ad542120f6d09fc4e2af23",
+      "summary" : "Outdated formulae and casks, with upgrades a click away.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Developer/io.navbytes.stackbar.plugins.jira-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Connects to *.atlassian.net",
+        "Reads the secret JIRA_API_TOKEN"
+      ],
+      "category" : "Developer",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Developer/Jira",
+      "id" : "io.navbytes.stackbar.plugins.jira",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Jira",
+      "publisher" : "navbytes",
+      "screenshot" : "Developer/io.navbytes.stackbar.plugins.jira.png",
+      "sha256" : "2e7b5822fcd120b000deb5b8f354a8b656bbd78c347fdc0aa9d0c1c79eca9ea9",
+      "summary" : "Your assigned Jira Cloud issues, search and new issues from the palette.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Developer/io.navbytes.stackbar.plugins.linear-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Connects to api.linear.app",
+        "Reads the secret LINEAR_API_KEY"
+      ],
+      "category" : "Developer",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Developer/Linear",
+      "id" : "io.navbytes.stackbar.plugins.linear",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Linear",
+      "publisher" : "navbytes",
+      "screenshot" : "Developer/io.navbytes.stackbar.plugins.linear.png",
+      "sha256" : "3f18b92dce3ecc92bd2d172cdfc48dfbc82f063d786cdf4f741d72b019897eab",
+      "summary" : "Your assigned Linear issues, branch names, search and new issues from the palette.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Monitoring/io.navbytes.stackbar.plugins.litellm-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Connects to the server you enter as LITELLM_PROXY_URL, and no other",
+        "Reads the secret LITELLM_API_KEY"
+      ],
+      "category" : "Monitoring",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Monitoring/LiteLLM",
+      "id" : "io.navbytes.stackbar.plugins.litellm",
+      "minimumStackbar" : "0.11.0",
+      "name" : "LiteLLM",
+      "publisher" : "navbytes",
+      "screenshot" : "Monitoring/io.navbytes.stackbar.plugins.litellm.png",
+      "sha256" : "e5c0a2aa4c1454b1ef58de741f35873b04ed4a15a3753487adc6a747cb2fe6b0",
+      "summary" : "Tokens, spend, budget and model mix from your LiteLLM proxy, with charts.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "window",
+        "widget",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Productivity/io.navbytes.stackbar.plugins.music-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Runs /usr/bin/osascript (can run any program)"
+      ],
+      "category" : "Productivity",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Productivity/Music",
+      "id" : "io.navbytes.stackbar.plugins.music",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Music",
+      "publisher" : "navbytes",
+      "screenshot" : "Productivity/io.navbytes.stackbar.plugins.music.png",
+      "sha256" : "2fff4fd6ffcb6f815d89a156c0ba696afe827e39eefed565b3a0f2edaa61499a",
+      "summary" : "What's playing in Music or Spotify, with play, pause, skip and volume.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "widget",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Productivity/io.navbytes.stackbar.plugins.pomodoro-1.0.0.stackbarplugin",
+      "capabilities" : [
+
+      ],
+      "category" : "Productivity",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Productivity/Pomodoro",
+      "id" : "io.navbytes.stackbar.plugins.pomodoro",
+      "minimumStackbar" : "0.12.0",
+      "name" : "Pomodoro",
+      "publisher" : "navbytes",
+      "screenshot" : "Productivity/io.navbytes.stackbar.plugins.pomodoro.png",
+      "sha256" : "1d9523680f99bb1159c2703b5e75f4cad5b9737932f1794789962314c56a3b58",
+      "summary" : "A focus timer with presets, a progress ring, tags and today's sessions.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "settings",
+        "widget"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Developer/io.navbytes.stackbar.plugins.ports-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Runs /usr/sbin/lsof, /bin/kill"
+      ],
+      "category" : "Developer",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Developer/Ports",
+      "id" : "io.navbytes.stackbar.plugins.ports",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Ports",
+      "publisher" : "navbytes",
+      "screenshot" : "Developer/io.navbytes.stackbar.plugins.ports.png",
+      "sha256" : "218ce5381ee1105bc467d2a2c1ca4598293aa0fdb1266cec61404a821c39fc4b",
+      "summary" : "Which process is listening on which port, and a way to stop it.",
+      "surfaces" : [
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Monitoring/io.navbytes.stackbar.plugins.system-monitor-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Runs /usr/bin/top, /usr/bin/vm_stat, /bin/df, /bin/kill"
+      ],
+      "category" : "Monitoring",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Monitoring/SystemMonitor",
+      "id" : "io.navbytes.stackbar.plugins.system-monitor",
+      "minimumStackbar" : "0.11.0",
+      "name" : "System Monitor",
+      "publisher" : "navbytes",
+      "screenshot" : "Monitoring/io.navbytes.stackbar.plugins.system-monitor.png",
+      "sha256" : "3e431d45f8b24541f3dc678d6c97a7afadf763e0098f222cc154f242d016c58b",
+      "summary" : "CPU, memory and disk in the menu bar, with the processes using the most.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "widget",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Productivity/io.navbytes.stackbar.plugins.translate-1.0.0.stackbarplugin",
+      "capabilities" : [
+        "Reads the text you select and which app you're in",
+        "Reads everything you copy, and pastes into the app you're using",
+        "Connects to api-free.deepl.com, api.deepl.com",
+        "Reads the secret DEEPL_API_KEY"
+      ],
+      "category" : "Productivity",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Productivity/Translate",
+      "id" : "io.navbytes.stackbar.plugins.translate",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Translate",
+      "publisher" : "navbytes",
+      "screenshot" : "Productivity/io.navbytes.stackbar.plugins.translate.png",
+      "sha256" : "b6166e51be7693b6974a6284c9158c9598736a81ea0d65bcf217010a0020a9ae",
+      "summary" : "Translate the selected text, in your browser or in place with DeepL.",
+      "surfaces" : [
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Productivity/io.navbytes.stackbar.plugins.world-clock-1.0.0.stackbarplugin",
+      "capabilities" : [
+
+      ],
+      "category" : "Productivity",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Productivity/WorldClock",
+      "id" : "io.navbytes.stackbar.plugins.world-clock",
+      "minimumStackbar" : "0.10.0",
+      "name" : "World Clock",
+      "publisher" : "navbytes",
+      "screenshot" : "Productivity/io.navbytes.stackbar.plugins.world-clock.png",
+      "sha256" : "1911d32bf32d8c412dd0b81c9a92d2e0f0027b74d23332886e82ca85b8e118db",
+      "summary" : "The time in the cities you work with, with offsets and working hours.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "settings",
+        "widget"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.0"
+    },
+    {
+      "bundle" : "Developer/io.navbytes.stackbar.pr-cockpit-1.1.1.stackbarplugin",
+      "capabilities" : [
+        "Connects to api.github.com",
+        "Reads the secret GITHUB_TOKEN"
+      ],
+      "category" : "Developer",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Developer/PRCockpit",
+      "id" : "io.navbytes.stackbar.pr-cockpit",
+      "minimumStackbar" : "0.11.0",
+      "name" : "PR Cockpit",
+      "publisher" : "navbytes",
+      "screenshot" : "Developer/io.navbytes.stackbar.pr-cockpit.png",
+      "sha256" : "d0f4f04f173bf492f1478d82e7729325a712b2e869b0614ff691b396e45a6013",
+      "summary" : "Your pull requests and the ones waiting on your review, with CI and review state.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "window",
+        "widget",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.1.1"
+    },
+    {
+      "bundle" : "Productivity/io.navbytes.stackbar.quicklinks-1.0.1.stackbarplugin",
+      "capabilities" : [
+        "Opens any link, file or folder, in any app",
+        "Reads everything you copy, and pastes into the app you're using",
+        "Reads the text you select and which app you're in"
+      ],
+      "category" : "Productivity",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Productivity/Quicklinks",
+      "id" : "io.navbytes.stackbar.quicklinks",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Quicklinks",
+      "publisher" : "navbytes",
+      "screenshot" : "Productivity/io.navbytes.stackbar.quicklinks.png",
+      "sha256" : "5eb60aba270a69861c80402d5ea08cfdc1de779e2f465135aad68a70856602ff",
+      "summary" : "Open links and folders by name, with placeholders filled in.",
+      "surfaces" : [
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.1"
+    },
+    {
+      "bundle" : "Productivity/io.navbytes.stackbar.snippets-1.0.1.stackbarplugin",
+      "capabilities" : [
+        "Reads everything you copy, and pastes into the app you're using",
+        "Reads the text you select and which app you're in",
+        "Stores up to 16 MB"
+      ],
+      "category" : "Productivity",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Productivity/Snippets",
+      "id" : "io.navbytes.stackbar.snippets",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Snippets",
+      "publisher" : "navbytes",
+      "screenshot" : "Productivity/io.navbytes.stackbar.snippets.png",
+      "sha256" : "98611c40de3642bf4d06840b7908f46a6c203b71661f6b87f5aa0a122d7a8fc0",
+      "summary" : "Paste text by name, with placeholders filled in.",
+      "surfaces" : [
+        "panel",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.1"
+    },
+    {
+      "bundle" : "System/io.navbytes.stackbar.stay-awake-1.0.1.stackbarplugin",
+      "capabilities" : [
+        "Keeps the Mac awake, and reads battery and running apps"
+      ],
+      "category" : "System",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/System/StayAwake",
+      "id" : "io.navbytes.stackbar.stay-awake",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Stay Awake",
+      "publisher" : "navbytes",
+      "screenshot" : "System/io.navbytes.stackbar.stay-awake.png",
+      "sha256" : "d3c6e3396c801279c6a127c4138303a5c29e27b98ee2da85b243b2b7737cb0d1",
+      "summary" : "Keeps your Mac awake for a while, until a time, while an app runs or on a schedule.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "widget",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.1"
+    },
+    {
+      "bundle" : "Productivity/io.navbytes.stackbar.up-next-1.0.1.stackbarplugin",
+      "capabilities" : [
+        "Reads your calendar events"
+      ],
+      "category" : "Productivity",
+      "homepage" : "https://github.com/navbytes/stackbar-plugins/tree/main/Productivity/UpNext",
+      "id" : "io.navbytes.stackbar.up-next",
+      "minimumStackbar" : "0.11.0",
+      "name" : "Up Next",
+      "publisher" : "navbytes",
+      "screenshot" : "Productivity/io.navbytes.stackbar.up-next.png",
+      "sha256" : "1b262745fc09b686b42dfcd36405414cd1947c5d15a183890f0a3c118867a24e",
+      "summary" : "Your next meeting in the menu bar, with a countdown and one-click join.",
+      "surfaces" : [
+        "menuBar",
+        "panel",
+        "window",
+        "widget",
+        "settings"
+      ],
+      "updated" : "2026-11-01",
+      "version" : "1.0.1"
+    }
+  ],
+  "signature" : "6bA60+pHP49wu5k/5A8wtqXVnArJt9/udgAIyRgTInTZjkCQ4RYhoU3VP0DIe7a+t7HKGxfP33g7iUXyGY7QAw=="
+}

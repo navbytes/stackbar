@@ -1,0 +1,36 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../../layouts/Base.astro';
+import PluginCard from '../../../components/PluginCard.astro';
+import { byName, categories, categorySlug, hueOf } from '../../../lib/plugins';
+import { href } from '../../../lib/site';
+
+export async function getStaticPaths() {
+  const plugins = await getCollection('plugins');
+  return categories
+    .filter((c) => plugins.some((p) => p.data.category === c))
+    .map((category) => ({ params: { category: categorySlug(category) }, props: { category } }));
+}
+const { category } = Astro.props;
+const plugins = (await getCollection('plugins')).filter((p) => p.data.category === category).sort(byName);
+const hue = hueOf({ category });
+---
+<Base title={`${category} plugins`} description={`${plugins.length} ${category.toLowerCase()} plugins for Stackbar.`} hue={hue}>
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <a class="back" href={href('/plugins/')}>← All plugins</a>
+        <p class="eyebrow">{plugins.length} plugins</p>
+        <h1>{category}</h1>
+      </div>
+      <div class="cards">{plugins.map((p) => <PluginCard plugin={p.data} />)}</div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  h1 { font-size: var(--step-5); font-weight: 800; letter-spacing: -0.04em; color: var(--accent); }
+  .back { color: var(--ink-2); text-decoration: none; }
+  .back:hover { color: var(--ink); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+</style>
