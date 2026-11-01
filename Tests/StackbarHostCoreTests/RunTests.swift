@@ -155,19 +155,27 @@ final class CommandRunGateTests: XCTestCase {
     func testWorkingDirectoryIsThePluginsFolderOrAGrantedOne() async throws {
         let gate = gate()
         let home = try await run(gate, "pwd")
-        XCTAssertEqual(home.text, CommandRunGate.canonical(root.appendingPathComponent("dev.test.run").path) + "\n")
+        XCTAssertEqual(home.text, Self.physical(root.appendingPathComponent("dev.test.run").path) + "\n")
 
         let project = root.appendingPathComponent("project/src", isDirectory: true)
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         let granted = CommandRunGate.Grant(pluginID: grant.pluginID, folders: [root.appendingPathComponent("project").path])
         let inside = try await run(gate, "pwd", workingDirectory: project.path, grant: granted)
-        XCTAssertEqual(inside.text, CommandRunGate.canonical(project.path) + "\n")
+        XCTAssertEqual(inside.text, Self.physical(project.path) + "\n")
 
         for outside in ["/", project.path + "/../../..", "relative"] {
             let refused = await gate.run(RunRequest(command: "pwd", workingDirectory: outside), id: 1, grant: granted)
             guard case .failure(let refusal) = refused else { return XCTFail("\(outside) was allowed") }
             XCTAssertEqual(refusal.kind, .invalid)
         }
+    }
+
+    /// What `pwd` prints: macOS's temporary folder is under /private, which
+    /// Foundation's symlink resolution leaves out.
+    static func physical(_ path: String) -> String {
+        guard let resolved = realpath(path, nil) else { return path }
+        defer { free(resolved) }
+        return String(cString: resolved)
     }
 
     func testTimeoutStopsTheWholeProcessGroup() async throws {
