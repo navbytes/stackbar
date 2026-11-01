@@ -74,6 +74,7 @@ export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch
   if (!response.ok) throw new Error(`store: ${indexURL} answered ${response.status}`);
   const index = verifyIndex(await response.json(), publicKey);
   const base = new URL('.', indexURL);
+  const renders = await fetchRenders(fetch, new URL('site.json', base).href, log);
   const revoked = new Set((index.revoked ?? []).map((r) => `${r.id}@${r.version}`));
   const seen = new Map();
   const plugins = [];
@@ -95,13 +96,46 @@ export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch
       const head = await fetchWithRetry(fetch, screenshot, { method: 'HEAD' }).catch(() => undefined);
       if (!head?.ok) { log(`store: no screenshot for ${entry.id} (${head?.status ?? 'unreachable'})`); screenshot = undefined; }
     }
+    const gallery = await galleryOf(fetch, renders[entry.id]?.[entry.version], base, log);
     plugins.push({
       ...entry,
       slug,
       screenshot,
+      gallery,
       bundle: new URL(entry.bundle, base).href,
       readme,
     });
   }
   return { name: index.name, generated: index.generated, plugins };
 }
+
+/** The order the gallery shows surfaces in. */
+export const surfaceOrder = ['menuBar', 'panel', 'window', 'widget', 'palette', 'settings'];
+
+/** The store's site.json (renders per plugin version), or none yet. */
+async function fetchRenders(fetch, url, log) {
+  const response = await fetchWithRetry(fetch, url).catch(() => undefined);
+  if (!response?.ok) { log(`store: no renders yet (${url} answered ${response?.status ?? 'nothing'})`); return {}; }
+  const site = await response.json();
+  return site.format === 1 && site.plugins ? site.plugins : {};
+}
+
+/** One version's renders, each surface's light and dark image that answers. */
+export async function galleryOf(fetch, shots = {}, base, log = console.warn) {
+  const gallery = [];
+  const surfaces = Object.keys(shots).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  for (const surface of surfaces) {
+    const item = { surface };
+    for (const appearance of ['light', 'dark']) {
+      const path = shots[surface][appearance];
+      if (!path) continue;
+      const url = new URL(path, base).href;
+      const head = await fetchWithRetry(fetch, url, { method: 'HEAD' }).catch(() => undefined);
+      if (head?.ok) item[appearance] = url; else log(`store: missing render ${url}`);
+    }
+    if (item.light || item.dark) gallery.push(item);
+  }
+  return gallery;
+}
+
+const rank = (surface) => { const at = surfaceOrder.indexOf(surface); return at < 0 ? surfaceOrder.length : at; };

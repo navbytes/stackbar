@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { verifyIndex, parseReadme, readmeURL, slugOf, fetchStore } from './store.mjs';
+import { verifyIndex, parseReadme, readmeURL, slugOf, fetchStore, galleryOf } from './store.mjs';
 import { readStore } from './kit.mjs';
 
 // A copy of the published index, signed by the navbytes key.
@@ -39,6 +39,7 @@ test('fetchStore resolves URLs, reads READMEs and refuses a forged index', async
       if (flaky-- > 0) return { ok: false, status: 503 };   // one dropped request, retried
       return { ok: true, json: async () => index };
     }
+    if (url.endsWith('site.json')) return { ok: false, status: 404 };
     if (url.endsWith('.png')) return url.includes('clipboard') ? { ok: false, status: 404 } : { ok: true, status: 200 };
     return { ok: true, text: async () => '# X\n\nLong text.\n\n- **Needs:** nothing.' };
   };
@@ -54,4 +55,21 @@ test('fetchStore resolves URLs, reads READMEs and refuses a forged index', async
   assert.ok(store.plugins.find((p) => p.slug === 'pomodoro').screenshot);
   const forged = async () => ({ ok: true, json: async () => ({ ...index, name: 'Evil' }) });
   await assert.rejects(fetchStore({ indexURL: 'https://x/index.json', publicKey, fetch: forged }), /does not verify/);
+});
+
+test('a gallery lists surfaces in order and drops renders that are missing', async () => {
+  const base = new URL('https://navbytes.github.io/stackbar-plugins/');
+  const shots = {
+    panel: { light: 'S/shots/a/1/light/panel.png', dark: 'S/shots/a/1/dark/panel.png' },
+    menuBar: { light: 'S/shots/a/1/light/menuBar.png' },
+    window: { dark: 'S/shots/a/1/dark/window.png' },
+  };
+  const fake = async (url) => (url.includes('window') ? { ok: false, status: 404 } : { ok: true, status: 200 });
+  const warnings = [];
+  const gallery = await galleryOf(fake, shots, base, (m) => warnings.push(m));
+  assert.deepEqual(gallery.map((g) => g.surface), ['menuBar', 'panel']);
+  assert.equal(gallery[1].dark, 'https://navbytes.github.io/stackbar-plugins/S/shots/a/1/dark/panel.png');
+  assert.equal(gallery[0].dark, undefined);
+  assert.match(warnings.join(), /missing render .*window/);
+  assert.deepEqual(await galleryOf(fake, undefined, base), []);
 });

@@ -340,6 +340,10 @@ Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
 `minimumStackbar: "0.10.0"` names the oldest Stackbar whose StackbarKit the
 source compiles against; a plugin index hides Install on older apps.
 `homepage: "https://..."` links the plugin's README from the store.
+`accent: .teal` and `symbol: "cloud.sun.fill"` (minimumStackbar 0.14.0) give
+the plugin its own colour and icon on its store card and its page on the
+Stackbar site; `Theme(.teal)` is the same hue for its own views. Without them
+the store uses the category's colour and the name's first letter.
 To publish (`stackbarctl sign`, `index build`) a plugin also needs an `x.y.z`
 `version`, a `summary` and a `minimumStackbar`.
 

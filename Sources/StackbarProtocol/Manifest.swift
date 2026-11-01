@@ -26,8 +26,14 @@ public struct Manifest: Codable, Equatable, Sendable {
     public var minimumStackbar: String?
     /// Where to read about the plugin: its README or repository.
     public var homepage: String?
+    /// The plugin's own colour: its store card, its page on the Stackbar
+    /// site and its icon tile take it. Without one they use the category's.
+    public var accent: Accent?
+    /// An SF Symbol name for the plugin's icon, like `timer` or
+    /// `cloud.sun.fill`. The store draws it on a tile in `accent`.
+    public var symbol: String?
 
-    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil, minimumStackbar: String? = nil, homepage: String? = nil) {
+    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil, minimumStackbar: String? = nil, homepage: String? = nil, accent: Accent? = nil, symbol: String? = nil) {
         self.id = id
         self.name = name
         self.version = version
@@ -38,6 +44,8 @@ public struct Manifest: Codable, Equatable, Sendable {
         self.hotkey = hotkey
         self.minimumStackbar = minimumStackbar
         self.homepage = homepage
+        self.accent = accent
+        self.symbol = symbol
     }
 
     /// Problems that make the manifest unusable, in words. Empty means valid.
@@ -57,6 +65,9 @@ public struct Manifest: Codable, Equatable, Sendable {
         }
         if let homepage, !homepage.hasPrefix("https://") {
             result.append("homepage must be an https URL")
+        }
+        if let symbol, !Self.isSymbolName(symbol) {
+            result.append("symbol \"\(symbol)\" must be an SF Symbol name, like timer or cloud.sun.fill")
         }
         if triggers.contains(.clipboard), !capabilities.contains(.clipboard) {
             result.append("the .clipboard trigger needs the .clipboard capability")
@@ -107,6 +118,15 @@ public struct Manifest: Codable, Equatable, Sendable {
     }
 
     public static let maxStorageMegabytes = 64
+
+    /// Lowercase letters and digits in dot-separated words, as SF Symbol
+    /// names are spelled: `timer`, `cloud.sun.fill`, `0.circle`.
+    static func isSymbolName(_ name: String) -> Bool {
+        let words = name.split(separator: ".", omittingEmptySubsequences: false)
+        return name.count <= 64 && !words.contains { word in
+            word.isEmpty || !word.allSatisfy { $0.isASCII && ($0.isLowercase || $0.isNumber) }
+        }
+    }
 
     /// The storage quota the manifest asks for, in bytes; nil means the
     /// default.
@@ -265,6 +285,12 @@ public struct OAuthProvider: Codable, Hashable, Sendable {
         self.clientSecret = clientSecret
         self.scopes = scopes
     }
+}
+
+/// A plugin's colour, named like StackbarKit's `Theme` hues so a plugin can
+/// use the same one in its own views: `Theme(Self.manifest.accent!)`.
+public enum Accent: String, Codable, CaseIterable, Sendable {
+    case blue, indigo, violet, pink, red, orange, amber, green, teal, cyan, graphite
 }
 
 /// A parsed hotkey spec: modifiers and one key, all lowercased.

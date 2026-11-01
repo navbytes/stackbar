@@ -173,6 +173,12 @@ public struct Theme: Equatable, Sendable {
         ("amber", .amber), ("green", .green), ("teal", .teal), ("cyan", .cyan), ("graphite", .graphite),
     ]
 
+    /// The hue a manifest's `accent` names, so a plugin's views can wear
+    /// the colour its store card and site page show.
+    public init(_ accent: Accent) {
+        self = Self.all.first { $0.name == accent.rawValue }?.theme ?? .neutral
+    }
+
     public var solidPaint: Paint { .color(solid) }
     public var onSolidPaint: Paint { .color(onSolid) }
     public var textPaint: Paint { .color(text) }

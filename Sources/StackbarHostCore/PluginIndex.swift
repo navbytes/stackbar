@@ -34,10 +34,15 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         /// Absolute, or relative to the index's own URL.
         public var screenshot: String?
         public var homepage: String?
+        /// From the manifest: the plugin's colour, an `Accent` name. Kept as
+        /// a string so an app that predates a new hue still reads the index.
+        public var accent: String?
+        /// From the manifest: an SF Symbol name for the plugin's icon.
+        public var symbol: String?
         /// When this version was published, `YYYY-MM-DD`.
         public var updated: String?
 
-        public init(id: String, name: String, summary: String? = nil, version: String, publisher: String, bundle: String, sha256: String, capabilities: [String], category: String? = nil, surfaces: [String]? = nil, minimumStackbar: String? = nil, screenshot: String? = nil, homepage: String? = nil, updated: String? = nil) {
+        public init(id: String, name: String, summary: String? = nil, version: String, publisher: String, bundle: String, sha256: String, capabilities: [String], category: String? = nil, surfaces: [String]? = nil, minimumStackbar: String? = nil, screenshot: String? = nil, homepage: String? = nil, accent: String? = nil, symbol: String? = nil, updated: String? = nil) {
             self.id = id
             self.name = name
             self.summary = summary
@@ -51,6 +56,8 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             self.minimumStackbar = minimumStackbar
             self.screenshot = screenshot
             self.homepage = homepage
+            self.accent = accent
+            self.symbol = symbol
             self.updated = updated
         }
 
@@ -180,6 +187,29 @@ public struct PluginIndex: Codable, Equatable, Sendable {
               try Signing.verify(signatureData, of: signedBytes(), publicKey: key) else { throw IndexError.badSignature }
     }
 
+    /// Throws unless `data`, an index as downloaded, carries a valid
+    /// signature by `publicKey`. It checks the bytes as published rather
+    /// than the decoded index, so fields this app does not know yet stay
+    /// covered and a newer publisher's index still verifies here.
+    public static func verify(_ data: Data, publicKey: String) throws {
+        let (bytes, signature) = try signedBytes(of: data)
+        guard let signature, let signatureData = Data(base64Encoded: signature) else { throw IndexError.unsigned }
+        guard let key = Data(base64Encoded: publicKey),
+              try Signing.verify(signatureData, of: bytes, publicKey: key) else { throw IndexError.badSignature }
+    }
+
+    /// `signedBytes()` of the index in `data`, every field kept, and its
+    /// signature.
+    static func signedBytes(of data: Data) throws -> (bytes: Data, signature: String?) {
+        guard case .object(var fields) = try JSONDecoder().decode(JSONValue.self, from: data) else { throw IndexError.unsigned }
+        let signature = fields.removeValue(forKey: "signature")?.string
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        var bytes = Data("stackbarindex/1\n".utf8)
+        bytes.append(try encoder.encode(JSONValue.object(fields)))
+        return (bytes, signature)
+    }
+
     public func encoded() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -188,9 +218,10 @@ public struct PluginIndex: Codable, Equatable, Sendable {
 
     /// Downloads an index. With `publicKey`, it must be signed by that key.
     public static func fetch(_ url: URL, publicKey: String? = nil) async throws -> PluginIndex {
-        let index = try JSONDecoder().decode(PluginIndex.self, from: try await download(url))
+        let data = try await download(url)
+        let index = try JSONDecoder().decode(PluginIndex.self, from: data)
         if let format = index.format, format > currentFormat { throw IndexError.unsupportedFormat(format) }
-        if let publicKey { try index.verify(publicKey: publicKey) }
+        if let publicKey { try verify(data, publicKey: publicKey) }
         return index
     }
 
@@ -256,7 +287,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             formatter.formatOptions = [.withFullDate]
             return formatter.string(from: date)
         }
-        return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, updated: day)
+        return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, accent: manifest.accent?.rawValue, symbol: manifest.symbol, updated: day)
     }
 
     public static func download(_ url: URL) async throws -> Data {

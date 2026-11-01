@@ -29,10 +29,16 @@ const plugins = defineCollection({
     updated: z.string(),
     minimumStackbar: z.string().optional(),
     homepage: z.url(),
+    /** The plugin's own Theme hue, from its manifest (Stackbar 0.14.0). */
+    accent: z.string().optional(),
+    /** An SF Symbol name. Apple's licence keeps SF Symbols off the web, so the site draws a monogram. */
+    symbol: z.string().optional(),
     bundle: z.url(),
     sha256: z.string(),
     screenshot: z.url().optional(),
     surfaces: z.array(z.string()),
+    /** Renders of this version's surfaces, from the store's site.json. */
+    gallery: z.array(z.object({ surface: z.string(), light: z.url().optional(), dark: z.url().optional() })),
     capabilities: z.array(z.string()),
     readme: z.object({
       description: z.string(),
