@@ -111,20 +111,11 @@ final class PluginController: Identifiable {
         state = .starting
         defer { if generation == loadGeneration { building = false } }
         let source = source
-        let builder = model.builder
-        let sandbox = model.sandbox
+        let loader = PluginLoader(builder: model.builder, sandbox: model.sandbox)
         do {
-            let (binary, manifest) = try await Task.detached {
-                let built = source.pathExtension == "swift" ? try builder.build(source: source).binary : source
-                let manifest = try PluginProcess.readManifest(executable: built)
-                // The sandboxed copy is what runs; the manifest was read from
-                // the unsigned build, which has the same code.
-                let binary = sandbox ? try builder.sign(binary: built, manifest: manifest) : built
-                return (binary, manifest)
-            }.value
+            let loaded = try await Task.detached { try loader.load(source) }.value
             guard generation == loadGeneration else { return }
-            let problems = manifest.problems
-            if !problems.isEmpty { throw PluginSession.SessionError.badManifest(problems) }
+            let manifest = loaded.manifest
             if let clash = model.controllers.first(where: { $0 !== self && $0.pluginID == manifest.id }) {
                 throw LoadError.duplicateID(manifest.id, clash.source.lastPathComponent)
             }
@@ -156,7 +147,7 @@ final class PluginController: Identifiable {
             guard generation == loadGeneration else { return }
             updatesTask?.cancel()
             let (updates, continuation) = AsyncStream.makeStream(of: PluginSupervisor.Update.self)
-            let next = PluginSupervisor(executable: binary, manifest: manifest, grantedCapabilities: review.granted, services: model.services) { continuation.yield($0) }
+            let next = PluginSupervisor(executable: loaded.binary, manifest: manifest, grantedCapabilities: review.granted, services: model.services) { continuation.yield($0) }
             supervisor = next
             // One consumer, so updates are applied in the order they happened.
             updatesTask = Task { [weak self] in

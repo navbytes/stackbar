@@ -306,5 +306,8 @@ From a terminal: `stackbarctl build|render|manifest <file.swift>`,
 and calendar are simulated: `stackbarctl render <file> --copy "text"` (or the
 `stackbar_simulate_copy` tool) pretends the user copied something, and
 `STACKBAR_CALENDAR=events.json` sets the calendar (a sample day otherwise).
+On macOS stackbarctl and the MCP tools run the plugin in the same App Sandbox
+as the app, so a capability missing from the manifest fails here too
+(`--no-sandbox` turns that off).
 """#
 }
