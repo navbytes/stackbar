@@ -21,8 +21,8 @@ one site for both on 2026-11-01.
   Screenshots are the store's own renders. The home page's code sample is
   `Examples/ClockPlugin/Clock.swift`.
 - `.github/workflows/site.yml` tests, checks types and links, builds, and
-  deploys to GitHub Pages from main, daily, and on the store's
-  `store-published` dispatch.
+  deploys to GitHub Pages from main and hourly, so a newly published plugin
+  appears within the hour with no cross-repository token.
 - The store keeps serving `index.json` and bundles from
   navbytes.github.io/stackbar-plugins; its Pages root gets a redirect to
   `/plugins/` (stackbar-plugins change).

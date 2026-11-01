@@ -6,7 +6,8 @@
 @import '../generated/kit.css';
 
 :root {
-  color-scheme: light dark;
+  /* Dark first (Naveen, 2026-11-01); the header toggle switches to light. */
+  color-scheme: dark;
 
   --font-display: 'Bricolage Grotesque Variable', 'Inter Variable', system-ui, sans-serif;
   --font-text: 'Inter Variable', system-ui, -apple-system, sans-serif;
@@ -52,7 +53,6 @@
 }
 
 :root[data-theme='light'] { color-scheme: light; }
-:root[data-theme='dark'] { color-scheme: dark; }
 
 *, *::before, *::after { box-sizing: border-box; }
 

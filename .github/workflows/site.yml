@@ -1,8 +1,9 @@
 name: Site
 
 # Builds stackbar.navbytes.io (site/) and deploys it to GitHub Pages from main.
-# Plugin pages come from the published store, so the site also rebuilds daily
-# and when navbytes/stackbar-plugins publishes (repository_dispatch).
+# Plugin pages come from the published store, so the site also rebuilds every
+# hour, which picks up a newly published plugin without a cross-repository
+# token, and on a store-published dispatch if one is ever set up.
 on:
   push:
     branches: [main]
@@ -10,7 +11,7 @@ on:
   pull_request:
     paths: [site/**, Sources/StackbarKit/Design.swift, Sources/StackbarHostCore/OfficialIndex.swift, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, .github/workflows/site.yml]
   schedule:
-    - cron: '17 6 * * *'
+    - cron: '17 * * * *'
   repository_dispatch:
     types: [store-published]
   workflow_dispatch:

@@ -201,8 +201,7 @@ const safety = [
   .code-bar span { width: 11px; height: 11px; border-radius: 50%; background: var(--line-2); }
   .code-bar b { margin-left: 8px; font-weight: 500; }
   .code :global(pre) { margin: 0; padding: 20px 24px; max-height: 620px; overflow: auto; font-size: 14px; line-height: 1.65; background: transparent !important; }
-  :global(:root[data-theme='dark']) .code :global(.astro-code), :global(:root[data-theme='dark']) .code :global(.astro-code span) { color: var(--shiki-dark) !important; }
-  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme='light'])) .code :global(.astro-code), :global(:root:not([data-theme='light'])) .code :global(.astro-code span) { color: var(--shiki-dark) !important; } }
+  :global(:root:not([data-theme='light'])) .code :global(.astro-code), :global(:root:not([data-theme='light'])) .code :global(.astro-code span) { color: var(--shiki-dark) !important; }
   .terminal pre { margin: 0; padding: 20px; font-size: 13px; line-height: 1.7; overflow: auto; color: var(--stage-ink); }
   .terminal i { color: var(--brand-1-from); font-style: normal; }
   .terminal em { color: var(--stage-ink-2); font-style: normal; }

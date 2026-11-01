@@ -26,8 +26,8 @@ Nothing about Stackbar or a plugin is typed twice:
 - **Screenshots** are the renders the store publishes with each version.
 - **The code on the home page** is `Examples/ClockPlugin/Clock.swift`.
 
-The site rebuilds on a push that touches it, daily, and when the store
-publishes. Until `stackbar.navbytes.io` points at GitHub Pages it is served at
+The site rebuilds on a push that touches it and every hour, so a newly
+published plugin shows up within the hour. Until `stackbar.navbytes.io` points at GitHub Pages it is served at
 `navbytes.github.io/stackbar/`; to switch, set the custom domain in the
 repository's Pages settings and the `SITE_URL=https://stackbar.navbytes.io` and
 `SITE_BASE=/` variables in the workflow.
