@@ -32,5 +32,5 @@
 - [x] 4.7 On a Mac: the app, `FluidUI` and the CryptoKit and Security code compile; Clock runs in the menu bar (the widget project is not built yet)
 - [ ] 4.8 On a Mac: signing, Keychain and sandbox checks (README "Status")
 - [ ] 4.9 App writes plugin logs to the host log and shows `doctor` problems in Settings
-- [ ] 4.10 A day-long soak of PR Cockpit
+- [x] 4.10 A day-long soak of PR Cockpit: ran 2026-10-31 on a build before #33 and showed a leak (13 MB to 594 MB over 16 h, then compressed by macOS). #33 fixed the cause (autorelease pools in reader threads); the soak now measures the physical footprint and fails on mid-run climbs. Re-run on current main to confirm.
 - [x] 4.11 Audit fixes: secret names can't reach OAuth tokens, per-id storage files, no environment secrets in the app, no http redirect downgrade, OAuth callback state check, reload races, coalesced timer triggers, a single app instance, SHA-256 build keys that cover FluidKit

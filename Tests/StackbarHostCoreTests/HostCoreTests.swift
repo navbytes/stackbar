@@ -340,6 +340,21 @@ final class PluginSupervisorTests: XCTestCase {
         return true
     }
 
+    func testSoakFailsALeakThatComesBackDown() {
+        let mb = 1_048_576
+        // The 24-hour PR Cockpit run: steady growth for most of it, then the
+        // OS compressed the process and the end looked like the start.
+        let climbing = (0..<700).map { 13 * mb + $0 * mb * 4 / 5 }
+        let leaked = Soak.Report(samples: climbing + Array(repeating: 12 * mb, count: 300), restarts: 0, ticks: 1000, allowedGrowth: 0.15)
+        XCTAssertTrue(leaked.isFlat, "start and end alone look fine")
+        XCTAssertFalse(leaked.passed, "\(leaked)")
+        XCTAssertTrue(leaked.description.contains("climbed mid-run"))
+
+        let noisy = (0..<1000).map { 20 * mb + ($0 % 7) * mb / 10 }
+        let flat = Soak.Report(samples: noisy, restarts: 0, ticks: 1000, allowedGrowth: 0.15)
+        XCTAssertTrue(flat.passed, "\(flat)")
+    }
+
     func testSoakSamplesMemoryAndSkipsDestructiveButtons() async throws {
         let panel = ViewNode.section(title: nil, children: [
             .button(title: "Save", action: "button/Save"),
