@@ -11,7 +11,7 @@
 
 ## Wave 2
 - [ ] 2.1 `stackbarctl manifest --json`; `Manifest.storeProblems`; `index build` enforces it
-- [ ] 2.2 `Stackbar.getJSON(_:auth:)`, `StackbarError.missingSecret` and its standard panel view
+- [x] 2.2 `Stackbar.getJSON(_:auth:)`, `StackbarError.missingSecret` and its standard panel view
 
 ## Wave 3 (stackbar-plugins)
 - [ ] 3.1 `lint.py` reads `stackbarctl manifest --json`; raise `stackbarRevision`

@@ -93,7 +93,8 @@ exist only for the host's tests. `Examples/` are small plugins that each teach o
   one inside Stackbar. Spotlight and Shortcuts need the Xcode build
   (`scripts/install.sh`), which extracts the App Intents metadata.
 - **Services:** per-plugin storage (`@Stored`), secrets (Keychain), HTTP to
-  declared hosts only, an OAuth broker (authorization code with PKCE, refresh,
+  declared hosts only (`getJSON` and `postJSON` take `auth:` from a secret, and
+  an unset one shows as a standard "waiting for it" state), an OAuth broker (authorization code with PKCE, refresh,
   tokens in the Keychain), pub/sub between plugins, notifications, opening URLs
   and the clipboard. Behind their own capabilities: clipboard history and
   paste, keeping the Mac awake with battery and running apps, calendar
