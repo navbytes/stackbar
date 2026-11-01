@@ -6,8 +6,8 @@ import StackbarProtocol
 import StackbarUI
 
 /// Plugin windows: the `window` surface in a resizable window, one per plugin.
-/// While one is open Stackbar shows in the Dock and ⌘Tab, so a window behind
-/// others can be found again; it goes back to menu-bar only after the last.
+/// While one (or Settings) is open Stackbar shows in the Dock and ⌘Tab, so a
+/// window behind others can be found again; menu-bar only after the last.
 @MainActor
 @Observable
 final class PluginWindows: NSObject, NSWindowDelegate {
@@ -20,15 +20,30 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         windows[pluginID] != nil
     }
 
-    func updatePresence() {
-        let dock = !windows.isEmpty && (UserDefaults.standard.object(forKey: Self.dockIconKey) as? Bool ?? true)
+    /// Counts every titled window, so Settings too; panels (the palette) don't.
+    func updatePresence(excluding closing: NSWindow? = nil) {
+        let open = NSApp.windows.contains { $0 !== closing && !($0 is NSPanel) && $0.styleMask.contains(.titled) && ($0.isVisible || $0.isMiniaturized) }
+        let dock = open && (UserDefaults.standard.object(forKey: Self.dockIconKey) as? Bool ?? true)
         NSApp.setActivationPolicy(dock ? .regular : .accessory)
+    }
+
+    /// The plugin's open window when it isn't already in front of you:
+    /// behind other windows, minimized, or in an app you've left.
+    func buried(_ controller: PluginController) -> NSWindow? {
+        guard let window = windows[controller.pluginID] else { return nil }
+        if window.isMiniaturized || !window.isVisible { return window }
+        return NSApp.isActive && window.isKeyWindow ? nil : window
+    }
+
+    func show(_ window: NSWindow) {
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate()
     }
 
     func open(_ controller: PluginController) {
         if let window = windows[controller.pluginID] {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            show(window)
             return
         }
         let window = NSWindow(
@@ -46,8 +61,8 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         windows[controller.pluginID] = window
         controllers[ObjectIdentifier(window)] = controller
         controller.setVisible(.window, true)
-        updatePresence()
         window.makeKeyAndOrderFront(nil)
+        updatePresence()
         NSApp.activate()
     }
 
@@ -55,11 +70,14 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         windows[pluginID]?.close()
     }
 
+    /// Also the Settings window's delegate, so closing it updates the Dock.
     func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow, let controller = controllers.removeValue(forKey: ObjectIdentifier(window)) else { return }
-        controller.setVisible(.window, false)
-        windows[controller.pluginID] = nil
-        updatePresence()
+        guard let window = notification.object as? NSWindow else { return }
+        if let controller = controllers.removeValue(forKey: ObjectIdentifier(window)) {
+            controller.setVisible(.window, false)
+            windows[controller.pluginID] = nil
+        }
+        updatePresence(excluding: window)
     }
 }
 

@@ -35,6 +35,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Clicking the Dock icon (shown while a window is open) brings the
+    /// windows back, minimized ones included.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        for window in NSApp.windows where window.isMiniaturized { window.deminiaturize(nil) }
+        NSApp.arrangeInFront(nil)
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // Helpers exit on their own when their stdin closes with the app.
         model.prepareForTermination()
@@ -162,10 +170,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.isReleasedWhenClosed = false
             window.contentViewController = NSHostingController(rootView: SettingsView(model: model))
             window.center()
+            window.delegate = windows
             settingsWindow = window
         }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
+        windows.updatePresence()
     }
 }
 #endif
