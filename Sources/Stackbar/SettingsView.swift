@@ -42,6 +42,7 @@ struct GeneralSettings: View {
                     .onChange(of: dockIcon) { AppDelegate.shared?.windows.updatePresence() }
                 LabeledContent("Command palette", value: "⌃⌥Space")
             }
+            MacOSAlternativesSection()
             Section("Agents") {
                 Toggle("Let agents use plugin tools (MCP)", isOn: $model.agentGatewayEnabled)
                 if let error = model.agentGatewayError {

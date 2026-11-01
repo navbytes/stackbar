@@ -44,22 +44,18 @@ final class StdioTransport: Sendable {
                 let input = FileHandle.standardInput
                 var buffer = LineBuffer()
                 while true {
-                    let chunk = input.availableData
-                    if chunk.isEmpty { break }
-                    for line in buffer.append(chunk) {
-                        guard let message = try? LineCodec.decode(HostMessage.self, from: line) else { continue }
-                        if case .response(let id, let result) = message {
-                            // Straight to the waiting call, not behind the
-                            // refresh that is awaiting it.
-                            HostClient.shared.resolve(id: id, result: result)
-                        } else if case .runOutput = message {
-                            HostClient.shared.deliver(run: message)
-                        } else if case .runExit = message {
-                            HostClient.shared.deliver(run: message)
-                        } else {
-                            continuation.yield(message)
-                        }
+                    // Each read gets its own autorelease pool: on macOS
+                    // `availableData` and the decoding behind it hand back
+                    // autoreleased objects, and this thread's outer pool
+                    // would only drain when the plugin exits, so memory
+                    // grew with every message.
+                    let more = withAutoreleasePool {
+                        let chunk = input.availableData
+                        if chunk.isEmpty { return false }
+                        Self.dispatch(buffer.append(chunk), to: continuation)
+                        return true
                     }
+                    if !more { break }
                 }
                 // The host is gone (it quit or crashed). Fail waiting host
                 // calls so the runtime loop can finish, and don't outlive the
@@ -69,6 +65,23 @@ final class StdioTransport: Sendable {
                 DispatchQueue.global().asyncAfter(deadline: .now() + 2) { exit(0) }
             }
             reader.start()
+        }
+    }
+
+    private static func dispatch(_ lines: [Data], to continuation: AsyncStream<HostMessage>.Continuation) {
+        for line in lines {
+            guard let message = try? LineCodec.decode(HostMessage.self, from: line) else { continue }
+            if case .response(let id, let result) = message {
+                // Straight to the waiting call, not behind the refresh that
+                // is awaiting it.
+                HostClient.shared.resolve(id: id, result: result)
+            } else if case .runOutput = message {
+                HostClient.shared.deliver(run: message)
+            } else if case .runExit = message {
+                HostClient.shared.deliver(run: message)
+            } else {
+                continuation.yield(message)
+            }
         }
     }
 
