@@ -36,7 +36,7 @@ public final class HostClient: @unchecked Sendable {
 
     /// Sends a call without waiting. A failure is reported to the host's log.
     public func fire(_ call: HostCall) {
-        let label = Self.label(call)
+        let label = call.label
         send(call) { [weak self] result in
             if case .failure(let message) = result {
                 self?.deliver(.log(level: .warning, message: "\(label) failed: \(message)"))
@@ -145,35 +145,6 @@ public final class HostClient: @unchecked Sendable {
         let sendMessage = sendMessage
         lock.unlock()
         sendMessage?(message)
-    }
-
-    static func label(_ call: HostCall) -> String {
-        switch call {
-        case .storageSet(let key, _): return "saving \(key)"
-        case .secret(let name): return "reading secret \(name)"
-        case .http(let request): return "\(request.method) \(request.url)"
-        case .oauthToken(let provider, _): return "signing in to \(provider)"
-        case .publish(let topic, _): return "publishing to \(topic)"
-        case .notify: return "notification"
-        case .alert: return "alert"
-        case .playSound(let sound): return "playing \(sound.rawValue)"
-        case .openURL(let url): return "opening \(url)"
-        case .open(let url, _): return "opening \(url)"
-        case .copy: return "copying"
-        case .clipboardRead: return "reading the clipboard"
-        case .clipboardWrite: return "writing the clipboard"
-        case .paste: return "pasting"
-        case .keepAwake(let request): return request == nil ? "letting the Mac sleep" : "keeping the Mac awake"
-        case .systemStatus: return "reading system status"
-        case .calendarEvents: return "reading calendar events"
-        case .run(let request): return "running \(request.command)"
-        case .cancelRun: return "stopping a run"
-        case .context: return "reading the selection"
-        case .finderSelection: return "reading Finder's selection"
-        case .chooseFile: return "choosing a file"
-        case .saveFile(let name, _): return "saving \(name)"
-        case .resolveApplication(let name): return "finding the app \(name)"
-        }
     }
 }
 
@@ -436,7 +407,7 @@ public enum Stackbar {
         switch await HostClient.shared.call(call) {
         case .value(let value): return value
         case .failure(let message): throw HostError(message)
-        default: throw HostError("unexpected answer to \(HostClient.label(call))")
+        default: throw HostError("unexpected answer to \(call.label)")
         }
     }
 
@@ -444,7 +415,7 @@ public enum Stackbar {
         switch await HostClient.shared.call(call) {
         case .ok, .value: return
         case .failure(let message): throw HostError(message)
-        default: throw HostError("unexpected answer to \(HostClient.label(call))")
+        default: throw HostError("unexpected answer to \(call.label)")
         }
     }
 }

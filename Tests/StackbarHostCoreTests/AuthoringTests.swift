@@ -7,7 +7,7 @@ final class AuthoringTests: XCTestCase {
     func testLLMsTxtMatchesTheGuide() throws {
         let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("llms.txt")
         let text = try String(contentsOf: file, encoding: .utf8)
-        XCTAssertEqual(text, AuthoringGuide.text + "\n", "llms.txt is out of date; regenerate it with: swift run stackbarctl docs > llms.txt")
+        XCTAssertEqual(text, AuthoringGuide.text + "\n", "llms.txt is out of date; run scripts/generate-docs.sh")
     }
 
     func testTemplateNames() {

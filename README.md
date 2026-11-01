@@ -188,6 +188,7 @@ response, and a capped line length on the protocol.
 scripts/check.sh                 # what CI runs: build, every test, and a release build of the app on a Mac
 swift build && swift test        # quick loop
 STACKBAR_BUILD_TESTS=1 swift test   # also compiles real plugins through PluginBuilder
+scripts/generate-docs.sh         # rewrite llms.txt and the docs/surface-parity.md ledger from the code
 ```
 
 Everything except the app, `StackbarUI` and the widget builds and is tested on

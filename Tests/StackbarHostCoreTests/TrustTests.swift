@@ -67,6 +67,24 @@ final class CapabilityLedgerTests: XCTestCase {
             XCTAssertTrue(undeclared.contains("manifest's capabilities"), undeclared)
         }
     }
+
+    func testCapabilityRefusalsKeepTheirWording() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let services = HostServices.local(directory: directory)
+        let declared = Manifest(id: "dev.test.clip", name: "Clip", capabilities: [.clipboard])
+        var granted = declared
+        granted.capabilities = []
+
+        let undeclared = await services.handle(.clipboardRead, for: granted)
+        XCTAssertEqual(undeclared, .failure("to read the clipboard, add .clipboard to the manifest's capabilities"))
+        let waiting = await services.handle(.clipboardRead, for: granted, declared: declared)
+        XCTAssertEqual(waiting, .failure("Clip needs your approval to read the clipboard; open its panel in Stackbar and click Allow"))
+        // Releasing a keep-awake is never refused for want of `.power`.
+        if case .failure(let message) = await services.handle(.keepAwake(nil), for: granted) {
+            XCTAssertFalse(message.contains("power"), message)
+        }
+    }
 }
 
 final class ForkTests: XCTestCase {
