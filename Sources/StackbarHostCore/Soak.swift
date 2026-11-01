@@ -96,7 +96,7 @@ public struct Soak: Sendable {
             await supervisor.send(.visibility(surface: .panel, visible: false))
             await supervisor.send(.visibility(surface: .panel, visible: true))
             if pressEvents, let panel = await supervisor.views[.panel] {
-                for action in Self.safeActions(in: panel) { await supervisor.event(action) }
+                for action in Self.safeActions(in: panel) { await press(action, on: supervisor) }
             }
             try? await Task.sleep(for: .seconds(interval))
             if let pid = await supervisor.helperPID, let bytes = ProcessMemory.residentBytes(pid) {
@@ -116,6 +116,19 @@ public struct Soak: Sendable {
             guard action.rawValue.hasPrefix("button/") else { return false }
             let label = action.rawValue.lowercased()
             return !avoid.contains { label.contains($0) }
+        }
+    }
+
+    /// Presses `action` if the panel still offers it (an earlier press may
+    /// have removed it, like "Mark all as seen"), then waits for the plugin to
+    /// settle so the next press sees the panel that press produced.
+    private func press(_ action: ActionID, on supervisor: PluginSupervisor) async {
+        guard let panel = await supervisor.views[.panel], panel.actions.contains(action) else { return }
+        let before = await supervisor.settledCount
+        await supervisor.event(action)
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline, await supervisor.settledCount <= before {
+            try? await Task.sleep(for: .milliseconds(10))
         }
     }
 
