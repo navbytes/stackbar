@@ -7,6 +7,6 @@
 - [x] 1.5 SurfaceParity rows, regenerated docs/surface-parity.md; agent text for grids and remote images; lint uses `Paint.stops`
 - [x] 1.6 Kit modifiers and views; design components with lint and contrast tests
 - [x] 1.7 Authoring guide and llms.txt; Stackbar 0.14.0
-- [ ] 1.8 Look at the new components on a Mac, light and dark (`stackbarctl render --png`)
-- [ ] 1.9 Bold second pass on the store plugins (stackbar-plugins), wave 1: Music, World Clock, Up Next, System Monitor, Stay Awake
-- [ ] 1.10 Wave 2: the other 13 plugins
+- [x] 1.8 Look at the new components on a Mac, light and dark (`stackbarctl render --png`)
+- [x] 1.9 Bold second pass on the store plugins (stackbar-plugins), wave 1: Music, World Clock, Up Next, System Monitor, Stay Awake
+- [x] 1.10 Wave 2: the other 13 plugins (both waves: navbytes/stackbar-plugins#9, checked over five light and dark render passes)
