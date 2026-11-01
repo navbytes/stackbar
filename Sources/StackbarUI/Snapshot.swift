@@ -14,13 +14,15 @@ public enum Snapshot {
         case .menuBar:
             content = AnyView(MenuBarView(node: node, fallbackTitle: "").padding(4).frame(height: 24))
         case .panel, .window, .settings:
-            content = AnyView(NodeView(node: node, send: { _, _ in }).padding(12).frame(width: surface == .panel ? 360 : 520, alignment: .leading))
+            // The panel is 380 points wide with 12 points of padding, as in PanelView.
+            content = AnyView(NodeView(node: node, send: { _, _ in }).padding(12).frame(width: surface == .panel ? 380 : 520, alignment: .leading))
         case .widget:
             content = AnyView(WidgetContentView(node: node).frame(width: 330, height: 155))
         }
         let view = content
             .background(Color(nsColor: .windowBackgroundColor))
             .environment(\.colorScheme, dark ? .dark : .light)
+            .environment(\.stackbarSnapshot, true)
         let renderer = ImageRenderer(content: view)
         renderer.scale = scale
         guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else { return nil }

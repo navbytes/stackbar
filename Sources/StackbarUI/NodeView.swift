@@ -28,6 +28,9 @@ extension EnvironmentValues {
     @Entry var stackbarFont: FontSpec? = nil
     /// A `styled` foreground, used in place of role colors.
     @Entry var stackbarForeground: Paint? = nil
+    /// Drawing for `Snapshot`: AppKit-backed controls (text fields, pickers)
+    /// don't render off screen, so they draw as SwiftUI look-alikes.
+    @Entry public var stackbarSnapshot: Bool = false
 }
 
 /// Draws one `ViewNode` for the panel and window surfaces. Every case of the
@@ -38,6 +41,7 @@ public struct NodeView: View {
     let node: ViewNode
     let send: SendAction
     @Environment(\.stackbarReadOnly) private var readOnly
+    @Environment(\.stackbarSnapshot) private var snapshot
     @Environment(\.stackbarFont) private var font
     @Environment(\.stackbarForeground) private var foreground
 
@@ -112,8 +116,14 @@ public struct NodeView: View {
         case .chart(let values, let kind, let label, let role, let options):
             ChartNodeView(values: values, kind: kind, label: label, role: role, options: options ?? ChartOptions(), tint: foreground?.flatColor)
         case .textField(let placeholder, let text, let action):
-            FieldNodeView(placeholder: placeholder, text: text, action: action, send: send)
-                .disabled(readOnly)
+            if snapshot {
+                SnapshotField(placeholder: placeholder, text: text)
+            } else {
+                FieldNodeView(placeholder: placeholder, text: text, action: action, send: send)
+                    .disabled(readOnly)
+            }
+        case .picker(let title, let options, let selection, let style, _) where snapshot:
+            SnapshotPicker(title: title, options: options, selection: selection, segmented: style == .segmented)
         case .picker(let title, let options, let selection, let style, let action):
             let picker = Picker(title, selection: Binding(get: { selection ?? "" }, set: { send(action, .text($0)) })) {
                 ForEach(options, id: \.self) { Text($0).tag($0) }
