@@ -169,6 +169,9 @@ public final class HostClient: @unchecked Sendable {
         case .cancelRun: return "stopping a run"
         case .context: return "reading the selection"
         case .finderSelection: return "reading Finder's selection"
+        case .chooseFile: return "choosing a file"
+        case .saveFile(let name, _): return "saving \(name)"
+        case .resolveApplication(let name): return "finding the app \(name)"
         }
     }
 }
@@ -391,6 +394,29 @@ public enum Stackbar {
     public static func finderSelection() async throws -> [String] {
         guard let json = try await value(.finderSelection) else { return [] }
         return try SystemCodec.decode([String].self, from: json)
+    }
+
+    // MARK: Files and apps
+
+    /// Asks the user to pick a file (of these extensions, or any) and
+    /// returns its name and contents, at most 5 MB; `nil` when they cancel.
+    /// Needs no capability: the user chooses.
+    public static func chooseFile(types: [String] = []) async throws -> ChosenFile? {
+        guard let json = try await value(.chooseFile(types: types)) else { return nil }
+        return try SystemCodec.decode(ChosenFile.self, from: json)
+    }
+
+    /// Asks the user where to save `data`, suggesting `name`; returns the
+    /// path written, or `nil` when they cancel. At most 5 MB.
+    @discardableResult
+    public static func saveFile(_ name: String, data: Data) async throws -> String? {
+        try await value(.saveFile(name: name, data: data))
+    }
+
+    /// An installed app's bundle id from its name ("Safari"), path or
+    /// bundle id; `nil` when it isn't installed.
+    public static func resolveApplication(_ nameOrPath: String) async throws -> String? {
+        try await value(.resolveApplication(nameOrPath))
     }
 
     private static func value(_ call: HostCall) async throws -> String? {

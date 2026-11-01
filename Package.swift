@@ -44,11 +44,12 @@ let package = Package(
         .executableTarget(name: "ClipboardPlugin", dependencies: ["StackbarKit"], path: "Plugins/ClipboardPlugin"),
         .executableTarget(name: "StayAwakePlugin", dependencies: ["StackbarKit"], path: "Plugins/StayAwakePlugin"),
         .executableTarget(name: "UpNextPlugin", dependencies: ["StackbarKit"], path: "Plugins/UpNextPlugin"),
+        .executableTarget(name: "QuicklinksPlugin", dependencies: ["StackbarKit"], path: "Plugins/QuicklinksPlugin"),
         // A plugin that misbehaves on request, so the supervisor's crash and
         // restart handling is tested against a real process.
         .executableTarget(name: "FixturePlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/FixturePlugin"),
         .testTarget(name: "StackbarProtocolTests", dependencies: ["StackbarProtocol"]),
         .testTarget(name: "StackbarKitTests", dependencies: ["StackbarKit"]),
-        .testTarget(name: "StackbarHostCoreTests", dependencies: ["StackbarHostCore", "ClockPlugin", "FixturePlugin", "PomodoroPlugin", "TodoPlugin", "ClipboardPlugin", "StayAwakePlugin", "UpNextPlugin"]),
+        .testTarget(name: "StackbarHostCoreTests", dependencies: ["StackbarHostCore", "ClockPlugin", "FixturePlugin", "PomodoroPlugin", "TodoPlugin", "ClipboardPlugin", "StayAwakePlugin", "UpNextPlugin", "QuicklinksPlugin"]),
     ]
 )

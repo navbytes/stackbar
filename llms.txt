@@ -140,6 +140,28 @@ Form(submit: "Add") {
 }
 ```
 
+## Templates (quicklinks and snippets)
+
+`Template` fills Raycast-style placeholders, so links and text can ask for
+input and pick up what the user copied or selected:
+
+```swift
+let template = try Template("https://github.com/search?q={argument name=\"query\"}&type={argument name=\"type\" default=\"code\"}")
+template.arguments            // query (required), type (default code): use them as the command's arguments
+let url = try template.render(invocation.arguments, in: Template.Environment(clipboard: copied, selection: invocation.context?.selectedText), encoding: .url).text
+```
+
+Placeholders: `{argument name= default= options="a, b"}` (3 at most),
+`{clipboard}`, `{selection}`, `{date}`, `{time}`, `{datetime}`, `{day}` (each with
+`format="yyyy-MM-dd"`, `offset="+2d -3h"`, `locale="fr-FR"`), `{uuid}`,
+`{cursor}` (`render(...).cursorFromEnd` for `.paste(text, cursorFromEnd:)`),
+`{snippet name=}` (from `environment.snippets`, one level). Modifiers chain
+after `|`: `uppercase`, `lowercase`, `trim`, `percent-encode`,
+`json-stringify`, `raw`. With `encoding: .url` values are percent-encoded
+(not the template's own text) unless `raw`. A brace group that isn't a
+placeholder stays as written; `template.unrecognized` lists likely typos
+for a form to flag. Errors name the placeholder that failed.
+
 ## Views (ViewContent bodies, SwiftUI-like; `if`, `for`, `switch` work)
 
 - `Text(s).style(.title|.headline|.body|.caption|.monospaced).role(r)`
@@ -154,6 +176,7 @@ Form(submit: "Add") {
   fuzzy ("gthb" finds "GitHub") and plain rows are ranked best first.
   `.preview(text:imageID:caption:)` shows the full text or a kept clipboard
   image under the list while the row is selected; search looks through it.
+- `Row(...).appIcon("com.apple.Safari")` draws that app's icon instead of the symbol (the symbol stays as the fallback).
 - `Badge(text, role:)`, `ProgressBar(label, value:, total:)`, `LabeledContent(label, value:)`
 - `Chart(label, values: [Double], kind: .line|.bar|.area|.donut, role:, labels: ["Mon", …], unit: "h", goal: 4, highlight: 6)`
   `labels` name the points (or a donut's slices), `unit` follows values, `goal`
@@ -185,6 +208,8 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `for try await event in Stackbar.stream("docker", ["logs", "-f", id]) { switch event { case .stdout(let data), .stderr(let data): …; case .exit(let exit): … } }`; leaving the loop stops it | `.run(commands: ["docker"])` |
 | `invocation.context` in commands, or `try await Stackbar.context()` now: frontmostApp, windowTitle, selectedText (nil when the app doesn't share it); `try await Stackbar.finderSelection()` returns paths | `.context` |
 | `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing |
+| `try await Stackbar.chooseFile(types: ["json"])` returns `ChosenFile?` (name, data; 5 MB at most), `try await Stackbar.saveFile("x.json", data:)` returns the path; nil when the user cancels | nothing (the user picks) |
+| `try await Stackbar.resolveApplication("Google Chrome")` returns a bundle id from an app's name, path or id | nothing |
 | `try await Stackbar.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
 | `try await Stackbar.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Stackbar.paste(content)` (into the app the user was in; needs Accessibility for Stackbar) | `.clipboard` |
 | `try await Stackbar.keepAwake(display:, reason:)`, `Stackbar.allowSleep()`; the host releases it if the plugin stops | `.power` |

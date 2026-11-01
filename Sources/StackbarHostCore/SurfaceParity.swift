@@ -77,7 +77,7 @@ public enum SurfaceParity {
         case .stack: return "VStack / HStack"
         case .list: return "List; filter field when searchable"
         case .section: return "Captioned group"
-        case .row: return "Row; click = first action, context menu = all"
+        case .row: return "Row with app icon or symbol; click = first action, context menu = all"
         case .badge: return "Capsule"
         case .button: return "Button"
         case .toggle: return "Toggle"

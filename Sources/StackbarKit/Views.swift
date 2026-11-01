@@ -115,6 +115,7 @@ public struct Row: StackbarView {
     var title: String
     var subtitle: String?
     var symbol: String?
+    var appIcon: String?
     var accessories: [ViewNode] = []
     var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler?, navigate: CommandTarget?)] = []
     var preview: RowPreview?
@@ -126,6 +127,14 @@ public struct Row: StackbarView {
         self.title = title
         self.subtitle = subtitle
         self.symbol = symbol
+    }
+
+    /// Shows the icon of the app with this bundle id instead of the symbol
+    /// (the symbol stays as the fallback when the app isn't installed).
+    public func appIcon(_ bundleID: String?) -> Row {
+        var copy = self
+        copy.appIcon = bundleID
+        return copy
     }
 
     public func badge(_ text: String, role: Role = .secondary) -> Row {
@@ -171,7 +180,7 @@ public struct Row: StackbarView {
             let id = action.handler.map { context.register(base, $0) } ?? ActionID(context.prefix + base)
             return ActionRef(id: id, title: action.title, shortcut: action.shortcut, role: action.role, navigate: action.navigate)
         }
-        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, accessories: accessories, actions: refs, preview: preview))]
+        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, accessories: accessories, actions: refs, preview: preview))]
     }
 }
 

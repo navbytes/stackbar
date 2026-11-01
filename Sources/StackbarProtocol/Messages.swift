@@ -9,7 +9,8 @@ public enum StackbarProtocolVersion {
     /// 6 added full-screen alerts.
     /// 7 added commands, command views, forms and row navigation.
     /// 8 added running declared commands and reading the user's context.
-    public static let current = 8
+    /// 9 added file panels, finding apps and rows with an app's icon.
+    public static let current = 9
 }
 
 /// Host → plugin.
@@ -178,6 +179,17 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// The paths selected in Finder (`[String]` as JSON). Needs `.context`;
     /// macOS asks the user once to let Stackbar control Finder.
     case finderSelection
+    /// Shows an Open panel for a file of these types (extensions such as
+    /// `json`, or empty for any) and answers with `ChosenFile` as JSON, or
+    /// `nil` when the user cancelled. At most 5 MB. Needs nothing: the user
+    /// picks the file.
+    case chooseFile(types: [String])
+    /// Shows a Save panel with `name` filled in and writes `data` where the
+    /// user says; answers with the path, or `nil` when they cancelled.
+    case saveFile(name: String, data: Data)
+    /// The bundle id of an installed app named by its name ("Safari"), its
+    /// path or its bundle id, or `nil` when there is none.
+    case resolveApplication(String)
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

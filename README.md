@@ -70,6 +70,7 @@ Stackbar menu or Settings). `Examples/` are small plugins that each teach one id
 | Clipboard History | Everything you copy, searchable, with pins, ⌘1–⌘9 to paste into the app you were in, images, ignored apps (password managers by default) and a pause. ⌘⇧V opens it. | `.clipboard` |
 | Stay Awake | Keeps the Mac awake indefinitely, for a while, until a time, while an app runs, or on a weekday schedule. Lets go below a battery level or in Low Power Mode. | `.power` |
 | Up Next | The meeting on now or next in the menu bar with a countdown, one-click join for Zoom, Meet, Teams, Webex and more, reminders, auto-join, calendar filters. ⌃⌥J opens it. | `.calendar` |
+| Quicklinks | Links and folders you open by name: each is a command (palette, Spotlight, hotkeys, links) whose placeholders ask for input or take the clipboard, the selection or the date. Imports and exports Raycast's quicklinks. No menu-bar item. | `.openURLs(["*"])`, `.clipboard`, `.context` |
 | PR Cockpit | Pull requests waiting on your review and your own, with checks, review decision and conflicts; notifies on new requests, approvals and failing checks. | GitHub token |
 
 ## What the host provides

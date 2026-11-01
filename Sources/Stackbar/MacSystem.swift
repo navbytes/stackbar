@@ -6,6 +6,8 @@ import IOKit.ps
 import IOKit.pwr_mgt
 import StackbarHostCore
 import StackbarProtocol
+import StackbarUI
+import UniformTypeIdentifiers
 
 /// The clipboard, power assertions, battery, running apps and calendar for
 /// plugins, read from AppKit, IOKit and EventKit. `HostServices` checks each
@@ -314,6 +316,48 @@ final class MacSystem: SystemServices, @unchecked Sendable {
 
     func finderSelection() async throws -> [String] {
         try await MacContext.finderSelection()
+    }
+
+    // MARK: Files and apps
+
+    func chooseFile(types: [String], for pluginName: String) async throws -> ChosenFile? {
+        let url: URL? = await MainActor.run {
+            let panel = NSOpenPanel()
+            panel.message = "\(pluginName) asks for a file"
+            panel.canChooseDirectories = false
+            panel.allowsMultipleSelection = false
+            let kinds = types.compactMap { UTType(filenameExtension: $0) }
+            if !kinds.isEmpty { panel.allowedContentTypes = kinds }
+            NSApp.activate()
+            return panel.runModal() == .OK ? panel.url : nil
+        }
+        guard let url else { return nil }
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard size <= ChosenFile.maxBytes else { throw SystemServiceError("\(url.lastPathComponent) is larger than 5 MB") }
+        return ChosenFile(name: url.lastPathComponent, data: try Data(contentsOf: url))
+    }
+
+    func saveFile(name: String, data: Data, for pluginName: String) async throws -> String? {
+        let url: URL? = await MainActor.run {
+            let panel = NSSavePanel()
+            panel.message = "\(pluginName) saves a file"
+            panel.nameFieldStringValue = name
+            NSApp.activate()
+            return panel.runModal() == .OK ? panel.url : nil
+        }
+        guard let url else { return nil }
+        try data.write(to: url, options: .atomic)
+        return url.path
+    }
+
+    func resolveApplication(_ nameOrPath: String) async -> String? {
+        if nameOrPath.hasPrefix("/") || nameOrPath.hasPrefix("~") {
+            return Bundle(path: NSString(string: nameOrPath).expandingTildeInPath)?.bundleIdentifier
+        }
+        if NSWorkspace.shared.urlForApplication(withBundleIdentifier: nameOrPath) != nil { return nameOrPath }
+        let name = nameOrPath.hasSuffix(".app") ? String(nameOrPath.dropLast(4)) : nameOrPath
+        let apps = await InstalledApp.load()
+        return apps.first { $0.name.caseInsensitiveCompare(name) == .orderedSame || $0.url.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(name) == .orderedSame }?.id
     }
 
     private func onMain<T: Sendable>(_ body: @MainActor () -> T) -> T {
