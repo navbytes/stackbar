@@ -167,3 +167,49 @@ func awaitResult<T: Sendable>(_ body: @escaping @Sendable () async throws -> T) 
 private final class ResultBox<T>: @unchecked Sendable {
     var result: Result<T, Error>?
 }
+
+#if canImport(CryptoKit)
+final class BundledStoreTests: XCTestCase {
+    func testMigratesUntouchedCopiesAndKeepsEditedOnes() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundles = root.appendingPathComponent("Bundles"), plugins = root.appendingPathComponent("Plugins")
+        try FileManager.default.createDirectory(at: bundles, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: plugins, withIntermediateDirectories: true)
+        let key = try Signing.generateKey()
+        func sign(_ id: String, _ version: String) throws {
+            let bundle = try Signing.bundle(source: "// \(id) \(version)", manifest: Manifest(id: id, name: id, version: version), publisherName: "navbytes", privateKey: key.privateKey)
+            try bundle.encoded().write(to: bundles.appendingPathComponent("\(id)-\(version).stackbarplugin"))
+        }
+        try sign("io.navbytes.stackbar.clipboard", "1.0.0")
+        try sign("io.navbytes.stackbar.clipboard", "1.2.0")
+        try sign("io.navbytes.stackbar.up-next", "1.0.0")
+        try sign("io.navbytes.stackbar.stay-awake", "1.0.0")
+        // Signed by someone else: never used.
+        let other = try Signing.bundle(source: "// evil", manifest: Manifest(id: "io.navbytes.stackbar.pr-cockpit", name: "x", version: "9.0.0"), publisherName: "navbytes", privateKey: Signing.generateKey().privateKey)
+        try other.encoded().write(to: bundles.appendingPathComponent("evil.stackbarplugin"))
+
+        let record = root.appendingPathComponent("bundled.json")
+        try Data("// old clipboard".utf8).write(to: plugins.appendingPathComponent("Clipboard.swift"))   // no record: an install.sh copy
+        try Data("// my up next".utf8).write(to: plugins.appendingPathComponent("UpNext.swift"))          // edited since recorded
+        try JSONEncoder().encode(["UpNext.swift": SHA256.hex(Data("// shipped up next".utf8))]).write(to: record)
+
+        let installer = PluginInstaller(pluginsDirectory: plugins, publishers: PublisherStore(file: root.appendingPathComponent("p.json")), recordFile: root.appendingPathComponent("installed.json"))
+        let store = BundledStore(bundlesDirectory: bundles, pluginsDirectory: plugins, bundledRecord: record, installer: installer, publicKey: key.publicKey.base64EncodedString())
+        XCTAssertEqual(store.bundles().map { "\($0.manifest.id) \($0.manifest.version)" },
+                       ["io.navbytes.stackbar.clipboard 1.2.0", "io.navbytes.stackbar.stay-awake 1.0.0", "io.navbytes.stackbar.up-next 1.0.0"])
+
+        let migrated = store.migrate()
+        XCTAssertEqual(migrated.map(\.old.lastPathComponent), ["Clipboard.swift"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: plugins.appendingPathComponent("Clipboard.swift").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: plugins.appendingPathComponent("Clipboard.swift.bak").path))
+        XCTAssertEqual(try String(contentsOf: migrated[0].new, encoding: .utf8), "// io.navbytes.stackbar.clipboard 1.2.0")
+        XCTAssertEqual(try String(contentsOf: plugins.appendingPathComponent("UpNext.swift"), encoding: .utf8), "// my up next", "an edited copy stays the user's")
+
+        let added = store.installMissing()
+        XCTAssertEqual(added.count, 1, "Stay Awake is new; Up Next has the user's copy; Clipboard is installed")
+        XCTAssertEqual(Set(installer.installed.map(\.id)), ["io.navbytes.stackbar.clipboard", "io.navbytes.stackbar.stay-awake"])
+        XCTAssertEqual(store.migrate(), [], "running it again changes nothing")
+    }
+}
+#endif

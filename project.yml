@@ -36,7 +36,7 @@ targets:
         NSCalendarsFullAccessUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
         NSCalendarsUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
         NSAppleEventsUsageDescription: Plugins you approve to read what you're working on can see the files you select in Finder.
-        CFBundleShortVersionString: "0.10.0"
+        CFBundleShortVersionString: "0.11.0"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
         # stackbar://commands/<plugin>/<command>?argument=value
@@ -71,7 +71,7 @@ targets:
     info:
       path: Packaging/Widget-Info.generated.plist
       properties:
-        CFBundleShortVersionString: "0.10.0"
+        CFBundleShortVersionString: "0.11.0"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

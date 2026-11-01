@@ -33,6 +33,6 @@ withdraw a bad release.
 
 ## Not in this change
 
-- The four bundled plugins stay in `Plugins/` (decided 2026-11-01).
+- ~~The bundled plugins stay in `Plugins/`~~: Naveen asked on 2026-11-01 to move them now (tasks section 7).
 - A host-level grant for user-chosen network hosts.
 - Key rotation records in the index.

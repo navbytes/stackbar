@@ -1,6 +1,6 @@
 import Foundation
 
-/// Keeps the plugins Stackbar ships (Plugins/ and Examples/) current in the
+/// Keeps the examples Stackbar ships (Examples/) current in the
 /// user's plugins folder without overwriting their edits.
 ///
 /// A copy is replaced when it is still exactly what Stackbar last wrote (the
