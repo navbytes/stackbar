@@ -79,6 +79,13 @@ final class DesignTests: XCTestCase {
         XCTAssertEqual(widths[1], 2)
     }
 
+    func testTagChipsPutTheRestInAMenu() async {
+        let context = RenderContext()
+        var picked: [String?] = []
+        _ = TagChips(["work", "docs", "home", "dev", "music", "misc"], selection: "music", theme: .cyan) { picked.append($0) }.resolve(in: context)
+        XCTAssertEqual(Set(context.handlers.keys), ["button/tag/All", "button/tag/work", "button/tag/docs", "button/tag/home", "button/tag/dev", "picker/tag/More"])
+    }
+
     func testTypographySetsTheWholeFont() async {
         XCTAssertEqual(Text("12").typography(.stat).resolve(in: RenderContext()), [
             .styled(.text("12"), style: Style(font: FontSpec(size: 20, weight: .semibold, design: .rounded, monospacedDigit: true))),

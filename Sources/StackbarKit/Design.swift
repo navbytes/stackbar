@@ -758,3 +758,37 @@ public struct Chip: StackbarView {
         .resolve(in: context)
     }
 }
+
+/// A row of tag filters: "All", the first few tags as chips, and the rest
+/// in a "More" menu. `selection` nil is All; `onSelect` gets the tag, or nil.
+public struct TagChips: StackbarView {
+    var tags: [String]
+    var selection: String?
+    var theme: Theme
+    var limit: Int
+    var onSelect: @MainActor (String?) async throws -> Void
+
+    public init(_ tags: [String], selection: String?, theme: Theme, limit: Int = 4, onSelect: @escaping @MainActor (String?) async throws -> Void) {
+        self.tags = tags
+        self.selection = selection
+        self.theme = theme
+        self.limit = limit
+        self.onSelect = onSelect
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        let shown = Array(tags.prefix(limit)), rest = Array(tags.dropFirst(limit))
+        let onSelect = onSelect
+        return HStack(spacing: Space.xs + 2) {
+            Chip("All", theme: theme, selected: selection == nil, key: "tag/All") { try await onSelect(nil) }
+            ForEach(shown) { tag in
+                Chip(tag, theme: theme, selected: selection == tag, key: "tag/\(tag)") { try await onSelect(tag) }
+            }
+            if !rest.isEmpty {
+                Picker("More", options: rest, selection: selection.flatMap { rest.contains($0) ? $0 : nil }, key: "tag/More") { try await onSelect($0) }
+            }
+            Spacer()
+        }
+        .resolve(in: context)
+    }
+}
