@@ -71,6 +71,7 @@ Stackbar menu or Settings). `Examples/` are small plugins that each teach one id
 | Stay Awake | Keeps the Mac awake indefinitely, for a while, until a time, while an app runs, or on a weekday schedule. Lets go below a battery level or in Low Power Mode. | `.power` |
 | Up Next | The meeting on now or next in the menu bar with a countdown, one-click join for Zoom, Meet, Teams, Webex and more, reminders, auto-join, calendar filters. ⌃⌥J opens it. | `.calendar` |
 | Quicklinks | Links and folders you open by name: each is a command (palette, Spotlight, hotkeys, links) whose placeholders ask for input or take the clipboard, the selection or the date. Imports and exports Raycast's quicklinks. No menu-bar item. | `.openURLs(["*"])`, `.clipboard`, `.context` |
+| Snippets | Text you paste by name (⌃⌥S): each snippet is a command whose placeholders fill in the clipboard, the selection, the date or what you type, with `{cursor}` placing the caret. Your clipboard comes back after the paste. Imports and exports Raycast's snippets. Keywords are kept but not expanded as you type. No menu-bar item. | `.clipboard`, `.context`, `.storage(megabytes: 16)` |
 | PR Cockpit | Pull requests waiting on your review and your own, with checks, review decision and conflicts; notifies on new requests, approvals and failing checks. | GitHub token |
 
 ## What the host provides

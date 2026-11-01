@@ -98,8 +98,9 @@ public final class CommandRunner: Sendable {
             return await host(.open(url: url, app: app), supervisor, success: nil)
         case .copy(let text):
             return await host(.copy(text), supervisor, success: "Copied")
-        case .paste(let text, _):
-            return await host(.paste(.text(text)), supervisor, success: nil)
+        case .paste(let text, let cursor):
+            // A command's paste is a one-off: the user's clipboard comes back.
+            return await host(.paste(.text(text), options: PasteOptions(restoreClipboard: true, cursorFromEnd: cursor)), supervisor, success: nil)
         }
     }
 

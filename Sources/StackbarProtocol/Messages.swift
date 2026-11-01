@@ -10,7 +10,8 @@ public enum StackbarProtocolVersion {
     /// 7 added commands, command views, forms and row navigation.
     /// 8 added running declared commands and reading the user's context.
     /// 9 added file panels, finding apps and rows with an app's icon.
-    public static let current = 9
+    /// 10 added paste options (restoring the clipboard, the cursor) and storage grants.
+    public static let current = 10
 }
 
 /// Host → plugin.
@@ -157,7 +158,9 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// Puts the content on the clipboard and pastes it into the app the user
     /// was in. Needs `.clipboard`, and Accessibility access for the host;
     /// without it the content is still copied and the call fails saying so.
-    case paste(ClipboardContent)
+    /// `options` (protocol 10) restore the clipboard afterwards and place
+    /// the caret.
+    case paste(ClipboardContent, options: PasteOptions? = nil)
     /// Keeps the Mac awake for this plugin until called with `nil`, or until
     /// the plugin stops or crashes. Needs `.power`.
     case keepAwake(KeepAwakeRequest?)

@@ -315,8 +315,14 @@ public enum Stackbar {
     /// Puts the content on the clipboard and pastes it into the app the user
     /// was in before Stackbar's panel opened. Needs `.clipboard`. Throws (after
     /// copying) when Stackbar lacks Accessibility access.
-    public static func paste(_ content: ClipboardContent) async throws {
-        try await ok(.paste(content))
+    ///
+    /// `restoringClipboard` puts back what the user had copied about half a
+    /// second later (unless they copied something else meanwhile), and marks
+    /// the pasted content transient so clipboard managers skip it.
+    /// `cursorFromEnd` moves the caret that many characters left afterwards.
+    public static func paste(_ content: ClipboardContent, restoringClipboard: Bool = false, cursorFromEnd: Int = 0) async throws {
+        let options = restoringClipboard || cursorFromEnd > 0 ? PasteOptions(restoreClipboard: restoringClipboard, cursorFromEnd: cursorFromEnd) : nil
+        try await ok(.paste(content, options: options))
     }
 
     /// Keeps the Mac (and with `display`, the screen) awake until

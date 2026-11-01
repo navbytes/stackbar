@@ -65,6 +65,25 @@ public enum ClipboardContent: Codable, Equatable, Sendable {
     case stored(id: String)
 }
 
+/// How the host pastes.
+public struct PasteOptions: Codable, Equatable, Sendable {
+    /// Put back what was on the clipboard about half a second after pasting,
+    /// unless the user copied something in the meantime. The pasted text is
+    /// marked transient, so clipboard managers skip it.
+    public var restoreClipboard: Bool
+    /// Characters (grapheme clusters) to move the caret left after pasting,
+    /// one ← press each, for a `{cursor}` placeholder.
+    public var cursorFromEnd: Int
+
+    public init(restoreClipboard: Bool = false, cursorFromEnd: Int = 0) {
+        self.restoreClipboard = restoreClipboard
+        self.cursorFromEnd = max(0, cursorFromEnd)
+    }
+
+    /// At most this many ← presses.
+    public static let maxCursorFromEnd = 10_000
+}
+
 /// A file the user picked in an Open panel.
 public struct ChosenFile: Codable, Equatable, Sendable {
     public var name: String

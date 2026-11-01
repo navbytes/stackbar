@@ -13,8 +13,9 @@ public protocol SystemServices: Sendable {
     func clipboardChangeCount() -> Int
     func readClipboard() -> ClipboardItem?
     func writeClipboard(_ content: ClipboardContent) throws
-    /// Writes the content, then pastes it into the app the user was in.
-    func paste(_ content: ClipboardContent) async throws
+    /// Writes the content, then pastes it into the app the user was in,
+    /// moving the caret and restoring the clipboard as `options` say.
+    func paste(_ content: ClipboardContent, options: PasteOptions) async throws
     /// Holds (or with `nil` releases) the plugin's power assertion.
     func keepAwake(_ request: KeepAwakeRequest?, pluginID: String) throws
     func systemStatus() -> SystemStatus
@@ -52,7 +53,7 @@ public struct UnsupportedSystem: SystemServices {
     public func clipboardChangeCount() -> Int { 0 }
     public func readClipboard() -> ClipboardItem? { nil }
     public func writeClipboard(_ content: ClipboardContent) throws { throw error }
-    public func paste(_ content: ClipboardContent) async throws { throw error }
+    public func paste(_ content: ClipboardContent, options: PasteOptions) async throws { throw error }
     public func keepAwake(_ request: KeepAwakeRequest?, pluginID: String) throws { if request != nil { throw error } }
     public func systemStatus() -> SystemStatus { SystemStatus() }
     public func calendarEvents(from: Date, to: Date) async throws -> [CalendarEvent] { throw error }
@@ -72,7 +73,11 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     private var stored: [String: String] = [:]
     private var simulatedContext = InvocationContext(frontmostApp: .init(bundleID: "com.apple.Safari", name: "Safari"), windowTitle: "Stackbar")
     /// Every paste, in order (for tests).
-    public private(set) var pasted: [ClipboardContent] = []
+    public var pasted: [ClipboardContent] { lock.withLock { pastes.map(\.content) } }
+    /// Every paste with its options, in order (for tests).
+    public private(set) var pastes: [(content: ClipboardContent, options: PasteOptions)] = []
+    /// How long after a paste the clipboard is put back (0.5 s on the Mac).
+    public var restoreDelay: Duration = .milliseconds(500)
 
     public init(status: SystemStatus = SystemStatus(batteryLevel: 0.8, charging: false, onACPower: false, runningApps: [.init(id: "com.apple.Safari", name: "Safari"), .init(id: "com.apple.dt.Xcode", name: "Xcode")]), events: [CalendarEvent]? = nil) {
         self.status = status
@@ -174,9 +179,26 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
         }
     }
 
-    public func paste(_ content: ClipboardContent) async throws {
+    public func paste(_ content: ClipboardContent, options: PasteOptions) async throws {
+        let before = lock.withLock { item }
         try writeClipboard(content)
-        lock.withLock { pasted.append(content) }
+        let written = lock.withLock {
+            pastes.append((content, options))
+            // Marked transient, as on the Mac: clipboard managers skip it.
+            if options.restoreClipboard { item?.concealed = true }
+            return changeCount
+        }
+        guard options.restoreClipboard else { return }
+        let delay = restoreDelay
+        Task {
+            try? await Task.sleep(for: delay)
+            self.lock.withLock {
+                // The user copied something since: leave their copy alone.
+                guard self.changeCount == written else { return }
+                self.changeCount += 1
+                self.item = before.map { var item = $0; item.changeCount = self.changeCount; return item }
+            }
+        }
     }
 
     public func keepAwake(_ request: KeepAwakeRequest?, pluginID: String) throws {
