@@ -61,6 +61,52 @@ extension StackbarView {
     public func accessibilityLabel(_ label: String) -> Modified { style(Style(accessibilityLabel: label)) }
     /// Animates changes inside this view; off under Reduce Motion.
     public func animation(_ motion: Motion = .default) -> Modified { style(Style(animation: motion)) }
+
+    /// Blurs this view by `radius` points: an image turned into a backdrop.
+    /// Protocol 12.
+    public func blur(_ radius: Double) -> Modified { style(Style(blur: max(radius, 0))) }
+
+    /// How SF Symbols inside draw: layered, in their own colors, or in a
+    /// palette. Protocol 12.
+    public func symbolRendering(_ rendering: SymbolStyle.Rendering, palette: [Paint] = []) -> Modified {
+        style(Style(symbol: SymbolStyle(rendering: rendering, palette: palette.isEmpty ? nil : palette.compactMap { if case .color(let color) = $0 { return color } else { return nil } })))
+    }
+
+    /// Plays a motion on SF Symbols inside, looping unless `repeats` is
+    /// false: `.pulse` for live, `.breathe` for resting, `.rotate` for busy.
+    /// Off under Reduce Motion. Protocol 12.
+    public func symbolEffect(_ effect: SymbolStyle.Effect, repeats: Bool = true, rendering: SymbolStyle.Rendering? = nil) -> Modified {
+        style(Style(symbol: SymbolStyle(rendering: rendering, effect: effect, repeats: repeats ? nil : false)))
+    }
+
+    /// Numbers inside roll to their new value when the plugin renders again.
+    /// Protocol 12.
+    public func numericTransition() -> Modified { style(Style(numericTransition: true)) }
+
+    /// While the pointer is over this view it grows by `scale`, takes a
+    /// see-through `highlight` in its background's shape, and lifts on a
+    /// shadow. Panel and window only. Protocol 12.
+    public func hover(scale: Double? = 1.02, highlight: Paint? = nil, lift: Bool = true) -> Modified {
+        style(Style(hover: Hover(scale: scale, highlight: highlight, shadow: lift ? Shadow(color: HexColor("#00000033"), radius: 8, y: 3) : nil)))
+    }
+}
+
+/// Children in rows of `columns` equal-width cells, filled left to right:
+/// tiles, launchers, stat blocks. Protocol 12.
+public struct Grid: StackbarView {
+    var columns: Int
+    var spacing: Double?
+    var content: ViewContent
+
+    public init(columns: Int, spacing: Double? = nil, @ViewBuilder content: () -> ViewContent) {
+        self.columns = max(1, columns)
+        self.spacing = spacing
+        self.content = content()
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        [.grid(columns: columns, spacing: spacing, children: content.flatMap { $0.resolve(in: context) })]
+    }
 }
 
 /// Flexible space along the enclosing stack's axis.
@@ -77,6 +123,14 @@ public struct Image: StackbarView {
     var source: ImageSource
 
     public init(systemName: String) { self.source = .symbol(systemName) }
+
+    /// A picture at an https URL that fills its frame, cropped to keep its
+    /// aspect: album art, an avatar, a favicon. The host fetches it, only
+    /// from a domain in the manifest's `.network`, so declare the image
+    /// host too. `placeholder` is a symbol shown until it loads; without one
+    /// nothing is drawn, so what is behind it shows. Give it a `.frame`.
+    /// Protocol 12.
+    public init(url: String, placeholder: String? = nil) { self.source = .url(url, placeholder: placeholder) }
 
     public func resolve(in context: RenderContext) -> [ViewNode] { [.image(source)] }
 }

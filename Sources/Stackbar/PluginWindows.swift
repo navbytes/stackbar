@@ -99,6 +99,7 @@ struct PluginWindowView: View {
         }
         .frame(minWidth: 360, minHeight: 240)
         .environment(\.stackbarImageData, AppModel.previewImages(for: controller))
+        .environment(\.stackbarRemoteImage, controller.remoteImages)
     }
 }
 /// The title bar's "Keep on top" pin: a pinned window floats above other

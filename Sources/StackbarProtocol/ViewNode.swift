@@ -11,7 +11,8 @@
 /// picks colors, fonts and spacing for light and dark mode on every surface.
 /// Since protocol 11 a plugin can also take over the look: `styled` sets
 /// fonts, colors, padding, frames, backgrounds and more; `shape`, `image`,
-/// `timer` and `tappable` build custom controls.
+/// `timer` and `tappable` build custom controls. Protocol 12 adds gradients
+/// and glass, remote images, symbol effects, hover and `grid`.
 public indirect enum ViewNode: Codable, Equatable, Sendable {
     case text(String, style: TextStyle = .body, role: Role = .primary)
     case label(String, symbol: String, role: Role = .primary)
@@ -54,7 +55,9 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     case styled(ViewNode, style: Style)
     /// A filled or stroked shape. Protocol 11.
     case shape(ShapeNode)
-    /// An image, sized by the font and colored by the foreground. Protocol 11.
+    /// An image: an SF Symbol sized by the font and colored by the
+    /// foreground (protocol 11), or a remote picture that fills its frame
+    /// (protocol 12).
     case image(ImageSource)
     /// Live clock text the host counts through `range` on its own: down to
     /// `0:00`, or up from it. Protocol 11.
@@ -63,6 +66,9 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     case spacer(minLength: Double? = nil)
     /// Any content as a button: a click sends `action`. Protocol 11.
     case tappable(ViewNode, action: ActionID)
+    /// Children in rows of `columns` equal-width cells, filled left to right:
+    /// tiles, launchers, stat blocks. Protocol 12.
+    case grid(columns: Int, spacing: Double? = nil, children: [ViewNode])
 }
 
 /// A form: fields, a submit button and the action it sends.
@@ -133,12 +139,17 @@ public struct ChartOptions: Codable, Equatable, Sendable {
     public var goal: Double?
     /// Index of the point to emphasize, like today in a week.
     public var highlight: Int?
+    /// Just the marks, with no axes or summary, filling the frame it is
+    /// given, and a dot on the latest value: a sparkline. Line, area and bar
+    /// charts. Protocol 12.
+    public var compact: Bool?
 
-    public init(labels: [String]? = nil, unit: String? = nil, goal: Double? = nil, highlight: Int? = nil) {
+    public init(labels: [String]? = nil, unit: String? = nil, goal: Double? = nil, highlight: Int? = nil, compact: Bool? = nil) {
         self.labels = labels
         self.unit = unit
         self.goal = goal
         self.highlight = highlight
+        self.compact = compact
     }
 }
 
@@ -269,7 +280,7 @@ extension ViewNode {
     /// of the row, not children.
     public var children: [ViewNode] {
         switch self {
-        case .stack(_, _, _, let children), .list(_, let children), .section(_, let children):
+        case .stack(_, _, _, let children), .list(_, let children), .section(_, let children), .grid(_, _, let children):
             return children
         case .styled(let child, _), .tappable(let child, _):
             return [child]
@@ -283,6 +294,20 @@ extension ViewNode {
     public var rows: [RowNode] {
         if case .row(let row) = self { return [row] }
         return children.flatMap(\.rows)
+    }
+
+    /// The remote image URLs this tree names, in order, without repeats.
+    /// The host fetches these before drawing (`RemoteImageLimits`).
+    public var imageURLs: [String] {
+        var seen = Set<String>()
+        var found: [String] = []
+        func walk(_ node: ViewNode) {
+            if case .image(.url(let url, _)) = node, seen.insert(url).inserted { found.append(url) }
+            if case .row(let row) = node { row.accessories.forEach(walk) }
+            node.children.forEach(walk)
+        }
+        walk(self)
+        return found
     }
 
     /// Every action id this tree can send, in order: its `affordances`

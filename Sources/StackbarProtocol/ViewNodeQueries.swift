@@ -18,6 +18,8 @@ extension ViewNode {
             return .styled(transform(child), style: style)
         case .tappable(let child, let action):
             return .tappable(transform(child), action: action)
+        case .grid(let columns, let spacing, let children):
+            return .grid(columns: columns, spacing: spacing, children: children.map(transform))
         case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .spacer:
             return self
         }
@@ -41,7 +43,7 @@ extension ViewNode {
             return false
         case .stack, .styled:
             return children.allSatisfy(\.isBlankInMenuBar)
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable:
+        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable, .grid:
             return true
         }
     }
@@ -86,7 +88,7 @@ extension ViewNode {
                 return affordance
             }
             return [Affordance(title: content.plainText, kind: .tappable(action))] + inside
-        case .stack, .list, .section, .styled:
+        case .stack, .list, .section, .styled, .grid:
             return children.flatMap(\.affordances)
         case .text, .label, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .image, .timer, .spacer:
             return []
@@ -205,7 +207,7 @@ public enum RowFilter {
                     guard case .row(let row) = node else { return nil }
                     items.append(.row(row))
                 }
-            case .text, .label, .stack, .list, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .styled, .shape, .image, .timer, .spacer, .tappable:
+            case .text, .label, .stack, .list, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .styled, .shape, .image, .timer, .spacer, .tappable, .grid:
                 return nil
             }
         }

@@ -53,12 +53,10 @@ public enum StyleLint {
     static let panelBackground = (light: "#E2E2E2", dark: "#363636")
 
     /// The hex colors a background shows: one, or each stop of a gradient.
+    /// A material shows what is behind it, so it is checked as the backdrop
+    /// it sits on (the panel when nothing else is behind).
     private static func colors(of paint: Paint) -> [HexColor] {
-        switch paint {
-        case .color(let color): return [color]
-        case .linearGradient(let colors, _): return colors
-        case .role: return []
-        }
+        paint.stops
     }
 
     /// A `#RRGGBBAA` color as it looks over `backdrop`, or over the panel.

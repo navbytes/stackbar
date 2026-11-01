@@ -33,7 +33,7 @@ public enum SurfaceParity {
     public enum Kind: String, CaseIterable, Sendable {
         case text, label, stack, list, section, row, badge, button, toggle, progress, divider
         case labeled, chart, textField, picker, slider, link, empty, form
-        case styled, shape, image, timer, spacer, tappable
+        case styled, shape, image, timer, spacer, tappable, grid
 
         public init(_ node: ViewNode) {
             switch node {
@@ -62,6 +62,7 @@ public enum SurfaceParity {
             case .timer: self = .timer
             case .spacer: self = .spacer
             case .tappable: self = .tappable
+            case .grid: self = .grid
             }
         }
     }
@@ -98,12 +99,13 @@ public enum SurfaceParity {
         case .link: return "Link; host opens it"
         case .empty: return "ContentUnavailableView"
         case .form: return "Form; submit sends every field"
-        case .styled: return "Child with font, colors, padding, frame, background, border, clip, shadow, opacity, animation"
+        case .styled: return "Child with font, colors, gradients and glass, padding, frame, background, border, clip, shadow, blur, opacity, symbol effects, rolling numbers, hover, animation"
         case .shape: return "Filled or stroked shape"
-        case .image: return "SF Symbol sized by the font"
+        case .image: return "SF Symbol sized by the font; a remote image fills its frame"
         case .timer: return "Live timer text the host counts"
         case .spacer: return "Spacer"
         case .tappable: return "Content as a plain button; click sends the action"
+        case .grid: return "Equal-width columns, filled left to right"
         }
     }
 
@@ -112,7 +114,7 @@ public enum SurfaceParity {
         case .list: return "List filtered by the plugin as the user types"
         case .row: return "Row; Return = first action, ⌘K = all, navigate pushes"
         case .text, .label, .stack, .section, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form,
-             .styled, .shape, .image, .timer, .spacer, .tappable:
+             .styled, .shape, .image, .timer, .spacer, .tappable, .grid:
             return "As panel"
         }
     }
@@ -122,13 +124,13 @@ public enum SurfaceParity {
         case .text: return "Inline text"
         case .label: return "Symbol and title"
         case .stack: return "Children on one line; layered when depth"
-        case .list, .section, .row: return "Hidden (panel only)"
+        case .list, .section, .row, .grid: return "Hidden (panel only)"
         case .badge: return "Small capsule"
         case .button, .toggle, .textField, .picker, .slider, .link, .form, .tappable: return "Hidden (click opens the panel)"
         case .progress: return "12 pt ring, timed ones animate"
         case .divider, .shape, .spacer: return "Hidden"
         case .styled: return "Child; colors and decoration ignored so the bar stays legible"
-        case .image: return "Symbol"
+        case .image: return "Symbol; a remote image is hidden"
         case .timer: return "Live timer text"
         case .labeled: return "Label and value"
         case .chart: return "32 pt sparkline"
@@ -143,7 +145,9 @@ public enum SurfaceParity {
         case .button, .toggle, .textField, .picker, .slider, .form: return "Drawn disabled"
         case .tappable: return "Drawn, not clickable"
         case .link: return "Link (opens Stackbar's URL)"
-        case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty, .styled, .shape, .image, .timer, .spacer: return "As panel"
+        case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .timer, .spacer, .grid: return "As panel"
+        case .styled: return "As panel, without hover"
+        case .image: return "Symbol; a remote image shows its placeholder"
         }
     }
 
@@ -154,7 +158,7 @@ public enum SurfaceParity {
         case .toggle: return "Entry, flips the toggle"
         case .link: return "Entry, opens the URL"
         case .tappable: return "Entry named by its text"
-        case .list, .section, .stack, .styled: return "Searched through"
+        case .list, .section, .stack, .styled, .grid: return "Searched through"
         case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form, .shape, .image, .timer, .spacer: return "Not listed"
         }
     }
@@ -182,9 +186,10 @@ public enum SurfaceParity {
         case .form: return "`Form` then `label: [value____]` lines and `(submit) {id}`"
         case .styled: return "Child, or its accessibility label with the child's action ids"
         case .shape, .spacer: return "Nothing"
-        case .image: return "`[symbol]`"
+        case .image: return "`[symbol]`, or `[image]` for a remote one"
         case .timer: return "`12:34` as of now"
         case .tappable: return "`(text) {id}`"
+        case .grid: return "Lines, one per cell"
         }
     }
 

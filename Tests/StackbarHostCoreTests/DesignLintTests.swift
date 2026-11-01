@@ -31,10 +31,28 @@ final class DesignLintTests: XCTestCase {
                 Chip("Unselected", theme: theme) {},
                 IconButton("plus", label: "Tinted", theme: theme, prominence: .tinted) {},
                 IconButton("plus", label: "Filled", theme: theme, prominence: .filled) {},
+                HeroCard(theme: theme, look: .glow) { Metric("25:00", caption: "Focus") },
+                HeroCard(theme: theme, look: .vivid) { Metric("25:00", caption: "Focus") },
+                Backdrop(imageURL: "https://example.com/a.png", theme: theme) {
+                    Text("Track").typography(.title)
+                    GlassBar { IconButton("play.fill", label: "Play", prominence: .onMedia) {} }
+                },
+                Avatar("Ada Lovelace", theme: theme),
+                AvatarStack([("Ada", nil), ("Grace", nil), ("Linus", nil), ("Ken", nil), ("Barbara", nil)], theme: theme),
+                RingCluster([.init("CPU", value: 0.4, theme: theme)]) { Text("40%") },
+                Sparkline([1, 3, 2, 5], theme: theme),
+                Grid(columns: 3) { Tile("Tile", subtitle: "Detail", symbol: "star", theme: theme) {} },
             ]
             let nodes = view.resolve(in: RenderContext())
             let warnings = StyleLint.warnings(.stack(axis: .vertical, children: nodes))
             XCTAssertEqual(warnings, [], name)
+        }
+    }
+
+    func testWhiteTextReadsOnEverySky() {
+        for sky in Sky.allCases {
+            let view = Text("12:30").foreground(.onMedia).background(sky.paint)
+            XCTAssertEqual(StyleLint.warnings(.stack(axis: .vertical, children: view.resolve(in: RenderContext()))), [], sky.rawValue)
         }
     }
 }

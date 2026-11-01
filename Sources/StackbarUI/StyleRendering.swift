@@ -6,13 +6,15 @@ import SwiftUI
 import StackbarProtocol
 
 /// Applies a `Style` in its fixed order: font and foreground, padding,
-/// frame, background, border, clip, shadow, opacity, then the accessibility
-/// label and animation. Font and foreground also go into the environment,
+/// frame, background, border, clip, shadow, blur, opacity, hover, then the
+/// accessibility label and animation. Font and foreground also go into the environment,
 /// where `NodeView` uses them in place of text styles and role colors.
 struct StyleModifier: ViewModifier {
     let style: Style
     /// What the animation watches: the styled child.
     let animationValue: ViewNode
+    /// False in widgets and snapshots, which draw no hover.
+    var interactive = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
@@ -20,6 +22,8 @@ struct StyleModifier: ViewModifier {
             .transformEnvironment(\.stackbarFont) { if let font = style.font { $0 = font } }
             .transformEnvironment(\.font) { if let font = style.font { $0 = font.font(for: .body) } }
             .transformEnvironment(\.stackbarForeground) { if let paint = style.foreground { $0 = paint } }
+            .transformEnvironment(\.stackbarSymbol) { if let symbol = style.symbol { $0 = symbol } }
+            .ifLet(style.numericTransition) { view, rolls in view.contentTransition(rolls ? .numericText() : .identity) }
             .ifLet(style.foreground) { $0.foregroundStyle($1.shapeStyle) }
             .ifLet(style.padding) { $0.padding(SwiftUI.EdgeInsets(top: $1.top, leading: $1.leading, bottom: $1.bottom, trailing: $1.trailing)) }
             .ifLet(style.frame) { view, frame in
@@ -27,7 +31,13 @@ struct StyleModifier: ViewModifier {
                     .frame(width: frame.width.map { CGFloat($0) }, height: frame.height.map { CGFloat($0) }, alignment: frame.alignment?.alignment ?? .center)
                     .frame(maxWidth: frame.fillWidth == true ? .infinity : nil, maxHeight: frame.fillHeight == true ? .infinity : nil, alignment: frame.alignment?.alignment ?? .center)
             }
-            .ifLet(style.background) { view, fill in view.background { fill.shape.view(fill: fill.paint.shapeStyle, stroke: nil, lineWidth: 0) } }
+            .ifLet(style.background) { view, fill in
+                if case .material(.glass) = fill.paint {
+                    view.glassEffect(.regular, in: fill.shape.anyShape)
+                } else {
+                    view.background { fill.shape.view(fill: fill.paint.shapeStyle, stroke: nil, lineWidth: 0) }
+                }
+            }
             .ifLet(style.border) { view, border in view.overlay { border.shape.view(fill: nil, stroke: border.paint.shapeStyle, lineWidth: border.width) } }
             .ifLet(style.clip) { $0.clipShape($1.anyShape) }
             .ifLet(style.shadow) { view, shadow in
@@ -42,9 +52,13 @@ struct StyleModifier: ViewModifier {
                     view.shadow(color: color, radius: shadow.radius, x: shadow.x, y: shadow.y)
                 }
             }
+            .ifLet(style.blur) { $0.blur(radius: $1, opaque: false) }
             .ifLet(style.opacity) { $0.opacity($1) }
+            .ifLet(style.hover) { view, hover in
+                view.modifier(HoverModifier(hover: hover, shape: style.background?.shape ?? style.clip ?? .roundedRectangle(cornerRadius: 8), enabled: interactive))
+            }
             .ifLet(style.accessibilityLabel) { $0.accessibilityElement(children: .combine).accessibilityLabel($1) }
-            .ifLet(style.animation) { view, motion in view.animation(reduceMotion ? nil : motion.animation, value: animationValue) }
+            .ifLet(style.animation ?? (style.numericTransition == true ? .spring : nil)) { view, motion in view.animation(reduceMotion ? nil : motion.animation, value: animationValue) }
     }
 }
 
@@ -116,7 +130,9 @@ extension Paint {
         switch self {
         case .role(let role): return role.color
         case .color(let color): return color.color
-        case .linearGradient(let colors, _): return colors.first?.color ?? .accentColor
+        case .linearGradient(let colors, _), .radialGradient(let colors, _, _, _), .angularGradient(let colors, _):
+            return colors.first?.color ?? .accentColor
+        case .material: return .secondary
         }
     }
 
@@ -130,6 +146,27 @@ extension Paint {
             let radians = angle * .pi / 180
             let dx = cos(radians) / 2, dy = sin(radians) / 2
             return AnyShapeStyle(LinearGradient(colors: colors.map(\.color), startPoint: UnitPoint(x: 0.5 - dx, y: 0.5 - dy), endPoint: UnitPoint(x: 0.5 + dx, y: 0.5 + dy)))
+        case .radialGradient(let colors, let x, let y, let radius):
+            return AnyShapeStyle(RadialGradient(colors: colors.map(\.color), center: UnitPoint(x: x, y: y), startRadius: 0, endRadius: max(radius, 1)))
+        case .angularGradient(let colors, let angle):
+            // Back to the first color at the end, so a full ring has no seam.
+            let stops = colors.map(\.color)
+            return AnyShapeStyle(AngularGradient(colors: stops, center: .center, startAngle: .degrees(angle), endAngle: .degrees(angle + 360)))
+        case .material(let material):
+            return material.shapeStyle
+        }
+    }
+}
+
+extension MaterialKind {
+    /// The system material; glass draws as one where it can't be a glass
+    /// effect (a shape's fill, a border).
+    var shapeStyle: AnyShapeStyle {
+        switch self {
+        case .ultraThin: return AnyShapeStyle(.ultraThinMaterial)
+        case .thin: return AnyShapeStyle(.thinMaterial)
+        case .regular, .glass: return AnyShapeStyle(.regularMaterial)
+        case .thick: return AnyShapeStyle(.thickMaterial)
         }
     }
 }

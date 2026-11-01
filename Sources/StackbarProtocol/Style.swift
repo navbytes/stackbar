@@ -5,9 +5,10 @@ import Foundation
 ///
 /// Fields apply in a fixed order, the order a SwiftUI author usually writes
 /// them: font and foreground, then padding, frame, background, border, clip,
-/// shadow and opacity. `font`, `foreground`, `accessibilityLabel` and
-/// `animation` act like SwiftUI environment values, so the innermost one wins.
-/// Protocol 11.
+/// shadow, blur, opacity and hover. `font`, `foreground`, `symbol`,
+/// `numericTransition`, `accessibilityLabel` and `animation` act like SwiftUI
+/// environment values, so the innermost one wins. Protocol 11; `blur`,
+/// `symbol`, `numericTransition` and `hover` protocol 12.
 public struct Style: Codable, Equatable, Sendable {
     public var font: FontSpec?
     /// Overrides the role color of text, labels, images, progress and shapes
@@ -20,14 +21,25 @@ public struct Style: Codable, Equatable, Sendable {
     /// Clips the child (and everything before it) to a shape.
     public var clip: ShapeKind?
     public var shadow: Shadow?
+    /// A Gaussian blur of this radius in points, for a backdrop made from an
+    /// image. Protocol 12.
+    public var blur: Double?
     /// 0 to 1.
     public var opacity: Double?
+    /// How SF Symbols inside draw and move. Protocol 12.
+    public var symbol: SymbolStyle?
+    /// Numbers inside roll from the old value to the new one instead of
+    /// snapping. Protocol 12.
+    public var numericTransition: Bool?
+    /// What changes while the pointer is over the child. Panel and window
+    /// only. Protocol 12.
+    public var hover: Hover?
     /// What VoiceOver and the agent read in place of the child.
     public var accessibilityLabel: String?
     /// Animates changes inside the child.
     public var animation: Motion?
 
-    public init(font: FontSpec? = nil, foreground: Paint? = nil, padding: EdgeInsets? = nil, frame: Frame? = nil, background: Fill? = nil, border: Border? = nil, clip: ShapeKind? = nil, shadow: Shadow? = nil, opacity: Double? = nil, accessibilityLabel: String? = nil, animation: Motion? = nil) {
+    public init(font: FontSpec? = nil, foreground: Paint? = nil, padding: EdgeInsets? = nil, frame: Frame? = nil, background: Fill? = nil, border: Border? = nil, clip: ShapeKind? = nil, shadow: Shadow? = nil, blur: Double? = nil, opacity: Double? = nil, symbol: SymbolStyle? = nil, numericTransition: Bool? = nil, hover: Hover? = nil, accessibilityLabel: String? = nil, animation: Motion? = nil) {
         self.font = font
         self.foreground = foreground
         self.padding = padding
@@ -36,14 +48,18 @@ public struct Style: Codable, Equatable, Sendable {
         self.border = border
         self.clip = clip
         self.shadow = shadow
+        self.blur = blur
         self.opacity = opacity
+        self.symbol = symbol
+        self.numericTransition = numericTransition
+        self.hover = hover
         self.accessibilityLabel = accessibilityLabel
         self.animation = animation
     }
 
     /// The positions of the order-sensitive fields that are set, in drawing order.
     private var orderedSlots: [Int] {
-        [padding != nil, frame != nil, background != nil, border != nil, clip != nil, shadow != nil, opacity != nil]
+        [padding != nil, frame != nil, background != nil, border != nil, clip != nil, shadow != nil, blur != nil, opacity != nil, hover != nil]
             .enumerated().filter(\.element).map(\.offset)
     }
 
@@ -59,13 +75,17 @@ public struct Style: Codable, Equatable, Sendable {
         result.foreground = foreground ?? outer.foreground
         result.accessibilityLabel = accessibilityLabel ?? outer.accessibilityLabel
         result.animation = animation ?? outer.animation
+        result.symbol = symbol ?? outer.symbol
+        result.numericTransition = numericTransition ?? outer.numericTransition
         result.padding = padding ?? outer.padding
         result.frame = frame ?? outer.frame
         result.background = background ?? outer.background
         result.border = border ?? outer.border
         result.clip = clip ?? outer.clip
         result.shadow = shadow ?? outer.shadow
+        result.blur = blur ?? outer.blur
         result.opacity = opacity ?? outer.opacity
+        result.hover = hover ?? outer.hover
         return result
     }
 }
@@ -89,6 +109,18 @@ public enum Paint: Codable, Equatable, Sendable {
     /// A linear gradient; `angle` is in degrees, 0 running left to right and
     /// 90 top to bottom.
     case linearGradient(colors: [HexColor], angle: Double)
+    /// A glow from a point outward: `x` and `y` place the center from 0 to 1
+    /// across the shape, and the last color is reached at `radius` points.
+    /// Protocol 12.
+    case radialGradient(colors: [HexColor], x: Double, y: Double, radius: Double)
+    /// Colors swept around the center, clockwise from `angle` degrees
+    /// (0 is three o'clock, -90 the top), like a ring that warms as it
+    /// fills. Protocol 12.
+    case angularGradient(colors: [HexColor], angle: Double)
+    /// Frosted glass that blurs what is behind it, for a control bar over an
+    /// image or gradient. Under Reduce Transparency it draws as a solid
+    /// surface. Protocol 12.
+    case material(MaterialKind)
 
     /// `Paint.hex("#F28C38")`, or with a dark-mode variant.
     public static func hex(_ light: String, dark: String? = nil) -> Paint {
@@ -98,6 +130,90 @@ public enum Paint: Codable, Equatable, Sendable {
     /// A linear gradient through hex colors, top to bottom unless `angle` says otherwise.
     public static func gradient(_ colors: [String], angle: Double = 90) -> Paint {
         .linearGradient(colors: colors.map { HexColor($0) }, angle: angle)
+    }
+
+    /// A radial glow through hex colors, centered unless `x` and `y` say otherwise.
+    public static func radial(_ colors: [String], x: Double = 0.5, y: Double = 0.5, radius: Double) -> Paint {
+        .radialGradient(colors: colors.map { HexColor($0) }, x: x, y: y, radius: radius)
+    }
+
+    /// Hex colors swept around the center, starting at the top.
+    public static func angular(_ colors: [String], angle: Double = -90) -> Paint {
+        .angularGradient(colors: colors.map { HexColor($0) }, angle: angle)
+    }
+
+    /// The hex colors this paint shows, or none for a role or material.
+    public var stops: [HexColor] {
+        switch self {
+        case .color(let color): return [color]
+        case .linearGradient(let colors, _), .radialGradient(let colors, _, _, _), .angularGradient(let colors, _): return colors
+        case .role, .material: return []
+        }
+    }
+}
+
+/// How thick a `Paint.material` is: thicker hides more of what is behind.
+public enum MaterialKind: String, Codable, Sendable, CaseIterable {
+    case ultraThin, thin, regular, thick
+    /// Liquid Glass: refracts and lights what is behind, for floating controls.
+    case glass
+}
+
+/// How SF Symbols draw and move. Protocol 12.
+public struct SymbolStyle: Codable, Equatable, Sendable {
+    public enum Rendering: String, Codable, Sendable, CaseIterable {
+        /// One color, the default.
+        case monochrome
+        /// One color in layered opacities.
+        case hierarchical
+        /// The symbol's own colors (a red record dot, a yellow sun).
+        case multicolor
+        /// Each layer in the next of `palette`'s colors.
+        case palette
+    }
+
+    /// A motion the symbol plays. Off under Reduce Motion.
+    public enum Effect: String, Codable, Sendable, CaseIterable {
+        /// Fades in and out, for something live.
+        case pulse
+        /// Grows and shrinks gently, for something resting or waiting.
+        case breathe
+        /// Jumps, for attention.
+        case bounce
+        /// Spins, for work in progress.
+        case rotate
+        /// Lights its layers in turn (wifi, speaker waves).
+        case variableColor
+        /// Shakes, for a problem.
+        case wiggle
+    }
+
+    public var rendering: Rendering?
+    public var palette: [HexColor]?
+    public var effect: Effect?
+    /// The effect loops while shown; otherwise it plays once each time the
+    /// symbol appears or changes. Defaults to looping.
+    public var repeats: Bool?
+
+    public init(rendering: Rendering? = nil, palette: [HexColor]? = nil, effect: Effect? = nil, repeats: Bool? = nil) {
+        self.rendering = rendering
+        self.palette = palette
+        self.effect = effect
+        self.repeats = repeats
+    }
+}
+
+/// What changes while the pointer is over a view: it grows by `scale`, gains
+/// a `highlight` in its background's shape, and a shadow lifts it. Protocol 12.
+public struct Hover: Codable, Equatable, Sendable {
+    public var scale: Double?
+    public var highlight: Paint?
+    public var shadow: Shadow?
+
+    public init(scale: Double? = nil, highlight: Paint? = nil, shadow: Shadow? = nil) {
+        self.scale = scale
+        self.highlight = highlight
+        self.shadow = shadow
     }
 }
 
@@ -280,9 +396,24 @@ public struct ShapeNode: Codable, Equatable, Sendable {
     }
 }
 
-/// Where an image comes from. SF Symbols for now; bundled assets later.
+/// Where an image comes from.
 public enum ImageSource: Codable, Equatable, Sendable {
     case symbol(String)
+    /// A picture at an https URL (album art, an avatar, a favicon). The host
+    /// fetches it, only from a domain the plugin declares with `.network`,
+    /// up to `RemoteImageLimits.maxBytes`, and caches it. It fills its frame
+    /// (cropping to keep its aspect), so give it one; `placeholder` is the SF
+    /// Symbol drawn until it loads or when it can't, and without one nothing
+    /// is drawn, so what is behind shows. Protocol 12.
+    case url(String, placeholder: String?)
+}
+
+/// What the host fetches for `ImageSource.url`.
+public enum RemoteImageLimits {
+    /// Bytes per image.
+    public static let maxBytes = 4 * 1024 * 1024
+    /// Distinct images one tree may name; the rest draw their placeholders.
+    public static let maxPerTree = 64
 }
 
 /// A span of time the host counts through on its own, so a countdown or a

@@ -28,6 +28,12 @@ extension EnvironmentValues {
     @Entry var stackbarFont: FontSpec? = nil
     /// A `styled` foreground, used in place of role colors.
     @Entry var stackbarForeground: Paint? = nil
+    /// A `styled` symbol style, used by SF Symbol images inside.
+    @Entry var stackbarSymbol: SymbolStyle? = nil
+    /// The bytes of a remote image (`ImageSource.url`) the host has fetched
+    /// for this plugin, or `nil` while it hasn't. Set by the app and by
+    /// `Snapshot`.
+    @Entry public var stackbarRemoteImage: (@Sendable (String) -> Data?)? = nil
     /// Drawing for `Snapshot`: AppKit-backed controls (text fields, pickers)
     /// don't render off screen, so they draw as SwiftUI look-alikes.
     @Entry public var stackbarSnapshot: Bool = false
@@ -44,6 +50,7 @@ public struct NodeView: View {
     @Environment(\.stackbarSnapshot) private var snapshot
     @Environment(\.stackbarFont) private var font
     @Environment(\.stackbarForeground) private var foreground
+    @Environment(\.stackbarSymbol) private var symbolStyle
 
     public init(node: ViewNode, send: @escaping SendAction) {
         self.node = node
@@ -155,11 +162,15 @@ public struct NodeView: View {
             FormNodeView(form: form, send: send)
                 .disabled(readOnly)
         case .styled(let child, let style):
-            NodeView(node: child, send: send).modifier(StyleModifier(style: style, animationValue: child))
+            NodeView(node: child, send: send).modifier(StyleModifier(style: style, animationValue: child, interactive: !readOnly && !snapshot))
         case .shape(let shape):
             shape.kind.view(fill: (shape.fill ?? (shape.stroke == nil ? foreground ?? .role(.primary) : nil))?.shapeStyle, stroke: shape.stroke?.shapeStyle, lineWidth: shape.lineWidth ?? 1)
         case .image(.symbol(let symbol)):
-            Image(systemName: symbol)
+            SymbolView(name: symbol, style: symbolStyle)
+        case .image(.url(let url, let placeholder)):
+            RemoteImageView(url: url, placeholder: placeholder)
+        case .grid(let columns, let spacing, let children):
+            GridNodeView(columns: columns, spacing: spacing, children: children, send: send)
         case .timer(let range, let countsDown):
             Text(timerInterval: range.start...range.end, countsDown: countsDown)
                 .font(textFont(.body))
@@ -551,6 +562,47 @@ struct ChartNodeView: View {
     }
 
     var body: some View {
+        if options.compact == true, kind != .donut, kind != .heatmap {
+            sparkline
+        } else {
+            full
+        }
+    }
+
+    /// Marks alone, filling the frame, with the latest value dotted.
+    private var sparkline: some View {
+        Chart {
+            ForEach(points) { point in
+                if kind == .bar {
+                    BarMark(x: .value("Point", String(point.index)), y: .value("Value", point.value))
+                        .foregroundStyle(point.index == values.count - 1 ? main : main.opacity(0.45))
+                        .cornerRadius(2)
+                } else {
+                    if kind == .area {
+                        AreaMark(x: .value("Point", point.index), y: .value("Value", point.value))
+                            .foregroundStyle(LinearGradient(colors: [main.opacity(0.4), main.opacity(0)], startPoint: .top, endPoint: .bottom))
+                            .interpolationMethod(.monotone)
+                    }
+                    LineMark(x: .value("Point", point.index), y: .value("Value", point.value))
+                        .foregroundStyle(main)
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .interpolationMethod(.monotone)
+                }
+            }
+            if kind != .bar, let last = points.last {
+                PointMark(x: .value("Point", last.index), y: .value("Value", last.value))
+                    .foregroundStyle(main)
+                    .symbolSize(28)
+            }
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartLegend(.hidden)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text([label, summary].compactMap { $0 }.joined(separator: ", ")))
+    }
+
+    private var full: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 if let label { Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary) }

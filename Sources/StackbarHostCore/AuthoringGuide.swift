@@ -250,6 +250,27 @@ theme passes 4.5:1 in both modes.
 - `.typography(.hero | .metric | .stat | .title | .headline | .body | .caption | .captionNumber | .overline)`,
   `Space.xs…xl` (4–24), `Radius.small | .medium | .large`, `Paint.surface | .raised | .hairline`
 
+### Bolder looks (minimumStackbar 0.14.0)
+
+Give each panel one signature hero, and make content the star: real pictures,
+light that follows the hue, numbers that move.
+
+- `Image(url: "https://…", placeholder: "music.note")` fills its `.frame`, cropped; the host
+  fetches it from a domain in `.network` (declare the image host too), up to 4 MB.
+- `Backdrop(imageURL:, paint:, theme:, height: 160) { }` blurred picture (or `Sky`/vivid fill) under a
+  veil, content in white; `GlassBar { IconButton(…, prominence: .onMedia) }` frosted controls over it.
+- `HeroCard(theme:, look: .glow | .vivid)`; paints `theme.glow`, `theme.vivid`, `theme.sweep`
+  (a ring that warms), `theme.track`, `.radial([…], radius:)`, `.angular([…])`, `.material(.glass | .thin | .regular)`, `.onMedia`, `.scrim`.
+- `Avatar("Ada Lovelace", imageURL:, theme:)`, `AvatarStack([(name, url)], limit: 4)`.
+- `RingCluster([.init("CPU", value: 0.4, theme: .green), …]) { center }` up to three concentric rings.
+- `Sparkline(values, theme:, height: 28)`; `Chart(…, compact: true)` is the bare marks.
+- `Grid(columns: 3) { Tile("Docs", subtitle:, symbol:, imageURL: favicon, theme:) { … } }` lifts under the pointer.
+- `Sky(hour: 14.5)` gives `.paint`, `.symbol` and `.colors` for clocks and calendars; white text reads on all four.
+- `.symbolEffect(.pulse | .breathe | .bounce | .rotate | .variableColor | .wiggle)`,
+  `.symbolRendering(.hierarchical | .multicolor | .palette, palette: […])`, `.numericTransition()`,
+  `.hover(scale: 1.03, highlight: .hoverWash)`, `.blur(20)`. Effects stop under Reduce Motion;
+  widgets draw no hover and show image placeholders.
+
 Leave text in the system's `.primary` and `.secondary` roles and color it with
 the theme only for emphasis. Keep the menu bar plain: a symbol, at most one
 short value, `.secondary` when idle.

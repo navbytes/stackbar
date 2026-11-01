@@ -20,6 +20,6 @@ final class SurfaceParityTests: XCTestCase {
                 XCTAssertFalse(SurfaceParity.treatment(kind, on: column).isEmpty)
             }
         }
-        XCTAssertEqual(SurfaceParity.Kind.allCases.count, 25)
+        XCTAssertEqual(SurfaceParity.Kind.allCases.count, 26)
     }
 }

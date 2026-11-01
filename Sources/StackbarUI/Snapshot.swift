@@ -8,7 +8,9 @@ import StackbarProtocol
 /// so an agent can look at what a plugin draws without a screen.
 @MainActor
 public enum Snapshot {
-    public static func png(_ node: ViewNode, surface: Surface, dark: Bool = false, scale: CGFloat = 2) -> Data? {
+    /// `images` gives the bytes of remote images the tree names, fetched
+    /// beforehand: a snapshot is drawn at once and can't wait for them.
+    public static func png(_ node: ViewNode, surface: Surface, dark: Bool = false, scale: CGFloat = 2, images: (@Sendable (String) -> Data?)? = nil) -> Data? {
         let content: AnyView
         switch surface {
         case .menuBar:
@@ -23,6 +25,7 @@ public enum Snapshot {
             .background(Color(nsColor: .windowBackgroundColor))
             .environment(\.colorScheme, dark ? .dark : .light)
             .environment(\.stackbarSnapshot, true)
+            .environment(\.stackbarRemoteImage, images)
         let renderer = ImageRenderer(content: view)
         renderer.scale = scale
         guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
