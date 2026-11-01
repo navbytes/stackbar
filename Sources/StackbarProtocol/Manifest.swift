@@ -118,7 +118,17 @@ public struct Manifest: Codable, Equatable, Sendable {
     }
 
     public var secretNames: [String] {
-        capabilities.compactMap { if case .secret(let name) = $0 { return name } else { return nil } }
+        capabilities.compactMap { capability in
+            switch capability {
+            case .secret(let name), .userServer(let name): return name
+            default: return nil
+            }
+        }
+    }
+
+    /// The secrets that hold the URLs of servers the user chose.
+    public var userServerSecrets: [String] {
+        capabilities.compactMap { if case .userServer(let name) = $0 { return name } else { return nil } }
     }
 
     public var oauthProviders: [OAuthProvider] {
@@ -202,6 +212,11 @@ public enum Capability: Codable, Hashable, Sendable {
     case openURLs(schemes: [String])
     /// More room for `Stackbar.storage` than the default 1 MB: 1 to 64 MB.
     case storage(megabytes: Int)
+    /// A server the user chooses, like a self-hosted proxy: the user enters
+    /// its URL as the secret `name` (read it with `Stackbar.secret(name)`),
+    /// and the plugin may reach that URL's host and no other. Stackbar 0.11.0
+    /// and later.
+    case userServer(secret: String)
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

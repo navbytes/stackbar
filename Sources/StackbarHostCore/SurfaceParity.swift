@@ -84,7 +84,7 @@ public enum SurfaceParity {
         case .progress: return "ProgressView"
         case .divider: return "Divider"
         case .labeled: return "LabeledContent"
-        case .chart: return "Swift Charts line, bar, area or donut, with labels, unit and goal"
+        case .chart: return "Swift Charts line, bar, area or donut, with labels, unit and goal; a day heatmap"
         case .textField: return "TextField; return submits"
         case .picker: return "Picker"
         case .slider: return "Slider; sends on release"

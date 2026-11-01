@@ -188,6 +188,24 @@ final class HostServicesTests: XCTestCase {
         guard case .failure = wrongHost else { return XCTFail("localhost is not 127.0.0.1") }
     }
 
+    func testAUserServerOpensOnlyTheHostTheUserEntered() async throws {
+        let server = try LoopbackServer { _ in .text("ok") }
+        defer { server.stop() }
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore(["PROXY_URL": " \(server.baseURL)/api/ "]))
+        let manifest = Manifest(id: "dev.test.p", name: "P", capabilities: [.userServer(secret: "PROXY_URL")])
+        XCTAssertEqual(manifest.problems, [])
+        XCTAssertEqual(manifest.secretNames, ["PROXY_URL"], "the plugin reads the URL like any secret")
+        XCTAssertEqual(SandboxEntitlements.entitlements(for: manifest)["com.apple.security.network.client"], true)
+        let url = await services.handle(.secret(name: "PROXY_URL"), for: manifest)
+        XCTAssertEqual(url, .value(" \(server.baseURL)/api/ "))
+        guard case .http(let response) = await services.handle(.http(HTTPRequest(url: "\(server.baseURL)/user/info")), for: manifest) else { return XCTFail("the entered host is allowed") }
+        XCTAssertEqual(response.status, 200)
+        guard case .failure = await services.handle(.http(HTTPRequest(url: "http://localhost:\(server.port)/")), for: manifest) else { return XCTFail("only that host") }
+
+        let unset = HostServices.local(directory: directory.appendingPathComponent("unset"), secrets: MemorySecretStore())
+        guard case .failure = await unset.handle(.http(HTTPRequest(url: "\(server.baseURL)/")), for: manifest) else { return XCTFail("nothing until the user enters a URL") }
+    }
+
     func testOAuthIgnoresACallbackForAnotherSignIn() async throws {
         let tokenServer = try LoopbackServer { request in
             request.form["code"] == "real" ? .json(#"{"access_token":"ok"}"#) : .json(#"{"error":"invalid_grant"}"#, status: 400)

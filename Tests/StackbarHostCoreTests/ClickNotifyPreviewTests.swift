@@ -107,7 +107,9 @@ final class ClickNotifyPreviewTests: XCTestCase {
 
     func testDonutsRenderAsNamedValues() {
         let text = TreeTextRenderer.render(.chart(values: [3, 1], kind: .donut, label: "Kinds", options: ChartOptions(labels: ["Text", "Links"])))
-        XCTAssertEqual(text, "Kinds: Text 3, Links 1 (donut)")
+        XCTAssertEqual(text, "Kinds: Text 3 (75.0%), Links 1 (25.0%) (donut)")
+        let heatmap = TreeTextRenderer.render(.chart(values: [0, 2_000_000, 5], kind: .heatmap, label: "Activity", options: ChartOptions(labels: ["Mon", "Tue", "Wed"], unit: " tokens")))
+        XCTAssertTrue(heatmap.hasSuffix("(heatmap: 3 days, 2 active, busiest Tue 2M tokens)"), heatmap)
     }
 
     func testUpNextDialsInAndCoversTheScreen() async throws {
