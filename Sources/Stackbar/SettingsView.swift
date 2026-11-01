@@ -87,7 +87,8 @@ struct PluginsSettings: View {
             List(model.controllers, selection: $model.settingsPlugin) { controller in
                 HStack {
                     Circle().fill(color(controller.state)).frame(width: 8, height: 8)
-                    Text(controller.name)
+                    Text(controller.name).foregroundStyle(controller.isEnabled ? .primary : .secondary)
+                    if !controller.isEnabled { OffBadge() }
                     if controller.isWaitingForApproval { Image(systemName: "lock.shield").foregroundStyle(.orange) }
                 }
             }
@@ -116,6 +117,7 @@ struct PluginPage: View {
     let controller: PluginController
     let model: AppModel
     @State private var showingAbout = false
+    @State private var confirmingUninstall = false
 
     private var hasSettings: Bool { controller.manifest?.surfaces.contains(.settings) == true }
 
@@ -222,11 +224,16 @@ struct PluginDetail: View {
                     Button("Rebuild") { controller.reload() }
                     Button("Edit with Claude…") { Platform.editWithClaude(controller.source) }
                     Spacer()
-                    Button("Move to Trash", role: .destructive) { Task { await model.uninstall(controller) } }
+                    Button("Move to Trash…", role: .destructive) { confirmingUninstall = true }
                 }
             }
         }
         .formStyle(.grouped)
+        .modifier(UninstallDialog(isPresented: $confirmingUninstall, name: controller.name, canTurnOff: controller.isEnabled) { deleteData in
+            Task { await model.uninstall(controller, deleteData: deleteData) }
+        } turnOff: {
+            controller.isEnabled = false
+        })
     }
 
     /// "12:04 /opt/homebrew/bin/brew · exit 0 · 1.2s · 14 KB"
@@ -271,10 +278,13 @@ struct StoreView: View {
                         ForEach(catalog.index.byCategory(catalog.index.search(query)), id: \.category) { group in
                             Text(group.category).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                             ForEach(group.entries) { entry in
-                                StoreRow(entry: entry, indexURL: catalog.source.url, state: state(of: entry)) {
+                                let controller = model.controller(for: entry.id)
+                                StoreRow(entry: entry, indexURL: catalog.source.url, state: state(of: entry), isOn: controller?.isEnabled) {
                                     Task { await install(entry, from: catalog) }
-                                } uninstall: {
-                                    Task { await uninstall(entry) }
+                                } uninstall: { deleteData in
+                                    Task { await uninstall(entry, deleteData: deleteData) }
+                                } setOn: { on in
+                                    controller?.isEnabled = on
                                 }
                             }
                         }
@@ -335,15 +345,17 @@ struct StoreView: View {
 }
 
 extension StoreView {
-    private func uninstall(_ entry: PluginIndex.Entry) async {
+    private func uninstall(_ entry: PluginIndex.Entry, deleteData: Bool) async {
         if let controller = model.controller(for: entry.id) {
-            await model.uninstall(controller)
+            await model.uninstall(controller, deleteData: deleteData)
         } else if let record = model.installedPlugins.first(where: { $0.id == entry.id }) {
             try? FileManager.default.trashItem(at: URL(fileURLWithPath: record.file), resultingItemURL: nil)
             try? model.installer.forget(entry.id)
+            model.switches.set(entry.id, on: true)
+            if deleteData { model.services.storage.erase(entry.id) }
             model.refreshInstalled()
         }
-        status = "Moved \(entry.name) to the Trash."
+        status = "Moved \(entry.name) to the Trash" + (deleteData ? " and deleted its data." : ".")
     }
 }
 
@@ -358,8 +370,12 @@ struct StoreRow: View {
     let entry: PluginIndex.Entry
     let indexURL: URL
     let state: Availability
+    /// Whether the installed plugin is on; nil when it isn't loaded.
+    let isOn: Bool?
     let install: () -> Void
-    let uninstall: () -> Void
+    let uninstall: (_ deleteData: Bool) -> Void
+    let setOn: (Bool) -> Void
+    @State private var confirmingUninstall = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -386,16 +402,69 @@ struct StoreRow: View {
             switch state {
             case .available: Button("Install", action: install)
             case .installed:
-                Button("Uninstall", role: .destructive, action: uninstall)
+                VStack(alignment: .trailing) {
+                    if isOn == false { OffBadge() }
+                    HStack {
+                        onOffButton
+                        Button("Uninstall…", role: .destructive) { confirmingUninstall = true }
+                    }
+                }
             case .update(let from):
                 VStack(alignment: .trailing) {
+                    if isOn == false { OffBadge() }
                     Button("Update", action: install).help("Installed: \(from)")
-                    Button("Uninstall", role: .destructive, action: uninstall).buttonStyle(.link)
+                    HStack {
+                        onOffButton.buttonStyle(.link)
+                        Button("Uninstall…", role: .destructive) { confirmingUninstall = true }.buttonStyle(.link)
+                    }
                 }
             case .needsStackbar(let version): Text("Needs Stackbar \(version)").font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
+        .modifier(UninstallDialog(isPresented: $confirmingUninstall, name: entry.name, canTurnOff: isOn == true, uninstall: uninstall) {
+            setOn(false)
+        })
+    }
+
+    @ViewBuilder private var onOffButton: some View {
+        if let isOn {
+            Button(isOn ? "Turn Off" : "Turn On") { setOn(!isOn) }
+                .help(isOn ? "Stops it and takes it out of the menu bar, the palette and widgets. Its settings and data stay." : "Runs it again")
+        }
+    }
+}
+
+/// Marks a plugin that is turned off.
+struct OffBadge: View {
+    var body: some View {
+        Text("Off")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+    }
+}
+
+/// Asks before uninstalling: keep the plugin's data, delete it too, or just
+/// turn the plugin off.
+struct UninstallDialog: ViewModifier {
+    @Binding var isPresented: Bool
+    let name: String
+    let canTurnOff: Bool
+    let uninstall: (_ deleteData: Bool) -> Void
+    let turnOff: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Uninstall \(name)?", isPresented: $isPresented, titleVisibility: .visible) {
+            if canTurnOff { Button("Turn Off Instead") { turnOff() } }
+            Button("Move to Trash", role: .destructive) { uninstall(false) }
+            Button("Move to Trash and Delete Its Data", role: .destructive) { uninstall(true) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its file goes to the Trash. Its saved data stays unless you delete it, so installing it again picks up where it left off. Secrets you entered are shared by name with other plugins, so they stay either way.")
+        }
     }
 }
 #endif
