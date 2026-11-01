@@ -74,7 +74,9 @@ final class CommandFixtureTests: XCTestCase {
         XCTAssertFalse(outcome.isError, "\(outcome)")
         outcome = await runner.run(key("link-1"), source: .palette)
         XCTAssertFalse(outcome.isError, "\(outcome)")
-        XCTAssertEqual(opened.all.map(\.url), ["https://example.com/?q=x", "file:///tmp/"])
+        // Foundation gives a directory URL a trailing slash; on macOS /tmp is
+        // a symlink and gets none.
+        XCTAssertEqual(opened.all.map { $0.url.hasSuffix("/") ? String($0.url.dropLast()) : $0.url }, ["https://example.com/?q=x", "file:///tmp"])
         XCTAssertEqual(opened.all.map(\.app), ["com.google.Chrome", nil], "the app the plugin resolved opens the link")
 
         system.simulateCopy("what the user had")
