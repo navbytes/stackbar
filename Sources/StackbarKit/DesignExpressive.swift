@@ -34,7 +34,7 @@ extension Theme {
     /// The hue swept around a ring, from a lighter tone at the top to the
     /// full hue: a ring that warms as it fills.
     public var sweep: Paint {
-        .angularGradient(colors: [HexColor(Self.lighten(solid.light, 0.45), dark: solid.dark.map { Self.lighten($0, 0.3) }), solid], angle: -90)
+        .angularGradient(colors: [HexColor(Self.lighten(solid.light, 0.25), dark: solid.dark.map { Self.lighten($0, 0.3) }), solid], angle: -90)
     }
 
     /// A soft light of the hue from the top-left corner, laid over its tint
@@ -287,11 +287,9 @@ public struct RingCluster: StackbarView {
         let label = rings.map { "\($0.label) \(Int(($0.fraction * 100).rounded()))%" }.joined(separator: ", ")
         return ZStack {
             for (index, ring) in rings.enumerated() {
-                ZStack {
-                    Circle().stroke(ring.theme.track, lineWidth: lineWidth)
-                    ProgressBar(value: ring.fraction, style: .ring(lineWidth: lineWidth)).foreground(ring.theme.sweep)
-                }
-                .frame(width: diameter(index), height: diameter(index))
+                // The ring draws its own track in the sweep's hue.
+                ProgressBar(value: ring.fraction, style: .ring(lineWidth: lineWidth)).foreground(ring.theme.sweep)
+                    .frame(width: diameter(index), height: diameter(index))
             }
             center
         }

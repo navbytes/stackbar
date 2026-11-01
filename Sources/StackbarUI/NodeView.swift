@@ -193,11 +193,18 @@ public struct NodeView: View {
     /// A styled foreground when one is set, else the role's color.
     private func tint(_ role: Role) -> AnyShapeStyle { foreground?.shapeStyle ?? AnyShapeStyle(role.color) }
 
-    /// A progress track: a faint copy of a plain foreground color, so a
-    /// bar styled white on a photo or gradient keeps a visible track.
+    /// A progress track: a faint copy of the foreground, so a bar styled
+    /// white on a photo keeps a visible track and a gradient ring sits on
+    /// its own hue. A gradient's track is its last stop, a little fainter.
     private func track(_ opacity: Double) -> Color {
-        if case .color(let color) = foreground { return color.color.opacity(opacity) }
-        return .secondary.opacity(opacity)
+        switch foreground {
+        case .color(let color):
+            return color.color.opacity(opacity)
+        case .linearGradient(let colors, _), .radialGradient(let colors, _, _, _), .angularGradient(let colors, _):
+            return (colors.last?.color ?? .secondary).opacity(opacity * 0.75)
+        default:
+            return .secondary.opacity(opacity)
+        }
     }
 }
 
