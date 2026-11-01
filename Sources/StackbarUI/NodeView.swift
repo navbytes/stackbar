@@ -109,9 +109,9 @@ public struct NodeView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let label { Text(label).font(.caption) }
                     if case .ring(let lineWidth) = style {
-                        RingView(fraction: fraction, paint: tint(role), lineWidth: lineWidth ?? 4)
+                        RingView(fraction: fraction, paint: tint(role), lineWidth: lineWidth ?? 4, track: track(0.2))
                     } else {
-                        BarView(fraction: fraction, paint: tint(role))
+                        BarView(fraction: fraction, paint: tint(role), track: track(0.25))
                     }
                 }
                 .accessibilityElement(children: .combine)
@@ -145,6 +145,7 @@ public struct NodeView: View {
             .disabled(readOnly)
         case .slider(let title, let value, let low, let high, let step, let action):
             SliderNodeView(title: title, value: value, range: low...max(high, low), step: step, action: action, send: send)
+                .tint(foreground?.flatColor)
                 .disabled(readOnly)
         case .link(let title, let url):
             if let destination = URL(string: url) {
@@ -191,6 +192,13 @@ public struct NodeView: View {
 
     /// A styled foreground when one is set, else the role's color.
     private func tint(_ role: Role) -> AnyShapeStyle { foreground?.shapeStyle ?? AnyShapeStyle(role.color) }
+
+    /// A progress track: a faint copy of a plain foreground color, so a
+    /// bar styled white on a photo or gradient keeps a visible track.
+    private func track(_ opacity: Double) -> Color {
+        if case .color(let color) = foreground { return color.color.opacity(opacity) }
+        return .secondary.opacity(opacity)
+    }
 }
 
 /// Children of a stack or section, in order.
@@ -225,10 +233,13 @@ struct ListNodeView: View {
     @Environment(\.stackbarReadOnly) private var readOnly
     @Environment(\.stackbarScrollTo) private var scrollTo
     @Environment(\.stackbarShownCount) private var shownCount
+    @Environment(\.stackbarSnapshot) private var snapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if searchable {
+            if searchable && snapshot {
+                SnapshotField(placeholder: "Filter", text: "").padding(.bottom, 4)
+            } else if searchable {
                 TextField("Filter", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .padding(.bottom, 4)
@@ -857,12 +868,13 @@ extension TextStyle {
 struct BarView: View {
     var fraction: Double
     var paint: AnyShapeStyle
+    var track: Color = .secondary.opacity(0.25)
 
     var body: some View {
         let clamped = min(max(fraction.isFinite ? fraction : 0, 0), 1)
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.secondary.opacity(0.25))
+                Capsule().fill(track)
                 Capsule().fill(paint).frame(width: proxy.size.width * clamped)
             }
         }

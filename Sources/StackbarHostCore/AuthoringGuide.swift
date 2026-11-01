@@ -263,6 +263,7 @@ light that follows the hue, numbers that move.
   (a ring that warms), `theme.track`, `.radial([…], radius:)`, `.angular([…])`, `.material(.glass | .thin | .regular)`, `.onMedia`, `.scrim`.
 - `Avatar("Ada Lovelace", imageURL:, theme:)`, `AvatarStack([(name, url)], limit: 4)`.
 - `RingCluster([.init("CPU", value: 0.4, theme: .green), …]) { center }` up to three concentric rings.
+- `HeroStat("Running", value: "3", theme:, live: true)` big rolling counts, two to four across a glowing hero.
 - `Sparkline(values, theme:, height: 28)`; `Chart(…, compact: true)` is the bare marks.
 - `Grid(columns: 3) { Tile("Docs", subtitle:, symbol:, imageURL: favicon, theme:) { … } }` lifts under the pointer.
 - `Sky(hour: 14.5)` gives `.paint`, `.symbol` and `.colors` for clocks and calendars; white text reads on all four.

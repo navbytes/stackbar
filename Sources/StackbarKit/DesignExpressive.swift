@@ -375,3 +375,38 @@ public struct Tile: StackbarView {
         return Button(key: key ?? title, action: action) { face }.resolve(in: context)
     }
 }
+
+/// A big rolling number with a small-capitals label, for a row of two to
+/// four across a `HeroCard(look: .glow)`: the counts a developer panel is
+/// about. `live` puts a pulsing dot of the theme's color before the label.
+public struct HeroStat: StackbarView {
+    var label: String
+    var value: String
+    var theme: Theme
+    var live: Bool
+    var symbol: String?
+
+    public init(_ label: String, value: String, theme: Theme, live: Bool = false, symbol: String? = nil) {
+        self.label = label
+        self.value = value
+        self.theme = theme
+        self.live = live
+        self.symbol = symbol
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        VStack(spacing: 0) {
+            HStack(spacing: Space.xs) {
+                if live {
+                    Image(systemName: "circle.fill").font(size: 7).foreground(theme.textPaint).symbolEffect(.pulse)
+                } else if let symbol {
+                    Image(systemName: symbol).font(size: 9, weight: .semibold).foreground(theme.textPaint)
+                }
+                Text(label.uppercased()).role(.secondary).typography(.overline)
+            }
+            Text(value).typography(.metric).numericTransition()
+        }
+        .accessibilityLabel("\(value) \(label)")
+        .resolve(in: context)
+    }
+}

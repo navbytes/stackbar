@@ -41,6 +41,7 @@ final class DesignLintTests: XCTestCase {
                 AvatarStack([("Ada", nil), ("Grace", nil), ("Linus", nil), ("Ken", nil), ("Barbara", nil)], theme: theme),
                 RingCluster([.init("CPU", value: 0.4, theme: theme)]) { Text("40%") },
                 Sparkline([1, 3, 2, 5], theme: theme),
+                HeroCard(theme: theme, look: .glow) { HStack { HeroStat("Running", value: "3", theme: theme, live: true); HeroStat("Stopped", value: "2", theme: theme, symbol: "stop.fill") } },
                 Grid(columns: 3) { Tile("Tile", subtitle: "Detail", symbol: "star", theme: theme) {} },
             ]
             let nodes = view.resolve(in: RenderContext())
