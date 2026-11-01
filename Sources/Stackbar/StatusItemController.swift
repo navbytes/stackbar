@@ -16,6 +16,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private let hosting: PassthroughHostingView<StatusItemContent>
     private var hotKey: HotKey?
     private var hotKeySpec: String?
+    /// When the popover last opened. A transient popover shown while the app
+    /// is still activating gets a close request from that activation, which
+    /// made the first click on each item open and at once close the panel.
+    private var shownAt: Date?
     /// An invisible window at the text cursor that a pasting plugin's panel
     /// hangs from when its hotkey opens it.
     private lazy var caretAnchor: NSWindow = {
@@ -69,12 +73,25 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if atCaret, let caret = Self.caretRect(), let view = caretAnchor.contentView {
             caretAnchor.setFrame(caret, display: false)
             caretAnchor.orderFrontRegardless()
-            NSApp.activate()
-            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+            present(relativeTo: view.bounds, of: view)
             return
         }
-        NSApp.activate()
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        present(relativeTo: button.bounds, of: button)
+    }
+
+    private func present(relativeTo rect: NSRect, of view: NSView) {
+        NSApp.activate(ignoringOtherApps: true)
+        shownAt = Date()
+        popover.show(relativeTo: rect, of: view, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        // Ignore the close that activation sends right after opening; a real
+        // click elsewhere that soon is unlikely, and Esc or a second click
+        // on the item close it without asking.
+        guard let shownAt else { return true }
+        return Date().timeIntervalSince(shownAt) > 0.4
     }
 
     /// Where the text cursor is in the focused app, in screen coordinates,
@@ -142,7 +159,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     /// text cursor, like a completion list; others open from the menu bar.
     private func hotKeyPressed() {
         if popover.isShown {
-            popover.performClose(nil)
+            popover.close()
         } else {
             showPanel(atCaret: controller.manifest?.capabilities.contains(.clipboard) == true)
         }
@@ -158,7 +175,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             return
         }
         if popover.isShown {
-            popover.performClose(sender)
+            popover.close()
         } else {
             showPanel()
         }
@@ -169,6 +186,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     func popoverDidClose(_ notification: Notification) {
+        shownAt = nil
         caretAnchor.orderOut(nil)
         controller.setVisible(.panel, false)
     }
