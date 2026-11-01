@@ -38,21 +38,16 @@ let package = Package(
         .executableTarget(name: "TodoPlugin", dependencies: ["StackbarKit"], path: "Examples/TodoPlugin"),
         .executableTarget(name: "WeatherPlugin", dependencies: ["StackbarKit"], path: "Examples/WeatherPlugin"),
         .executableTarget(name: "CIStatusPlugin", dependencies: ["StackbarKit"], path: "Examples/CIStatusPlugin"),
-        // Copies of the first-party plugins, which now live in
-        // navbytes/stackbar-plugins and reach users through the store. The
-        // host tests run them as real plugins. Examples/ are the small
-        // teaching ones.
-        .executableTarget(name: "PRCockpitPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/PRCockpitPlugin"),
-        .executableTarget(name: "ClipboardPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/ClipboardPlugin"),
-        .executableTarget(name: "StayAwakePlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/StayAwakePlugin"),
-        .executableTarget(name: "UpNextPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/UpNextPlugin"),
-        .executableTarget(name: "QuicklinksPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/QuicklinksPlugin"),
-        .executableTarget(name: "SnippetsPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/SnippetsPlugin"),
         // A plugin that misbehaves on request, so the supervisor's crash and
         // restart handling is tested against a real process.
         .executableTarget(name: "FixturePlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/FixturePlugin"),
+        // Plugins that each do the least that reaches a host feature, so the
+        // host's side is tested without a first-party plugin's own behaviour
+        // (that is tested in navbytes/stackbar-plugins).
+        .executableTarget(name: "SystemFixturePlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/SystemFixturePlugin"),
+        .executableTarget(name: "CommandFixturePlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/CommandFixturePlugin"),
         .testTarget(name: "StackbarProtocolTests", dependencies: ["StackbarProtocol"]),
         .testTarget(name: "StackbarKitTests", dependencies: ["StackbarKit"]),
-        .testTarget(name: "StackbarHostCoreTests", dependencies: ["StackbarHostCore", "ClockPlugin", "FixturePlugin", "PomodoroPlugin", "TodoPlugin", "ClipboardPlugin", "StayAwakePlugin", "UpNextPlugin", "QuicklinksPlugin", "SnippetsPlugin"]),
+        .testTarget(name: "StackbarHostCoreTests", dependencies: ["StackbarHostCore", "ClockPlugin", "FixturePlugin", "PomodoroPlugin", "TodoPlugin", "SystemFixturePlugin", "CommandFixturePlugin"]),
     ]
 )

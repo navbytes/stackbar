@@ -65,8 +65,9 @@ It is written for coding agents, and the authoring MCP server serves it too.
 These utilities live in [navbytes/stackbar-plugins](https://github.com/navbytes/stackbar-plugins)
 and install and update through the store, like any other plugin there. The app
 carries their signed bundles so a new Mac can install them without a network
-(from the Stackbar menu or Settings). Copies under `Tests/Fixtures/BundledPlugins/`
-exist only for the host's tests. `Examples/` are small plugins that each teach one idea.
+(from the Stackbar menu or Settings). Their tests live there too; the host's
+tests run small purpose-built plugins under `Tests/Fixtures/`. `Examples/` are
+small plugins that each teach one idea.
 
 | Plugin | What it does | Needs |
 | --- | --- | --- |

@@ -2,7 +2,7 @@ import XCTest
 @testable import StackbarHostCore
 import StackbarProtocol
 
-/// The clipboard, power and calendar services, and the plugins built on them.
+/// The clipboard, power and calendar services, and how they reach a plugin.
 final class SystemServicesTests: XCTestCase {
     private func services(_ system: SimulatedSystem) -> (HostServices, URL) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -50,115 +50,51 @@ final class SystemServicesTests: XCTestCase {
         XCTAssertNil(store.data(for: "../secrets"), "ids are hex only")
     }
 
-    func testClipboardHistoryRecordsCopiesAndSkipsPasswords() async throws {
+    /// The SystemFixture plugin, started and settled.
+    private func fixture(_ services: HostServices) async throws -> PluginSupervisor {
+        let executable = PluginSupervisorTests.helper("SystemFixturePlugin")
+        let supervisor = PluginSupervisor(executable: executable, manifest: try PluginProcess.readManifest(executable: executable), services: services)
+        await supervisor.start()
+        _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
+        return supervisor
+    }
+
+    func testTheClipboardTriggerFiresAndRowsPasteWhatWasCopied() async throws {
         let system = SimulatedSystem()
         let (services, directory) = services(system)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let manifest = try PluginProcess.readManifest(executable: PluginSupervisorTests.helper("ClipboardPlugin"))
-        let supervisor = PluginSupervisor(executable: PluginSupervisorTests.helper("ClipboardPlugin"), manifest: manifest, services: services)
-        await supervisor.start()
-        _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
-        func panel() async -> String { await supervisor.views[.panel].map { TreeTextRenderer.render($0) } ?? "" }
+        let supervisor = try await fixture(services)
+        func rows() async -> [RowNode] { await supervisor.views[.panel]?.rows ?? [] }
 
-        // The host polls twice a second, like other clipboard managers, so
-        // copies further apart than that are each recorded.
-        func copy(_ text: String, app: SystemStatus.App? = SystemStatus.App(id: "com.apple.Safari", name: "Safari"), concealed: Bool = false, formatted: Bool = false) async {
-            let before = await supervisor.settledCount
-            system.simulateCopy(text, app: app, concealed: concealed, formatted: formatted)
-            _ = await waitUntil(5) { await supervisor.settledCount > before }
-        }
-        await copy("first thing")
-        await copy("https://example.com/page")
-        let recorded = await waitUntil(10) { await panel().contains("https://example.com/page") }
+        system.simulateCopy("first thing")
+        let recorded = await waitUntil(10) { await rows().map(\.title) == ["first thing"] }
         XCTAssertTrue(recorded, "the clipboard trigger fires on a copy")
-        await copy("hunter2", concealed: true)
-        await copy("from a password manager", app: SystemStatus.App(id: "com.1password.1password", name: "1Password"))
-        await copy("last thing")
-        _ = await waitUntil(10) { await panel().contains("last thing") }
-        var text = await panel()
-        XCTAssertFalse(text.contains("hunter2"))
-        XCTAssertFalse(text.contains("password manager"), "ignored apps are skipped")
+        system.simulateCopy("hunter2", concealed: true)
+        system.simulateCopy("**bold**", formatted: true)
+        _ = await waitUntil(10) { await rows().first?.title == "**bold**" }
+        let titles = await rows().map(\.title)
+        XCTAssertFalse(titles.contains("hunter2"), "a concealed copy never shows its text: \(titles)")
 
-        guard let row = await supervisor.views[.panel]?.rows.first(where: { $0.title == "first thing" }) else { return XCTFail("no row:\n\(text)") }
-        let count = await supervisor.settledCount
-        await supervisor.event(ActionID("row/\(row.key)/Paste"))
-        _ = await waitUntil { await supervisor.settledCount > count }
+        guard let plain = await rows().first(where: { $0.title == "first thing" }), let rich = await rows().first(where: { $0.title == "**bold**" }) else { return XCTFail("rows: \(titles)") }
+        await supervisor.event(ActionID("row/\(plain.key)/Paste"))
+        _ = await waitUntil(5) { system.pasted.count == 1 }
         XCTAssertEqual(system.pasted, [.text("first thing")])
-        let moved = await waitUntil(10) { await supervisor.views[.panel]?.rows.first?.title == "first thing" }
-        text = await panel()
-        XCTAssertTrue(moved, "a pasted item moves to the top:\n\(text)")
-
-        // Formatted text is pasted back as it was copied, or as plain text on request.
-        await copy("**bold**", formatted: true)
-        _ = await waitUntil(10) { await supervisor.views[.panel]?.rows.first?.title == "**bold**" }
-        guard let rich = await supervisor.views[.panel]?.rows.first(where: { $0.title == "**bold**" }) else { return XCTFail("no formatted row") }
-        XCTAssertTrue(rich.actions.map(\.title).contains("Paste as plain text"))
         await supervisor.event(ActionID("row/\(rich.key)/Paste"))
         _ = await waitUntil(5) { system.pasted.count == 2 }
-        guard case .stored = system.pasted.last else { return XCTFail("formatted copies paste their stored original: \(system.pasted)") }
-        await supervisor.event(ActionID("row/\(rich.key)/Paste as plain text"))
-        _ = await waitUntil(5) { system.pasted.count == 3 }
-        XCTAssertEqual(system.pasted.last, .text("**bold**"))
+        guard case .stored = system.pasted.last else { return XCTFail("a formatted copy pastes the host's stored original: \(system.pasted)") }
         await supervisor.stop()
     }
 
-    func testStayAwakeHoldsAndReleasesTheAssertion() async throws {
-        let system = SimulatedSystem()
-        let (services, directory) = services(system)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let fast = BackoffPolicy(initialDelay: 0.05, multiplier: 1, maxDelay: 0.05, maxConsecutiveFailures: 3)
-        let manifest = try PluginProcess.readManifest(executable: PluginSupervisorTests.helper("StayAwakePlugin"))
-        let supervisor = PluginSupervisor(executable: PluginSupervisorTests.helper("StayAwakePlugin"), manifest: manifest, policy: fast, services: services)
-        await supervisor.start()
-        _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
-        XCTAssertTrue(system.keptAwake.isEmpty)
-
-        await supervisor.event("row/for-60/Start")
-        let held = await waitUntil(10) { system.keptAwake["io.navbytes.stackbar.stay-awake"] != nil }
-        XCTAssertTrue(held)
-        let result = await supervisor.callTool("awake_status")
-        XCTAssertTrue(result.text.contains("left"), result.text)
-
-        // A low battery ends the hold on the next refresh.
-        system.simulate(status: SystemStatus(batteryLevel: 0.1, onACPower: false))
-        await supervisor.refresh()
-        let released = await waitUntil(10) { system.keptAwake.isEmpty }
-        XCTAssertTrue(released, "the battery floor lets the Mac sleep")
-        system.simulate(status: SystemStatus(batteryLevel: 0.9, onACPower: true))
-        await supervisor.refresh()
-        _ = await waitUntil(10) { !system.keptAwake.isEmpty }
-        XCTAssertFalse(system.keptAwake.isEmpty, "the session resumes once the battery is fine")
-
-        await supervisor.event("field/For a while, like 90m or 1h30", value: .text("1h30"))
-        let custom = await waitUntil(10) {
-            let status = await supervisor.callTool("awake_status").text
-            return status.contains("1h 29m left") || status.contains("1h 30m left")
-        }
-        XCTAssertTrue(custom, "a typed duration starts a session")
-
-        await supervisor.stop()
-        XCTAssertTrue(system.keptAwake.isEmpty, "stopping a plugin releases its assertion")
-    }
-
-    func testUpNextFindsTheMeetingAndItsLink() async throws {
+    func testCalendarEventsReachThePlugin() async throws {
         let now = Date()
         let system = SimulatedSystem(events: [
-            CalendarEvent(id: "a", title: "Planning", start: now.addingTimeInterval(600), end: now.addingTimeInterval(2400), notes: "Join Zoom Meeting\nhttps://acme.zoom.us/j/987654321?pwd=xyz.", calendar: "Work", participation: .accepted, attendees: 3),
-            CalendarEvent(id: "b", title: "Declined thing", start: now.addingTimeInterval(300), end: now.addingTimeInterval(900), location: "https://meet.google.com/aaa-bbbb-ccc", calendar: "Work", participation: .declined),
+            CalendarEvent(id: "a", title: "Planning", start: now.addingTimeInterval(600), end: now.addingTimeInterval(2400), calendar: "Work", participation: .accepted, attendees: 3),
         ])
         let (services, directory) = services(system)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let manifest = try PluginProcess.readManifest(executable: PluginSupervisorTests.helper("UpNextPlugin"))
-        let supervisor = PluginSupervisor(executable: PluginSupervisorTests.helper("UpNextPlugin"), manifest: manifest, services: services)
-        await supervisor.start()
-        _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
+        let supervisor = try await fixture(services)
         let menu = await supervisor.views[.menuBar].map { TreeTextRenderer.render($0) } ?? ""
-        XCTAssertTrue(menu.contains("Planning · in 10m"), menu)
-        let next = await supervisor.callTool("next_meeting")
-        XCTAssertTrue(next.text.contains("https://acme.zoom.us/j/987654321?pwd=xyz"), "trailing punctuation is trimmed: \(next.text)")
-        XCTAssertTrue(next.text.contains("Zoom"))
-        let menuRows = await supervisor.views[.panel]?.rows.map(\.title) ?? []
-        XCTAssertEqual(menuRows.first, "Planning", "the next meeting is the first row, so Return joins it: \(menuRows)")
+        XCTAssertEqual(menu, "Planning")
         await supervisor.stop()
     }
 }
@@ -166,29 +102,32 @@ final class SystemServicesTests: XCTestCase {
 final class SettingsSurfaceTests: XCTestCase {
     /// Preferences live on the settings surface, not in the panel, and their
     /// controls still work from there.
-    func testBundledPluginsKeepPreferencesOutOfThePanel() async throws {
-        let cases: [(plugin: String, preference: String)] = [
-            ("ClipboardPlugin", "Paste into the app on click"),
-            ("StayAwakePlugin", "Pause in Low Power Mode"),
-            ("UpNextPlugin", "Open the call when it starts"),
-            ("PRCockpitPlugin", "Include drafts to review"),
-        ]
-        for (plugin, preference) in cases {
-            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            defer { try? FileManager.default.removeItem(at: directory) }
-            let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(system: SimulatedSystem()))
-            let executable = PluginSupervisorTests.helper(plugin)
-            let manifest = try PluginProcess.readManifest(executable: executable)
-            XCTAssertTrue(manifest.surfaces.contains(.settings), plugin)
-            let supervisor = PluginSupervisor(executable: executable, manifest: manifest, services: services)
-            await supervisor.start()
-            _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
-            let panel = await supervisor.views[.panel].map { TreeTextRenderer.render($0) } ?? ""
-            let settings = await supervisor.views[.settings].map { TreeTextRenderer.render($0) } ?? ""
-            XCTAssertFalse(panel.contains(preference), "\(plugin)'s panel still has \(preference)")
-            XCTAssertTrue(settings.contains(preference), "\(plugin)'s settings lack \(preference): \(settings)")
-            await supervisor.stop()
+    func testPreferencesStayOutOfThePanelAndWorkFromSettings() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(system: SimulatedSystem()))
+        let executable = PluginSupervisorTests.helper("SystemFixturePlugin")
+        let manifest = try PluginProcess.readManifest(executable: executable)
+        XCTAssertTrue(manifest.surfaces.contains(.settings))
+        let supervisor = PluginSupervisor(executable: executable, manifest: manifest, services: services)
+        await supervisor.start()
+        _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
+        let panel = await supervisor.views[.panel].map { TreeTextRenderer.render($0) } ?? ""
+        XCTAssertFalse(panel.contains("Compact rows"), panel)
+        func toggle() async -> (isOn: Bool, action: ActionID)? {
+            func find(_ node: ViewNode) -> (isOn: Bool, action: ActionID)? {
+                if case .toggle("Compact rows", let isOn, let action) = node { return (isOn, action) }
+                return node.children.lazy.compactMap(find).first
+            }
+            return await supervisor.views[.settings].flatMap(find)
         }
+        guard let off = await toggle(), !off.isOn else { return XCTFail("the settings surface has the preference") }
+        let before = await supervisor.settledCount
+        await supervisor.event(off.action, value: .bool(true))
+        _ = await waitUntil { await supervisor.settledCount > before }
+        let on = await toggle()
+        XCTAssertEqual(on?.isOn, true, "the toggle works from settings")
+        await supervisor.stop()
     }
 }
 
