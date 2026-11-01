@@ -70,11 +70,12 @@ public actor MCPServer {
         let lines = AsyncStream<Data> { continuation in
             Thread {
                 var buffer = LineBuffer()
-                while true {
+                while withAutoreleasePool({ () -> Bool in
                     let chunk = input.availableData
-                    if chunk.isEmpty { break }
+                    if chunk.isEmpty { return false }
                     for line in buffer.append(chunk) { continuation.yield(line) }
-                }
+                    return true
+                }) {}
                 continuation.finish()
             }.start()
         }

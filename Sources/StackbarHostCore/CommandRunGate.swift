@@ -357,11 +357,12 @@ private final class Run: @unchecked Sendable {
     private func read(_ handle: FileHandle, _ channel: RunChannel) {
         group.enter()
         let thread = Thread { [self] in
-            while true {
+            while withAutoreleasePool({ () -> Bool in
                 let chunk = handle.availableData
-                if chunk.isEmpty { break }
+                if chunk.isEmpty { return false }
                 append(chunk, channel)
-            }
+                return true
+            }) {}
             group.leave()
         }
         thread.name = "stackbar.run.\(channel.rawValue)"
