@@ -71,6 +71,9 @@ final class AppModel {
 
     func start() {
         try? FileManager.default.createDirectory(at: StackbarPaths.pluginsDirectory, withIntermediateDirectories: true)
+        // Refresh bundled plugins already installed; installing them stays
+        // the user's choice (the welcome prompt or the menu item).
+        syncBundled(installMissing: false)
         for source in Self.discover() { add(source) }
         let watcher = DirectoryWatcher(directory: StackbarPaths.pluginsDirectory)
         watcher.start { [weak self] change in
@@ -144,23 +147,25 @@ final class AppModel {
     }
 
     /// Copies the bundled plugins (Plugins/) and examples (Examples/) into the
-    /// plugins folder, skipping any already there.
+    /// plugins folder, and updates copies the user hasn't edited (see
+    /// `BundledPlugins`). Returns how many were installed or updated.
     @discardableResult
     func installExamples() -> Int {
+        let result = syncBundled(installMissing: true)
+        for file in result.installed { add(file) }
+        return result.installed.count + result.updated.count
+    }
+
+    /// Run at launch before discovery, so new versions of the bundled
+    /// plugins arrive with a new app.
+    @discardableResult
+    func syncBundled(installMissing: Bool) -> BundledPlugins.Result {
         let folders = ["Plugins", "Examples"].map { builder.stackbarPackage.appendingPathComponent($0, isDirectory: true) }
         let files = folders.flatMap { folder in
             FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
         }
-        var count = 0
-        for file in files {
-            let destination = StackbarPaths.pluginsDirectory.appendingPathComponent(file.lastPathComponent)
-            guard !FileManager.default.fileExists(atPath: destination.path) else { continue }
-            if (try? FileManager.default.copyItem(at: file, to: destination)) != nil {
-                add(destination)
-                count += 1
-            }
-        }
-        return count
+        let bundled = BundledPlugins(directory: StackbarPaths.pluginsDirectory, recordFile: StackbarPaths.dataDirectory.appendingPathComponent("bundled.json"))
+        return bundled.sync(files, installMissing: installMissing)
     }
 
     // MARK: - Cross-plugin features
