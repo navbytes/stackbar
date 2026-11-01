@@ -36,18 +36,37 @@ public struct Soak: Sendable {
         public var baseline: Int { Self.median(window(first: true)) }
         public var final: Int { Self.median(window(first: false)) }
         public var growth: Double { baseline > 0 ? Double(final - baseline) / Double(baseline) : 0 }
+        /// The highest median over any twentieth of the run after warm-up. A leak
+        /// that macOS later compresses or swaps out shows here even when the end
+        /// of the run looks like the start.
+        public var plateau: Int {
+            let usable = Array(samples.dropFirst(samples.count / 10))
+            guard !usable.isEmpty else { return 0 }
+            let width = max(1, usable.count / 20)
+            return stride(from: 0, to: usable.count, by: width)
+                .map { Self.median(Array(usable[$0..<min($0 + width, usable.count)])) }
+                .max() ?? 0
+        }
+        public var plateauGrowth: Double { baseline > 0 ? Double(plateau - baseline) / Double(baseline) : 0 }
         /// Small absolute changes (allocator noise) never fail the gate.
-        public var isFlat: Bool { growth <= allowedGrowth || final - baseline < 2 * 1024 * 1024 }
-        public var passed: Bool { isFlat && restarts == 0 && !samples.isEmpty }
+        public var isFlat: Bool { Self.within(growth, final - baseline, allowedGrowth) }
+        /// Memory never climbed past the allowance at any point, not just at the end.
+        public var neverClimbed: Bool { Self.within(plateauGrowth, plateau - baseline, allowedGrowth) }
+        public var passed: Bool { isFlat && neverClimbed && restarts == 0 && !samples.isEmpty }
+
+        private static func within(_ growth: Double, _ bytes: Int, _ allowed: Double) -> Bool {
+            growth <= allowed || bytes < 2 * 1024 * 1024
+        }
 
         public var description: String {
             func mb(_ bytes: Int) -> String { String(format: "%.1f MB", Double(bytes) / 1_048_576) }
             let verdict = passed ? "PASS" : "FAIL"
             var lines = [
                 "\(verdict): \(ticks) ticks, \(samples.count) samples, \(restarts) restarts",
-                "resident memory \(mb(baseline)) → \(mb(final)) (\(String(format: "%+.1f%%", growth * 100)), allowed \(Int(allowedGrowth * 100))%)",
-                "peak \(mb(samples.max() ?? 0))",
+                "memory \(mb(baseline)) → \(mb(final)) (\(String(format: "%+.1f%%", growth * 100)), allowed \(Int(allowedGrowth * 100))%)",
+                "highest stretch \(mb(plateau)) (\(String(format: "%+.1f%%", plateauGrowth * 100))), peak sample \(mb(samples.max() ?? 0))",
             ]
+            if isFlat && !neverClimbed { lines.append("memory climbed mid-run and came back down: likely a leak the OS compressed or swapped out") }
             if restarts > 0 { lines.append("the plugin crashed during the run") }
             if samples.isEmpty { lines.append("no memory samples: the helper never ran") }
             return lines.joined(separator: "\n")
@@ -110,9 +129,18 @@ public struct Soak: Sendable {
     }
 }
 
-/// Resident memory of a process.
+/// Memory of a process: its physical footprint on macOS (resident plus
+/// compressed, what Activity Monitor shows as Memory, so pages the OS
+/// compresses still count), resident memory elsewhere.
 public enum ProcessMemory {
     public static func residentBytes(_ pid: Int32) -> Int? {
+        #if canImport(Darwin)
+        var info = rusage_info_v4()
+        let status = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V4, $0) }
+        }
+        if status == 0 { return Int(info.ri_phys_footprint) }
+        #endif
         #if os(Linux)
         guard let statm = try? String(contentsOfFile: "/proc/\(pid)/statm", encoding: .utf8) else { return nil }
         let fields = statm.split(separator: " ")
