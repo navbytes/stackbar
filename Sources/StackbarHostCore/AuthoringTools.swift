@@ -53,10 +53,14 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             MCPTool(name: "stackbar_list_commands", description: "List the plugin's commands: id, run or view, title and arguments.", properties: ["path": path], required: ["path"]),
             MCPTool(name: "stackbar_run_command", description: "Run one of the plugin's run commands and return its result (message, open, copy, paste or failure).", properties: [
                 "path": path, "command": MCPTool.property("string", "Command id"), "arguments": MCPTool.property("object", "Argument values by name"),
+                "selected_text": MCPTool.property("string", "Pretend this text is selected in the user's app (plugins with .context)"),
+                "frontmost_app": MCPTool.property("string", "Pretend this app is frontmost, as bundle id or name (default Safari)"),
             ], required: ["path", "command"]),
             MCPTool(name: "stackbar_render_command", description: "Open one of the plugin's view commands with a query and show its view, with action ids in {braces}. stackbar_send_event then presses things inside it; submit a form with value as an object of field values.", properties: [
                 "path": path, "command": MCPTool.property("string", "Command id"), "query": MCPTool.property("string", "What the user typed (default empty)"),
                 "arguments": MCPTool.property("object", "Argument values by name"), "format": MCPTool.property("string", "Output format", enumValues: ["text", "json"]),
+                "selected_text": MCPTool.property("string", "Pretend this text is selected in the user's app (plugins with .context)"),
+                "frontmost_app": MCPTool.property("string", "Pretend this app is frontmost, as bundle id or name (default Safari)"),
             ], required: ["path", "command"]),
             MCPTool(name: "stackbar_logs", description: "Recent log lines from the plugin: its errors, warnings and stray prints.", properties: [
                 "path": path, "lines": MCPTool.property("number", "How many (default 50)"),
@@ -118,7 +122,7 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
                 guard let command = arguments["command"]?.string else { return .text("command is required", isError: true) }
                 let session = session(for: url)
                 try await session.ensureRunning()
-                let result = try await session.runCommand(command, arguments: Self.strings(arguments["arguments"]))
+                let result = try await session.runCommand(command, arguments: Self.strings(arguments["arguments"]), context: await context(arguments))
                 return Self.describe(result)
             case "stackbar_render_command":
                 guard let command = arguments["command"]?.string else { return .text("command is required", isError: true) }
@@ -126,7 +130,7 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
                 try await session.ensureRunning()
                 if let previous = lock.withLock({ openViews[url.path] }) { await session.closeView(previous) }
                 let query = CommandQuery(text: arguments["query"]?.string ?? "", arguments: Self.strings(arguments["arguments"]))
-                let opened = try await session.openView(command, query: query)
+                let opened = try await session.openView(command, query: query, context: await context(arguments))
                 lock.withLock { openViews[url.path] = opened.session }
                 return await renderCommandView(session, opened.session, format: arguments["format"]?.string ?? "text")
             case "stackbar_logs":
@@ -253,6 +257,18 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
         case .paste(let text, let cursor): return .text("paste: \(text)" + (cursor > 0 ? " (cursor \(cursor) from the end)" : ""))
         case .failure(let message): return .text("failure: \(message)", isError: true)
         }
+    }
+
+    /// What the user is in for a command: the simulated system's context,
+    /// with the tool call's `selected_text` and `frontmost_app` on top. The
+    /// supervisor passes it on only to plugins granted `.context`.
+    func context(_ arguments: [String: JSONValue]) async -> InvocationContext {
+        var context = await services.platform.system.context()
+        if let text = arguments["selected_text"]?.string { context.selectedText = InvocationContext.capped(text) }
+        if let app = arguments["frontmost_app"]?.string, !app.isEmpty {
+            context.frontmostApp = app.contains(".") ? .init(bundleID: app, name: app.split(separator: ".").last.map(String.init) ?? app) : .init(bundleID: "", name: app)
+        }
+        return context
     }
 
     static func strings(_ value: JSONValue?) -> [String: String] {

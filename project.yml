@@ -35,6 +35,7 @@ targets:
       properties:
         NSCalendarsFullAccessUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
         NSCalendarsUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
+        NSAppleEventsUsageDescription: Plugins you approve to read what you're working on can see the files you select in Finder.
         CFBundleShortVersionString: "0.10.0"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
@@ -51,6 +52,8 @@ targets:
         # The hardened runtime denies calendar access, without a prompt,
         # unless the app carries this entitlement (Up Next needs it).
         com.apple.security.personal-information.calendars: true
+        # Finder's selection, for plugins granted .context; macOS asks once.
+        com.apple.security.automation.apple-events: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: io.navbytes.stackbar
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

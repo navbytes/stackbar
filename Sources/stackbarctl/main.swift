@@ -23,6 +23,8 @@ usage:
   stackbarctl commands <plugin.swift | helper>        lists the plugin's commands
   stackbarctl run <plugin.swift | helper> <command> [--arg name=value]...
                                     runs a command and prints its result
+                  render and run take --selected-text <text> and --frontmost-app <bundle id>
+                  for plugins with .context (or STACKBAR_CONTEXT=<json>)
   stackbarctl mcp                      authoring MCP server on stdio (for coding agents)
   stackbarctl agent [<plugin>...]      runtime MCP gateway on stdio: bridges to the running
                                     app, or runs the given plugins itself when it isn't
@@ -63,6 +65,18 @@ let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), ca
 /// stackbarctl runs plugins against a simulated clipboard, battery and calendar
 /// (`STACKBAR_CALENDAR` points at a JSON file of events; otherwise a sample day).
 let simulatedSystem = SimulatedSystem.fromEnvironment()
+
+/// `--selected-text` and `--frontmost-app`: what the user is in, for
+/// plugins granted `.context`.
+func simulateContext(_ flag: String, _ value: String) {
+    var context = simulatedSystem.currentContext
+    if flag == "--selected-text" {
+        context.selectedText = value
+    } else {
+        context.frontmostApp = value.contains(".") ? .init(bundleID: value, name: value.split(separator: ".").last.map(String.init) ?? value) : .init(bundleID: "", name: value)
+    }
+    simulatedSystem.simulate(context: context)
+}
 
 func makeServices() -> HostServices {
     HostServices(
@@ -141,6 +155,8 @@ func render(_ path: String, options: [String]) async {
         case "--verbose": verbose = true
         case "--command": command = value(after: "--command", in: options, at: &index)
         case "--query": query = value(after: "--query", in: options, at: &index)
+        case "--selected-text", "--frontmost-app":
+            simulateContext(options[index], value(after: options[index], in: options, at: &index))
         case "--arg":
             let parts = value(after: "--arg", in: options, at: &index).split(separator: "=", maxSplits: 1).map(String.init)
             commandArguments[parts[0]] = .string(parts.count > 1 ? parts[1] : "")
@@ -440,9 +456,15 @@ case "commands", "run":
         var values: [String: JSONValue] = [:]
         var index = 2
         while index < rest.count {
-            guard rest[index] == "--arg" else { fail(usage) }
-            let parts = value(after: "--arg", in: rest, at: &index).split(separator: "=", maxSplits: 1).map(String.init)
-            values[parts[0]] = .string(parts.count > 1 ? parts[1] : "")
+            switch rest[index] {
+            case "--arg":
+                let parts = value(after: "--arg", in: rest, at: &index).split(separator: "=", maxSplits: 1).map(String.init)
+                values[parts[0]] = .string(parts.count > 1 ? parts[1] : "")
+            case "--selected-text", "--frontmost-app":
+                simulateContext(rest[index], value(after: rest[index], in: rest, at: &index))
+            default:
+                fail(usage)
+            }
             index += 1
         }
         callArguments["arguments"] = .object(values)

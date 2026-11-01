@@ -119,11 +119,25 @@ final class CommandCenter {
 
     private func hotKeyPressed(_ key: CommandKey) {
         guard let entry = registry.entry(key) else { return }
+        let context = captureContext(for: key.pluginID)
         if entry.spec.kind == .run, entry.spec.requiredArguments.isEmpty {
-            Task { await run(key, source: .hotkey) }
+            Task { await run(key, source: .hotkey, context: context) }
         } else {
-            AppDelegate.shared?.palette.open(entry, source: .hotkey)
+            AppDelegate.shared?.palette.open(entry, source: .hotkey, context: context)
         }
+    }
+
+    // MARK: - Context
+
+    /// What the user is in, read the moment a command is triggered (before
+    /// the palette takes focus), when a plugin that may read it could get
+    /// it: the one given, or any, for the palette. Supervisors drop it for
+    /// plugins without `.context`.
+    func captureContext(for pluginID: String? = nil) -> InvocationContext? {
+        guard let model else { return nil }
+        let readers = model.controllers.filter(\.readsContext)
+        guard pluginID.map({ id in readers.contains { $0.pluginID == id } }) ?? !readers.isEmpty else { return nil }
+        return MacContext.capture()
     }
 
     // MARK: - Running
@@ -167,12 +181,14 @@ final class CommandCenter {
         let entry = try intentEntry(id)
         let (arguments, query) = Self.inputs(entry, input)
         let ready = entry.spec.requiredArguments.allSatisfy { !(arguments[$0.name] ?? "").isEmpty }
+        // Spotlight is an overlay: the user's app is still frontmost.
+        let context = captureContext(for: entry.pluginID)
         guard entry.spec.kind == .run, ready else {
-            AppDelegate.shared?.palette.open(entry, arguments: arguments, query: query, source: .spotlight)
+            AppDelegate.shared?.palette.open(entry, arguments: arguments, query: query, source: .spotlight, context: context)
             return "Opened \(entry.spec.title) in Stackbar"
         }
         usage.record(entry.key.description)
-        let outcome = await runner.run(entry.key, arguments: arguments, source: .spotlight)
+        let outcome = await runner.run(entry.key, arguments: arguments, source: .spotlight, context: context)
         if outcome.isError { throw CommandIntentError(outcome.message ?? "\(entry.spec.title) failed") }
         return outcome.message ?? "Done"
     }
@@ -181,11 +197,11 @@ final class CommandCenter {
     func openFromIntent(_ id: String, input: String?) async throws {
         let entry = try intentEntry(id)
         let (arguments, query) = Self.inputs(entry, input)
-        AppDelegate.shared?.palette.open(entry, arguments: arguments, query: query, source: .spotlight)
+        AppDelegate.shared?.palette.open(entry, arguments: arguments, query: query, source: .spotlight, context: captureContext(for: entry.pluginID))
     }
 
     /// Opens a view command: waits for its plugin, then starts the session.
-    func openView(_ key: CommandKey, query: CommandQuery = CommandQuery()) async -> Result<CommandViewModel, CommandRunner.Outcome> {
+    func openView(_ key: CommandKey, query: CommandQuery = CommandQuery(), context: InvocationContext? = nil) async -> Result<CommandViewModel, CommandRunner.Outcome> {
         guard let entry = registry.entry(key) else { return .failure(.failure("\(key) is not a command")) }
         guard entry.spec.kind == .view else { return .failure(.failure("\(entry.spec.title) is not a view")) }
         let supervisor: PluginSupervisor
@@ -196,7 +212,7 @@ final class CommandCenter {
         usage.record(key.description)
         let session = nextSession
         nextSession += 1
-        let view = CommandViewModel(session: session, entry: entry, supervisor: supervisor, query: query) { [weak self] in
+        let view = CommandViewModel(session: session, entry: entry, supervisor: supervisor, query: query, context: context) { [weak self] in
             self?.views[session] = nil
         }
         views[session] = view
@@ -279,6 +295,8 @@ final class CommandViewModel: Identifiable {
     @ObservationIgnored var onFinished: (() -> Void)?
     @ObservationIgnored private var state: ViewSessionState
     @ObservationIgnored private let supervisor: PluginSupervisor
+    /// What the user was in when the view was opened.
+    @ObservationIgnored private let context: InvocationContext?
     @ObservationIgnored private let onClose: () -> Void
     @ObservationIgnored private var submitting = false
     @ObservationIgnored private var closed = false
@@ -286,10 +304,11 @@ final class CommandViewModel: Identifiable {
     /// that follows it.
     @ObservationIgnored private var chain: Task<Void, Never>?
 
-    init(session: Int, entry: CommandRegistry.Entry, supervisor: PluginSupervisor, query: CommandQuery, onClose: @escaping () -> Void) {
+    init(session: Int, entry: CommandRegistry.Entry, supervisor: PluginSupervisor, query: CommandQuery, context: InvocationContext? = nil, onClose: @escaping () -> Void) {
         id = session
         self.entry = entry
         self.supervisor = supervisor
+        self.context = context
         self.onClose = onClose
         self.query = query.text
         var arguments = query.arguments
@@ -317,10 +336,11 @@ final class CommandViewModel: Identifiable {
         let session = id
         let command = entry.spec.id
         let supervisor = supervisor
+        let context = context
         enqueue {
             switch send {
             case .open(let seq, let query):
-                await supervisor.openView(session: session, command: command, query: query, seq: seq)
+                await supervisor.openView(session: session, command: command, query: query, seq: seq, context: context)
             case .update(let seq, let query):
                 await supervisor.updateView(session: session, query: query, seq: seq)
             }

@@ -224,8 +224,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             HUD.shared.show("\(entry.spec.title) can only be run from inside Stackbar", isError: true)
             return
         }
+        // Read before the palette or the alert below takes focus.
+        let context = model.commands.captureContext(for: link.key.pluginID)
         if entry.spec.kind == .view || !entry.spec.requiredArguments.allSatisfy({ !(link.arguments[$0.name] ?? "").isEmpty }) {
-            palette.open(entry, arguments: link.arguments, source: .link)
+            palette.open(entry, arguments: link.arguments, source: .link, context: context)
             return
         }
         var preference = model.commands.preferences[link.key]
@@ -248,7 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
         }
-        Task { await model.commands.run(link.key, arguments: link.arguments, source: .link) }
+        Task { await model.commands.run(link.key, arguments: link.arguments, source: .link, context: context) }
     }
 
     /// Opens Settings, on a plugin's page when one is given.

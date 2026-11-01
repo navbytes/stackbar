@@ -28,6 +28,8 @@
     <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
     <key>NSCalendarsUsageDescription</key>
     <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Plugins you approve to read what you're working on can see the files you select in Finder.</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>

@@ -91,9 +91,11 @@ Stackbar menu or Settings). `Examples/` are small plugins that each teach one id
   declared hosts only, an OAuth broker (authorization code with PKCE, refresh,
   tokens in the Keychain), pub/sub between plugins, notifications, opening URLs
   and the clipboard. Behind their own capabilities: clipboard history and
-  paste, keeping the Mac awake with battery and running apps, and calendar
-  events. Outside the app these are simulated, so plugins that use them are
-  tested on Linux too.
+  paste, keeping the Mac awake with battery and running apps, calendar
+  events, running declared command-line tools (`Stackbar.run` and
+  `Stackbar.stream`, by the path the user approved, with no shell), and the
+  selected text and frontmost app. Outside the app these are simulated, so
+  plugins that use them are tested on Linux too.
 - **Triggers:** launch, intervals, wake from sleep, watched files, topics,
   clipboard changes. A manifest can also declare a global `hotkey` that opens
   its panel.

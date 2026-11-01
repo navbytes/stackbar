@@ -37,7 +37,7 @@ final class AppModel {
     @ObservationIgnored let services: HostServices
     /// Commands: the registry, preferences, hotkeys and the runner.
     @ObservationIgnored private(set) var commands: CommandCenter!
-    @ObservationIgnored let ledger = CapabilityLedger(file: StackbarPaths.ledgerFile)
+    @ObservationIgnored let ledger: CapabilityLedger
     @ObservationIgnored let installer = PluginInstaller(pluginsDirectory: StackbarPaths.pluginsDirectory, publishers: PublisherStore(file: StackbarPaths.publishersFile), recordFile: StackbarPaths.dataDirectory.appendingPathComponent("installed.json"))
     @ObservationIgnored let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
@@ -65,6 +65,8 @@ final class AppModel {
         autoUpdatePlugins = UserDefaults.standard.object(forKey: "autoUpdatePlugins") as? Bool ?? true
         agentGatewayEnabled = UserDefaults.standard.object(forKey: "agentGateway") as? Bool ?? true
         let secretRouter = SecretRouter()
+        let ledger = CapabilityLedger(file: StackbarPaths.ledgerFile)
+        self.ledger = ledger
         services = HostServices(
             storage: StorageStore(directory: StackbarPaths.storageDirectory),
             secrets: StackbarPaths.defaultSecrets(includeEnvironment: false),
@@ -75,8 +77,11 @@ final class AppModel {
                 openWith: { url, bundleID in try await Platform.open(url, with: bundleID) },
                 copy: { text in Task { @MainActor in Platform.copy(text) } },
                 secretMissing: { pluginID, name in secretRouter.route(pluginID, name) },
-                system: MacSystem(images: Self.clipboardImages)
-            )
+                system: MacSystem(images: Self.clipboardImages),
+                approvalNeeded: { pluginID in secretRouter.reviewAgain(pluginID) }
+            ),
+            runs: CommandRunGate(root: StackbarPaths.runDirectory) { pluginID, line in HostLog.shared.write(.info, line, plugin: pluginID) },
+            approvedCommands: { ledger.approvedCommandPaths(for: $0) }
         )
         secretRouter.model = self
         commands = CommandCenter(model: self, services: services)
@@ -293,6 +298,11 @@ final class SecretRouter: @unchecked Sendable {
 
     func route(_ pluginID: String, _ name: String) {
         Task { @MainActor in self.model?.secretMissing(pluginID: pluginID, name: name) }
+    }
+
+    /// A plugin's declared command moved: its approval shows again.
+    func reviewAgain(_ pluginID: String) {
+        Task { @MainActor in self.model?.controller(for: pluginID)?.reviewAgain() }
     }
 }
 

@@ -14,6 +14,8 @@ public final class HostClient: @unchecked Sendable {
     private let lock = NSLock()
     private var nextID = 1
     private var pending: [Int: @Sendable (HostResult) -> Void] = [:]
+    /// Streamed runs still going, by the id of the request that started them.
+    private var streams: [Int: AsyncThrowingStream<RunEvent, any Error>.Continuation] = [:]
     private var sendMessage: (@Sendable (PluginMessage) -> Void)?
 
     init() {}
@@ -56,10 +58,65 @@ public final class HostClient: @unchecked Sendable {
     public func failAll(_ reason: String) {
         lock.lock()
         let handlers = pending
+        let running = streams
         pending.removeAll()
+        streams.removeAll()
         sendMessage = nil
         lock.unlock()
         for handler in handlers.values { handler(.failure(reason)) }
+        for stream in running.values { stream.finish(throwing: HostError(reason)) }
+    }
+
+    /// Starts a streamed run. Ending the loop over it early cancels the run.
+    func stream(_ request: RunRequest) -> AsyncThrowingStream<RunEvent, any Error> {
+        var request = request
+        request.stream = true
+        let (events, continuation) = AsyncThrowingStream.makeStream(of: RunEvent.self)
+        lock.lock()
+        guard let sendMessage else {
+            lock.unlock()
+            continuation.finish(throwing: HostError("not running inside Stackbar"))
+            return events
+        }
+        let id = nextID
+        nextID += 1
+        streams[id] = continuation
+        pending[id] = { [weak self] result in
+            // `.ok` means it started; output follows as `runOutput`.
+            guard case .failure(let message) = result else { return }
+            self?.endStream(id)?.finish(throwing: HostError(message))
+        }
+        lock.unlock()
+        continuation.onTermination = { [weak self] _ in
+            // Still registered: the consumer left before the exit.
+            guard let self, self.endStream(id) != nil else { return }
+            self.fire(.cancelRun(id: id))
+        }
+        sendMessage(.request(id: id, call: .run(request)))
+        return events
+    }
+
+    /// Delivers a streamed run's output or exit. Returns `false` for a run
+    /// nobody is reading.
+    @discardableResult
+    public func deliver(run message: HostMessage) -> Bool {
+        switch message {
+        case .runOutput(let id, let channel, let data):
+            guard let stream = lock.withLock({ streams[id] }) else { return false }
+            stream.yield(channel == .stdout ? .stdout(data) : .stderr(data))
+            return true
+        case .runExit(let id, let exit):
+            guard let stream = endStream(id) else { return false }
+            stream.yield(.exit(exit))
+            stream.finish()
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func endStream(_ id: Int) -> AsyncThrowingStream<RunEvent, any Error>.Continuation? {
+        lock.withLock { streams.removeValue(forKey: id) }
     }
 
     /// How many calls are waiting on the host (for tests).
@@ -108,7 +165,26 @@ public final class HostClient: @unchecked Sendable {
         case .keepAwake(let request): return request == nil ? "letting the Mac sleep" : "keeping the Mac awake"
         case .systemStatus: return "reading system status"
         case .calendarEvents: return "reading calendar events"
+        case .run(let request): return "running \(request.command)"
+        case .cancelRun: return "stopping a run"
+        case .context: return "reading the selection"
+        case .finderSelection: return "reading Finder's selection"
         }
+    }
+}
+
+/// What a streamed run hands over.
+public enum RunEvent: Equatable, Sendable {
+    case stdout(Data)
+    case stderr(Data)
+    /// The last event: how it ended.
+    case exit(RunExit)
+}
+
+extension Duration {
+    var seconds: Double {
+        let (seconds, attoseconds) = components
+        return Double(seconds) + Double(attoseconds) / 1e18
     }
 }
 
@@ -262,6 +338,59 @@ public enum Stackbar {
     public static func calendarEvents(from: Date, to: Date) async throws -> [CalendarEvent] {
         guard let json = try await value(.calendarEvents(from: from, to: to)) else { return [] }
         return try SystemCodec.decode([CalendarEvent].self, from: json)
+    }
+
+    // MARK: Commands and context
+
+    /// Runs a command the manifest declares with `.run(commands:)` and
+    /// waits for it to finish. Arguments go to it exactly as given (there is
+    /// no shell). A non-zero exit is not an error; check `result.status`.
+    ///
+    /// ```swift
+    /// let result = try await Stackbar.run("brew", ["outdated", "--json=v2"], timeout: .seconds(120))
+    /// let outdated = try JSONDecoder().decode(Outdated.self, from: result.stdout)
+    /// ```
+    ///
+    /// It runs in the plugin's own folder unless `workingDirectory` names
+    /// one inside a granted `.files` path, with PATH, HOME, LANG and TMPDIR
+    /// set by the host plus `environment`. Output past 8 MB a channel is
+    /// cut (`result.truncated`); the timeout is at most 10 minutes.
+    public static func run(_ command: String, _ arguments: [String] = [], input: Data? = nil, workingDirectory: String? = nil, environment: [String: String] = [:], timeout: Duration = .seconds(60)) async throws -> RunResult {
+        let request = RunRequest(command: command, arguments: arguments, input: input, workingDirectory: workingDirectory, environment: environment, timeout: timeout.seconds)
+        guard let json = try await value(.run(request)) else { throw HostError("no result from \(command)") }
+        return try SystemCodec.decode(RunResult.self, from: json)
+    }
+
+    /// Runs a declared command and hands over its output as it is written,
+    /// ending with `.exit`. Leaving the loop early stops the command.
+    ///
+    /// ```swift
+    /// for try await event in Stackbar.stream("docker", ["logs", "-f", id]) {
+    ///     switch event {
+    ///     case .stdout(let data): lines.append(String(decoding: data, as: UTF8.self))
+    ///     case .stderr: break
+    ///     case .exit(let exit): status = exit.status
+    ///     }
+    /// }
+    /// ```
+    public static func stream(_ command: String, _ arguments: [String] = [], input: Data? = nil, workingDirectory: String? = nil, environment: [String: String] = [:], timeout: Duration = .seconds(60)) -> AsyncThrowingStream<RunEvent, any Error> {
+        HostClient.shared.stream(RunRequest(command: command, arguments: arguments, input: input, workingDirectory: workingDirectory, environment: environment, timeout: timeout.seconds, stream: true))
+    }
+
+    /// The app the user is in, its window title and the selected text (when
+    /// the app shares it through Accessibility). Needs `.context`. In a
+    /// command, prefer `invocation.context`: it was read when the command
+    /// started, before Stackbar's palette took focus.
+    public static func context() async throws -> InvocationContext {
+        guard let json = try await value(.context) else { return InvocationContext() }
+        return try SystemCodec.decode(InvocationContext.self, from: json)
+    }
+
+    /// The paths selected in Finder. Needs `.context`; macOS asks the user
+    /// once to let Stackbar read Finder's selection.
+    public static func finderSelection() async throws -> [String] {
+        guard let json = try await value(.finderSelection) else { return [] }
+        return try SystemCodec.decode([String].self, from: json)
     }
 
     private static func value(_ call: HostCall) async throws -> String? {

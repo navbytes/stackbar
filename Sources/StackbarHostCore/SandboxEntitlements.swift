@@ -72,11 +72,19 @@ public enum SandboxEntitlements {
 
 extension Capability {
     /// The capability in words, for install and update sheets.
-    public var summary: String {
+    public var summary: String { summary(resolver: .standard) }
+
+    /// The capability in words, with each `.run` command as the program it
+    /// resolves to on this Mac, which is what the user approves.
+    public func summary(resolver: CommandResolver) -> String {
         switch self {
         case .network(let hosts): return "Connects to " + (hosts.isEmpty ? "the network" : hosts.joined(separator: ", "))
         case .files(let paths): return "Reads and writes " + paths.joined(separator: ", ")
-        case .run(let commands): return "Runs " + commands.joined(separator: ", ")
+        case .run(let commands):
+            return "Runs " + commands.map { name in
+                guard let path = resolver.resolve(name) else { return "\(name) (not installed)" }
+                return CommandResolver.isInterpreter(path) ? "\(path) (can run any program)" : path
+            }.joined(separator: ", ")
         case .secret(let name): return "Reads the secret \(name)"
         case .oauth(let provider):
             return "Signs in to \(provider.name) (\(URLParts.host(of: provider.authorizeURL) ?? provider.authorizeURL))" + (provider.scopes.isEmpty ? "" : " with scopes " + provider.scopes.joined(separator: " "))

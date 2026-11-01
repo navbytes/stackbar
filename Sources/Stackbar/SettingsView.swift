@@ -188,6 +188,15 @@ struct PluginDetail: View {
             Section("Network") {
                 ForEach(controller.networkReport(), id: \.self) { Text($0).font(.caption) }
             }
+            if controller.manifest?.runCommands.isEmpty == false {
+                Section("Commands run") {
+                    let runs = model.services.runs.recentRuns(pluginID: controller.pluginID).prefix(10)
+                    if runs.isEmpty { Text("Nothing yet.").font(.caption).foregroundStyle(.secondary) }
+                    ForEach(Array(runs.enumerated()), id: \.offset) { _, run in
+                        Text(Self.describe(run)).font(.caption).textSelection(.enabled)
+                    }
+                }
+            }
             if !controller.commands.isEmpty {
                 Section("Commands") {
                     ForEach(controller.commands, id: \.id) { command in
@@ -211,6 +220,13 @@ struct PluginDetail: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// "12:04 /opt/homebrew/bin/brew · exit 0 · 1.2s · 14 KB"
+    static func describe(_ run: CommandRunGate.Record) -> String {
+        let how = run.timedOut ? "timed out" : (run.cancelled ? "stopped" : "exit \(run.status)")
+        let bytes = ByteCountFormatter.string(fromByteCount: Int64(run.stdoutBytes + run.stderrBytes), countStyle: .file)
+        return [run.at.formatted(date: .omitted, time: .shortened) + " " + run.path, how, String(format: "%.1fs", run.duration), bytes].joined(separator: " · ")
     }
 }
 
