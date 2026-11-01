@@ -33,12 +33,17 @@ final class PluginController: Identifiable {
             model?.onPluginsChanged?()
         }
     }
-    /// The user turned the plugin off (Settings): it is built and listed
-    /// but not run, and it shows nowhere else.
+    /// The user turned the plugin off (Settings or the store): it is listed
+    /// but not built or run, and it shows nowhere else. Kept by plugin id
+    /// (`PluginSwitches`), so it survives the file moving.
     var isEnabled: Bool {
         didSet {
             guard isEnabled != oldValue else { return }
-            UserDefaults.standard.set(!isEnabled, forKey: "disabled." + source.path)
+            if let id = manifest?.id ?? model?.switches.knownID(for: source) {
+                model?.switches.set(id, on: isEnabled)
+            } else {
+                UserDefaults.standard.set(!isEnabled, forKey: "disabled." + source.path)
+            }
             if isEnabled {
                 reload()
             } else {
@@ -66,10 +71,10 @@ final class PluginController: Identifiable {
         self.id = source.path
         self.source = source
         self.model = model
-        self.name = source.deletingPathExtension().lastPathComponent
-        self.pluginID = source.path
+        self.name = UserDefaults.standard.string(forKey: "pluginName." + source.path) ?? source.deletingPathExtension().lastPathComponent
+        self.pluginID = model.switches.knownID(for: source) ?? source.path
         hiddenFromMenuBar = UserDefaults.standard.bool(forKey: "hiddenFromMenuBar." + source.path)
-        isEnabled = !UserDefaults.standard.bool(forKey: "disabled." + source.path)
+        isEnabled = model.switches.isOn(file: source)
     }
 
     /// Whether the plugin draws in the menu bar: it lists `.menuBar` (or did
@@ -104,6 +109,12 @@ final class PluginController: Identifiable {
     /// against what was approved, then starts its helper.
     func load() async {
         guard let model else { return }
+        // A plugin that is off isn't built at all: it costs nothing and
+        // asks for nothing until it is turned on.
+        guard isEnabled else {
+            await turnOff()
+            return
+        }
         loadGeneration += 1
         let generation = loadGeneration
         building = true
@@ -111,20 +122,11 @@ final class PluginController: Identifiable {
         state = .starting
         defer { if generation == loadGeneration { building = false } }
         let source = source
-        let builder = model.builder
-        let sandbox = model.sandbox
+        let loader = PluginLoader(builder: model.builder, sandbox: model.sandbox)
         do {
-            let (binary, manifest) = try await Task.detached {
-                let built = source.pathExtension == "swift" ? try builder.build(source: source).binary : source
-                let manifest = try PluginProcess.readManifest(executable: built)
-                // The sandboxed copy is what runs; the manifest was read from
-                // the unsigned build, which has the same code.
-                let binary = sandbox ? try builder.sign(binary: built, manifest: manifest) : built
-                return (binary, manifest)
-            }.value
+            let loaded = try await Task.detached { try loader.load(source) }.value
             guard generation == loadGeneration else { return }
-            let problems = manifest.problems
-            if !problems.isEmpty { throw PluginSession.SessionError.badManifest(problems) }
+            let manifest = loaded.manifest
             if let clash = model.controllers.first(where: { $0 !== self && $0.pluginID == manifest.id }) {
                 throw LoadError.duplicateID(manifest.id, clash.source.lastPathComponent)
             }
@@ -133,6 +135,8 @@ final class PluginController: Identifiable {
             pluginID = manifest.id
             name = manifest.name
             UserDefaults.standard.set(manifest.surfaces.contains(.menuBar), forKey: "declaresMenuBar." + source.path)
+            UserDefaults.standard.set(manifest.name, forKey: "pluginName." + source.path)
+            if !model.switches.adopt(manifest.id, for: source) { isEnabled = false }
             if showsInMenuBar != showedInMenuBar || manifest.surfaces.contains(.panel) { model.onPluginsChanged?() }
 
             let review = model.ledger.review(manifest)
@@ -156,7 +160,7 @@ final class PluginController: Identifiable {
             guard generation == loadGeneration else { return }
             updatesTask?.cancel()
             let (updates, continuation) = AsyncStream.makeStream(of: PluginSupervisor.Update.self)
-            let next = PluginSupervisor(executable: binary, manifest: manifest, grantedCapabilities: review.granted, services: model.services) { continuation.yield($0) }
+            let next = PluginSupervisor(executable: loaded.binary, manifest: manifest, grantedCapabilities: review.granted, services: model.services) { continuation.yield($0) }
             supervisor = next
             // One consumer, so updates are applied in the order they happened.
             updatesTask = Task { [weak self] in

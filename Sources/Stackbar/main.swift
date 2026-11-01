@@ -6,9 +6,6 @@ import AppKit
 import StackbarHostCore
 
 let app = NSApplication.shared
-// Before anything opens a file there: bring over a Mac's data from when the
-// app was called Fluid.
-StackbarPaths.migrateFromFluid()
 // One Stackbar per user: a second copy would take over the agent socket and
 // run every plugin twice.
 guard let instanceLock = InstanceLock.acquire(StackbarPaths.instanceLockFile) else {

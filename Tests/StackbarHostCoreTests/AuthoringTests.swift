@@ -7,7 +7,7 @@ final class AuthoringTests: XCTestCase {
     func testLLMsTxtMatchesTheGuide() throws {
         let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("llms.txt")
         let text = try String(contentsOf: file, encoding: .utf8)
-        XCTAssertEqual(text, AuthoringGuide.text + "\n", "llms.txt is out of date; regenerate it with: swift run stackbarctl docs > llms.txt")
+        XCTAssertEqual(text, AuthoringGuide.text + "\n", "llms.txt is out of date; run scripts/generate-docs.sh")
     }
 
     func testTemplateNames() {
@@ -27,7 +27,7 @@ final class AuthoringTests: XCTestCase {
     func testMCPServerSpeaksJSONRPC() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let tools = AuthoringTools(builder: PluginBuilder(stackbarPackage: directory, cacheRoot: directory), services: .local(directory: directory, secrets: MemorySecretStore()))
+        let tools = AuthoringTools(loader: PluginLoader(builder: PluginBuilder(stackbarPackage: directory, cacheRoot: directory), sandbox: false), services: .local(directory: directory, secrets: MemorySecretStore()))
         let server = MCPServer(name: "test", version: "1", provider: tools)
         func call(_ json: String) async throws -> JSONValue? {
             guard let reply = await server.handle(line: Data(json.utf8)) else { return nil }
@@ -51,7 +51,7 @@ final class AuthoringTests: XCTestCase {
     func testAuthoringToolsDriveARunningPlugin() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let tools = AuthoringTools(builder: PluginBuilder(stackbarPackage: directory, cacheRoot: directory), services: .local(directory: directory, secrets: MemorySecretStore()))
+        let tools = AuthoringTools(loader: PluginLoader(builder: PluginBuilder(stackbarPackage: directory, cacheRoot: directory), sandbox: false), services: .local(directory: directory, secrets: MemorySecretStore()))
         let helper = PluginSupervisorTests.helper("FixturePlugin").path
         func text(_ result: MCPToolResult) -> String { result.content.compactMap { if case .text(let text) = $0 { return text } else { return nil } }.joined() }
 

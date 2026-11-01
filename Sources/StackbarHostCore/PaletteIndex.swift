@@ -133,29 +133,27 @@ public struct PaletteIndex: Sendable {
         return (entry, String(query[query.index(after: space)...]).trimmingCharacters(in: .whitespaces))
     }
 
+    /// The tree's affordances the palette can press on its own: not inputs,
+    /// which need their control, nor what a tappable wraps, nor a tappable
+    /// with no words to find it by.
     static func entries(in node: ViewNode, pluginID: String, pluginName: String) -> [Entry] {
-        func entry(_ title: String, _ subtitle: String?, _ symbol: String?, _ kind: Entry.Kind) -> Entry {
-            Entry(pluginID: pluginID, pluginName: pluginName, title: title, subtitle: subtitle, symbol: symbol, kind: kind)
-        }
-        switch node {
-        case .row(let row):
-            return row.actions.enumerated().map { index, action in
-                let title = index == 0 ? row.title : "\(action.title): \(row.title)"
-                return entry(title, row.subtitle ?? (index == 0 ? action.title : nil), row.symbol, action.navigate.map(Entry.Kind.navigate) ?? .action(action.id, value: nil))
+        node.affordances.compactMap { affordance in
+            guard !affordance.isInsideTappable else { return nil }
+            let kind: Entry.Kind
+            switch affordance.kind {
+            case .action(let action, let value):
+                kind = .action(action, value: value)
+            case .tappable(let action):
+                guard !affordance.title.isEmpty else { return nil }
+                kind = .action(action, value: nil)
+            case .open(let url):
+                kind = .open(url)
+            case .navigate(let target, _):
+                kind = .navigate(target)
+            case .input:
+                return nil
             }
-        case .button(let title, let symbol, _, let action):
-            return [entry(title, nil, symbol, .action(action, value: nil))]
-        case .toggle(let title, let isOn, let action):
-            return [entry("\(isOn ? "Turn off" : "Turn on") \(title)", nil, isOn ? "switch.2" : "switch.2", .action(action, value: .bool(!isOn)))]
-        case .link(let title, let url):
-            return [entry(title, url, "link", .open(url))]
-        case .tappable(let content, let action):
-            let title = content.plainText
-            return title.isEmpty ? [] : [entry(title, nil, nil, .action(action, value: nil))]
-        case .stack, .list, .section, .styled:
-            return node.children.flatMap { entries(in: $0, pluginID: pluginID, pluginName: pluginName) }
-        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form, .shape, .image, .timer, .spacer:
-            return []
+            return Entry(pluginID: pluginID, pluginName: pluginName, title: affordance.title, subtitle: affordance.subtitle, symbol: affordance.symbol, kind: kind)
         }
     }
 

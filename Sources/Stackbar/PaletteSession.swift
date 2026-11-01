@@ -3,7 +3,6 @@ import AppKit
 import Observation
 import StackbarHostCore
 import StackbarProtocol
-import StackbarUI
 
 /// What the palette is showing: the search over everything at the root, and
 /// a stack above it of a command's argument fields or its live view. Esc pops
@@ -212,43 +211,8 @@ final class PaletteSession {
 
     // MARK: - A command view
 
-    /// The rows of a list view after the host's filter, for keyboard
-    /// selection; nil when the view isn't a list of rows.
-    static func items(_ root: ViewNode, query: String) -> [ListItem]? {
-        guard case .list(let searchable, let children) = root else { return nil }
-        let shown = searchable ? RowFilter.filter(children, query: query) : children
-        var items: [ListItem] = []
-        for child in shown {
-            switch child {
-            case .row(let row):
-                items.append(.row(row))
-            case .section(let title, let inner):
-                if let title { items.append(.header(title)) }
-                for node in inner {
-                    guard case .row(let row) = node else { return nil }
-                    items.append(.row(row))
-                }
-            default:
-                return nil
-            }
-        }
-        return items
-    }
-
-    enum ListItem: Identifiable {
-        case header(String)
-        case row(RowNode)
-
-        var id: String {
-            switch self {
-            case .header(let title): return "header|\(title)"
-            case .row(let row): return row.key
-            }
-        }
-    }
-
     func rows(of view: CommandViewModel) -> [RowNode] {
-        guard let root = view.root, let items = Self.items(root, query: view.query) else { return [] }
+        guard let root = view.root, let items = RowFilter.items(in: root, query: view.query) else { return [] }
         return items.compactMap { if case .row(let row) = $0 { return row } else { return nil } }
     }
 

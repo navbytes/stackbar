@@ -38,6 +38,8 @@ final class AppModel {
     /// Commands: the registry, preferences, hotkeys and the runner.
     @ObservationIgnored private(set) var commands: CommandCenter!
     @ObservationIgnored let ledger: CapabilityLedger
+    /// Which plugins are turned off, by id.
+    @ObservationIgnored let switches = PluginSwitches()
     @ObservationIgnored let installer = PluginInstaller(pluginsDirectory: StackbarPaths.pluginsDirectory, publishers: PublisherStore(file: StackbarPaths.publishersFile), recordFile: StackbarPaths.dataDirectory.appendingPathComponent("installed.json"))
     @ObservationIgnored let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
@@ -92,13 +94,10 @@ final class AppModel {
 
     func start() {
         try? FileManager.default.createDirectory(at: StackbarPaths.pluginsDirectory, withIntermediateDirectories: true)
-        // First-party plugins now come from the store: turn untouched copies
-        // from before into store installs of the same id. Then refresh the
-        // examples already installed; installing new ones stays the user's
-        // choice (the welcome prompt or the menu item).
-        for migration in bundledStore.migrate() { Self.moveDefaults(from: migration.old, to: migration.new) }
+        // Refresh the examples already installed; installing new ones stays
+        // the user's choice (the welcome prompt or the menu item).
         refreshInstalled()
-        syncBundled(installMissing: false)
+        bundledStore.syncExamples()
         commands.start()
         for source in Self.discover() { add(source) }
         let watcher = DirectoryWatcher(directory: StackbarPaths.pluginsDirectory)
@@ -191,8 +190,16 @@ final class AppModel {
     /// the store's record of installing it (so the store offers it again and
     /// the update check doesn't bring it back). Every copy loaded under the
     /// same id goes, so nothing of it is left running.
-    func uninstall(_ controller: PluginController) async {
+    ///
+    /// Its saved data stays unless `deleteData`, so installing it again picks
+    /// up where it left off. Deleting erases its storage and its sign-ins;
+    /// named secrets are shared between plugins and stay either way.
+    func uninstall(_ controller: PluginController, deleteData: Bool = false) async {
         let id = controller.pluginID
+        let providers = controller.manifest?.capabilities.compactMap { capability -> OAuthProvider? in
+            if case .oauth(let provider) = capability { return provider }
+            return nil
+        } ?? []
         var files = [controller.source.standardizedFileURL]
         files += installer.installed.filter { $0.id == id }.map { URL(fileURLWithPath: $0.file).standardizedFileURL }
         let doomed = controllers.filter { $0 === controller || $0.pluginID == id || files.contains($0.source.standardizedFileURL) }
@@ -202,6 +209,12 @@ final class AppModel {
         }
         try? installer.forget(id)
         try? ledger.revoke(id)
+        switches.set(id, on: true)
+        for file in Set(files) { switches.forget(file: file) }
+        if deleteData {
+            await services.storage.erase(id)
+            OAuthBroker.forgetTokens(of: id, providers: providers, in: services.secrets)
+        }
         refreshInstalled()
     }
 
@@ -250,48 +263,23 @@ final class AppModel {
     }
 
     /// Installs the first-party plugins from the signed bundles the app
-    /// carries (see `BundledStore`), copies the examples (Examples/) into the
-    /// plugins folder and updates copies the user hasn't edited (see
-    /// `BundledPlugins`). Returns how many were installed or updated.
+    /// carries and copies the examples into the plugins folder (see
+    /// `BundledStore`). Returns how many files were added.
     @discardableResult
     func installExamples() -> Int {
-        let result = syncBundled(installMissing: true)
-        for file in result.installed { add(file) }
-        let fromStore = bundledStore.installMissing()
-        for file in fromStore { add(file) }
+        let added = bundledStore.installMissing()
+        for file in added { add(file) }
         refreshInstalled()
-        return result.installed.count + result.updated.count + fromStore.count
+        return added.count
     }
 
-    /// The first-party plugins' signed bundles carried in the app.
+    /// The plugins that ship with the app.
     var bundledStore: BundledStore {
         BundledStore(bundlesDirectory: builder.stackbarPackage.appendingPathComponent("Bundles", isDirectory: true),
+                     examplesDirectory: builder.stackbarPackage.appendingPathComponent("Examples", isDirectory: true),
                      pluginsDirectory: StackbarPaths.pluginsDirectory,
-                     bundledRecord: StackbarPaths.dataDirectory.appendingPathComponent("bundled.json"),
+                     record: StackbarPaths.dataDirectory.appendingPathComponent("bundled.json"),
                      installer: installer)
-    }
-
-    /// Per-file preferences follow a plugin whose file was replaced.
-    static func moveDefaults(from old: URL, to new: URL) {
-        let defaults = UserDefaults.standard
-        for prefix in ["hiddenFromMenuBar.", "declaresMenuBar.", "disabled."] {
-            if let value = defaults.object(forKey: prefix + old.path) {
-                defaults.set(value, forKey: prefix + new.path)
-                defaults.removeObject(forKey: prefix + old.path)
-            }
-        }
-    }
-
-    /// Run at launch before discovery, so new versions of the bundled
-    /// plugins arrive with a new app.
-    @discardableResult
-    func syncBundled(installMissing: Bool) -> BundledPlugins.Result {
-        let folders = ["Examples"].map { builder.stackbarPackage.appendingPathComponent($0, isDirectory: true) }
-        let files = folders.flatMap { folder in
-            FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
-        }
-        let bundled = BundledPlugins(directory: StackbarPaths.pluginsDirectory, recordFile: StackbarPaths.dataDirectory.appendingPathComponent("bundled.json"))
-        return bundled.sync(files, installMissing: installMissing)
     }
 
     // MARK: - Cross-plugin features

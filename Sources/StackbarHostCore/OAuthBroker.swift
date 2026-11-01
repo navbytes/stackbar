@@ -147,6 +147,12 @@ public actor OAuthBroker {
 
     static func key(_ pluginID: String, _ provider: OAuthProvider) -> String { "oauth/\(pluginID)/\(provider.name)" }
 
+    /// Deletes the tokens a plugin signed in with (when its data is deleted).
+    /// Named secrets are shared between plugins, so they stay.
+    public static func forgetTokens(of pluginID: String, providers: [OAuthProvider], in secrets: any SecretStore) {
+        for provider in providers { try? secrets.setSecret(nil, for: key(pluginID, provider)) }
+    }
+
     static func form(_ fields: [String: String]) -> String {
         fields.sorted { $0.key < $1.key }.map { "\($0.key.formEncoded)=\($0.value.formEncoded)" }.joined(separator: "&")
     }

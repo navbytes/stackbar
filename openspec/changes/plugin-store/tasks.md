@@ -37,3 +37,9 @@
 - [x] 7.4 `BundledStore`: untouched old copies become store installs of the same id, edited ones stay; per-file settings follow
 - [x] 7.5 install.sh stops copying plugin sources; Stackbar 0.11.0
 - [ ] 7.6 Publish them from stackbar-plugins and check an install from a clean plugins folder on a Mac
+
+## 8. Turning plugins off (Naveen, 2026-11-01)
+- [x] 8.1 The off setting is kept by plugin id (`PluginSwitches`), so it survives a reinstall, an update or a move; old per-file settings carry over
+- [x] 8.2 A plugin that is off isn't built; store updates still install for it
+- [x] 8.3 An "Off" badge in the plugin list and the store; Turn On / Turn Off next to Uninstall
+- [x] 8.4 Uninstall asks: keep its data, delete its data (storage and sign-ins; shared secrets stay), or turn it off instead

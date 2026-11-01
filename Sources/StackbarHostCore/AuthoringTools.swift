@@ -11,7 +11,7 @@ import StackbarProtocol
 public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
     public typealias PNGRenderer = @Sendable (ViewNode, Surface) async -> Data?
 
-    private let builder: PluginBuilder
+    private let loader: PluginLoader
     private let services: HostServices
     private let png: PNGRenderer?
     private let lock = NSLock()
@@ -19,8 +19,8 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
     /// The command view each file has open, so events inside it render it.
     private var openViews: [String: Int] = [:]
 
-    public init(builder: PluginBuilder, services: HostServices, png: PNGRenderer? = nil) {
-        self.builder = builder
+    public init(loader: PluginLoader, services: HostServices, png: PNGRenderer? = nil) {
+        self.loader = loader
         self.services = services
         self.png = png
     }
@@ -169,8 +169,9 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
     }
 
     private func build(_ url: URL) async throws -> MCPToolResult {
-        let builder = builder
-        let output = try await Task.detached { try builder.build(source: url) }.value
+        guard url.pathExtension == "swift" else { return .text("the path must end in .swift", isError: true) }
+        let loader = loader
+        let output = try await Task.detached { try loader.helper(for: url) }.value
         let manifest = try PluginProcess.readManifest(executable: output.binary)
         var lines = ["Built \(manifest.name) \(manifest.version) (\(manifest.id))" + (output.cached ? ", unchanged since the last build" : "")]
         lines.append("surfaces: " + manifest.surfaces.map(\.rawValue).joined(separator: ", "))
@@ -293,7 +294,7 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
     private func session(for url: URL) -> PluginSession {
         lock.withLock {
             if let session = sessions[url.path] { return session }
-            let session = PluginSession(source: url, builder: builder, services: services)
+            let session = PluginSession(source: url, loader: loader, services: services)
             sessions[url.path] = session
             return session
         }

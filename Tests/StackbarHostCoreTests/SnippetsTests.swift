@@ -21,7 +21,7 @@ final class SnippetsTests: XCTestCase {
     }
 
     private func session() async throws -> PluginSession {
-        let session = PluginSession(source: PluginSupervisorTests.helper("SnippetsPlugin"), builder: nil, services: services)
+        let session = PluginSession(source: PluginSupervisorTests.helper("SnippetsPlugin"), loader: PluginLoader(builder: nil, sandbox: false), services: services)
         try await session.ensureRunning()
         return session
     }
