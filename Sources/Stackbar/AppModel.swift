@@ -38,6 +38,8 @@ final class AppModel {
     /// Commands: the registry, preferences, hotkeys and the runner.
     @ObservationIgnored private(set) var commands: CommandCenter!
     @ObservationIgnored let ledger: CapabilityLedger
+    /// Which plugins are turned off, by id.
+    @ObservationIgnored let switches = PluginSwitches()
     @ObservationIgnored let installer = PluginInstaller(pluginsDirectory: StackbarPaths.pluginsDirectory, publishers: PublisherStore(file: StackbarPaths.publishersFile), recordFile: StackbarPaths.dataDirectory.appendingPathComponent("installed.json"))
     @ObservationIgnored let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
@@ -191,8 +193,16 @@ final class AppModel {
     /// the store's record of installing it (so the store offers it again and
     /// the update check doesn't bring it back). Every copy loaded under the
     /// same id goes, so nothing of it is left running.
-    func uninstall(_ controller: PluginController) async {
+    ///
+    /// Its saved data stays unless `deleteData`, so installing it again picks
+    /// up where it left off. Deleting erases its storage and its sign-ins;
+    /// named secrets are shared between plugins and stay either way.
+    func uninstall(_ controller: PluginController, deleteData: Bool = false) async {
         let id = controller.pluginID
+        let providers = controller.manifest?.capabilities.compactMap { capability -> OAuthProvider? in
+            if case .oauth(let provider) = capability { return provider }
+            return nil
+        } ?? []
         var files = [controller.source.standardizedFileURL]
         files += installer.installed.filter { $0.id == id }.map { URL(fileURLWithPath: $0.file).standardizedFileURL }
         let doomed = controllers.filter { $0 === controller || $0.pluginID == id || files.contains($0.source.standardizedFileURL) }
@@ -202,6 +212,12 @@ final class AppModel {
         }
         try? installer.forget(id)
         try? ledger.revoke(id)
+        switches.set(id, on: true)
+        for file in Set(files) { switches.forget(file: file) }
+        if deleteData {
+            await services.storage.erase(id)
+            OAuthBroker.forgetTokens(of: id, providers: providers, in: services.secrets)
+        }
         refreshInstalled()
     }
 
