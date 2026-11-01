@@ -39,7 +39,7 @@ extension Dictionary where Key == String, Value == EventValue {
         case .text(let value)?: return value
         case .number(let value)?: return value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
         case .bool(let value)?: return String(value)
-        case nil: return nil
+        case .fields?, nil: return nil
         }
     }
 

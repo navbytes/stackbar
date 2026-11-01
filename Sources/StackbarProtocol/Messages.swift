@@ -7,7 +7,8 @@ public enum StackbarProtocolVersion {
     /// 4 added the settings surface.
     /// 5 added the menu-bar click action, notification buttons and row previews.
     /// 6 added full-screen alerts.
-    public static let current = 6
+    /// 7 added commands, command views, forms and row navigation.
+    public static let current = 7
 }
 
 /// Host → plugin.
@@ -30,6 +31,16 @@ public enum HostMessage: Codable, Equatable, Sendable {
     case topic(name: String, payload: String, from: String)
     /// An agent called one of the plugin's tools.
     case callTool(id: Int, name: String, arguments: [String: EventValue])
+    /// Run one of the plugin's run commands; answered with `commandResult`.
+    /// `context` is set only for plugins granted `.context`.
+    case runCommand(id: Int, command: String, arguments: [String: String], source: InvocationSource, context: InvocationContext?)
+    /// A view command opened in the palette. The plugin answers with `view`
+    /// carrying the same `seq`.
+    case openView(session: Int, command: String, query: CommandQuery, seq: Int, context: InvocationContext?)
+    /// The user typed or changed an argument in an open view.
+    case updateView(session: Int, query: CommandQuery, seq: Int)
+    /// The view was closed or popped; its handlers can go.
+    case closeView(session: Int)
 }
 
 public enum TriggerReason: String, Codable, Sendable {
@@ -37,10 +48,12 @@ public enum TriggerReason: String, Codable, Sendable {
 }
 
 /// The value that came with an event: a toggle's new state, a slider's number.
-public enum EventValue: Codable, Equatable, Sendable {
+public indirect enum EventValue: Codable, Equatable, Sendable {
     case bool(Bool)
     case number(Double)
     case text(String)
+    /// A submitted form: each field's value by its name.
+    case fields([String: EventValue])
 }
 
 /// Plugin → host.
@@ -64,6 +77,14 @@ public enum PluginMessage: Codable, Equatable, Sendable {
     /// action (`MenuBarClick.action` names it), or open the panel when `nil`.
     /// A right click always opens the panel. Sent when it changes.
     case menuBarClick(MenuBarClick?)
+    /// The commands the plugin offers. Sent after `ready` and whenever the
+    /// list changes.
+    case commands([CommandSpec])
+    /// The answer to `runCommand`.
+    case commandResult(id: Int, result: CommandResult)
+    /// An open view's tree, for the query with `seq`. Also sent unasked after
+    /// an action or refresh changed what an open view shows.
+    case view(session: Int, seq: Int, root: ViewNode)
 }
 
 /// A plugin's left-click action on its status item, like starting or
@@ -117,6 +138,9 @@ public enum HostCall: Codable, Equatable, Sendable {
     case alert(title: String, body: String?, actions: [NotificationAction])
     /// Opens a URL with the default app (https, mailto, or a file URL).
     case openURL(String)
+    /// Opens a URL or an absolute path, with an app by bundle id when given.
+    /// Schemes beyond the safe defaults need `.openURLs(schemes:)`.
+    case open(url: String, app: String?)
     /// Puts text on the clipboard.
     case copy(String)
     /// What is on the clipboard now (`ClipboardItem` as JSON, or `nil` when

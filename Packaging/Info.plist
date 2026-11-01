@@ -28,6 +28,17 @@
     <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
     <key>NSCalendarsUsageDescription</key>
     <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>io.navbytes.stackbar.commands</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>stackbar</string>
+            </array>
+        </dict>
+    </array>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 navbytes. MIT License.</string>
 </dict>

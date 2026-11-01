@@ -39,7 +39,7 @@ public struct MenuBarView: View {
             return false
         case .stack(_, _, let children):
             return children.allSatisfy(isBlank)
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link:
+        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form:
             return true
         }
     }
@@ -85,7 +85,7 @@ struct MenuBarNode: View {
                     if !MenuBarView.isBlank(child) { MenuBarNode(node: child) }
                 }
             }
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link:
+        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form:
             EmptyView()
         }
     }

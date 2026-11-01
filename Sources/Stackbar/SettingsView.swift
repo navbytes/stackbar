@@ -15,6 +15,7 @@ struct SettingsView: View {
         TabView(selection: $model.settingsTab) {
             GeneralSettings(model: model).tabItem { Label("General", systemImage: "gearshape") }.tag(SettingsTab.general)
             PluginsSettings(model: model).tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }.tag(SettingsTab.plugins)
+            CommandsSettings(model: model).tabItem { Label("Commands", systemImage: "command") }.tag(SettingsTab.commands)
             StoreView(model: model).tabItem { Label("Store", systemImage: "bag") }.tag(SettingsTab.store)
         }
         .frame(minWidth: 680, minHeight: 520)
@@ -22,7 +23,7 @@ struct SettingsView: View {
 }
 
 enum SettingsTab: Hashable {
-    case general, plugins, store
+    case general, plugins, commands, store
 }
 
 struct GeneralSettings: View {
@@ -164,6 +165,14 @@ struct PluginDetail: View {
                     if let summary = manifest.summary { Text(summary) }
                 }
                 LabeledContent("File", value: controller.source.path).textSelection(.enabled)
+                if controller.manifest?.surfaces.contains(.menuBar) == true {
+                    Toggle("Show in menu bar", isOn: Binding(get: { !controller.hiddenFromMenuBar }, set: { controller.hiddenFromMenuBar = !$0 }))
+                    if controller.hiddenFromMenuBar {
+                        Text("Open its panel from the command palette" + (controller.manifest?.hotkey.map { " or with \($0)" } ?? "") + ".")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             Section("Allowed") {
                 let granted = controller.manifest.map { model.ledger.review($0).granted } ?? []
@@ -178,6 +187,14 @@ struct PluginDetail: View {
             }
             Section("Network") {
                 ForEach(controller.networkReport(), id: \.self) { Text($0).font(.caption) }
+            }
+            if !controller.commands.isEmpty {
+                Section("Commands") {
+                    ForEach(controller.commands, id: \.id) { command in
+                        LabeledContent(command.title, value: command.kind == .view ? "View" : "Run")
+                    }
+                    Button("Aliases and Hotkeys…") { AppDelegate.shared?.showCommandSettings() }
+                }
             }
             if !controller.tools.isEmpty {
                 Section("Agent tools") {

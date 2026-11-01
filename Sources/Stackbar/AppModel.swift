@@ -15,6 +15,8 @@ final class AppModel {
     /// Which Settings tab is showing, and which plugin's page.
     var settingsTab = SettingsTab.general
     var settingsPlugin: PluginController.ID?
+    /// The command Settings → Commands shows.
+    var settingsCommand: CommandKey?
     var indexURLs: [String] {
         didSet { UserDefaults.standard.set(indexURLs, forKey: "indexURLs") }
     }
@@ -33,6 +35,8 @@ final class AppModel {
     }
 
     @ObservationIgnored let services: HostServices
+    /// Commands: the registry, preferences, hotkeys and the runner.
+    @ObservationIgnored private(set) var commands: CommandCenter!
     @ObservationIgnored let ledger = CapabilityLedger(file: StackbarPaths.ledgerFile)
     @ObservationIgnored let installer = PluginInstaller(pluginsDirectory: StackbarPaths.pluginsDirectory, publishers: PublisherStore(file: StackbarPaths.publishersFile), recordFile: StackbarPaths.dataDirectory.appendingPathComponent("installed.json"))
     @ObservationIgnored let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
@@ -68,12 +72,14 @@ final class AppModel {
                 notify: { note in Task { @MainActor in Platform.notify(note) } },
                 alert: { note in Task { @MainActor in AlertPresenter.shared.show(note) } },
                 open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },
+                openWith: { url, bundleID in try await Platform.open(url, with: bundleID) },
                 copy: { text in Task { @MainActor in Platform.copy(text) } },
                 secretMissing: { pluginID, name in secretRouter.route(pluginID, name) },
                 system: MacSystem(images: Self.clipboardImages)
             )
         )
         secretRouter.model = self
+        commands = CommandCenter(model: self, services: services)
     }
 
     // MARK: - Plugins
@@ -83,6 +89,7 @@ final class AppModel {
         // Refresh bundled plugins already installed; installing them stays
         // the user's choice (the welcome prompt or the menu item).
         syncBundled(installMissing: false)
+        commands.start()
         for source in Self.discover() { add(source) }
         let watcher = DirectoryWatcher(directory: StackbarPaths.pluginsDirectory)
         watcher.start { [weak self] change in
@@ -162,6 +169,7 @@ final class AppModel {
         await controller.stop()
         controllers.removeAll { $0 === controller }
         palette.remove(pluginID: controller.pluginID)
+        commands.forget(pluginID: controller.pluginID)
         widgets.remove(controller.pluginID)
         onPluginsChanged?()
     }
@@ -227,6 +235,25 @@ final class AppModel {
 
     func panelChanged(_ controller: PluginController) {
         palette.update(pluginID: controller.pluginID, pluginName: controller.name, panel: controller.panel)
+    }
+
+    /// The registry or preferences changed: rebuild the palette's commands.
+    func commandsChanged() {
+        palette.setCommands(commands.registry.entries, preferences: commands.preferences.all)
+    }
+
+    func headlessPanelsChanged(_ controllers: [PluginController]) {
+        palette.setHeadlessPanels(controllers.map { (pluginID: $0.pluginID, name: $0.name) })
+    }
+
+    /// Opens a command of a plugin in the palette (a row's navigate action,
+    /// a link, a hotkey).
+    func openCommand(pluginID: String, target: CommandTarget, source: InvocationSource) {
+        guard let entry = commands.registry.entry(CommandKey(pluginID: pluginID, commandID: target.command)) else {
+            HUD.shared.show("\(target.command) is not a command of this plugin", isError: true)
+            return
+        }
+        AppDelegate.shared?.palette.open(entry, arguments: target.arguments, source: source)
     }
 
     func widgetChanged(_ controller: PluginController) {

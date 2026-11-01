@@ -9,10 +9,11 @@ import StackbarProtocol
 /// here; `docs/surface-parity.md` is generated from it and a test fails when
 /// the two disagree.
 public enum SurfaceParity {
-    /// The surfaces the ledger covers: the plugin surfaces plus the two the
-    /// host derives (the palette from panel rows, the agent from text).
+    /// The surfaces the ledger covers: the plugin surfaces, a command's view
+    /// in the palette, plus the two the host derives (the palette from panel
+    /// rows, the agent from text).
     public enum Column: String, CaseIterable, Sendable {
-        case panel, window, settings, menuBar, widget, palette, agent
+        case panel, window, settings, menuBar, widget, command, palette, agent
 
         var title: String {
             switch self {
@@ -21,6 +22,7 @@ public enum SurfaceParity {
             case .settings: return "Settings"
             case .menuBar: return "Menu bar"
             case .widget: return "Widget"
+            case .command: return "Command view"
             case .palette: return "Palette"
             case .agent: return "Agent (text)"
             }
@@ -30,7 +32,7 @@ public enum SurfaceParity {
     /// One name per `ViewNode` case.
     public enum Kind: String, CaseIterable, Sendable {
         case text, label, stack, list, section, row, badge, button, toggle, progress, divider
-        case labeled, chart, textField, picker, slider, link, empty
+        case labeled, chart, textField, picker, slider, link, empty, form
 
         public init(_ node: ViewNode) {
             switch node {
@@ -52,6 +54,7 @@ public enum SurfaceParity {
             case .slider: self = .slider
             case .link: self = .link
             case .empty: self = .empty
+            case .form: self = .form
             }
         }
     }
@@ -61,6 +64,7 @@ public enum SurfaceParity {
         case .panel, .window, .settings: return panel(kind)
         case .menuBar: return menuBar(kind)
         case .widget: return widget(kind)
+        case .command: return command(kind)
         case .palette: return palette(kind)
         case .agent: return agent(kind)
         }
@@ -86,6 +90,16 @@ public enum SurfaceParity {
         case .slider: return "Slider; sends on release"
         case .link: return "Link; host opens it"
         case .empty: return "ContentUnavailableView"
+        case .form: return "Form; submit sends every field"
+        }
+    }
+
+    private static func command(_ kind: Kind) -> String {
+        switch kind {
+        case .list: return "List filtered by the plugin as the user types"
+        case .row: return "Row; Return = first action, ⌘K = all, navigate pushes"
+        case .text, .label, .stack, .section, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form:
+            return "As panel"
         }
     }
 
@@ -96,7 +110,7 @@ public enum SurfaceParity {
         case .stack: return "Children on one line"
         case .list, .section, .row: return "Hidden (panel only)"
         case .badge: return "Small capsule"
-        case .button, .toggle, .textField, .picker, .slider, .link: return "Hidden (click opens the panel)"
+        case .button, .toggle, .textField, .picker, .slider, .link, .form: return "Hidden (click opens the panel)"
         case .progress: return "12 pt ring"
         case .divider: return "Hidden"
         case .labeled: return "Label and value"
@@ -109,7 +123,7 @@ public enum SurfaceParity {
         switch kind {
         case .list: return "First 4 rows, no filter"
         case .row: return "Row, not clickable"
-        case .button, .toggle, .textField, .picker, .slider: return "Drawn disabled"
+        case .button, .toggle, .textField, .picker, .slider, .form: return "Drawn disabled"
         case .link: return "Link (opens Stackbar's URL)"
         case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty: return "As panel"
         }
@@ -122,7 +136,7 @@ public enum SurfaceParity {
         case .toggle: return "Entry, flips the toggle"
         case .link: return "Entry, opens the URL"
         case .list, .section, .stack: return "Searched through"
-        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty: return "Not listed"
+        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form: return "Not listed"
         }
     }
 
@@ -146,6 +160,7 @@ public enum SurfaceParity {
         case .slider: return "`title: v (min...max) {id}`"
         case .link: return "`<title> url`"
         case .empty: return "`[symbol] title - message`"
+        case .form: return "`Form` then `label: [value____]` lines and `(submit) {id}`"
         }
     }
 

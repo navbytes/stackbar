@@ -16,8 +16,13 @@ usage:
   stackbarctl render <plugin.swift | helper> [--surface menuBar|panel|window|widget]
                   [--event <action-id>[=value]]... [--tool name[:json]] [--copy <text>]...
                   [--json] [--png <dir>] [--verbose]
+                  [--command <id> [--query <text>] [--arg name=value]...]
+                  --command opens a view command; --event then presses things inside it
                   --copy pretends you copied text in another app (clipboard plugins);
                   the clipboard, battery and calendar are simulated (STACKBAR_CALENDAR=<events.json>)
+  stackbarctl commands <plugin.swift | helper>        lists the plugin's commands
+  stackbarctl run <plugin.swift | helper> <command> [--arg name=value]...
+                                    runs a command and prints its result
   stackbarctl mcp                      authoring MCP server on stdio (for coding agents)
   stackbarctl agent [<plugin>...]      runtime MCP gateway on stdio: bridges to the running
                                     app, or runs the given plugins itself when it isn't
@@ -111,6 +116,9 @@ func render(_ path: String, options: [String]) async {
     var asJSON = false
     var pngDirectory: String?
     var verbose = false
+    var command: String?
+    var query = ""
+    var commandArguments: [String: JSONValue] = [:]
     var index = 0
     while index < options.count {
         switch options[index] {
@@ -131,6 +139,11 @@ func render(_ path: String, options: [String]) async {
         case "--json": asJSON = true
         case "--png": pngDirectory = value(after: "--png", in: options, at: &index)
         case "--verbose": verbose = true
+        case "--command": command = value(after: "--command", in: options, at: &index)
+        case "--query": query = value(after: "--query", in: options, at: &index)
+        case "--arg":
+            let parts = value(after: "--arg", in: options, at: &index).split(separator: "=", maxSplits: 1).map(String.init)
+            commandArguments[parts[0]] = .string(parts.count > 1 ? parts[1] : "")
         default: fail(usage)
         }
         index += 1
@@ -150,9 +163,24 @@ func render(_ path: String, options: [String]) async {
     }
 
     _ = await run("stackbar_render", ["format": "json"])
+    // The command view opens after the copies, tools and panel events
+    // before its first event, so it shows what they did.
+    var viewText: String?
+    var viewOpened = false
+    func openView() async {
+        guard let command, !viewOpened else { return }
+        viewOpened = true
+        let opened = await run("stackbar_render_command", ["command": .string(command), "query": .string(query), "arguments": .object(commandArguments), "format": .string(asJSON ? "json" : "text")])
+        if case .text(let text) = opened.content.first { viewText = text }
+    }
     for step in steps {
+        if step.kind == "event", step.name.hasPrefix("view/") { await openView() }
         if step.kind == "event" {
-            _ = await run("stackbar_send_event", ["action": .string(step.name), "value": step.value.map(JSONValue.string) ?? .null])
+            let value: JSONValue = step.value.map { text in
+                text.hasPrefix("{") ? (try? JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))) ?? .string(text) : .string(text)
+            } ?? .null
+            let result = await run("stackbar_send_event", ["action": .string(step.name), "value": value])
+            if command != nil, step.name.hasPrefix("view/"), case .text(let text) = result.content.first { viewText = text }
         } else if step.kind == "copy" {
             _ = await run("stackbar_simulate_copy", ["text": .string(step.name)])
         } else {
@@ -161,7 +189,10 @@ func render(_ path: String, options: [String]) async {
             if case .text(let text) = result.content.first { print("== tool \(step.name) ==\n\(text)") }
         }
     }
-    if let pngDirectory {
+    await openView()
+    if let viewText {
+        print(viewText)
+    } else if let pngDirectory {
         let result = await run("stackbar_render", ["format": "png", "surface": surfaces.count == 1 ? .string(surfaces[0].rawValue) : .null])
         try? FileManager.default.createDirectory(atPath: pngDirectory, withIntermediateDirectories: true)
         var label = "surface"
@@ -397,6 +428,30 @@ case "manifest":
     } catch {
         fail("\(error)")
     }
+case "commands", "run":
+    guard let path = rest.first else { fail(usage) }
+    let tools = AuthoringTools(builder: builder, services: makeServices(), png: nil)
+    var callArguments: [String: JSONValue] = ["path": .string(path)]
+    var toolName = "stackbar_list_commands"
+    if command == "run" {
+        guard rest.count >= 2 else { fail(usage) }
+        toolName = "stackbar_run_command"
+        callArguments["command"] = .string(rest[1])
+        var values: [String: JSONValue] = [:]
+        var index = 2
+        while index < rest.count {
+            guard rest[index] == "--arg" else { fail(usage) }
+            let parts = value(after: "--arg", in: rest, at: &index).split(separator: "=", maxSplits: 1).map(String.init)
+            values[parts[0]] = .string(parts.count > 1 ? parts[1] : "")
+            index += 1
+        }
+        callArguments["arguments"] = .object(values)
+    }
+    let result = await tools.call(toolName, arguments: callArguments)
+    await tools.stopAll()
+    let text = result.content.compactMap { if case .text(let text) = $0 { return text } else { return nil } }.joined(separator: "\n")
+    if result.isError { fail(text) }
+    print(text)
 case "render":
     guard let path = rest.first else { fail(usage) }
     await render(path, options: Array(rest.dropFirst()))

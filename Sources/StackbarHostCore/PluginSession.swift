@@ -13,6 +13,10 @@ public actor PluginSession {
     private var expected = 0
     private var logLines: [String] = []
     private let maxLogLines = 500
+    /// The latest tree of each open command view.
+    private var commandViews: [Int: ViewNode] = [:]
+    private var nextSession = 1
+    private var nextSeq = 1
 
     public init(source: URL, builder: PluginBuilder?, services: HostServices?) {
         self.source = source
@@ -65,6 +69,54 @@ public actor PluginSession {
         await supervisor?.tools ?? []
     }
 
+    public func commands() async -> [CommandSpec] {
+        await supervisor?.commands ?? []
+    }
+
+    /// Runs a run command and waits for its result.
+    public func runCommand(_ command: String, arguments: [String: String] = [:], context: InvocationContext? = nil) async throws -> CommandResult {
+        guard let supervisor else { throw SessionError.notRunning }
+        let result = await supervisor.runCommand(command, arguments: arguments, source: .cli, context: context)
+        expected += 1
+        try? await settle()
+        return result
+    }
+
+    /// Opens a view command with a query and returns its session and tree.
+    public func openView(_ command: String, query: CommandQuery = CommandQuery(), context: InvocationContext? = nil) async throws -> (session: Int, root: ViewNode?) {
+        guard let supervisor else { throw SessionError.notRunning }
+        let session = nextSession
+        nextSession += 1
+        let seq = nextSeq
+        nextSeq += 1
+        await supervisor.openView(session: session, command: command, query: query, seq: seq, context: context)
+        expected += 1
+        try await settle()
+        return (session, commandViews[session])
+    }
+
+    /// Changes an open view's query and returns its new tree.
+    public func updateView(_ session: Int, query: CommandQuery) async throws -> ViewNode? {
+        guard let supervisor else { throw SessionError.notRunning }
+        let seq = nextSeq
+        nextSeq += 1
+        await supervisor.updateView(session: session, query: query, seq: seq)
+        expected += 1
+        try await settle()
+        return commandViews[session]
+    }
+
+    public func commandView(_ session: Int) -> ViewNode? {
+        commandViews[session]
+    }
+
+    public func closeView(_ session: Int) async {
+        await supervisor?.closeView(session: session)
+        commandViews[session] = nil
+        expected += 1
+        try? await settle()
+    }
+
     /// The plugin's left-click action on its menu-bar item, if any.
     public func menuBarClick() async -> MenuBarClick? {
         await supervisor?.menuBarClick
@@ -77,7 +129,7 @@ public actor PluginSession {
     /// Sends an event and waits until the plugin has handled it.
     public func event(_ action: ActionID, value: EventValue? = nil) async throws {
         guard let supervisor else { throw SessionError.notRunning }
-        let actions = await supervisor.views.values.flatMap(\.actions)
+        let actions = await supervisor.views.values.flatMap(\.actions) + commandViews.values.flatMap(\.actions)
         guard actions.contains(action) else {
             throw SessionError.unknownAction(action, available: actions)
         }
@@ -123,7 +175,8 @@ public actor PluginSession {
         switch update {
         case .log(let level, let message): logLines.append("[\(level.rawValue)] \(message)")
         case .state(let state): logLines.append("[state] \(state)")
-        case .render, .tools, .menuBarClick: return
+        case .view(let session, _, let root): commandViews[session] = root; return
+        case .render, .tools, .menuBarClick, .commands: return
         }
         if logLines.count > maxLogLines { logLines.removeFirst(logLines.count - maxLogLines) }
     }

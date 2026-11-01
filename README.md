@@ -76,8 +76,13 @@ Stackbar menu or Settings). `Examples/` are small plugins that each teach one id
 
 - **Surfaces:** menu bar, panel (popover), window, desktop widget (WidgetKit,
   from snapshots), and the command palette (Control-Option-Space) that searches
-  every plugin's actions. `docs/surface-parity.md` says what each surface does
-  with each view, and a test keeps it in sync with the code.
+  every plugin's commands and actions. `docs/surface-parity.md` says what each
+  surface does with each view, and a test keeps it in sync with the code.
+- **Commands:** a plugin's `commands` are found by name in the palette, with
+  up to three inline arguments, or open a live view (a list that follows what
+  you type, a detail, a form). Each can have an alias and a global hotkey
+  (Settings → Commands) and a `stackbar://commands/<plugin>/<command>` link.
+  A plugin can have commands and no menu-bar item at all.
 - **Services:** per-plugin storage (`@Stored`), secrets (Keychain), HTTP to
   declared hosts only, an OAuth broker (authorization code with PKCE, refresh,
   tokens in the Keychain), pub/sub between plugins, notifications, opening URLs

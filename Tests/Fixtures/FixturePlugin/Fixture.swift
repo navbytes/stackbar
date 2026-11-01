@@ -67,6 +67,23 @@ final class Fixture: StackbarPlugin {
         }
     }
 
+    var commands: [Command] {
+        Command("bump", title: "Bump Count") { invocation in
+            self.count += Int(invocation["by"] ?? "1") ?? 1
+            return .message("count \(self.count)")
+        }
+        .argument("by", required: false, default: "1")
+        Command("copy-count", title: "Copy Count") { _ in .copy("\(self.count)") }
+        Command("slow", title: "Slow") { _ in
+            try await Task.sleep(for: .seconds(5))
+            return .done
+        }
+        Command("inside", title: "Inside Only") { _ in .done }
+            .stackbarOnly()
+        Command("echo", title: "Echo")
+            .view { invocation in Text("query \(invocation.text)") }
+    }
+
     func receive(topic: String, payload: String, from sender: String) async throws {
         status = "topic \(topic) \(payload) from \(sender)"
     }

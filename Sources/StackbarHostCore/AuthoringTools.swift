@@ -16,6 +16,8 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
     private let png: PNGRenderer?
     private let lock = NSLock()
     private var sessions: [String: PluginSession] = [:]
+    /// The command view each file has open, so events inside it render it.
+    private var openViews: [String: Int] = [:]
 
     public init(builder: PluginBuilder, services: HostServices, png: PNGRenderer? = nil) {
         self.builder = builder
@@ -48,6 +50,14 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
                 "path": path, "text": MCPTool.property("string", "What was copied"), "app": MCPTool.property("string", "The app it was copied from (default Safari)"),
                 "concealed": MCPTool.property("boolean", "Marked as a password by the copying app"),
             ], required: ["path", "text"]),
+            MCPTool(name: "stackbar_list_commands", description: "List the plugin's commands: id, run or view, title and arguments.", properties: ["path": path], required: ["path"]),
+            MCPTool(name: "stackbar_run_command", description: "Run one of the plugin's run commands and return its result (message, open, copy, paste or failure).", properties: [
+                "path": path, "command": MCPTool.property("string", "Command id"), "arguments": MCPTool.property("object", "Argument values by name"),
+            ], required: ["path", "command"]),
+            MCPTool(name: "stackbar_render_command", description: "Open one of the plugin's view commands with a query and show its view, with action ids in {braces}. stackbar_send_event then presses things inside it; submit a form with value as an object of field values.", properties: [
+                "path": path, "command": MCPTool.property("string", "Command id"), "query": MCPTool.property("string", "What the user typed (default empty)"),
+                "arguments": MCPTool.property("object", "Argument values by name"), "format": MCPTool.property("string", "Output format", enumValues: ["text", "json"]),
+            ], required: ["path", "command"]),
             MCPTool(name: "stackbar_logs", description: "Recent log lines from the plugin: its errors, warnings and stray prints.", properties: [
                 "path": path, "lines": MCPTool.property("number", "How many (default 50)"),
             ], required: ["path"]),
@@ -75,6 +85,9 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
                 let session = session(for: url)
                 if await !session.isRunning { try await session.ensureRunning() }
                 try await session.event(ActionID(action), value: Self.eventValue(arguments["value"], for: action))
+                if let open = lock.withLock({ openViews[url.path] }), action.hasPrefix("view/\(open)/") {
+                    return await renderCommandView(session, open, format: "text")
+                }
                 return await render(session, surfaces: [.menuBar, .panel], format: "text")
             case "stackbar_refresh":
                 let session = session(for: url)
@@ -96,13 +109,36 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
                 system.simulateCopy(arguments["text"]?.string ?? "", app: SystemStatus.App(id: "app.\(app.lowercased().filter(\.isLetter))", name: app), concealed: arguments["concealed"]?.bool ?? false)
                 try await session.trigger(.clipboard)
                 return await render(session, surfaces: [.menuBar, .panel], format: "text")
+            case "stackbar_list_commands":
+                let session = session(for: url)
+                try await session.ensureRunning()
+                let commands = await session.commands()
+                return .text(commands.isEmpty ? "(no commands; add a `var commands: [Command]` to the plugin)" : commands.map(Self.describe).joined(separator: "\n"))
+            case "stackbar_run_command":
+                guard let command = arguments["command"]?.string else { return .text("command is required", isError: true) }
+                let session = session(for: url)
+                try await session.ensureRunning()
+                let result = try await session.runCommand(command, arguments: Self.strings(arguments["arguments"]))
+                return Self.describe(result)
+            case "stackbar_render_command":
+                guard let command = arguments["command"]?.string else { return .text("command is required", isError: true) }
+                let session = session(for: url)
+                try await session.ensureRunning()
+                if let previous = lock.withLock({ openViews[url.path] }) { await session.closeView(previous) }
+                let query = CommandQuery(text: arguments["query"]?.string ?? "", arguments: Self.strings(arguments["arguments"]))
+                let opened = try await session.openView(command, query: query)
+                lock.withLock { openViews[url.path] = opened.session }
+                return await renderCommandView(session, opened.session, format: arguments["format"]?.string ?? "text")
             case "stackbar_logs":
                 let count = Int(arguments["lines"]?.number ?? 50)
                 let logs = await existing(url)?.logs(last: count) ?? []
                 return .text(logs.isEmpty ? "(no log lines; is the plugin running? use stackbar_render first)" : logs.joined(separator: "\n"))
             case "stackbar_stop":
                 await existing(url)?.stop()
-                lock.withLock { sessions[url.path] = nil }
+                lock.withLock {
+                    sessions[url.path] = nil
+                    openViews[url.path] = nil
+                }
                 return .text("stopped")
             default:
                 return .text("unknown tool \(name)", isError: true)
@@ -166,11 +202,67 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             if wanted.contains(.menuBar), let click = await session.menuBarClick() {
                 text += "\n(click: \(click.title) {\(click.action)})"
             }
+            let commands = await session.commands()
+            if !commands.isEmpty { text += "\n== commands ==\n" + commands.map(Self.describe).joined(separator: "\n") }
             let tools = await session.tools()
             if !tools.isEmpty { text += "\n== tools ==\n" + tools.map { "\($0.name): \($0.description)" }.joined(separator: "\n") }
             let warnings = await session.logs(last: 10).filter { $0.hasPrefix("[error]") || $0.hasPrefix("[warning]") }
             if !warnings.isEmpty { text += "\n== recent problems ==\n" + warnings.joined(separator: "\n") }
             return .text(text)
+        }
+    }
+
+    private func renderCommandView(_ session: PluginSession, _ id: Int, format: String) async -> MCPToolResult {
+        guard let root = await session.commandView(id) else {
+            let problems = await session.logs(last: 10).filter { $0.hasPrefix("[error]") || $0.hasPrefix("[warning]") }
+            return .text("the view did not render" + (problems.isEmpty ? "" : ":\n" + problems.joined(separator: "\n")), isError: true)
+        }
+        if format == "json" {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            return .text((try? encoder.encode(root)).map { String(decoding: $0, as: UTF8.self) } ?? "{}")
+        }
+        var text = "== command view ==\n" + TreeTextRenderer.render(root)
+        let warnings = await session.logs(last: 10).filter { $0.hasPrefix("[error]") || $0.hasPrefix("[warning]") }
+        if !warnings.isEmpty { text += "\n== recent problems ==\n" + warnings.joined(separator: "\n") }
+        return .text(text)
+    }
+
+    static func describe(_ spec: CommandSpec) -> String {
+        var line = "\(spec.id) (\(spec.kind.rawValue)): \(spec.title)"
+        if let subtitle = spec.subtitle { line += " - \(subtitle)" }
+        if !spec.arguments.isEmpty {
+            line += " [" + spec.arguments.map { argument in
+                var text = argument.name
+                if !argument.required || argument.defaultValue != nil { text += "?" }
+                if let options = argument.options { text += " one of " + options.joined(separator: "|") }
+                if let value = argument.defaultValue { text += " = \(value)" }
+                return text
+            }.joined(separator: ", ") + "]"
+        }
+        if !spec.keywords.isEmpty { line += " keywords: " + spec.keywords.joined(separator: ", ") }
+        if spec.exposure == .stackbarOnly { line += " (Stackbar only)" }
+        return line
+    }
+
+    static func describe(_ result: CommandResult) -> MCPToolResult {
+        switch result {
+        case .message(let message): return .text("message: " + (message ?? "(none)"))
+        case .open(let url, let app): return .text("open: \(url)" + (app.map { " with \($0)" } ?? ""))
+        case .copy(let text): return .text("copy: \(text)")
+        case .paste(let text, let cursor): return .text("paste: \(text)" + (cursor > 0 ? " (cursor \(cursor) from the end)" : ""))
+        case .failure(let message): return .text("failure: \(message)", isError: true)
+        }
+    }
+
+    static func strings(_ value: JSONValue?) -> [String: String] {
+        (value?.object ?? [:]).compactMapValues { value in
+            switch value {
+            case .string(let text): return text
+            case .number(let number): return number.rounded() == number ? String(Int(number)) : String(number)
+            case .bool(let flag): return String(flag)
+            case .null, .array, .object: return nil
+            }
         }
     }
 
@@ -201,7 +293,8 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
         case .string(let text): return .text(text)
         case .number(let number): return .text(number.rounded() == number ? String(Int(number)) : String(number))
         case .bool(let flag): return .text(String(flag))
-        case .null, .array, .object: return nil
+        case .object: return value.eventValue
+        case .null, .array: return nil
         }
     }
 }

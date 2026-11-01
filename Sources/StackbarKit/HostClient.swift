@@ -100,6 +100,7 @@ public final class HostClient: @unchecked Sendable {
         case .notify: return "notification"
         case .alert: return "alert"
         case .openURL(let url): return "opening \(url)"
+        case .open(let url, _): return "opening \(url)"
         case .copy: return "copying"
         case .clipboardRead: return "reading the clipboard"
         case .clipboardWrite: return "writing the clipboard"
@@ -203,6 +204,14 @@ public enum Stackbar {
 
     public static func open(_ url: String) {
         HostClient.shared.fire(.openURL(url))
+    }
+
+    /// Opens a URL or an absolute (or `~/`) path, with the app whose bundle
+    /// id is `app` when given, and waits for the host to say it worked.
+    /// Schemes beyond https, http, mailto, tel and meeting links need
+    /// `.openURLs(schemes:)`; files and folders need `"*"`.
+    public static func open(_ url: String, with app: String?) async throws {
+        if case .failure(let message) = await HostClient.shared.call(.open(url: url, app: app)) { throw HostError(message) }
     }
 
     public static func copy(_ text: String) {

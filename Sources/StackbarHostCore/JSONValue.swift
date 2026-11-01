@@ -55,7 +55,11 @@ public enum JSONValue: Codable, Equatable, Sendable, ExpressibleByStringLiteral,
         case .bool(let value): return .bool(value)
         case .number(let value): return .number(value)
         case .string(let value): return .text(value)
-        case .null, .array, .object: return nil
+        case .object(let fields):
+            var values: [String: EventValue] = [:]
+            for (key, field) in fields { values[key] = field.eventValue }
+            return .fields(values)
+        case .null, .array: return nil
         }
     }
 
@@ -64,6 +68,7 @@ public enum JSONValue: Codable, Equatable, Sendable, ExpressibleByStringLiteral,
         case .bool(let value): self = .bool(value)
         case .number(let value): self = .number(value)
         case .text(let value): self = .string(value)
+        case .fields(let values): self = .object(values.mapValues(JSONValue.init))
         }
     }
 }

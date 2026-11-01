@@ -15,7 +15,7 @@ extension EnvironmentValues {
     /// Widgets draw controls but can't act on them.
     @Entry public var stackbarReadOnly: Bool = false
     /// The row a keyboard-driven list has selected, drawn highlighted.
-    @Entry var stackbarSelectedRow: String? = nil
+    @Entry public var stackbarSelectedRow: String? = nil
     /// ⌘1–⌘9 positions of the first rows in a keyboard-driven list.
     @Entry var stackbarRowNumbers: [String: Int] = [:]
     /// Scrolls the enclosing panel to a row key. Set by the host's scroll
@@ -120,6 +120,9 @@ public struct NodeView: View {
             } description: {
                 if let message { Text(message) }
             }
+        case .form(let form):
+            FormNodeView(form: form, send: send)
+                .disabled(readOnly)
         }
     }
 
@@ -299,11 +302,11 @@ struct PreviewPane: View {
 
 /// A row action's shortcut (`cmd+return`, `cmd+1`, `cmd+shift+k`) matched
 /// against a key press.
-struct KeyShortcut: Equatable {
-    var key: KeyEquivalent
-    var modifiers: EventModifiers
+public struct KeyShortcut: Equatable {
+    public var key: KeyEquivalent
+    public var modifiers: EventModifiers
 
-    init?(_ spec: String) {
+    public init?(_ spec: String) {
         var modifiers: EventModifiers = []
         var key: KeyEquivalent?
         for part in spec.lowercased().split(separator: "+").map({ $0.trimmingCharacters(in: .whitespaces) }) {
@@ -332,11 +335,11 @@ struct KeyShortcut: Equatable {
         self.modifiers = modifiers
     }
 
-    static func == (lhs: KeyShortcut, rhs: KeyShortcut) -> Bool {
+    public static func == (lhs: KeyShortcut, rhs: KeyShortcut) -> Bool {
         lhs.key.character == rhs.key.character && lhs.modifiers == rhs.modifiers
     }
 
-    func matches(_ press: KeyPress) -> Bool {
+    public func matches(_ press: KeyPress) -> Bool {
         let relevant: EventModifiers = [.command, .shift, .option, .control]
         guard press.modifiers.intersection(relevant) == modifiers else { return false }
         if press.key.character == key.character { return true }
@@ -383,9 +386,15 @@ public enum RowFilter {
     }
 }
 
-struct RowView: View {
+public struct RowView: View {
     let row: RowNode
     let send: SendAction
+
+    public init(row: RowNode, send: @escaping SendAction) {
+        self.row = row
+        self.send = send
+    }
+
     @State private var hovering = false
     @Environment(\.stackbarReadOnly) private var readOnly
     @Environment(\.stackbarSelectedRow) private var selectedRow
@@ -396,7 +405,7 @@ struct RowView: View {
         return hovering && !row.actions.isEmpty && !readOnly ? Color.primary.opacity(0.08) : .clear
     }
 
-    var body: some View {
+    public var body: some View {
         HStack(spacing: 8) {
             if let symbol = row.symbol {
                 Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 18)
