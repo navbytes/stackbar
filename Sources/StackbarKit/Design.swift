@@ -811,7 +811,12 @@ public struct TagChips: StackbarView {
                 Chip(tag, theme: theme, selected: selection == tag, key: "tag/\(tag)") { try await onSelect(tag) }
             }
             if !rest.isEmpty {
-                Picker("More", options: rest, selection: selection.flatMap { rest.contains($0) ? $0 : nil }, key: "tag/More") { try await onSelect($0) }
+                // No label: the menu itself reads "More…" until a tag in it is picked.
+                let more = "More…"
+                Picker("", options: [more] + rest, selection: selection.flatMap { rest.contains($0) ? $0 : nil } ?? more, key: "tag/More") { choice in
+                    if choice != more { try await onSelect(choice) }
+                }
+                .frame(width: 96)
             }
             Spacer()
         }

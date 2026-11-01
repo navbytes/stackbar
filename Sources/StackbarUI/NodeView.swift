@@ -907,11 +907,30 @@ enum AppIcons {
     static func icon(_ bundleID: String) -> NSImage? {
         if let cached = cache[bundleID] { return cached }
         let image = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { url in
-            let icon = NSWorkspace.shared.icon(forFile: url.path)
-            icon.size = NSSize(width: 32, height: 32)
-            return icon
+            flattened(NSWorkspace.shared.icon(forFile: url.path))
         }
         cache[bundleID] = image
+        return image
+    }
+
+    /// The icon drawn once into a plain bitmap. Workspace icons are lazy,
+    /// many-sized images that `ImageRenderer` draws as a grey veil over the
+    /// whole snapshot; a bitmap draws like any other picture.
+    private static func flattened(_ icon: NSImage) -> NSImage {
+        let points = NSSize(width: 32, height: 32)
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: bitmap) else {
+            icon.size = points
+            return icon
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        icon.draw(in: NSRect(x: 0, y: 0, width: 64, height: 64), from: .zero, operation: .copy, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
+        bitmap.size = points
+        let image = NSImage(size: points)
+        image.addRepresentation(bitmap)
         return image
     }
 }
