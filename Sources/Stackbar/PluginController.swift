@@ -33,6 +33,19 @@ final class PluginController: Identifiable {
             model?.onPluginsChanged?()
         }
     }
+    /// The user turned the plugin off (Settings): it is built and listed
+    /// but not run, and it shows nowhere else.
+    var isEnabled: Bool {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            UserDefaults.standard.set(!isEnabled, forKey: "disabled." + source.path)
+            if isEnabled {
+                reload()
+            } else {
+                Task { await turnOff() }
+            }
+        }
+    }
     private(set) var problem: String?
     private(set) var building = false
     private(set) var logs: [String] = []
@@ -56,6 +69,7 @@ final class PluginController: Identifiable {
         self.name = source.deletingPathExtension().lastPathComponent
         self.pluginID = source.path
         hiddenFromMenuBar = UserDefaults.standard.bool(forKey: "hiddenFromMenuBar." + source.path)
+        isEnabled = !UserDefaults.standard.bool(forKey: "disabled." + source.path)
     }
 
     /// Whether the plugin draws in the menu bar: it lists `.menuBar` (or did
@@ -63,12 +77,12 @@ final class PluginController: Identifiable {
     var showsInMenuBar: Bool {
         let declares = manifest.map { $0.surfaces.contains(.menuBar) }
             ?? (UserDefaults.standard.object(forKey: "declaresMenuBar." + source.path) as? Bool ?? true)
-        return declares && !hiddenFromMenuBar
+        return declares && !hiddenFromMenuBar && isEnabled
     }
 
     /// A plugin with a panel and no menu-bar item opens it centered instead.
     var hasHeadlessPanel: Bool {
-        !showsInMenuBar && manifest?.surfaces.contains(.panel) == true
+        isEnabled && !showsInMenuBar && manifest?.surfaces.contains(.panel) == true
     }
 
     var isWaitingForApproval: Bool { !pendingApproval.isEmpty }
@@ -130,6 +144,11 @@ final class PluginController: Identifiable {
                 isNewInstall = isNew
             }
 
+            guard isEnabled else {
+                await turnOff()
+                return
+            }
+
             await supervisor?.stop()
             // A newer load (the file changed again) or a stop ran while the
             // old helper was stopping; starting this one too would leave a
@@ -155,6 +174,22 @@ final class PluginController: Identifiable {
     /// trees on screen meanwhile.
     func reload() {
         Task { await load() }
+    }
+
+    /// Stops the helper and clears what the plugin showed, keeping its
+    /// manifest so Settings can still name it.
+    private func turnOff() async {
+        await stop()
+        menuBar = nil
+        panel = nil
+        window = nil
+        widget = nil
+        settings = nil
+        menuBarClick = nil
+        tools = []
+        commands = []
+        problem = nil
+        model?.pluginTurnedOff(self)
     }
 
     func stop() async {

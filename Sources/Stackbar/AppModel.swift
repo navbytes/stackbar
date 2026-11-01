@@ -117,6 +117,7 @@ final class AppModel {
     /// updates (or lists them when automatic updates are off) and moves
     /// withdrawn plugins to the Trash.
     func checkStore() async {
+        refreshInstalled()
         let installed = installer.installed
         guard !installed.isEmpty else { return }
         let (catalogs, _) = await PluginStore.load(storeSources)
@@ -124,7 +125,7 @@ final class AppModel {
         for withdrawn in review.withdrawn {
             if let controller = controller(for: withdrawn.installed.id) { await remove(controller) }
             try? FileManager.default.trashItem(at: URL(fileURLWithPath: withdrawn.installed.file), resultingItemURL: nil)
-            try? installer.uninstall(withdrawn.installed.id)
+            try? installer.forget(withdrawn.installed.id)
             Platform.notify(HostNotification(pluginID: withdrawn.installed.id, pluginName: "Stackbar", title: "Removed a withdrawn plugin", body: "\(withdrawn.installed.id) \(withdrawn.installed.version) was withdrawn by its publisher and is in the Trash: \(withdrawn.reason)"))
         }
         guard autoUpdatePlugins else {
@@ -146,6 +147,7 @@ final class AppModel {
         let file = try installer.install(bundle)
         if let controller = controller(for: update.entry.id) { controller.reload() } else { add(file) }
         pendingUpdates.removeAll { $0.entry.id == update.entry.id }
+        refreshInstalled()
     }
 
     func stop() async {
@@ -163,7 +165,8 @@ final class AppModel {
     }
 
     func add(_ source: URL) {
-        guard !controllers.contains(where: { $0.source.standardizedFileURL == source.standardizedFileURL }) else { return }
+        let resolved = source.resolvingSymlinksInPath().standardizedFileURL
+        guard !controllers.contains(where: { $0.source.resolvingSymlinksInPath().standardizedFileURL == resolved }) else { return }
         let controller = PluginController(source: source, model: self)
         controllers.append(controller)
         onPluginsChanged?()
@@ -179,11 +182,38 @@ final class AppModel {
         onPluginsChanged?()
     }
 
-    /// Deletes a plugin's file (to the Trash) and forgets its approvals.
+    /// Moves a plugin's file to the Trash and forgets it: its approvals, and
+    /// the store's record of installing it (so the store offers it again and
+    /// the update check doesn't bring it back). Every copy loaded under the
+    /// same id goes, so nothing of it is left running.
     func uninstall(_ controller: PluginController) async {
-        await remove(controller)
-        try? FileManager.default.trashItem(at: controller.source, resultingItemURL: nil)
-        try? ledger.revoke(controller.pluginID)
+        let id = controller.pluginID
+        var files = [controller.source.standardizedFileURL]
+        files += installer.installed.filter { $0.id == id }.map { URL(fileURLWithPath: $0.file).standardizedFileURL }
+        let doomed = controllers.filter { $0 === controller || $0.pluginID == id || files.contains($0.source.standardizedFileURL) }
+        for other in doomed { await remove(other) }
+        for file in Set(files) where FileManager.default.fileExists(atPath: file.path) {
+            try? FileManager.default.trashItem(at: file, resultingItemURL: nil)
+        }
+        try? installer.forget(id)
+        try? ledger.revoke(id)
+        refreshInstalled()
+    }
+
+    /// Plugins installed from a store or a bundle, for the store pane.
+    private(set) var installedPlugins: [PluginInstaller.Installed] = []
+
+    func refreshInstalled() {
+        installedPlugins = installer.installed
+    }
+
+    /// A plugin was turned off: take it out of the palette, commands,
+    /// widgets and the menu bar until it is turned on again.
+    func pluginTurnedOff(_ controller: PluginController) {
+        palette.remove(pluginID: controller.pluginID)
+        commands.forget(pluginID: controller.pluginID)
+        widgets.remove(controller.pluginID)
+        onPluginsChanged?()
     }
 
     func controller(for pluginID: String) -> PluginController? {

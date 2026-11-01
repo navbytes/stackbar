@@ -101,6 +101,21 @@ final class PluginStoreTests: XCTestCase {
         XCTAssertEqual(review.withdrawn.map(\.installed.id), ["dev.t.w"], "only a signed index can withdraw a plugin")
     }
 
+    func testForgetDropsTheRecordAndKeepsTheFile() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let recordFile = directory.appendingPathComponent("installed.json")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("a.swift")
+        try Data("// a".utf8).write(to: file)
+        try JSONEncoder.ledger.encode([record("dev.t.a", "1.0.0"), record("dev.t.b", "1.0.0")]).write(to: recordFile)
+        let installer = PluginInstaller(pluginsDirectory: directory, publishers: PublisherStore(file: directory.appendingPathComponent("p.json")), recordFile: recordFile)
+        XCTAssertEqual(installer.installed.map(\.id), ["dev.t.a", "dev.t.b"])
+        try installer.forget("dev.t.a")
+        XCTAssertEqual(installer.installed.map(\.id), ["dev.t.b"], "an uninstalled plugin is no longer offered updates or shown as installed")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+    }
+
     func testOfficialIndexIsListedOnlyWithAKey() {
         let sources = PluginStore.sources(userURLs: ["https://example.com/a.json", OfficialIndex.url.absoluteString, "not a url \u{0}"])
         XCTAssertEqual(sources.filter { !$0.isOfficial }.map(\.url.absoluteString), ["https://example.com/a.json"])
