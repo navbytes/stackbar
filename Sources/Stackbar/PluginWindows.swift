@@ -58,6 +58,7 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         window.setFrameAutosaveName("stackbar.window." + controller.pluginID)
         window.delegate = self
         window.center()
+        window.addTitlebarAccessoryViewController(PinAccessory(window: window, pluginID: controller.pluginID))
         windows[controller.pluginID] = window
         controllers[ObjectIdentifier(window)] = controller
         controller.setVisible(.window, true)
@@ -98,6 +99,55 @@ struct PluginWindowView: View {
         }
         .frame(minWidth: 360, minHeight: 240)
         .environment(\.stackbarImageData, AppModel.previewImages(for: controller))
+    }
+}
+/// The title bar's "Keep on top" pin: a pinned window floats above other
+/// apps' windows (not over full-screen apps), for things you glance at while
+/// working, like the day's meetings during a call. Remembered per plugin; a
+/// plugin can't set it, only you.
+final class PinAccessory: NSTitlebarAccessoryViewController {
+    private let pluginID: String
+    private weak var target: NSWindow?
+    private let button = NSButton()
+
+    private var key: String { "stackbar.pinned." + pluginID }
+    private var pinned: Bool {
+        get { UserDefaults.standard.bool(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+
+    init(window: NSWindow, pluginID: String) {
+        self.pluginID = pluginID
+        target = window
+        super.init(nibName: nil, bundle: nil)
+        layoutAttribute = .trailing
+        button.bezelStyle = .accessoryBarAction
+        button.isBordered = false
+        button.target = self
+        button.action = #selector(toggle)
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 30, height: 22))
+        button.frame = container.bounds.insetBy(dx: 4, dy: 1)
+        button.autoresizingMask = [.width, .height]
+        container.addSubview(button)
+        view = container
+        apply()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    @objc private func toggle() {
+        pinned.toggle()
+        apply()
+    }
+
+    private func apply() {
+        target?.level = pinned ? .floating : .normal
+        let title = pinned ? "Unpin: stop keeping on top" : "Keep on top of other windows"
+        button.image = NSImage(systemSymbolName: pinned ? "pin.fill" : "pin", accessibilityDescription: title)
+        button.contentTintColor = pinned ? .controlAccentColor : .secondaryLabelColor
+        button.toolTip = title
+        button.setAccessibilityLabel(title)
     }
 }
 #endif
