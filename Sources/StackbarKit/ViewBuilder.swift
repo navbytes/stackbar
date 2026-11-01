@@ -43,10 +43,16 @@ public final class RenderContext {
     public typealias Handler = @MainActor (EventValue?) async throws -> Void
 
     public private(set) var handlers: [ActionID: Handler] = [:]
+    /// Put in front of every id: a command view's handlers live under
+    /// `view/<session>/` so they never collide with the panel's.
+    public let prefix: String
 
-    public init() {}
+    public init(prefix: String = "") {
+        self.prefix = prefix
+    }
 
     public func register(_ base: String, _ handler: @escaping Handler) -> ActionID {
+        let base = prefix + base
         var id = ActionID(base)
         var suffix = 2
         while handlers[id] != nil {

@@ -16,7 +16,7 @@ final class PRCockpit: StackbarPlugin {
     static let manifest = Manifest(
         id: "io.navbytes.stackbar.pr-cockpit",
         name: "PR Cockpit",
-        version: "1.0.0",
+        version: "1.1.0",
         summary: "Your pull requests and the ones waiting on your review, with CI and review state.",
         surfaces: [.menuBar, .panel, .window, .widget, .settings],
         triggers: [.launch, .minutes(2), .wake],
@@ -155,6 +155,13 @@ final class PRCockpit: StackbarPlugin {
         struct Problem: Decodable { let message: String }
         let data: Data?
         let errors: [Problem]?
+    }
+
+    /// One search of GitHub, for the Search Pull Requests command.
+    private struct SearchReply: Decodable {
+        struct Data: Decodable { let found: Reply.Data.Search }
+        let data: Data?
+        let errors: [Reply.Problem]?
     }
 
     static let fragment = """
@@ -556,6 +563,93 @@ final class PRCockpit: StackbarPlugin {
             if lastError == nil { ContentUnavailableView(empty.0, symbol: "checkmark.circle", message: empty.1) }
         } else {
             List(prs, searchable: true) { pr in row(pr, showAuthor: showAuthor) }
+        }
+    }
+
+    // MARK: Commands
+
+    var searchResults: [PullRequest] = []
+    var searchError: String?
+
+    var commands: [Command] {
+        Command("search", title: "Search Pull Requests", subtitle: "Yours and to review; type to search GitHub", symbol: "magnifyingglass", keywords: ["github", "pr", "pull request"])
+            .view(search: { invocation in
+                try await self.search(invocation.text)
+            }) { invocation in
+                self.searchView(invocation.text)
+            }
+        Command("review-queue", title: "Review Queue", subtitle: "Pull requests waiting on your review", symbol: "arrow.triangle.pull", keywords: ["github", "pr"])
+            .view { _ in
+                if self.shownReview.isEmpty {
+                    ContentUnavailableView("Nothing to review", symbol: "checkmark.circle", message: self.lastError ?? "You're all caught up.")
+                } else {
+                    List(searchable: true) {
+                        ForEach(self.shownReview) { pr in self.row(pr, showAuthor: true) }
+                    }
+                }
+            }
+        Command("open-next-review", title: "Open Next Review", symbol: "arrow.up.forward.square", keywords: ["github", "pr"]) { _ in
+            guard let pr = self.shownReview.first else { return .message("Nothing to review") }
+            self.markSeen(pr)
+            return .open(url: pr.url, app: nil)
+        }
+        Command("refresh", title: "Refresh Pull Requests", symbol: "arrow.clockwise", keywords: ["github"]) { _ in
+            try await self.refresh()
+            return .message(self.lastError ?? "\(self.shownReview.count) to review, \(self.shownMine.count) of yours open")
+        }
+    }
+
+    /// Searches GitHub for pull requests that involve you. Two characters
+    /// or fewer show the lists already fetched instead.
+    func search(_ text: String) async throws {
+        let text = text.trimmingCharacters(in: .whitespaces)
+        guard text.count > 2 else {
+            searchResults = []
+            searchError = nil
+            return
+        }
+        guard let token = try await Stackbar.secret("GITHUB_TOKEN") else {
+            searchError = "Add a GitHub token to search."
+            return
+        }
+        let escaped = text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let query = "query { found: search(query: \"is:pr archived:false involves:@me \(escaped)\", type: ISSUE, first: 30) { nodes { ...pr } } } \(Self.fragment)"
+        do {
+            let response = try await Stackbar.http(HTTPRequest(url: "https://api.github.com/graphql", method: "POST", headers: [
+                "Authorization": "Bearer \(token)", "Content-Type": "application/json", "Accept": "application/json",
+            ], body: try JSONEncoder().encode(["query": query])))
+            guard (200..<300).contains(response.status) else { throw HostError("GitHub answered \(response.status)") }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let reply = try decoder.decode(SearchReply.self, from: response.body)
+            guard let data = reply.data else { throw HostError(reply.errors?.map(\.message).joined(separator: "; ") ?? "GitHub sent no data") }
+            searchResults = data.found.nodes
+            searchError = nil
+        } catch {
+            searchResults = []
+            searchError = "\(error)"
+        }
+    }
+
+    @ViewBuilder func searchView(_ text: String) -> ViewContent {
+        if text.trimmingCharacters(in: .whitespaces).count <= 2 {
+            // The host filters these as you type.
+            List(searchable: true) {
+                Section("Waiting on your review") {
+                    ForEach(shownReview) { pr in row(pr, showAuthor: true) }
+                }
+                Section("Yours") {
+                    ForEach(shownMine) { pr in row(pr, showAuthor: false) }
+                }
+            }
+        } else if let searchError {
+            ContentUnavailableView("Search failed", symbol: "exclamationmark.triangle", message: searchError)
+        } else if searchResults.isEmpty {
+            ContentUnavailableView("No pull requests", symbol: "magnifyingglass", message: "Nothing that involves you matches \"\(text)\".")
+        } else {
+            List {
+                ForEach(searchResults) { pr in row(pr, showAuthor: true) }
+            }
         }
     }
 

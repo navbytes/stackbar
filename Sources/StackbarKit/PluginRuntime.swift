@@ -16,7 +16,18 @@ public final class PluginRuntime {
     private var lastSent: [Surface: ViewNode] = [:]
     private var lastTools: [ToolSpec]?
     private var lastClick: MenuBarClick?
+    private var lastCommands: [CommandSpec]?
     private var handlers: [ActionID: RenderContext.Handler] = [:]
+    /// Open command views, by session.
+    private var views: [Int: OpenView] = [:]
+
+    private struct OpenView {
+        var command: String
+        var invocation: CommandInvocation
+        var seq: Int
+        var lastRoot: ViewNode?
+        var handlers: [ActionID: RenderContext.Handler] = [:]
+    }
 
     public init(plugin: any StackbarPlugin, send: @escaping Send) {
         self.plugin = plugin
@@ -37,13 +48,16 @@ public final class PluginRuntime {
             await run("refresh") { try await self.plugin.refresh() }
             render()
         case .event(let action, let value):
-            guard let handler = handlers[action] else {
+            guard let handler = handler(for: action) else {
                 send(.log(level: .warning, message: "no handler for action \(action)"))
                 send(.settled)
                 return true
             }
             await run("action \(action)") { try await handler(value) }
-            render()
+            // An action inside a command view always answers with its view,
+            // so the host knows the action finished and what it left behind
+            // (a form with errors, or not).
+            render(forcing: Self.viewSession(of: action))
         case .visibility(let surface, let isVisible):
             if isVisible {
                 // Re-send on open, so a host that dropped the tree recovers.
@@ -61,14 +75,34 @@ public final class PluginRuntime {
         case .callTool(let id, let name, let arguments):
             await callTool(id: id, name: name, arguments: arguments)
             render()
+        case .runCommand(let id, let command, let arguments, let source, let context):
+            await runCommand(id: id, command: command, invocation: CommandInvocation(arguments: arguments, source: source, context: context))
+            render()
+        case .openView(let session, let command, let query, let seq, let context):
+            let invocation = CommandInvocation(text: query.text, arguments: query.arguments, source: .palette, context: context)
+            views[session] = OpenView(command: command, invocation: invocation, seq: seq)
+            await searchView(session)
+            render(forcing: session)
+        case .updateView(let session, let query, let seq):
+            if var view = views[session] {
+                view.invocation.text = query.text
+                view.invocation.arguments = query.arguments
+                view.seq = seq
+                views[session] = view
+                await searchView(session)
+                render(forcing: session)
+            }
+        case .closeView(let session):
+            views[session] = nil
         }
         send(.settled)
         return true
     }
 
     /// Resolves every surface and sends the ones that changed, then the tool
-    /// list if it changed.
-    public func render() {
+    /// and command lists if they changed, then every open command view that
+    /// changed (and `forcing`'s view always, since the host waits on its seq).
+    public func render(forcing forced: Int? = nil) {
         let context = RenderContext()
         for surface in surfaces {
             let root = Self.root(for: surface, content(for: surface).resolve(in: context))
@@ -91,6 +125,80 @@ public final class PluginRuntime {
         if tools != lastTools, !(lastTools == nil && tools.isEmpty) {
             lastTools = tools
             send(.tools(tools))
+        }
+        let commands = plugin.commands.map(\.spec)
+        if commands != lastCommands, !(lastCommands == nil && commands.isEmpty) {
+            lastCommands = commands
+            send(.commands(commands))
+        }
+        renderViews(forcing: forced)
+    }
+
+    static func viewSession(of action: ActionID) -> Int? {
+        guard action.rawValue.hasPrefix("view/") else { return nil }
+        let parts = action.rawValue.split(separator: "/", maxSplits: 2)
+        return parts.count == 3 ? Int(parts[1]) : nil
+    }
+
+    private func handler(for action: ActionID) -> RenderContext.Handler? {
+        if action.rawValue.hasPrefix("view/") {
+            let parts = action.rawValue.split(separator: "/", maxSplits: 2)
+            guard parts.count == 3, let session = Int(parts[1]) else { return nil }
+            return views[session]?.handlers[action]
+        }
+        return handlers[action]
+    }
+
+    private func command(_ id: String) -> Command? {
+        plugin.commands.first { $0.spec.id == id }
+    }
+
+    private func renderViews(forcing forced: Int?) {
+        for session in views.keys.sorted() {
+            guard var view = views[session] else { continue }
+            let context = RenderContext(prefix: "view/\(session)/")
+            let root: ViewNode
+            if let body = command(view.command)?.body {
+                root = Self.root(for: .panel, body(view.invocation).resolve(in: context))
+            } else {
+                root = .empty(title: "\(view.command) is not a view command", symbol: "exclamationmark.triangle", message: nil)
+            }
+            view.handlers = context.handlers
+            if root != view.lastRoot || session == forced {
+                view.lastRoot = root
+                send(.view(session: session, seq: view.seq, root: root))
+            }
+            views[session] = view
+        }
+    }
+
+    private func searchView(_ session: Int) async {
+        guard let view = views[session], let search = command(view.command)?.search else { return }
+        await run("search \(view.command)") { try await search(view.invocation) }
+    }
+
+    private func runCommand(id: Int, command name: String, invocation: CommandInvocation) async {
+        guard let command = command(name) else {
+            send(.commandResult(id: id, result: .failure("no command named \(name)")))
+            return
+        }
+        guard let perform = command.run else {
+            send(.commandResult(id: id, result: .failure("\(command.spec.title) opens a view; it can't be run")))
+            return
+        }
+        var invocation = invocation
+        for argument in command.spec.arguments where invocation[argument.name] == nil {
+            if let defaultValue = argument.defaultValue {
+                invocation.arguments[argument.name] = defaultValue
+            } else if argument.required {
+                send(.commandResult(id: id, result: .failure("\(command.spec.title) needs \(argument.placeholder)")))
+                return
+            }
+        }
+        do {
+            send(.commandResult(id: id, result: try await perform(invocation)))
+        } catch {
+            send(.commandResult(id: id, result: .failure("\(error)")))
         }
     }
 

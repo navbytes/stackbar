@@ -40,6 +40,55 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     case link(title: String, url: String)
     /// What to show when there is nothing to show, like `ContentUnavailableView`.
     case empty(title: String, symbol: String? = nil, message: String? = nil)
+    /// Several fields submitted together. Submitting sends `.fields` with
+    /// every field's value by name.
+    case form(FormNode)
+}
+
+/// A form: fields, a submit button and the action it sends.
+public struct FormNode: Codable, Equatable, Sendable {
+    public var fields: [FormField]
+    public var submitTitle: String
+    public var action: ActionID
+
+    public init(fields: [FormField], submitTitle: String = "Save", action: ActionID) {
+        self.fields = fields
+        self.submitTitle = submitTitle
+        self.action = action
+    }
+}
+
+/// One field of a form.
+public struct FormField: Codable, Equatable, Sendable {
+    public enum Kind: Codable, Equatable, Sendable {
+        /// One line of text.
+        case text(placeholder: String?)
+        /// Several lines of text, like a snippet's body.
+        case multiline(placeholder: String?)
+        /// An installed app, picked by the host; the value is its bundle id.
+        case application
+        /// One of a few options.
+        case picker(options: [String])
+        case toggle
+    }
+
+    /// The key of the field's value in the submitted `.fields`.
+    public var name: String
+    public var label: String
+    public var kind: Kind
+    /// The value the field starts with: `.text` for text, app and picker
+    /// fields, `.bool` for a toggle.
+    public var value: EventValue?
+    /// A problem the plugin found on the last submit, shown under the field.
+    public var error: String?
+
+    public init(name: String, label: String, kind: Kind, value: EventValue? = nil, error: String? = nil) {
+        self.name = name
+        self.label = label
+        self.kind = kind
+        self.value = value
+        self.error = error
+    }
 }
 
 public enum ChartKind: String, Codable, Sendable, CaseIterable {
@@ -119,12 +168,16 @@ public struct ActionRef: Codable, Equatable, Sendable {
     /// A key-equivalent spelled like Vee's `key=`: `cmd+return`, `cmd+shift+k`.
     public var shortcut: String?
     public var role: Role
+    /// When set, the host opens this command itself instead of sending the
+    /// action: the palette pushes it as a new view.
+    public var navigate: CommandTarget?
 
-    public init(id: ActionID, title: String, shortcut: String? = nil, role: Role = .primary) {
+    public init(id: ActionID, title: String, shortcut: String? = nil, role: Role = .primary, navigate: CommandTarget? = nil) {
         self.id = id
         self.title = title
         self.shortcut = shortcut
         self.role = role
+        self.navigate = navigate
     }
 }
 
@@ -206,6 +259,8 @@ extension ViewNode {
             return [action]
         case .stack(_, _, let children), .list(_, let children), .section(_, let children):
             return children.flatMap(\.actions)
+        case .form(let form):
+            return [form.action]
         case .text, .label, .badge, .progress, .divider, .labeled, .chart, .link, .empty:
             return []
         }

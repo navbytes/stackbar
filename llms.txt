@@ -72,6 +72,71 @@ var menuBarClick: MenuBarAction? {
 }
 ```
 
+## Commands
+
+Commands are what people find by name in the palette (⌃⌥Space), give an
+alias or a hotkey in Settings → Commands, start from a
+`stackbar://commands/<plugin-id>/<command-id>?arg=value` link, and (unless
+`.stackbarOnly()`) from Spotlight and Shortcuts. A plugin can have commands
+and no menu-bar item at all: leave `.menuBar` out of `surfaces`.
+
+```swift
+var commands: [Command] {
+    // A run command does its work and says what happened.
+    Command("toggle", title: "Toggle Stay Awake", symbol: "cup.and.saucer") { invocation in
+        try await self.toggle()
+        return .message(self.awake ? "Staying awake" : "Sleep allowed")
+    }
+    // Up to three arguments, typed inline in the palette.
+    Command("convert", title: "Convert Temperature") { invocation in
+        .copy(self.convert(invocation["degrees"] ?? "0", to: invocation["unit"]))
+    }
+    .argument("degrees", placeholder: "20")
+    .argument("unit", required: false, default: "F", options: ["C", "F"])
+
+    // A view command opens a live view in the palette. `search` runs when the
+    // query or an argument changes (fetch here); `body` only reads state.
+    Command("search", title: "Search Pull Requests", keywords: ["github"])
+        .view(search: { invocation in
+            self.results = try await self.find(invocation.text)
+        }) { _ in
+            List(self.results) { pr in
+                Row(pr.title, key: pr.id)
+                    .action("Open") { Stackbar.open(pr.url) }
+                    .navigate("Details", to: "details", arguments: ["id": pr.id])
+            }
+        }
+    Command("details", title: "Pull Request").view { invocation in
+        Text(invocation["id"] ?? "")
+    }
+    .stackbarOnly()
+}
+```
+
+Results: `.done`, `.message(text)`, `.open(url:app:)`, `.copy(text)`,
+`.paste(text, cursorFromEnd:)` (needs `.clipboard`), `.failure(text)`. The host
+performs them under the plugin's capabilities. Ids are lowercase letters,
+digits and `-`, stable forever (aliases, hotkeys and links remember them);
+titles can change. `invocation["name"]` is nil when an argument was left
+empty; `invocation.source` says where it started (`.palette`, `.hotkey`,
+`.link`, `.spotlight`, `.shortcuts`, ...) and `invocation.context` carries the
+front app and selected text for plugins with `.context`.
+
+A form in a view (or a panel) submits every field at once:
+
+```swift
+Form(submit: "Add") {
+    FormField.text("Name", name: "name", error: nameError)
+    FormField.multiline("Body", name: "body")
+    FormField.picker("Kind", name: "kind", options: ["a", "b"])
+    FormField.toggle("Pinned", name: "pinned")
+    FormField.application("Open with", name: "app")
+} onSubmit: { values in
+    let name = values.string("name") ?? ""
+    self.nameError = name.isEmpty ? "Give it a name" : nil
+}
+```
+
 ## Views (ViewContent bodies, SwiftUI-like; `if`, `for`, `switch` work)
 
 - `Text(s).style(.title|.headline|.body|.caption|.monospaced).role(r)`
@@ -112,6 +177,8 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.oauthToken("github")` | `.oauth(OAuthProvider(name:, authorizeURL:, tokenURL:, clientID:, scopes:))` |
 | `Stackbar.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
 | `Stackbar.notify(title, body:, actions: [NotificationAction("Join", url:)])`, `Stackbar.alert(title, body:, actions:)` (full screen, one a minute), `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
+| `try await Stackbar.open(url, with: "com.apple.Safari")`; links other than https, http, mailto, tel and meeting apps, and files or folders | `.openURLs(schemes: ["slack"])`; `["*"]` for any scheme and paths |
+| `invocation.context` in commands: front app, window title, selected text, Finder selection | `.context` |
 | `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing |
 | `try await Stackbar.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
 | `try await Stackbar.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Stackbar.paste(content)` (into the app the user was in; needs Accessibility for Stackbar) | `.clipboard` |
@@ -136,10 +203,15 @@ source compiles against; a plugin index hides Install on older apps.
 1. `stackbar_new` (or write the file), then `stackbar_build`: fix every diagnostic.
 2. `stackbar_render` (text, or png on a Mac) and read the action ids.
 3. `stackbar_send_event` with an id, render again; `stackbar_call_tool` for tools.
+   Commands: `stackbar_list_commands`, `stackbar_run_command`, and
+   `stackbar_render_command` for a view (then `stackbar_send_event` inside it;
+   a form's value is an object of its fields).
 4. `stackbar_logs` when something is off. Stray `print` goes to the log.
 
 From a terminal: `stackbarctl build|render|manifest <file.swift>`,
-`stackbarctl render <file> --event <id>`. Outside the app the clipboard, battery
+`stackbarctl render <file> --event <id>`, `stackbarctl commands <file>`,
+`stackbarctl run <file> <command> --arg name=value`,
+`stackbarctl render <file> --command <id> --query <text>`. Outside the app the clipboard, battery
 and calendar are simulated: `stackbarctl render <file> --copy "text"` (or the
 `stackbar_simulate_copy` tool) pretends the user copied something, and
 `STACKBAR_CALENDAR=events.json` sets the calendar (a sample day otherwise).

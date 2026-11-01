@@ -29,6 +29,14 @@ enum Platform {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
+    /// Opens a URL or file with the app that has this bundle id.
+    static func open(_ url: URL, with bundleID: String) async throws {
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            throw SystemServiceError("no app with the bundle id \(bundleID) is installed")
+        }
+        _ = try await NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+    }
+
     static func reloadWidgets() {
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()

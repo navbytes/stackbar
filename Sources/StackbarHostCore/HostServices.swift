@@ -33,6 +33,8 @@ public final class HostServices: Sendable {
         /// A full-screen alert; `actions` are already checked.
         public var alert: @Sendable (HostNotification) -> Void
         public var open: @Sendable (URL) -> Void
+        /// Opens with a specific app by bundle id; throws when it isn't installed.
+        public var openWith: @Sendable (URL, String) async throws -> Void
         public var copy: @Sendable (String) -> Void
         /// A plugin asked for a declared secret the user hasn't entered.
         public var secretMissing: @Sendable (_ pluginID: String, _ name: String) -> Void
@@ -43,6 +45,7 @@ public final class HostServices: Sendable {
             notify: @escaping @Sendable (HostNotification) -> Void = { _ in },
             alert: @escaping @Sendable (HostNotification) -> Void = { _ in },
             open: @escaping @Sendable (URL) -> Void = { _ in },
+            openWith: @escaping @Sendable (URL, String) async throws -> Void = { _, _ in throw SystemServiceError("opening with a chosen app is not available here") },
             copy: @escaping @Sendable (String) -> Void = { _ in },
             secretMissing: @escaping @Sendable (String, String) -> Void = { _, _ in },
             system: any SystemServices = UnsupportedSystem()
@@ -50,6 +53,7 @@ public final class HostServices: Sendable {
             self.notify = notify
             self.alert = alert
             self.open = open
+            self.openWith = openWith
             self.copy = copy
             self.secretMissing = secretMissing
             self.system = system
@@ -177,6 +181,22 @@ public final class HostServices: Sendable {
             platform.open(url)
             return .ok
 
+        case .open(let string, let app):
+            let url: URL
+            switch Self.openTarget(string, granted: granted) {
+            case .success(let target): url = target
+            case .failure(let message): return .failure(message.description)
+            }
+            if url.isFileURL, app == nil, Self.isProgram(url) {
+                return .failure("\(url.path) is a program; open it with an app chosen explicitly")
+            }
+            if let app {
+                do { try await platform.openWith(url, app) } catch { return .failure("\(error)") }
+            } else {
+                platform.open(url)
+            }
+            return .ok
+
         case .copy(let text):
             guard text.utf8.count <= 1024 * 1024 else { return .failure("text is too large to copy") }
             platform.copy(text)
@@ -236,6 +256,44 @@ public final class HostServices: Sendable {
     /// URL schemes a plugin may open: the web, mail, and the meeting apps
     /// that can't be reached through an https link without a browser tab.
     public static let openableSchemes: Set<String> = ["https", "http", "mailto", "tel", "zoommtg", "msteams"]
+
+    /// What `open` may open for this plugin: a URL whose scheme is a safe
+    /// default or declared in `.openURLs`, or (with `"*"`) an absolute or `~/`
+    /// path that exists.
+    static func openTarget(_ text: String, granted: Manifest) -> Result<URL, SystemServiceError> {
+        let extra = granted.capabilities.flatMap { capability -> [String] in
+            if case .openURLs(let schemes) = capability { return schemes.map { $0.lowercased() } }
+            return []
+        }
+        let anything = extra.contains("*")
+        if text.hasPrefix("/") || text.hasPrefix("~/") || text == "~" {
+            guard anything else { return .failure(SystemServiceError("opening files and folders needs .openURLs(schemes: [\"*\"])")) }
+            let path = NSString(string: text).expandingTildeInPath
+            guard FileManager.default.fileExists(atPath: path) else { return .failure(SystemServiceError("\(text) does not exist")) }
+            return .success(URL(fileURLWithPath: path))
+        }
+        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(), !scheme.isEmpty else {
+            return .failure(SystemServiceError("\(text) is not a URL or an absolute path"))
+        }
+        if scheme == "file" {
+            guard anything else { return .failure(SystemServiceError("opening files and folders needs .openURLs(schemes: [\"*\"])")) }
+            guard FileManager.default.fileExists(atPath: url.path) else { return .failure(SystemServiceError("\(url.path) does not exist")) }
+            return .success(url)
+        }
+        guard openableSchemes.contains(scheme) || anything || extra.contains(scheme) else {
+            return .failure(SystemServiceError("\(scheme): links need .openURLs(schemes: [\"\(scheme)\"]); https, http, mailto, tel and meeting links need nothing"))
+        }
+        return .success(url)
+    }
+
+    /// An app bundle or an executable file: opening one launches a program.
+    static func isProgram(_ url: URL) -> Bool {
+        let path = url.path
+        if url.pathExtension.lowercased() == "app" { return true }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory.boolValue else { return false }
+        return FileManager.default.isExecutableFile(atPath: path)
+    }
 
     /// At most three buttons, each opening an allowed URL, titles cut to 40.
     static func checked(_ actions: [NotificationAction]) -> CheckedButtons {

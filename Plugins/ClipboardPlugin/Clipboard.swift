@@ -15,7 +15,7 @@ final class Clipboard: StackbarPlugin {
     static let manifest = Manifest(
         id: "io.navbytes.stackbar.clipboard",
         name: "Clipboard History",
-        version: "1.0.0",
+        version: "1.1.0",
         summary: "Everything you copy, searchable and one keystroke from pasting back.",
         surfaces: [.menuBar, .panel, .window, .settings],
         triggers: [.launch, .clipboard],
@@ -399,7 +399,13 @@ final class Clipboard: StackbarPlugin {
         }
     }
 
+    /// `paste` picks the primary action: the panel follows the setting, the
+    /// palette always pastes.
     func row(_ entry: Entry) -> Row {
+        row(entry, paste: pasteDirectly)
+    }
+
+    func row(_ entry: Entry, paste pasteDirectly: Bool) -> Row {
         let source = [entry.appName, Self.relative(entry.lastCopied), entry.count > 1 ? "×\(entry.count)" : nil, entry.kind == .text ? "\(entry.text?.count ?? 0) chars" : nil]
             .compactMap { $0 }.joined(separator: " · ")
         var row = Row(entry.title, subtitle: source, symbol: entry.pinned ? "pin.fill" : entry.symbol, key: entry.id)
@@ -441,6 +447,44 @@ final class Clipboard: StackbarPlugin {
         if seconds < 3600 { return "\(Int(seconds / 60))m ago" }
         if seconds < 86400 { return "\(Int(seconds / 3600))h ago" }
         return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    // MARK: Commands
+
+    var commands: [Command] {
+        Command("search", title: "Search Clipboard History", subtitle: "Paste anything you copied", symbol: "list.clipboard", keywords: ["paste", "copy", "history"])
+            .view { _ in
+                let all = self.sorted
+                if all.isEmpty {
+                    ContentUnavailableView("Nothing copied yet", symbol: "list.clipboard", message: self.paused ? "Recording is paused." : "Copy something in any app and it shows up here.")
+                } else {
+                    List(searchable: true) {
+                        let pinned = all.filter(\.pinned)
+                        if !pinned.isEmpty {
+                            Section("Pinned") {
+                                ForEach(pinned) { entry in self.row(entry, paste: true) }
+                            }
+                        }
+                        Section(pinned.isEmpty ? nil : "History") {
+                            ForEach(all.filter { !$0.pinned }) { entry in self.row(entry, paste: true) }
+                        }
+                    }
+                }
+            }
+        Command("paste-plain", title: "Paste Last Copy as Plain Text", symbol: "doc.plaintext", keywords: ["clipboard", "format"]) { _ in
+            guard let latest = self.sorted.first(where: { !$0.pinned }) ?? self.sorted.first else { return .message("Nothing copied yet") }
+            await self.use(latest, paste: true, plain: true)
+            if let error = self.lastError { return .failure(error) }
+            return .done
+        }
+        Command("pause", title: self.paused ? "Resume Clipboard History" : "Pause Clipboard History", symbol: self.paused ? "play.fill" : "pause.fill", keywords: ["clipboard", "record"]) { _ in
+            self.paused.toggle()
+            return .message(self.paused ? "Clipboard history paused" : "Clipboard history recording")
+        }
+        Command("ignore-next", title: "Ignore Next Copy", symbol: "eye.slash", keywords: ["clipboard", "password", "secret"]) { _ in
+            self.ignoreNext = true
+            return .message("The next copy won't be kept")
+        }
     }
 
     // MARK: Agents

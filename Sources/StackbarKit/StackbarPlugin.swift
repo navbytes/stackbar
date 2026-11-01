@@ -39,6 +39,11 @@ public protocol StackbarPlugin: AnyObject {
     var menuBarClick: MenuBarAction? { get }
     /// What agents can call through the host's MCP gateway.
     @ToolBuilder var tools: [AgentTool] { get }
+    /// What people can find and run by name: in the palette, from a hotkey,
+    /// a `stackbar://` link, Spotlight or Shortcuts. Recomputed on every
+    /// render, so user-defined items (one command per quicklink) can be
+    /// commands too.
+    @CommandBuilder var commands: [Command] { get }
     /// Another plugin published to a topic this plugin's manifest listens to
     /// with `.topic(name:)`. The plugin re-renders afterwards.
     func receive(topic: String, payload: String, from sender: String) async throws
@@ -53,6 +58,7 @@ extension StackbarPlugin {
     public var settings: ViewContent { [] }
     public var menuBarClick: MenuBarAction? { nil }
     public var tools: [AgentTool] { [] }
+    public var commands: [Command] { [] }
     public func receive(topic: String, payload: String, from sender: String) async throws {}
 
     /// The entry point `@main` uses. `--manifest` prints the manifest as JSON

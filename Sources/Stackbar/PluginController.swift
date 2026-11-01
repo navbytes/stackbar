@@ -24,6 +24,15 @@ final class PluginController: Identifiable {
     /// What a left click on the status item does, when not the panel.
     private(set) var menuBarClick: MenuBarClick?
     private(set) var tools: [ToolSpec] = []
+    private(set) var commands: [CommandSpec] = []
+    /// The user took the plugin's item out of the menu bar (Settings).
+    var hiddenFromMenuBar: Bool {
+        didSet {
+            guard hiddenFromMenuBar != oldValue else { return }
+            UserDefaults.standard.set(hiddenFromMenuBar, forKey: "hiddenFromMenuBar." + source.path)
+            model?.onPluginsChanged?()
+        }
+    }
     private(set) var problem: String?
     private(set) var building = false
     private(set) var logs: [String] = []
@@ -46,6 +55,20 @@ final class PluginController: Identifiable {
         self.model = model
         self.name = source.deletingPathExtension().lastPathComponent
         self.pluginID = source.path
+        hiddenFromMenuBar = UserDefaults.standard.bool(forKey: "hiddenFromMenuBar." + source.path)
+    }
+
+    /// Whether the plugin draws in the menu bar: it lists `.menuBar` (or did
+    /// last time, while it builds) and the user hasn't hidden it.
+    var showsInMenuBar: Bool {
+        let declares = manifest.map { $0.surfaces.contains(.menuBar) }
+            ?? (UserDefaults.standard.object(forKey: "declaresMenuBar." + source.path) as? Bool ?? true)
+        return declares && !hiddenFromMenuBar
+    }
+
+    /// A plugin with a panel and no menu-bar item opens it centered instead.
+    var hasHeadlessPanel: Bool {
+        !showsInMenuBar && manifest?.surfaces.contains(.panel) == true
     }
 
     var isWaitingForApproval: Bool { !pendingApproval.isEmpty }
@@ -78,9 +101,12 @@ final class PluginController: Identifiable {
             if let clash = model.controllers.first(where: { $0 !== self && $0.pluginID == manifest.id }) {
                 throw LoadError.duplicateID(manifest.id, clash.source.lastPathComponent)
             }
+            let showedInMenuBar = showsInMenuBar
             self.manifest = manifest
             pluginID = manifest.id
             name = manifest.name
+            UserDefaults.standard.set(manifest.surfaces.contains(.menuBar), forKey: "declaresMenuBar." + source.path)
+            if showsInMenuBar != showedInMenuBar || manifest.surfaces.contains(.panel) { model.onPluginsChanged?() }
 
             let review = model.ledger.review(manifest)
             switch review {
@@ -144,6 +170,14 @@ final class PluginController: Identifiable {
     }
 
     func send(_ action: ActionID, _ value: EventValue?) {
+        // A row action that opens one of the plugin's commands is the host's
+        // to perform; the plugin never hears about it.
+        for root in [panel, window, settings].compactMap({ $0 }) {
+            if let target = root.rows.flatMap(\.actions).first(where: { $0.id == action })?.navigate {
+                model?.openCommand(pluginID: pluginID, target: target, source: .panel)
+                return
+            }
+        }
         Task { await supervisor?.event(action, value: value) }
     }
 
@@ -193,6 +227,7 @@ final class PluginController: Identifiable {
     private func apply(_ update: PluginSupervisor.Update) {
         switch update {
         case .state(let newState):
+            if case .restarting = newState { model?.commands.pluginRestarted(pluginID) }
             state = newState
         case .render(.menuBar, let root):
             menuBar = root
@@ -210,6 +245,11 @@ final class PluginController: Identifiable {
             menuBarClick = click
         case .tools(let specs):
             tools = specs
+        case .commands(let specs):
+            commands = specs
+            model?.commands.commandsChanged(self, specs)
+        case .view(let session, let seq, let root):
+            model?.commands.received(session: session, seq: seq, root: root)
         case .log(let level, let message):
             logs.append("[\(level.rawValue)] \(message)")
             if logs.count > 300 { logs.removeFirst(logs.count - 300) }

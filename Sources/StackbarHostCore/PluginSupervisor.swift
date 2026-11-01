@@ -28,6 +28,10 @@ public actor PluginSupervisor {
         case tools([ToolSpec])
         /// What a left click on the status item does now (`nil`: the panel).
         case menuBarClick(MenuBarClick?)
+        /// The plugin's commands changed.
+        case commands([CommandSpec])
+        /// An open command view's tree, for the query numbered `seq`.
+        case view(session: Int, seq: Int, root: ViewNode)
     }
 
     public nonisolated let executable: URL
@@ -45,6 +49,7 @@ public actor PluginSupervisor {
     public private(set) var state: State = .stopped
     public private(set) var views: [Surface: ViewNode] = [:]
     public private(set) var tools: [ToolSpec] = []
+    public private(set) var commands: [CommandSpec] = []
     /// The plugin's left-click action on its status item, if it set one.
     public private(set) var menuBarClick: MenuBarClick?
     public private(set) var restarts = 0
@@ -73,6 +78,8 @@ public actor PluginSupervisor {
     private var pendingRestart: Task<Void, Never>?
     private var nextToolCall = 1
     private var toolCalls: [Int: CheckedContinuation<(text: String, isError: Bool), Never>] = [:]
+    private var nextCommandCall = 1
+    private var commandCalls: [Int: CheckedContinuation<CommandResult, Never>] = [:]
 
     public init(executable: URL, manifest: Manifest, grantedCapabilities: [Capability]? = nil, policy: BackoffPolicy = .standard, environment: [String: String]? = nil, services: HostServices? = nil, onUpdate: @escaping @Sendable (Update) -> Void = { _ in }) {
         self.executable = executable
@@ -109,6 +116,7 @@ public actor PluginSupervisor {
         process = nil
         services?.release(pluginID: manifest.id)
         failToolCalls("the plugin stopped")
+        failCommandCalls("\(manifest.name) stopped")
         await services?.bus.unsubscribe(manifest.id)
         setState(.stopped)
     }
@@ -169,6 +177,39 @@ public actor PluginSupervisor {
             sentCount += 1
             process.send(.callTool(id: id, name: name, arguments: arguments))
         }
+    }
+
+    /// Runs one of the plugin's run commands and waits for its result.
+    /// `context` reaches the plugin only when it was granted `.context`.
+    public func runCommand(_ command: String, arguments: [String: String] = [:], source: InvocationSource, context: InvocationContext? = nil, timeout: Double = 30) async -> CommandResult {
+        guard state == .running, let process else { return .failure("\(manifest.name) is not running") }
+        let id = nextCommandCall
+        nextCommandCall += 1
+        let currentGeneration = generation
+        let context = granted.capabilities.contains(.context) ? context : nil
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(timeout))
+            await self?.finishCommandCall(id, .failure("\(command) did not answer within \(Int(timeout)) seconds"), generation: currentGeneration)
+        }
+        return await withCheckedContinuation { continuation in
+            commandCalls[id] = continuation
+            sentCount += 1
+            process.send(.runCommand(id: id, command: command, arguments: arguments, source: source, context: context))
+        }
+    }
+
+    /// Opens a command view. Its trees arrive as `.view` updates.
+    public func openView(session: Int, command: String, query: CommandQuery, seq: Int, context: InvocationContext? = nil) {
+        let context = granted.capabilities.contains(.context) ? context : nil
+        send(.openView(session: session, command: command, query: query, seq: seq, context: context))
+    }
+
+    public func updateView(session: Int, query: CommandQuery, seq: Int) {
+        send(.updateView(session: session, query: query, seq: seq))
+    }
+
+    public func closeView(session: Int) {
+        send(.closeView(session: session))
     }
 
     /// Messages the host sends a fresh helper before anything else: `hello`,
@@ -303,6 +344,13 @@ public actor PluginSupervisor {
             onUpdate(.menuBarClick(click))
         case .message(.toolResult(let id, let text, let isError)):
             finishToolCall(id, text: text, isError: isError, generation: eventGeneration)
+        case .message(.commands(let specs)):
+            commands = specs
+            onUpdate(.commands(specs))
+        case .message(.commandResult(let id, let result)):
+            finishCommandCall(id, result, generation: eventGeneration)
+        case .message(.view(let session, let seq, let root)):
+            onUpdate(.view(session: session, seq: seq, root: root))
         case .stderr(let line):
             emitPluginLog(.debug, line)
         case .undecodable(let line):
@@ -357,6 +405,17 @@ public actor PluginSupervisor {
         continuation.resume(returning: (text, isError))
     }
 
+    private func finishCommandCall(_ id: Int, _ result: CommandResult, generation callGeneration: Int) {
+        guard callGeneration == generation, let continuation = commandCalls.removeValue(forKey: id) else { return }
+        continuation.resume(returning: result)
+    }
+
+    private func failCommandCalls(_ reason: String) {
+        let calls = commandCalls
+        commandCalls = [:]
+        for continuation in calls.values { continuation.resume(returning: .failure(reason)) }
+    }
+
     private func failToolCalls(_ reason: String) {
         let calls = toolCalls
         toolCalls = [:]
@@ -372,6 +431,7 @@ public actor PluginSupervisor {
         // A crashed plugin must not keep the Mac awake; a restarted one asks again.
         services?.release(pluginID: manifest.id)
         failToolCalls("the plugin exited")
+        failCommandCalls("\(manifest.name) exited")
         if stopping {
             setState(.stopped)
             return

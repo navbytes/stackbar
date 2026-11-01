@@ -40,7 +40,7 @@ public enum TreeTextRenderer {
             }
             if !row.actions.isEmpty {
                 let actions = row.actions.map { action in
-                    action.title + (action.shortcut.map { " (\($0))" } ?? "") + tag(action.id)
+                    action.title + (action.shortcut.map { " (\($0))" } ?? "") + (action.navigate.map { " -> \($0.command)" } ?? tag(action.id))
                 }
                 line += "  <" + actions.joined(separator: ", ") + ">"
             }
@@ -79,6 +79,35 @@ public enum TreeTextRenderer {
             return [pad + "<\(title)> \(url)"]
         case .empty(let title, let symbol, let message):
             return [pad + (symbol.map { "[\($0)] " } ?? "") + title + (message.map { " - \($0)" } ?? "")]
+        case .form(let form):
+            var result = [pad + "Form"]
+            for field in form.fields {
+                result.append(pad + "  " + fieldLine(field))
+                if let error = field.error { result.append(pad + "    ! \(error)") }
+            }
+            result.append(pad + "  (\(form.submitTitle))" + tag(form.action))
+            return result
+        }
+    }
+
+    static func fieldLine(_ field: FormField) -> String {
+        let value: String
+        switch field.value {
+        case .text(let text)?: value = text
+        case .bool(let flag)?: value = flag ? "on" : "off"
+        case .number(let number)?: value = format(number)
+        case .fields?, nil: value = ""
+        }
+        switch field.kind {
+        case .text(let placeholder), .multiline(let placeholder):
+            let shown = value.isEmpty ? (placeholder ?? "") : value.replacingOccurrences(of: "\n", with: "⏎")
+            return "\(field.label) <\(field.name)>: [\(shown)____]" + (field.kind == .multiline(placeholder: placeholder) ? " (multi-line)" : "")
+        case .application:
+            return "\(field.label) <\(field.name)>: [app: \(value.isEmpty ? "none" : value)]"
+        case .picker(let options):
+            return "\(field.label) <\(field.name)>: " + options.map { $0 == value ? "*\($0)*" : $0 }.joined(separator: " | ")
+        case .toggle:
+            return (value == "on" ? "[x] " : "[ ] ") + "\(field.label) <\(field.name)>"
         }
     }
 

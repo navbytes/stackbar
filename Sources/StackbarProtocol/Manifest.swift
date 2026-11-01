@@ -176,6 +176,14 @@ public enum Capability: Codable, Hashable, Sendable {
     case power
     /// Reads events from the user's calendars (`Stackbar.calendarEvents`).
     case calendar
+    /// Reads what the user is in: the frontmost app, its window title, the
+    /// selected text and Finder's selection (`Stackbar.context()`, and
+    /// `CommandInvocation.context` when a command starts).
+    case context
+    /// URL schemes beyond the safe defaults (https, http, mailto, tel and the
+    /// meeting apps) that `Stackbar.open` may open; `"*"` allows any scheme
+    /// and file paths, which the install sheet warns about.
+    case openURLs(schemes: [String])
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

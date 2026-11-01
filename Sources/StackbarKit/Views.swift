@@ -116,7 +116,7 @@ public struct Row: StackbarView {
     var subtitle: String?
     var symbol: String?
     var accessories: [ViewNode] = []
-    var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler)] = []
+    var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler?, navigate: CommandTarget?)] = []
     var preview: RowPreview?
 
     /// `key` defaults to the title; give one explicitly when titles can repeat
@@ -152,13 +152,24 @@ public struct Row: StackbarView {
     /// Adds an action. The first one is what a click on the row does.
     public func action(_ title: String, shortcut: String? = nil, role: Role = .primary, perform: @escaping @MainActor () async throws -> Void) -> Row {
         var copy = self
-        copy.actions.append((title, shortcut, role, { _ in try await perform() }))
+        copy.actions.append((title, shortcut, role, { _ in try await perform() }, nil))
+        return copy
+    }
+
+    /// Adds an action that opens another of this plugin's commands, with
+    /// arguments. The host opens it without calling the plugin: in the
+    /// palette it is pushed as a new view (Esc comes back).
+    public func navigate(_ title: String, to command: String, arguments: [String: String] = [:], shortcut: String? = nil) -> Row {
+        var copy = self
+        copy.actions.append((title, shortcut, .primary, nil, CommandTarget(command: command, arguments: arguments)))
         return copy
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] {
         let refs = actions.map { action in
-            ActionRef(id: context.register("row/\(key)/\(action.title)", action.handler), title: action.title, shortcut: action.shortcut, role: action.role)
+            let base = "row/\(key)/\(action.title)"
+            let id = action.handler.map { context.register(base, $0) } ?? ActionID(context.prefix + base)
+            return ActionRef(id: id, title: action.title, shortcut: action.shortcut, role: action.role, navigate: action.navigate)
         }
         return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, accessories: accessories, actions: refs, preview: preview))]
     }
@@ -397,4 +408,76 @@ public struct ContentUnavailableView: StackbarView {
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] { [.empty(title: title, symbol: symbol, message: message)] }
+}
+
+/// Several fields submitted together, like "Create Quicklink".
+///
+/// ```swift
+/// Form(submit: "Save") {
+///     FormField.text("Name", name: "name", value: link.name)
+///     FormField.multiline("Text", name: "text", value: snippet.text)
+///     FormField.application("Open with", name: "app", bundleID: link.openWith)
+///     FormField.picker("Tag", name: "tag", options: tags, selection: link.tag)
+///     FormField.toggle("Pinned", name: "pinned", isOn: link.pinned)
+/// } onSubmit: { values in
+///     guard let name = values.string("name"), !name.isEmpty else { self.nameError = "Give it a name"; return }
+///     ...
+/// }
+/// ```
+///
+/// Validate in `onSubmit` and set a field's `error` to keep the form open;
+/// the palette closes a form's view when a submit leaves no error.
+public struct Form: StackbarView {
+    var fields: [FormField]
+    var submitTitle: String
+    var key: String?
+    var onSubmit: @MainActor ([String: EventValue]) async throws -> Void
+
+    public init(submit submitTitle: String = "Save", key: String? = nil, @FormBuilder fields: () -> [FormField], onSubmit: @escaping @MainActor ([String: EventValue]) async throws -> Void) {
+        self.fields = fields()
+        self.submitTitle = submitTitle
+        self.key = key
+        self.onSubmit = onSubmit
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        let submit = onSubmit
+        let id = context.register("form/\(key ?? submitTitle)") { value in
+            if case .fields(let values)? = value { try await submit(values) }
+        }
+        return [.form(FormNode(fields: fields, submitTitle: submitTitle, action: id))]
+    }
+}
+
+extension FormField {
+    public static func text(_ label: String, name: String, value: String = "", placeholder: String? = nil, error: String? = nil) -> FormField {
+        FormField(name: name, label: label, kind: .text(placeholder: placeholder), value: .text(value), error: error)
+    }
+
+    public static func multiline(_ label: String, name: String, value: String = "", placeholder: String? = nil, error: String? = nil) -> FormField {
+        FormField(name: name, label: label, kind: .multiline(placeholder: placeholder), value: .text(value), error: error)
+    }
+
+    /// An installed app the host lets the user pick; the value is its bundle id.
+    public static func application(_ label: String, name: String, bundleID: String? = nil, error: String? = nil) -> FormField {
+        FormField(name: name, label: label, kind: .application, value: bundleID.map(EventValue.text), error: error)
+    }
+
+    public static func picker(_ label: String, name: String, options: [String], selection: String? = nil, error: String? = nil) -> FormField {
+        FormField(name: name, label: label, kind: .picker(options: options), value: selection.map(EventValue.text), error: error)
+    }
+
+    public static func toggle(_ label: String, name: String, isOn: Bool = false) -> FormField {
+        FormField(name: name, label: label, kind: .toggle, value: .bool(isOn))
+    }
+}
+
+@resultBuilder
+public enum FormBuilder {
+    public static func buildExpression(_ field: FormField) -> [FormField] { [field] }
+    public static func buildBlock(_ parts: [FormField]...) -> [FormField] { parts.flatMap { $0 } }
+    public static func buildOptional(_ part: [FormField]?) -> [FormField] { part ?? [] }
+    public static func buildEither(first part: [FormField]) -> [FormField] { part }
+    public static func buildEither(second part: [FormField]) -> [FormField] { part }
+    public static func buildArray(_ parts: [[FormField]]) -> [FormField] { parts.flatMap { $0 } }
 }

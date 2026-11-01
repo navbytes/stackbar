@@ -38,6 +38,10 @@ targets:
         CFBundleShortVersionString: "0.10.0"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
+        # stackbar://commands/<plugin>/<command>?argument=value
+        CFBundleURLTypes:
+          - CFBundleURLName: io.navbytes.stackbar.commands
+            CFBundleURLSchemes: [stackbar]
     # Not sandboxed: the host runs the Swift toolchain and launches plugin helpers, each in its own sandbox.
     entitlements:
       path: Packaging/Stackbar.entitlements
