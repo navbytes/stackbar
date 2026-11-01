@@ -20,7 +20,12 @@ struct CommandsSettings: View {
         let plugins = Dictionary(grouping: entries, by: \.pluginID)
         let order = entries.map(\.pluginID).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Search commands", text: $query).textFieldStyle(.roundedBorder)
+            HStack {
+                TextField("Search commands", text: $query).textFieldStyle(.roundedBorder)
+                Toggle("Show in Spotlight and Shortcuts", isOn: Binding(get: { center.preferences.spotlightEnabled }, set: { center.setSpotlightEnabled($0) }))
+                    .toggleStyle(.checkbox)
+                    .help("Commands appear in ⌘Space results and as \"Run Stackbar Command\" in Shortcuts")
+            }
             if entries.isEmpty {
                 Text(center.registry.entries.isEmpty ? "No plugin has commands yet. Plugins add them with `var commands`." : "No matches")
                     .foregroundStyle(.secondary)
@@ -95,6 +100,7 @@ struct CommandSettingsRow: View {
                 Menu {
                     if entry.spec.exposure == .everywhere {
                         Button("Copy Link") { Platform.copy(CommandLink(key: entry.key).url) }
+                        Toggle("Show in Spotlight", isOn: Binding(get: { preference.showInSpotlight }, set: { shown in save { $0.showInSpotlight = shown } }))
                         Toggle("Links May Run It Without Asking", isOn: Binding(get: { preference.linksAllowed }, set: { allowed in save { $0.linksAllowed = allowed } }))
                     } else {
                         Text("Only from inside Stackbar")

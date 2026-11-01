@@ -38,14 +38,14 @@ final class PaletteController {
 
     /// Opens the palette on a command: its view, its argument fields, or
     /// (with everything it needs) runs it straight away.
-    func open(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], source: InvocationSource) {
+    func open(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], query: String = "", source: InvocationSource) {
         if entry.spec.kind == .run, entry.spec.arguments.isEmpty || entry.spec.requiredArguments.allSatisfy({ !(arguments[$0.name] ?? "").isEmpty }) {
             hide()
             Task { await model.commands.run(entry.key, arguments: arguments, source: source) }
             return
         }
         show()
-        session.enter(entry, arguments: arguments, source: source)
+        session.enter(entry, arguments: arguments, query: query, source: source)
     }
 
     func hide() {

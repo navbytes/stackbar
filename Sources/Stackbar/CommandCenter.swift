@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppIntents
 import AppKit
 import Observation
 import StackbarHostCore
@@ -26,6 +27,7 @@ final class CommandCenter {
     @ObservationIgnored private var hotKeys: [CommandKey: (spec: String, hotKey: HotKey)] = [:]
     @ObservationIgnored private var views: [Int: CommandViewModel] = [:]
     @ObservationIgnored private var nextSession = 1
+    @ObservationIgnored private let indexer = CommandSpotlightIndexer()
 
     /// The palette's own shortcut, which no command may take.
     static let paletteHotKey = "ctrl+option+space"
@@ -79,9 +81,16 @@ final class CommandCenter {
         changed()
     }
 
+    /// The switch for all of Spotlight and Shortcuts; off empties the index.
+    func setSpotlightEnabled(_ enabled: Bool) {
+        preferences.spotlightEnabled = enabled
+        changed()
+    }
+
     private func changed() {
         model?.commandsChanged()
         syncHotKeys()
+        indexer.sync(CommandIndexing.items(registry: registry, preferences: preferences, usage: usage))
         revision += 1
     }
 
@@ -122,8 +131,57 @@ final class CommandCenter {
     /// Runs a run command, records the use, and shows what happened.
     func run(_ key: CommandKey, arguments: [String: String] = [:], source: InvocationSource, context: InvocationContext? = nil) async {
         usage.record(key.description)
+        donate(key)
         let outcome = await runner.run(key, arguments: arguments, source: source, context: context)
         if let message = outcome.message { HUD.shared.show(message, isError: outcome.isError) }
+    }
+
+    /// Tells Spotlight the user ran this, so it suggests it.
+    private func donate(_ key: CommandKey) {
+        guard let entry = registry.entry(key), CommandIndexing.isExposed(entry, preferences: preferences) else { return }
+        let item = CommandIndexing.item(entry, preferences: preferences, usage: usage)
+        Task {
+            _ = try? await IntentDonationManager.shared.donate(intent: RunCommandIntent(command: CommandEntity(item)))
+        }
+    }
+
+    // MARK: - Spotlight and Shortcuts
+
+    private func intentEntry(_ id: String) throws -> CommandRegistry.Entry {
+        guard let key = CommandKey(id), let entry = registry.entry(key) else { throw CommandIntentError("That command is no longer installed") }
+        guard entry.spec.exposure == .everywhere else { throw CommandIntentError("\(entry.spec.title) can only be run from inside Stackbar") }
+        guard preferences[key].enabled else { throw CommandIntentError("\(entry.spec.title) is switched off in Stackbar's settings") }
+        return entry
+    }
+
+    /// `input` fills the first argument, or a view's search.
+    private static func inputs(_ entry: CommandRegistry.Entry, _ input: String?) -> (arguments: [String: String], query: String) {
+        guard let input, !input.isEmpty else { return ([:], "") }
+        if let first = entry.spec.arguments.first { return ([first.name: input], "") }
+        return ([:], entry.spec.kind == .view ? input : "")
+    }
+
+    /// Spotlight's or Shortcuts' Run: a run command with what it needs runs
+    /// here and says what happened; anything else opens in the palette.
+    func runFromIntent(_ id: String, input: String?) async throws -> String {
+        let entry = try intentEntry(id)
+        let (arguments, query) = Self.inputs(entry, input)
+        let ready = entry.spec.requiredArguments.allSatisfy { !(arguments[$0.name] ?? "").isEmpty }
+        guard entry.spec.kind == .run, ready else {
+            AppDelegate.shared?.palette.open(entry, arguments: arguments, query: query, source: .spotlight)
+            return "Opened \(entry.spec.title) in Stackbar"
+        }
+        usage.record(entry.key.description)
+        let outcome = await runner.run(entry.key, arguments: arguments, source: .spotlight)
+        if outcome.isError { throw CommandIntentError(outcome.message ?? "\(entry.spec.title) failed") }
+        return outcome.message ?? "Done"
+    }
+
+    /// Spotlight opened an indexed command: the palette, at that command.
+    func openFromIntent(_ id: String, input: String?) async throws {
+        let entry = try intentEntry(id)
+        let (arguments, query) = Self.inputs(entry, input)
+        AppDelegate.shared?.palette.open(entry, arguments: arguments, query: query, source: .spotlight)
     }
 
     /// Opens a view command: waits for its plugin, then starts the session.
