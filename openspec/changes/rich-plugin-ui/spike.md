@@ -22,6 +22,7 @@ plugins to Stackbar.app would break its signature.
 | `.appex` in a container app, ad-hoc signed, sandboxed | Yes |
 | Registered from Application Support and discovered | Yes, with `lsregister -f -R -trusted` |
 | Discovered without a user step | No: one switch per plugin in the extensions browser |
+| Renders once switched on | Yes: Naveen switched it on and it rendered (2026-11-01) |
 | Shown in a popover with `EXHostViewController` | Yes, interactive |
 | Host survives `kill -9` of the extension | Yes; placeholder until the configuration is set again (143 ms) |
 | Time to first frame, cold | About 135 ms to activate, 180 ms to first `onAppear` |
@@ -47,9 +48,6 @@ plugins to Stackbar.app would break its signature.
   reopening is instant and keeps the view's state.
 
 ## Still open
-- One manual check: switch the separate-app plugin on in the browser and
-  confirm it is discovered and renders. Expected yes, because it takes the
-  same path as the in-bundle one.
 - A Developer ID host loading an ad-hoc signed extension, and notarized
   builds.
 - The data channel between host and extension

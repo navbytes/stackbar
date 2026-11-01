@@ -20,4 +20,4 @@
 - [x] 2.3 Host its scene in a popover with `EXHostViewController`
 - [x] 2.4 Sandbox, enablement, latency and memory
 - [x] 2.5 Write `spike.md` with the go/no-go (go; one Enable switch per native plugin)
-- [ ] 2.6 Confirm a separate-app extension renders once switched on (one manual click)
+- [x] 2.6 Confirm a separate-app extension renders once switched on (one manual click; confirmed 2026-11-01)
