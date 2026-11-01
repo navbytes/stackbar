@@ -473,6 +473,20 @@ public struct ContentUnavailableView: StackbarView {
     public func resolve(in context: RenderContext) -> [ViewNode] { [.empty(title: title, symbol: symbol, message: message)] }
 }
 
+extension ContentUnavailableView {
+    /// The standard panel for a refresh that threw, so every plugin says it
+    /// the same way: `if let problem { ContentUnavailableView(problem) }`.
+    /// A missing secret points at the host's prompt above it rather than
+    /// reading as a failure.
+    public init(_ error: any Error) {
+        if case StackbarError.missingSecret(let name) = error {
+            self.init("Waiting for \(name)", symbol: "key", message: "Enter it in the prompt above. Stackbar keeps it in your Keychain.")
+        } else {
+            self.init("Couldn't refresh", symbol: "exclamationmark.triangle", message: "\(error)")
+        }
+    }
+}
+
 /// Several fields submitted together, like "Create Quicklink".
 ///
 /// ```swift

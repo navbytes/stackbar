@@ -174,8 +174,7 @@ public struct HostError: Error, CustomStringConvertible, Sendable {
 /// Host services, for use in `refresh()` and action closures.
 ///
 /// ```swift
-/// let token = try await Stackbar.secret("GITHUB_TOKEN")
-/// let prs: [PR] = try await Stackbar.getJSON("https://api.github.com/...", headers: ["Authorization": "Bearer \(token ?? "")"])
+/// let prs: [PR] = try await Stackbar.getJSON("https://api.github.com/...", auth: .bearer(secret: "GITHUB_TOKEN"))
 /// ```
 ///
 /// Every call is checked against the manifest's capabilities as approved by
@@ -195,7 +194,15 @@ public enum Stackbar {
     }
 
     /// An HTTP request made by the host to a domain the manifest declares.
-    public static func http(_ request: HTTPRequest) async throws -> HTTPResponse {
+    /// `auth` adds a header built from a secret; while the user hasn't
+    /// entered it, this throws `StackbarError.missingSecret` instead of
+    /// sending a request that can only fail.
+    public static func http(_ request: HTTPRequest, auth: Auth? = nil) async throws -> HTTPResponse {
+        var request = request
+        if let auth {
+            let header = try await auth.header()
+            request.headers[header.name] = header.value
+        }
         switch await HostClient.shared.call(.http(request)) {
         case .http(let response): return response
         case .failure(let message): throw HostError(message)
@@ -203,17 +210,30 @@ public enum Stackbar {
         }
     }
 
-    public static func get(_ url: String, headers: [String: String] = [:]) async throws -> HTTPResponse {
-        try await http(HTTPRequest(url: url, headers: headers))
+    public static func get(_ url: String, headers: [String: String] = [:], auth: Auth? = nil) async throws -> HTTPResponse {
+        try await http(HTTPRequest(url: url, headers: headers), auth: auth)
     }
 
     /// GETs a URL and decodes its JSON body; a non-2xx status throws.
-    public static func getJSON<T: Decodable>(_ url: String, as type: T.Type = T.self, headers: [String: String] = [:], decoder: JSONDecoder = JSONDecoder()) async throws -> T {
+    public static func getJSON<T: Decodable>(_ url: String, as type: T.Type = T.self, headers: [String: String] = [:], auth: Auth? = nil, decoder: JSONDecoder = JSONDecoder()) async throws -> T {
+        try await json(HTTPRequest(url: url, headers: headers), auth: auth, decoder: decoder)
+    }
+
+    /// Sends `body` encoded as JSON (POST unless `method` says otherwise) and
+    /// decodes the JSON answer, as a GraphQL query or a create call needs; a
+    /// non-2xx status throws.
+    public static func postJSON<T: Decodable>(_ url: String, body: some Encodable, as type: T.Type = T.self, method: String = "POST", headers: [String: String] = [:], auth: Auth? = nil, encoder: JSONEncoder = JSONEncoder(), decoder: JSONDecoder = JSONDecoder()) async throws -> T {
         var headers = headers
-        if headers["Accept"] == nil { headers["Accept"] = "application/json" }
-        let response = try await get(url, headers: headers)
+        if headers["Content-Type"] == nil { headers["Content-Type"] = "application/json" }
+        return try await json(HTTPRequest(url: url, method: method, headers: headers, body: try encoder.encode(body)), auth: auth, decoder: decoder)
+    }
+
+    private static func json<T: Decodable>(_ request: HTTPRequest, auth: Auth?, decoder: JSONDecoder) async throws -> T {
+        var request = request
+        if request.headers["Accept"] == nil { request.headers["Accept"] = "application/json" }
+        let response = try await http(request, auth: auth)
         guard (200..<300).contains(response.status) else {
-            throw HostError("\(url) answered \(response.status): \(String(decoding: response.body.prefix(300), as: UTF8.self))")
+            throw HostError("\(request.url) answered \(response.status): \(String(decoding: response.body.prefix(300), as: UTF8.self))")
         }
         return try decoder.decode(T.self, from: response.body)
     }

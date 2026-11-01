@@ -233,7 +233,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 
 | Call | Needs |
 | --- | --- |
-| `try await Stackbar.getJSON(url, as: T.self, headers:)`, `Stackbar.get`, `Stackbar.http(HTTPRequest)` | `.network("host")`, `*.example.com` for subdomains |
+| `try await Stackbar.getJSON(url, as: T.self, headers:, auth:)`, `Stackbar.postJSON(url, body: encodable, as: T.self, auth:)` (POST unless `method:`), `Stackbar.get(url, auth:)`, `Stackbar.http(HTTPRequest, auth:)` | `.network("host")`, `*.example.com` for subdomains |
 | `try await Stackbar.secret("NAME")` returns `String?` (nil: the user hasn't entered it; Stackbar asks them) | `.secret(name: "NAME")`; names are letters, digits, `_`, `-`, `.` |
 | A server the user picks (a self-hosted proxy, GitHub Enterprise): read its URL with `Stackbar.secret("NAME")`, then `Stackbar.getJSON` to it | `.userServer(secret: "NAME")`: the plugin may reach that URL's host only (minimumStackbar 0.11.0) |
 | `try await Stackbar.oauthToken("github")` | `.oauth(OAuthProvider(name:, authorizeURL:, tokenURL:, clientID:, scopes:))` |
@@ -251,6 +251,29 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.keepAwake(display:, reason:)`, `Stackbar.allowSleep()`; the host releases it if the plugin stops | `.power` |
 | `try await Stackbar.systemStatus()`: batteryLevel, onACPower, lowPowerMode, runningApps, externalDisplays, networkBytesReceived, vpnActive | `.power` |
 | `try await Stackbar.calendarEvents(from:, to:)` returns `[CalendarEvent]` (title, start, end, location, notes, url, participation), 31 days at most | `.calendar` |
+
+`auth:` reads a declared secret and adds the header: `.bearer(secret: "GITHUB_TOKEN")`
+sends `Authorization: Bearer …`, `.header("Authorization", secret: "LINEAR_API_KEY")`
+the bare key, and `prefix: "DeepL-Auth-Key"` puts a word before it. While the
+secret is unset, the call throws `StackbarError.missingSecret(name)` and the
+panel asks the user for it; `ContentUnavailableView(error)` shows any thrown
+error the standard way, a missing secret as "Waiting for NAME":
+
+```swift
+var problem: (any Error)?
+func refresh() async throws {
+    do {
+        let reply: Reply = try await Stackbar.postJSON("https://api.linear.app/graphql",
+            body: ["query": "{ viewer { assignedIssues { nodes { title } } } }"],
+            auth: .header("Authorization", secret: "LINEAR_API_KEY"))
+        issues = reply.data.viewer.assignedIssues.nodes
+        problem = nil
+    } catch { problem = error }
+}
+var panel: ViewContent {
+    if let problem { ContentUnavailableView(problem) } else { ForEach(issues) { Row($0.title) } }
+}
+```
 
 Don't use URLSession, Process or files directly: plugins run sandboxed and
 only host calls are allowed through. Errors from host calls say which
