@@ -231,7 +231,7 @@ enum StackbarIntents {
 /// phrases up to date. Each sync is a diff against what was indexed.
 @MainActor
 final class CommandSpotlightIndexer {
-    static let indexName = "io.navbytes.stackbar.commands"
+    nonisolated static let indexName = "io.navbytes.stackbar.commands"
     private var indexed: [CommandIndexItem] = []
     private var started = false
     private var task: Task<Void, Never>?
