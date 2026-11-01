@@ -65,6 +65,19 @@ public enum ClipboardContent: Codable, Equatable, Sendable {
     case stored(id: String)
 }
 
+/// A file the user picked in an Open panel.
+public struct ChosenFile: Codable, Equatable, Sendable {
+    public var name: String
+    public var data: Data
+
+    public init(name: String, data: Data) {
+        self.name = name
+        self.data = data
+    }
+
+    public static let maxBytes = 5 * 1024 * 1024
+}
+
 /// Asks the host to keep the Mac awake for this plugin.
 public struct KeepAwakeRequest: Codable, Equatable, Sendable {
     /// Keep the display on too, not just the system.

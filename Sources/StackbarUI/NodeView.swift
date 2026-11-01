@@ -407,7 +407,9 @@ public struct RowView: View {
 
     public var body: some View {
         HStack(spacing: 8) {
-            if let symbol = row.symbol {
+            if let icon = row.appIcon.flatMap(AppIcons.icon) {
+                Image(nsImage: icon).resizable().frame(width: 18, height: 18)
+            } else if let symbol = row.symbol {
                 Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 18)
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -740,5 +742,24 @@ struct BarView: View {
         .accessibilityValue(Text("\(Int((clamped * 100).rounded())) percent"))
     }
 }
+
+#if canImport(AppKit)
+/// Apps' icons by bundle id, for rows that name an app. Looked up once.
+@MainActor
+enum AppIcons {
+    private static var cache: [String: NSImage?] = [:]
+
+    static func icon(_ bundleID: String) -> NSImage? {
+        if let cached = cache[bundleID] { return cached }
+        let image = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { url in
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            icon.size = NSSize(width: 32, height: 32)
+            return icon
+        }
+        cache[bundleID] = image
+        return image
+    }
+}
+#endif
 
 #endif

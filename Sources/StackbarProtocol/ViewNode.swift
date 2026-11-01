@@ -126,6 +126,9 @@ public struct RowNode: Codable, Equatable, Sendable {
     public var title: String
     public var subtitle: String?
     public var symbol: String?
+    /// An app's bundle id: the host draws that app's icon in place of the
+    /// symbol, and the symbol where it can't (the app isn't installed).
+    public var appIcon: String?
     /// Small trailing graphics: badges and progress gauges.
     public var accessories: [ViewNode]
     /// The first action is the row's primary action (a click); the rest are
@@ -135,11 +138,12 @@ public struct RowNode: Codable, Equatable, Sendable {
     /// full text, an image the host keeps, or both.
     public var preview: RowPreview?
 
-    public init(key: String, title: String, subtitle: String? = nil, symbol: String? = nil, accessories: [ViewNode] = [], actions: [ActionRef] = [], preview: RowPreview? = nil) {
+    public init(key: String, title: String, subtitle: String? = nil, symbol: String? = nil, appIcon: String? = nil, accessories: [ViewNode] = [], actions: [ActionRef] = [], preview: RowPreview? = nil) {
         self.key = key
         self.title = title
         self.subtitle = subtitle
         self.symbol = symbol
+        self.appIcon = appIcon
         self.accessories = accessories
         self.actions = actions
         self.preview = preview

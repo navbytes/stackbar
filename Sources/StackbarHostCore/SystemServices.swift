@@ -24,11 +24,20 @@ public protocol SystemServices: Sendable {
     func context() async -> InvocationContext
     /// The paths selected in Finder's frontmost window, read now.
     func finderSelection() async throws -> [String]
+    /// An Open panel; nil when the user cancelled.
+    func chooseFile(types: [String], for pluginName: String) async throws -> ChosenFile?
+    /// A Save panel; the path written, or nil when the user cancelled.
+    func saveFile(name: String, data: Data, for pluginName: String) async throws -> String?
+    /// An installed app's bundle id, from its name, path or bundle id.
+    func resolveApplication(_ nameOrPath: String) async -> String?
 }
 
 extension SystemServices {
     public func context() async -> InvocationContext { InvocationContext() }
     public func finderSelection() async throws -> [String] { throw SystemServiceError("Finder is not available on this platform") }
+    public func chooseFile(types: [String], for pluginName: String) async throws -> ChosenFile? { throw SystemServiceError("choosing files is not available on this platform") }
+    public func saveFile(name: String, data: Data, for pluginName: String) async throws -> String? { throw SystemServiceError("saving files is not available on this platform") }
+    public func resolveApplication(_ nameOrPath: String) async -> String? { nil }
 }
 
 public struct SystemServiceError: Error, CustomStringConvertible, Sendable {
@@ -85,6 +94,33 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
             if let context = try? SystemCodec.decode(InvocationContext.self, from: text) { system.simulate(context: context) }
         }
         return system
+    }
+
+    private var chosen: [ChosenFile?] = []
+    /// Every Save panel answered, in order (for tests).
+    public private(set) var saved: [(name: String, data: Data)] = []
+    /// Installed apps by name, for `resolveApplication`.
+    public var applications: [String: String] = ["Safari": "com.apple.Safari", "Google Chrome": "com.google.Chrome", "Xcode": "com.apple.dt.Xcode", "Finder": "com.apple.finder"]
+
+    /// The next Open panel picks this file (`nil`: the user cancels).
+    public func simulate(chosenFile: ChosenFile?) { lock.withLock { chosen.append(chosenFile) } }
+
+    public func chooseFile(types: [String], for pluginName: String) async throws -> ChosenFile? {
+        lock.withLock { chosen.isEmpty ? nil : chosen.removeFirst() }
+    }
+
+    public func saveFile(name: String, data: Data, for pluginName: String) async throws -> String? {
+        lock.withLock {
+            saved.append((name, data))
+            return "/Users/you/Downloads/" + name
+        }
+    }
+
+    public func resolveApplication(_ nameOrPath: String) async -> String? {
+        let apps = lock.withLock { applications }
+        if apps.values.contains(nameOrPath) { return nameOrPath }
+        let name = nameOrPath.hasSuffix(".app") ? ((nameOrPath as NSString).lastPathComponent as NSString).deletingPathExtension : nameOrPath
+        return apps.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
     }
 
     /// What the user is in: `context()` and `finderSelection()` return it.

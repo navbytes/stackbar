@@ -80,6 +80,7 @@ public final class HostServices: Sendable {
     private let approvedCommands: (@Sendable (String) -> [String: String])?
     private let notifications = RateLimiter(limit: 10, per: 60)
     private let alerts = RateLimiter(limit: 1, per: 60)
+    private let panels = RateLimiter(limit: 10, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
     private let calls = RateLimiter(limit: 1200, per: 60)
@@ -279,6 +280,29 @@ public final class HostServices: Sendable {
             } catch {
                 return .failure("\(error)")
             }
+
+        case .chooseFile(let types):
+            guard panels.allow(granted.id) else { return .failure("too many file panels; at most 10 a minute") }
+            do {
+                guard let file = try await platform.system.chooseFile(types: types, for: granted.name) else { return .value(nil) }
+                guard file.data.count <= ChosenFile.maxBytes else { return .failure("\(file.name) is larger than 5 MB") }
+                return .value(SystemCodec.encode(file))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .saveFile(let name, let data):
+            guard panels.allow(granted.id) else { return .failure("too many file panels; at most 10 a minute") }
+            guard data.count <= ChosenFile.maxBytes else { return .failure("files saved this way are at most 5 MB") }
+            let safe = (name as NSString).lastPathComponent
+            do {
+                return .value(try await platform.system.saveFile(name: safe.isEmpty ? "Untitled" : safe, data: data, for: granted.name))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .resolveApplication(let nameOrPath):
+            return .value(await platform.system.resolveApplication(nameOrPath))
         }
     }
 
