@@ -350,6 +350,7 @@ struct ListNodeView: View {
 struct PreviewPane: View {
     let preview: RowPreview
     @Environment(\.stackbarImageData) private var imageData
+    @Environment(\.stackbarSnapshot) private var snapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -364,13 +365,19 @@ struct PreviewPane: View {
             }
             #endif
             if let text = preview.text, !text.isEmpty {
-                ScrollView {
-                    Text(text)
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                // ImageRenderer draws a scroll view empty, so a snapshot shows
+                // the first lines instead.
+                Group {
+                    if snapshot {
+                        Text(text).lineLimit(8)
+                    } else {
+                        ScrollView {
+                            Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
                 }
-                .frame(maxHeight: 140)
+                .font(.system(.caption, design: .monospaced))
+                .frame(maxWidth: .infinity, maxHeight: 140, alignment: .topLeading)
                 .padding(6)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
             }
