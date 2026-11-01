@@ -44,7 +44,13 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         popover.behavior = .transient
         popover.animates = false
         popover.delegate = self
-        popover.contentViewController = NSHostingController(rootView: PanelView(controller: controller, model: model, windows: windows))
+        let panel = NSHostingController(rootView: PanelView(controller: controller, model: model, windows: windows))
+        // The popover follows SwiftUI's size as the panel's content changes.
+        // Without this it kept the size it had before the first layout, so the
+        // 380-point panel sometimes drew shifted left and clipped until it was
+        // reopened.
+        panel.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = panel
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(togglePanel(_:))
@@ -82,6 +88,13 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     private func present(relativeTo rect: NSRect, of view: NSView) {
+        // Size the popover from a fresh layout before it appears, so it
+        // opens at the panel's real size, not the one from its last close.
+        if let content = popover.contentViewController?.view {
+            content.layoutSubtreeIfNeeded()
+            let size = content.fittingSize
+            if size.width > 0, size.height > 0 { popover.contentSize = size }
+        }
         NSApp.activate(ignoringOtherApps: true)
         shownAt = Date()
         popover.show(relativeTo: rect, of: view, preferredEdge: .minY)

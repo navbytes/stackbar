@@ -29,7 +29,20 @@ public struct MenuBarView: View {
         .lineLimit(1)
         .fixedSize()
         .padding(.horizontal, 4)
-        .foregroundStyle(fallback.role == .primary ? Color.primary : fallback.role.color)
+        .foregroundStyle(MenuBarView.tint(fallback.role))
+    }
+
+    /// Menu-bar colors. The bar is translucent over the wallpaper, so the
+    /// accent blue (and green) disappeared on it; "on" and "fine" now draw in
+    /// the bar's own color, and a plugin shows an active state with its
+    /// symbol (a filled cup, say). Only warning and critical keep a color,
+    /// because those should catch the eye.
+    public static func tint(_ role: Role) -> Color {
+        switch role {
+        case .primary, .accent, .success: return .primary
+        case .secondary: return .secondary
+        case .warning, .critical: return role.color
+        }
     }
 
     /// True when nothing in the tree has a menu-bar form.
@@ -90,10 +103,6 @@ struct MenuBarNode: View {
         }
     }
 
-    /// The menu bar keeps the system's own color for primary content so it
-    /// follows the menu bar's appearance.
-    private func tint(_ role: Role) -> Color {
-        role == .primary ? .primary : role.color
-    }
+    private func tint(_ role: Role) -> Color { MenuBarView.tint(role) }
 }
 #endif

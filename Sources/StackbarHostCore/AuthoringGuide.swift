@@ -194,7 +194,9 @@ for a form to flag. Errors name the placeholder that failed.
 - `ContentUnavailableView(title, symbol:, message:)`
 
 Roles: `.primary .secondary .accent .success .warning .critical`. Never pick
-colors or sizes; the host does, per surface and appearance.
+colors or sizes; the host does, per surface and appearance. In the menu bar
+`.accent` and `.success` draw in the bar's own color (blue vanishes on it), so
+show an active state with the symbol, such as a filled variant.
 
 Action ids come from content: `button/<title>`, `toggle/<title>`,
 `row/<key>/<action title>`, `field/<placeholder>`, `picker/<title>`,
