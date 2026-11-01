@@ -14,7 +14,7 @@ bare rows.
   plus success, warning, critical, neutral and info), a type ramp
   (`Typography`, `.typography(_:)`), spacing and radius scales, surface
   paints, and components built only from protocol 11 nodes: `PanelHeader`,
-  `HeroCard`, `Card`, `CardTitle`, `StatTile`, `Metric`, `Gauge`, `Meter`,
+  `HeroCard`, `Card`, `CardTitle`, `StatTile`, `Metric`, `Gauge`, `Meter`, `DayBar`,
   `Pill`, `StatusDot`, `Banner`, `EmptyState`, `IconButton`, `ActionButton`,
   `Chip`. No protocol change.
 - The contrast lint measures see-through backgrounds over what is behind

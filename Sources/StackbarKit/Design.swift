@@ -466,6 +466,73 @@ public struct Meter: StackbarView {
     }
 }
 
+/// A span of time as a bar, with stretches of it filled: a day's meetings,
+/// or a city's working hours. `segments` and `now` are fractions of the
+/// span, 0 to 1. The bar is `width` points wide: 332 fills a panel card.
+public struct DayBar: StackbarView {
+    var segments: [ClosedRange<Double>]
+    var now: Double?
+    var theme: Theme
+    var width: Double
+    var height: Double
+
+    public init(_ segments: [ClosedRange<Double>], now: Double? = nil, theme: Theme, width: Double = 332, height: Double = 8) {
+        self.segments = segments
+        self.now = now
+        self.theme = theme
+        self.width = width
+        self.height = height
+    }
+
+    /// The bar as runs of filled and empty, merged and clamped to 0...1.
+    static func runs(_ segments: [ClosedRange<Double>]) -> [(span: ClosedRange<Double>, filled: Bool)] {
+        var merged: [ClosedRange<Double>] = []
+        for segment in segments.map({ min(1, max(0, $0.lowerBound))...min(1, max(0, $0.upperBound)) }).sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if let last = merged.last, segment.lowerBound <= last.upperBound {
+                merged[merged.count - 1] = last.lowerBound...max(last.upperBound, segment.upperBound)
+            } else {
+                merged.append(segment)
+            }
+        }
+        var runs: [(span: ClosedRange<Double>, filled: Bool)] = []
+        var at = 0.0
+        for segment in merged {
+            if segment.lowerBound > at { runs.append((at...segment.lowerBound, false)) }
+            if segment.upperBound > segment.lowerBound { runs.append((segment, true)) }
+            at = segment.upperBound
+        }
+        if at < 1 { runs.append((at...1, false)) }
+        return runs
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        let marker = 2.0
+        // The now marker takes its width out of whichever run it lands in.
+        let cut = now.map { min(max($0, 0), 1) * (width - marker) }
+        var pieces: [(width: Double, paint: Paint)] = []
+        var x = 0.0
+        for run in Self.runs(segments) {
+            let runWidth = (run.span.upperBound - run.span.lowerBound) * (width - (cut == nil ? 0 : marker))
+            let paint: Paint = run.filled ? theme.solidPaint : .hairline
+            if let cut, cut >= x, cut < x + runWidth || (cut == x + runWidth && run.span.upperBound >= 1) {
+                pieces.append((cut - x, paint))
+                pieces.append((marker, .role(.primary)))
+                pieces.append((x + runWidth - cut, paint))
+            } else {
+                pieces.append((runWidth, paint))
+            }
+            x += runWidth
+        }
+        return HStack(spacing: 0) {
+            ForEach(Array(pieces.enumerated()).filter { $0.element.width > 0.25 }) { _, piece in
+                Rectangle().fill(piece.paint).frame(width: piece.width, height: height)
+            }
+        }
+        .clipShape(.capsule)
+        .resolve(in: context)
+    }
+}
+
 /// A small colored state: "Running", "Checks fail", "Today". Not a button.
 public struct Pill: StackbarView {
     var text: String

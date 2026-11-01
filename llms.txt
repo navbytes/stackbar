@@ -234,7 +234,8 @@ theme passes 4.5:1 in both modes.
 - `Card("Title", detail: "8") { }` groups charts and values; native `Row`s stay in a `List` or `Section`.
 - `StatTile("Today", value: "1.2M", caption: "$4.12", symbol: "bolt.fill", theme:)` in an `HStack` of two or three.
 - `Metric("4:32", unit: "left", caption: "Until 17:30")`, `Gauge(value:, total:, theme:) { Text("40%") }` (or `Gauge(timing:)`),
-  `Meter("Memory", reading: "12 of 16 GB", value: 0.75, theme:)`
+  `Meter("Memory", reading: "12 of 16 GB", value: 0.75, theme:)`,
+  `DayBar([0.2...0.3, 0.5...0.6], now: 0.4, theme:)` (a day with its meetings or working hours filled; fractions of the span)
 - `Pill("Failing", symbol: "xmark", theme: .critical)`, `StatusDot(.success)`, `Banner("Showing numbers from 5 min ago")`
 - `IconButton("arrow.clockwise", label: "Refresh", theme:, prominence: .plain | .tinted | .filled) { }`,
   `ActionButton("Upgrade All", symbol:, theme:, prominent: true) { }`, `Chip("Running", theme:, selected:) { }`

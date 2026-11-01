@@ -63,6 +63,22 @@ final class DesignTests: XCTestCase {
         XCTAssertTrue("\(nodes[0])".contains("accessibilityLabel: Optional(\"Refresh\")"))
     }
 
+    func testDayBarMergesSegmentsAndPlacesNow() async {
+        let runs = DayBar.runs([0.5...0.75, 0.2...0.3, 0.25...0.4, 1.2...1.5])
+        XCTAssertEqual(runs.map(\.span), [0...0.2, 0.2...0.4, 0.4...0.5, 0.5...0.75, 0.75...1])
+        XCTAssertEqual(runs.map(\.filled), [false, true, false, true, false])
+        let nodes = DayBar([0.5...0.75], now: 0.25, theme: .red, width: 102).resolve(in: RenderContext())
+        guard case .stack(_, _, _, let pieces)? = nodes.first?.unstyled else { return XCTFail("\(nodes)") }
+        // empty to now, the marker, empty to the meeting, the meeting, empty.
+        XCTAssertEqual(pieces.count, 5)
+        let widths = pieces.compactMap { node -> Double? in
+            if case .styled(_, let style) = node { return style.frame?.width }
+            return nil
+        }
+        XCTAssertEqual(widths.reduce(0, +), 102, accuracy: 0.001)
+        XCTAssertEqual(widths[1], 2)
+    }
+
     func testTypographySetsTheWholeFont() async {
         XCTAssertEqual(Text("12").typography(.stat).resolve(in: RenderContext()), [
             .styled(.text("12"), style: Style(font: FontSpec(size: 20, weight: .semibold, design: .rounded, monospacedDigit: true))),
