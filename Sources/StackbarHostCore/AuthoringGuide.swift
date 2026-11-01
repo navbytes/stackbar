@@ -122,8 +122,9 @@ var commands: [Command] {
 ```
 
 Results: `.done`, `.message(text)`, `.open(url:app:)`, `.copy(text)`,
-`.paste(text, cursorFromEnd:)` (needs `.clipboard`), `.failure(text)`. The host
-performs them under the plugin's capabilities. Ids are lowercase letters,
+`.paste(text, cursorFromEnd:)` (needs `.clipboard`; puts the user's clipboard
+back afterwards and keeps the paste out of clipboard history), `.failure(text)`.
+The host performs them under the plugin's capabilities. Ids are lowercase letters,
 digits and `-`, stable forever (aliases, hotkeys and links remember them);
 titles can change. `invocation["name"]` is nil when an argument was left
 empty; `invocation.source` says where it started (`.palette`, `.hotkey`,
@@ -213,11 +214,11 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.run("brew", ["outdated", "--json=v2"], timeout: .seconds(120))` returns `RunResult` (status, stdout, stderr, text, truncated, timedOut); a non-zero exit is not thrown | `.run(commands: ["brew"])` |
 | `for try await event in Stackbar.stream("docker", ["logs", "-f", id]) { switch event { case .stdout(let data), .stderr(let data): …; case .exit(let exit): … } }`; leaving the loop stops it | `.run(commands: ["docker"])` |
 | `invocation.context` in commands, or `try await Stackbar.context()` now: frontmostApp, windowTitle, selectedText (nil when the app doesn't share it); `try await Stackbar.finderSelection()` returns paths | `.context` |
-| `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing |
+| `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing; `.storage(megabytes: 16)` for up to 64 MB |
 | `try await Stackbar.chooseFile(types: ["json"])` returns `ChosenFile?` (name, data; 5 MB at most), `try await Stackbar.saveFile("x.json", data:)` returns the path; nil when the user cancels | nothing (the user picks) |
 | `try await Stackbar.resolveApplication("Google Chrome")` returns a bundle id from an app's name, path or id | nothing |
 | `try await Stackbar.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
-| `try await Stackbar.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Stackbar.paste(content)` (into the app the user was in; needs Accessibility for Stackbar) | `.clipboard` |
+| `try await Stackbar.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Stackbar.paste(content, restoringClipboard: true, cursorFromEnd: n)` (into the app the user was in; needs Accessibility for Stackbar; restoring puts the user's copy back after half a second, marks the paste transient, and n ← presses place the caret) | `.clipboard` |
 | `try await Stackbar.keepAwake(display:, reason:)`, `Stackbar.allowSleep()`; the host releases it if the plugin stops | `.power` |
 | `try await Stackbar.systemStatus()`: batteryLevel, onACPower, lowPowerMode, runningApps, externalDisplays, networkBytesReceived, vpnActive | `.power` |
 | `try await Stackbar.calendarEvents(from:, to:)` returns `[CalendarEvent]` (title, start, end, location, notes, url, participation), 31 days at most | `.calendar` |

@@ -141,8 +141,20 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         }
     }
 
-    func paste(_ content: ClipboardContent) async throws {
+    func paste(_ content: ClipboardContent, options: PasteOptions) async throws {
+        // What the user had copied, to put back afterwards.
+        let saved = options.restoreClipboard ? onMain { Self.items(NSPasteboard.general) } : nil
         try writeClipboard(content)
+        let written = onMain { () -> Int in
+            let board = NSPasteboard.general
+            // Clipboard managers (ours included) skip transient content.
+            if options.restoreClipboard {
+                let transient = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+                board.addTypes([transient], owner: nil)
+                board.setData(Data(), forType: transient)
+            }
+            return board.changeCount
+        }
         let trusted = await MainActor.run { AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary) }
         guard trusted else {
             throw SystemServiceError("copied, but Stackbar needs Accessibility access to paste: System Settings > Privacy & Security > Accessibility")
@@ -154,13 +166,50 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         try? await Task.sleep(for: .milliseconds(200))
         await MainActor.run {
             let source = CGEventSource(stateID: .combinedSessionState)
-            let vKey: CGKeyCode = 9 // kVK_ANSI_V
-            for isDown in [true, false] {
-                let event = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: isDown)
-                event?.flags = .maskCommand
-                event?.post(tap: .cgAnnotatedSessionEventTap)
-            }
+            Self.press(9, flags: .maskCommand, source: source) // kVK_ANSI_V
+            // One ← per grapheme cluster: that is what one press moves over.
+            for _ in 0..<options.cursorFromEnd { Self.press(123, flags: [], source: source) } // kVK_LeftArrow
         }
+        guard let saved else { return }
+        try? await Task.sleep(for: .milliseconds(500))
+        onMain {
+            let board = NSPasteboard.general
+            // The user copied something meanwhile: leave their copy alone.
+            guard board.changeCount == written else { return }
+            board.clearContents()
+            guard !saved.isEmpty else { return }
+            board.writeObjects(saved.map { types in
+                let item = NSPasteboardItem()
+                for (type, data) in types { item.setData(data, forType: NSPasteboard.PasteboardType(type)) }
+                return item
+            })
+        }
+    }
+
+    private static func press(_ key: CGKeyCode, flags: CGEventFlags, source: CGEventSource?) {
+        for isDown in [true, false] {
+            let event = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: isDown)
+            event?.flags = flags
+            event?.post(tap: .cgAnnotatedSessionEventTap)
+        }
+    }
+
+    /// Every type of every item on the pasteboard, up to 32 MB in all; nil
+    /// when there is more (then the clipboard is not restored).
+    private static func items(_ board: NSPasteboard) -> [[String: Data]]? {
+        var items: [[String: Data]] = []
+        var total = 0
+        for pasteboardItem in board.pasteboardItems ?? [] {
+            var entry: [String: Data] = [:]
+            for type in pasteboardItem.types {
+                guard let data = pasteboardItem.data(forType: type) else { continue }
+                total += data.count
+                guard total <= 32 * 1024 * 1024 else { return nil }
+                entry[type.rawValue] = data
+            }
+            items.append(entry)
+        }
+        return items
     }
 
     // MARK: Power

@@ -67,6 +67,11 @@ public struct Manifest: Codable, Equatable, Sendable {
         for case .files(let paths) in capabilities where paths.contains(where: { !($0 == "~" || $0.hasPrefix("~/") || $0.hasPrefix("/")) }) {
             result.append("file paths start with ~/ or /, like ~/Notes")
         }
+        let storageGrants = capabilities.compactMap { if case .storage(let megabytes) = $0 { return megabytes } else { return nil } }
+        if storageGrants.count > 1 { result.append("declare .storage(megabytes:) once") }
+        if storageGrants.contains(where: { !(1...Self.maxStorageMegabytes).contains($0) }) {
+            result.append("storage is 1 to \(Self.maxStorageMegabytes) megabytes")
+        }
         for capability in capabilities {
             if case .network(let hosts) = capability, hosts.contains(where: { $0.contains("/") || $0.contains(":") }) {
                 result.append("network hosts are bare domain names (api.github.com, *.example.com), not URLs")
@@ -78,6 +83,17 @@ public struct Manifest: Codable, Equatable, Sendable {
             }
         }
         return result
+    }
+
+    public static let maxStorageMegabytes = 64
+
+    /// The storage quota the manifest asks for, in bytes; nil means the
+    /// default.
+    public var storageQuotaBytes: Int? {
+        for case .storage(let megabytes) in capabilities {
+            return min(max(megabytes, 1), Self.maxStorageMegabytes) * 1024 * 1024
+        }
+        return nil
     }
 
     /// The domains the plugin may reach through the host, from `.network` and
@@ -184,6 +200,8 @@ public enum Capability: Codable, Hashable, Sendable {
     /// meeting apps) that `Stackbar.open` may open; `"*"` allows any scheme
     /// and file paths, which the install sheet warns about.
     case openURLs(schemes: [String])
+    /// More room for `Stackbar.storage` than the default 1 MB: 1 to 64 MB.
+    case storage(megabytes: Int)
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

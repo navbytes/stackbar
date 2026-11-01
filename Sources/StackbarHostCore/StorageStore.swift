@@ -21,13 +21,16 @@ public actor StorageStore {
         load(pluginID)
     }
 
-    /// Saves or removes one value. Throws when the plugin would go over quota.
-    public func set(_ key: String, _ value: String?, for pluginID: String) throws {
+    /// Saves or removes one value. Throws when the plugin would go over its
+    /// quota: `quota` when the plugin was granted `.storage(megabytes:)`,
+    /// otherwise the store's default.
+    public func set(_ key: String, _ value: String?, for pluginID: String, quota: Int? = nil) throws {
+        let quota = quota ?? quotaBytes
         var values = load(pluginID)
         values[key] = value
         let size = values.reduce(0) { $0 + $1.key.utf8.count + $1.value.utf8.count }
-        if size > quotaBytes {
-            throw StorageError.overQuota(pluginID: pluginID, bytes: size, quota: quotaBytes)
+        if size > quota, value != nil {
+            throw StorageError.overQuota(pluginID: pluginID, bytes: size, quota: quota)
         }
         cache[pluginID] = values
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

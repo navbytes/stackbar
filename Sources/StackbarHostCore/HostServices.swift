@@ -123,7 +123,7 @@ public final class HostServices: Sendable {
         switch call {
         case .storageSet(let key, let value):
             do {
-                try await storage.set(key, value, for: granted.id)
+                try await storage.set(key, value, for: granted.id, quota: granted.storageQuotaBytes)
                 return .ok
             } catch {
                 return .failure("\(error)")
@@ -223,11 +223,17 @@ public final class HostServices: Sendable {
             guard granted.capabilities.contains(.clipboard) else { return missing(.clipboard, "read the clipboard") }
             return .value(platform.system.readClipboard().map(SystemCodec.encode))
 
-        case .clipboardWrite(let content), .paste(let content):
+        case .clipboardWrite(let content), .paste(let content, _):
             guard granted.capabilities.contains(.clipboard) else { return missing(.clipboard, "write or paste clipboard content") }
             if case .text(let text) = content, text.utf8.count > 1024 * 1024 { return .failure("text is too large to copy") }
             do {
-                if case .paste = call { try await platform.system.paste(content) } else { try platform.system.writeClipboard(content) }
+                if case .paste(_, let options) = call {
+                    var options = options ?? PasteOptions()
+                    options.cursorFromEnd = min(options.cursorFromEnd, PasteOptions.maxCursorFromEnd)
+                    try await platform.system.paste(content, options: options)
+                } else {
+                    try platform.system.writeClipboard(content)
+                }
                 return .ok
             } catch {
                 return .failure("\(error)")
