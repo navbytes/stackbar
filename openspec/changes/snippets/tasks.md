@@ -15,6 +15,6 @@
 - [ ] 3.1 README bundled table; placeholder reference page shared with Quicklinks
 - [ ] 3.2 Tests from design.md; Mac checklist
 
-## 4. Keyword expansion (only after Naveen decides)
-- [ ] 4.1 Decision recorded here
-- [ ] 4.2 `ExpansionMonitor`, `.textExpansion`, `Stackbar.setExpansions`, Settings switch and excluded apps
+## 4. Keyword expansion (not now)
+- [x] 4.1 Decision (Naveen, 2026-11-01): no system-wide keyboard monitor yet; it would worry many users. Snippets ships with pick-and-paste only.
+- [ ] 4.2 (deferred) `ExpansionMonitor`, `.textExpansion`, `Stackbar.setExpansions`, Settings switch and excluded apps

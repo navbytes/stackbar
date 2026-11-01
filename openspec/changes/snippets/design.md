@@ -64,7 +64,7 @@ says "Stores up to 16 MB". Plugins without it keep 1 MB.
 - **Export** writes the same format.
 - The files come from `chooseFile` and `saveFile`, the same as Quicklinks.
 
-## Keyword expansion (designed, not in 1.0)
+## Keyword expansion (designed, not built: Naveen, 2026-11-01)
 
 - **Plugins never see keystrokes.** A host service, `ExpansionMonitor`, uses a
   listen-only `CGEventTap`, which needs Input Monitoring. It is off until the
@@ -77,7 +77,7 @@ says "Stores up to 16 MB". Plugins without it keep 1 MB.
   by default, with a user list.
 - **On a match**, after a delimiter or immediately (a setting), the host
   sends backspaces for the keyword and runs the command, which pastes.
-- **Ships only after Naveen decides** (tasks 4.x).
+- **Not built.** Naveen decided on 2026-11-01 not to add a system-wide keyboard monitor yet.
 
 ## Tests
 

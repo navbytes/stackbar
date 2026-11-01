@@ -28,9 +28,9 @@ to bring them along.
 
 Expanding `;sig` as you type needs a system-wide keystroke monitor and the
 Input Monitoring permission. That is a real trust cost for a developer tool,
-and Text Replacements already covers plain keywords. So keyword expansion is
-designed here (design.md, "Keyword expansion") but stays out of 1.0. Naveen
-decides after Snippets ships, based on beta feedback. Keywords imported from
+and Text Replacements already covers plain keywords. Naveen decided on 2026-11-01 not to add one yet, because a system-wide keyboard
+monitor would worry many people. Keyword expansion stays designed here
+(design.md, "Keyword expansion") but is not built. Keywords imported from
 Raycast are kept, so they work the day it ships.
 
 ## Depends on
