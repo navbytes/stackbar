@@ -215,7 +215,7 @@ final class AppModel {
         switches.set(id, on: true)
         for file in Set(files) { switches.forget(file: file) }
         if deleteData {
-            services.storage.erase(id)
+            await services.storage.erase(id)
             OAuthBroker.forgetTokens(of: id, providers: providers, in: services.secrets)
         }
         refreshInstalled()

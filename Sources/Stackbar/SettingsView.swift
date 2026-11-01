@@ -117,7 +117,6 @@ struct PluginPage: View {
     let controller: PluginController
     let model: AppModel
     @State private var showingAbout = false
-    @State private var confirmingUninstall = false
 
     private var hasSettings: Bool { controller.manifest?.surfaces.contains(.settings) == true }
 
@@ -158,6 +157,8 @@ struct PluginPage: View {
 struct PluginDetail: View {
     let controller: PluginController
     let model: AppModel
+
+    @State private var confirmingUninstall = false
 
     var body: some View {
         Form {
@@ -352,7 +353,7 @@ extension StoreView {
             try? FileManager.default.trashItem(at: URL(fileURLWithPath: record.file), resultingItemURL: nil)
             try? model.installer.forget(entry.id)
             model.switches.set(entry.id, on: true)
-            if deleteData { model.services.storage.erase(entry.id) }
+            if deleteData { await model.services.storage.erase(entry.id) }
             model.refreshInstalled()
         }
         status = "Moved \(entry.name) to the Trash" + (deleteData ? " and deleted its data." : ".")
