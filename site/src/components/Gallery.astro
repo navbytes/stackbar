@@ -1,0 +1,78 @@
+---
+// Every surface a plugin version declares, as rendered by `stackbarctl render
+// --png` when it was published, in light and dark with a switch between them.
+import { Image, inferRemoteSize } from 'astro:assets';
+import { surfaceNames } from '../lib/plugins';
+
+interface Shot { surface: string; light?: string; dark?: string; }
+interface Props { name: string; gallery: Shot[]; }
+const { name, gallery } = Astro.props;
+const both = gallery.some((shot) => shot.light && shot.dark);
+// Renders are 2x: show each at its size in points.
+const sizes = new Map(await Promise.all(gallery.flatMap((shot) => [shot.light, shot.dark])
+  .filter((src): src is string => !!src)
+  .map(async (src) => [src, await inferRemoteSize(src)] as const)));
+---
+<div class="gallery" data-appearance="dark">
+  {both && (
+    <div class="switch" role="group" aria-label="Appearance">
+      <button type="button" data-show="dark" aria-pressed="true">Dark</button>
+      <button type="button" data-show="light" aria-pressed="false">Light</button>
+    </div>
+  )}
+  <div class="shots">
+    {gallery.map((shot) => (
+      <figure class:list={['shot', shot.surface]}>
+        <div class="frame">
+          {(['dark', 'light'] as const).map((appearance) => {
+            const src = shot[appearance];
+            const alone = !shot[appearance === 'dark' ? 'light' : 'dark'];
+            const size = src ? sizes.get(src) : undefined;
+            if (!src || !size) return null;
+            const width = Math.round(size.width / 2), height = Math.round(size.height / 2);
+            return (
+              <Image class:list={[appearance, { alone }]} src={src} alt={`${name}'s ${(surfaceNames[shot.surface] ?? shot.surface).toLowerCase()} in ${appearance} mode`}
+                width={width} height={height} widths={[width, size.width]} sizes={`${width}px`} loading="lazy" />
+            );
+          })}
+        </div>
+        <figcaption>{surfaceNames[shot.surface] ?? shot.surface}</figcaption>
+      </figure>
+    ))}
+  </div>
+</div>
+
+<script>
+  function wire() {
+    document.querySelectorAll<HTMLElement>('.gallery').forEach((gallery) => {
+      gallery.querySelectorAll<HTMLButtonElement>('.switch button').forEach((button) => {
+        button.onclick = () => {
+          gallery.dataset.appearance = button.dataset.show;
+          gallery.querySelectorAll<HTMLButtonElement>('.switch button').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+        };
+      });
+    });
+  }
+  document.addEventListener('astro:page-load', wire);
+</script>
+
+<style>
+  .switch {
+    display: inline-flex; padding: 4px; gap: 4px; margin-bottom: 28px;
+    border-radius: 999px; background: var(--page-2); box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .switch button {
+    font: 600 var(--step--1) / 1 var(--font-text); color: var(--ink-2);
+    padding: 10px 18px; border: 0; border-radius: 999px; background: none; cursor: pointer;
+  }
+  .switch button[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); }
+  .shots { display: flex; flex-wrap: wrap; gap: clamp(24px, 4vw, 48px); align-items: flex-start; }
+  .shot { margin: 0; display: grid; gap: 12px; justify-items: start; }
+  .frame :global(img) {
+    max-width: 100%; height: auto; border-radius: 14px;
+    box-shadow: 0 0 0 0.5px #00000040, 0 30px 60px -18px #00000066, 0 8px 18px -8px #00000033;
+  }
+  .gallery[data-appearance='dark'] .frame :global(img.light:not(.alone)),
+  .gallery[data-appearance='light'] .frame :global(img.dark:not(.alone)) { display: none; }
+  figcaption { font: 600 var(--step--1) / 1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+</style>

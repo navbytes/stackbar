@@ -19,8 +19,8 @@
 - [x] 3.1 Manifest `accent` (Theme hue) and `symbol`, carried into the signed index; site uses them over the category hue (Stackbar 0.14.0)
 - [x] 3.1a The app verifies an index's signature over the bytes as published, so a field an older app does not know stays signed and no longer breaks verification there
 - [ ] 3.2 StackbarKit previews and `stackbarctl render --preview <name>`
-- [ ] 3.3 `publish.sh`: render every surface light and dark per version, write `site.json`, add the redirect `index.html`
-- [ ] 3.4 Gallery on plugin pages: every surface, both appearances, with a light/dark switch
+- [x] 3.3 `publish.sh`: render every surface light and dark per version, write `site.json`, add the redirect `index.html` (stackbar-plugins #8)
+- [x] 3.4 Gallery on plugin pages: every surface, both appearances, with a light/dark switch
 - [ ] 3.5 `stackbar://store/<id>` opens the plugin in Settings → Store; "Get it in Stackbar" uses it
 
 ## 4. Polish

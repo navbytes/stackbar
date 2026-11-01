@@ -2,6 +2,7 @@
 import { getCollection, render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import Button from '../../components/Button.astro';
+import Gallery from '../../components/Gallery.astro';
 import Glyph from '../../components/Glyph.astro';
 import MenuBarScene from '../../components/MenuBarScene.astro';
 import PluginCard from '../../components/PluginCard.astro';
@@ -31,6 +32,9 @@ const inline = (text: string) => text
   .replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/`([^`]+)`/g, '<code>$1</code>')
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+// The hero sits on the always-dark stage, so it prefers the dark panel render.
+const panel = plugin.gallery.find((shot) => shot.surface === 'panel');
+const heroShot = panel?.dark ?? panel?.light ?? plugin.screenshot;
 const surfaces = plugin.surfaces.filter((s) => s !== 'settings');
 const installCommand = `stackbarctl install --index ${store.indexURL} ${plugin.id}`;
 const details: [string, string][] = [
@@ -66,7 +70,7 @@ const details: [string, string][] = [
       </div>
       <MenuBarScene label={`${plugin.name} open from the menu bar`} hues={[hue, hue, 'graphite']} compact
         items={[{ text: plugin.name, glyph: 'bolt', active: true }, { text: '23%', glyph: 'cpu' }]}>
-        <Screenshot src={plugin.screenshot} alt={`${plugin.name}'s panel`} eager>Screenshot coming with the next release</Screenshot>
+        <Screenshot src={heroShot} alt={`${plugin.name}'s panel`} eager>Screenshot coming with the next release</Screenshot>
       </MenuBarScene>
     </div>
   </section>
@@ -87,6 +91,15 @@ const details: [string, string][] = [
       </aside>
     </div>
   </section>
+
+  {plugin.gallery.length > 0 && (
+    <section class="section gallery-section" aria-labelledby="looks">
+      <div class="wrap">
+        <div class="section-head"><p class="eyebrow">Gallery</p><h2 id="looks">Every place it shows up.</h2></div>
+        <Gallery name={plugin.name} gallery={plugin.gallery} />
+      </div>
+    </section>
+  )}
 
   {features.length > 0 && (
     <section class="section features">

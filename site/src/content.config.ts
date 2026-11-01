@@ -37,6 +37,8 @@ const plugins = defineCollection({
     sha256: z.string(),
     screenshot: z.url().optional(),
     surfaces: z.array(z.string()),
+    /** Renders of this version's surfaces, from the store's site.json. */
+    gallery: z.array(z.object({ surface: z.string(), light: z.url().optional(), dark: z.url().optional() })),
     capabilities: z.array(z.string()),
     readme: z.object({
       description: z.string(),
