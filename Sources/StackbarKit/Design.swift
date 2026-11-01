@@ -329,7 +329,8 @@ public struct CardTitle: StackbarView {
 }
 
 /// One number with what it counts: a row of two to four of these sums up a
-/// panel. The theme colors the symbol, and the value when `emphasized`.
+/// panel. The theme colors the symbol, and when `emphasized` the value, on
+/// the theme's tint.
 public struct StatTile: StackbarView {
     var label: String
     var value: String
@@ -362,7 +363,8 @@ public struct StatTile: StackbarView {
         }
         .padding(horizontal: Space.m - 2, vertical: Space.s + 1)
         .frame(fillWidth: true, alignment: .leading)
-        .background(.surface, in: .roundedRectangle(cornerRadius: Radius.medium + 2))
+        // The theme's color reads on its own tint, not on a see-through surface.
+        .background(emphasized ? theme.tintPaint : .surface, in: .roundedRectangle(cornerRadius: Radius.medium + 2))
         .resolve(in: context)
     }
 }
