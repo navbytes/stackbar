@@ -15,11 +15,11 @@
 - [x] 3.1 `OfficialIndex` built in, first, not removable, verified against its key
 - [x] 3.2 Store pane: categories, screenshots, homepage, Needs Stackbar X, Update, remove an added index
 - [x] 3.3 Daily update check; automatic updates with an off switch; withdrawn plugins to the Trash
-- [ ] 3.4 Fill in `OfficialIndex.publicKey` once Naveen generates the navbytes key
+- [x] 3.4 Fill in `OfficialIndex.publicKey` once Naveen generates the navbytes key
 
 ## 4. Release
 - [x] 4.1 Stackbar 0.10.0
-- [ ] 4.2 Tag 0.10.0 after merge so stackbar-plugins can pin to it
+- [ ] 4.2 Tag 0.10.0 (stackbar-plugins pins the 0.10.0 commit until the tag exists; sessions cannot push tags)
 
 ## 5. Docs and tests
 - [x] 5.1 Authoring guide and llms.txt: `minimumStackbar`, `homepage`

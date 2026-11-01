@@ -9,9 +9,9 @@ public enum OfficialIndex {
     public static let repository = URL(string: "https://github.com/navbytes/stackbar-plugins")!
     /// The navbytes publisher key (raw Ed25519, base64). The index and every
     /// bundle in it are signed with its private half, which lives only in the
-    /// plugins repository's `release` environment. Nil until the key exists;
-    /// the app then leaves the official index out rather than trust it unsigned.
-    public static let publicKey: String? = nil
+    /// plugins repository's `release` environment (backed up by Naveen). Nil
+    /// would make the app leave the official index out rather than trust it unsigned.
+    public static let publicKey: String? = "4dpLtXEpFXdi+6cviY/KdYuUulJPbEmCxxIK0EEN2/w="
 
     public static var isAvailable: Bool { publicKey != nil }
 
