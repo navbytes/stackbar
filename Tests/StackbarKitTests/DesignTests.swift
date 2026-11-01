@@ -13,6 +13,11 @@ final class DesignTests: XCTestCase {
         return "#" + channel(color.red, under.red) + channel(color.green, under.green) + channel(color.blue, under.blue)
     }
 
+    func testEveryAccentIsAThemeHue() {
+        XCTAssertEqual(Accent.allCases.map(\.rawValue), Theme.all.map(\.name), "a manifest accent names exactly the Theme hues")
+        XCTAssertEqual(Theme(.teal), .teal)
+    }
+
     func testEveryThemeReadsAtFourAndAHalfToOne() async {
         for (name, theme) in Theme.all {
             for dark in [false, true] {

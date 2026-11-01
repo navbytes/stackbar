@@ -12,11 +12,12 @@
 - [x] 1.8 Pages workflow: tests, `astro check`, build, internal link check, deploy from main and hourly
 
 ## 2. Going live (Naveen)
-- [ ] 2.1 Settings → Pages → Source: GitHub Actions
-- [ ] 2.2 DNS: `stackbar` CNAME to `navbytes.github.io`; custom domain in Pages settings; repository variables `SITE_URL=https://stackbar.navbytes.io`, `SITE_BASE=/`
+- [x] 2.1 Settings → Pages → Source: GitHub Actions
+- [x] 2.2 DNS: `stackbar` CNAME to `navbytes.github.io`; custom domain in Pages settings; repository variables `SITE_URL=https://stackbar.navbytes.io`, `SITE_BASE=/`
 
 ## 3. Plugin content (after stackbar-plugins PR #7)
-- [ ] 3.1 Manifest `accent` (Theme hue) and `symbol`, carried into the signed index; site uses them over the category hue
+- [x] 3.1 Manifest `accent` (Theme hue) and `symbol`, carried into the signed index; site uses them over the category hue (Stackbar 0.14.0)
+- [x] 3.1a The app verifies an index's signature over the bytes as published, so a field an older app does not know stays signed and no longer breaks verification there
 - [ ] 3.2 StackbarKit previews and `stackbarctl render --preview <name>`
 - [ ] 3.3 `publish.sh`: render every surface light and dark per version, write `site.json`, add the redirect `index.html`
 - [ ] 3.4 Gallery on plugin pages: every surface, both appearances, with a light/dark switch
@@ -25,4 +26,5 @@
 ## 4. Polish
 - [ ] 4.1 Open Graph cards per plugin in its hue
 - [ ] 4.2 Lighthouse CI (95+ in all four) and a Playwright smoke at phone and desktop widths
-- [ ] 4.3 Copy pass with Naveen; switch to stackbar.navbytes.io
+- [ ] 4.3 Copy pass with Naveen
+- [x] 4.3a Live at stackbar.navbytes.io (2026-11-01); HTTPS enforced once GitHub issues the certificate

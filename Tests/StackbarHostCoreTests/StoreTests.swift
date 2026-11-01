@@ -161,6 +161,27 @@ final class PluginStoreTests: XCTestCase {
         XCTAssertEqual(try awaitResult { try await PluginIndex.fetch(file) }.name, "Old", "a format 1 index still reads")
     }
 
+    func testSignatureCoversFieldsThisAppDoesNotKnow() throws {
+        var index = PluginIndex(name: "T", plugins: [entry("dev.t.a", "1.0.0")], generated: "2026-11-01")
+        index.plugins[0].accent = "violet"
+        index.signature = "c2ln"
+        let (bytes, signature) = try PluginIndex.signedBytes(of: try index.encoded())
+        XCTAssertEqual(bytes, try index.signedBytes(), "the published bytes and the decoded index sign the same")
+        XCTAssertEqual(signature, "c2ln")
+        let newer = try index.encoded().replacingFirst(#""accent""#, with: #""sparkle" : "new", "accent""#)
+        XCTAssertNotEqual(try PluginIndex.signedBytes(of: newer).bytes, bytes, "an unknown field is still signed")
+    }
+
+    func testManifestAccentAndSymbolReachTheIndexEntry() throws {
+        let manifest = Manifest(id: "dev.t.a", name: "A", accent: .teal, symbol: "cloud.sun.fill")
+        XCTAssertEqual(manifest.problems, [])
+        let decoded = try JSONDecoder().decode(Manifest.self, from: JSONEncoder().encode(manifest))
+        XCTAssertEqual(decoded.accent, .teal)
+        XCTAssertEqual(decoded.symbol, "cloud.sun.fill")
+        XCTAssertEqual(Manifest(id: "dev.t.a", name: "A", symbol: "Cloud Sun").problems.count, 1)
+        XCTAssertEqual(Manifest(id: "dev.t.a", name: "A", symbol: "cloud..sun").problems.count, 1)
+    }
+
     #if canImport(CryptoKit)
     func testSignedIndexVerifiesAndTamperingBreaksIt() throws {
         let key = try Signing.generateKey()
@@ -173,6 +194,10 @@ final class PluginStoreTests: XCTestCase {
         XCTAssertThrowsError(try tampered.verify(publicKey: publicKey)) { XCTAssertEqual($0 as? PluginIndex.IndexError, .badSignature) }
         let other = try Signing.generateKey().publicKey.base64EncodedString()
         XCTAssertThrowsError(try index.verify(publicKey: other))
+        let published = try index.encoded()
+        XCTAssertNoThrow(try PluginIndex.verify(published, publicKey: publicKey))
+        let edited = try tampered.encoded()
+        XCTAssertThrowsError(try PluginIndex.verify(edited, publicKey: publicKey)) { XCTAssertEqual($0 as? PluginIndex.IndexError, .badSignature) }
     }
     #endif
 }
@@ -266,4 +291,12 @@ final class BundledStoreTests: XCTestCase {
         XCTAssertEqual(store.installMissing(), [], "running it again changes nothing")
     }
     #endif
+}
+
+private extension Data {
+    func replacingFirst(_ target: String, with replacement: String) -> Data {
+        let text = String(decoding: self, as: UTF8.self)
+        guard let range = text.range(of: target) else { return self }
+        return Data(text.replacingCharacters(in: range, with: replacement).utf8)
+    }
 }
