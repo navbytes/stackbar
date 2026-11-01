@@ -38,6 +38,9 @@ usage:
                                     a subfolder is the category; --key signs it (macOS)
   stackbarctl index verify <index.json | https://…> --public-key <base64>
   stackbarctl index search <url> [query] [--public-key <base64>]
+  stackbarctl index fetch <dir> [--index <url>] [--public-key <base64>]
+                                    downloads the first-party plugins' signed bundles
+                                    (the official store by default) for the app to carry
   stackbarctl docs                     the plugin authoring reference
   stackbarctl parity                   the surface parity ledger
   stackbarctl soak <plugin> [--minutes 10] [--interval 1] [--press] [--growth 15]
@@ -404,6 +407,27 @@ case "index":
             guard let url else { fail(usage) }
             let index = try await PluginIndex.fetch(url, publicKey: key)
             print("valid: \(index.name), \(index.plugins.count) plugins, \(index.revoked?.count ?? 0) revoked")
+        case "fetch":
+            let directory = URL(fileURLWithPath: rest[1])
+            let key = flag("--public-key", in: rest) ?? OfficialIndex.publicKey
+            guard let url = URL(string: flag("--index", in: rest) ?? OfficialIndex.url.absoluteString) else { fail(usage) }
+            let index = try await PluginIndex.fetch(url, publicKey: key)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            var fetched = 0
+            for id in BundledStore.pluginIDs.sorted() {
+                guard let entry = index.plugins.filter({ $0.id == id && $0.requiredStackbar() == nil }).max(by: { $1.isNewer(than: $0.version) }) else {
+                    print("not in \(index.name) for Stackbar \(StackbarVersion.current): \(id)")
+                    continue
+                }
+                try index.checkInstallable(entry)
+                let bundle = try await PluginIndex.bundle(for: entry, indexURL: url)
+                try bundle.verify()
+                guard bundle.publisher.publicKey == key else { fail("\(id) is not signed by the index's key") }
+                try bundle.encoded().write(to: directory.appendingPathComponent("\(id)-\(bundle.manifest.version).\(PluginBundle.fileExtension)"))
+                print("fetched \(bundle.manifest.name) \(bundle.manifest.version)")
+                fetched += 1
+            }
+            print("\(directory.path): \(fetched) bundles")
         case "search":
             guard let url = URL(string: rest[1]) else { fail(usage) }
             let index = try await PluginIndex.fetch(url, publicKey: flag("--public-key", in: rest))

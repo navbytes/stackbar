@@ -34,18 +34,20 @@ let package = Package(
         .executableTarget(name: "Stackbar", dependencies: ["StackbarProtocol", "StackbarHostCore", "StackbarUI"]),
         .executableTarget(name: "stackbarctl", dependencies: ["StackbarHostCore", "StackbarUI"]),
         .executableTarget(name: "ClockPlugin", dependencies: ["StackbarKit"], path: "Examples/ClockPlugin"),
-        .executableTarget(name: "PRCockpitPlugin", dependencies: ["StackbarKit"], path: "Plugins/PRCockpitPlugin"),
         .executableTarget(name: "PomodoroPlugin", dependencies: ["StackbarKit"], path: "Examples/PomodoroPlugin"),
         .executableTarget(name: "TodoPlugin", dependencies: ["StackbarKit"], path: "Examples/TodoPlugin"),
         .executableTarget(name: "WeatherPlugin", dependencies: ["StackbarKit"], path: "Examples/WeatherPlugin"),
         .executableTarget(name: "CIStatusPlugin", dependencies: ["StackbarKit"], path: "Examples/CIStatusPlugin"),
-        // First-party plugins (Plugins/), shipped with the app. Examples/ are
-        // the small teaching ones.
-        .executableTarget(name: "ClipboardPlugin", dependencies: ["StackbarKit"], path: "Plugins/ClipboardPlugin"),
-        .executableTarget(name: "StayAwakePlugin", dependencies: ["StackbarKit"], path: "Plugins/StayAwakePlugin"),
-        .executableTarget(name: "UpNextPlugin", dependencies: ["StackbarKit"], path: "Plugins/UpNextPlugin"),
-        .executableTarget(name: "QuicklinksPlugin", dependencies: ["StackbarKit"], path: "Plugins/QuicklinksPlugin"),
-        .executableTarget(name: "SnippetsPlugin", dependencies: ["StackbarKit"], path: "Plugins/SnippetsPlugin"),
+        // Copies of the first-party plugins, which now live in
+        // navbytes/stackbar-plugins and reach users through the store. The
+        // host tests run them as real plugins. Examples/ are the small
+        // teaching ones.
+        .executableTarget(name: "PRCockpitPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/PRCockpitPlugin"),
+        .executableTarget(name: "ClipboardPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/ClipboardPlugin"),
+        .executableTarget(name: "StayAwakePlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/StayAwakePlugin"),
+        .executableTarget(name: "UpNextPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/UpNextPlugin"),
+        .executableTarget(name: "QuicklinksPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/QuicklinksPlugin"),
+        .executableTarget(name: "SnippetsPlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/BundledPlugins/SnippetsPlugin"),
         // A plugin that misbehaves on request, so the supervisor's crash and
         // restart handling is tested against a real process.
         .executableTarget(name: "FixturePlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/FixturePlugin"),

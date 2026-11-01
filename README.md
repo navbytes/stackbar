@@ -60,10 +60,13 @@ never runs concurrently with itself and needs no locks.
 the view vocabulary, triggers, capabilities, host services and agent tools.
 It is written for coding agents, and the authoring MCP server serves it too.
 
-## Bundled plugins
+## First-party plugins
 
-`Plugins/` holds the utilities that ship with the app (install them from the
-Stackbar menu or Settings). `Examples/` are small plugins that each teach one idea.
+These utilities live in [navbytes/stackbar-plugins](https://github.com/navbytes/stackbar-plugins)
+and install and update through the store, like any other plugin there. The app
+carries their signed bundles so a new Mac can install them without a network
+(from the Stackbar menu or Settings). Copies under `Tests/Fixtures/BundledPlugins/`
+exist only for the host's tests. `Examples/` are small plugins that each teach one idea.
 
 | Plugin | What it does | Needs |
 | --- | --- | --- |

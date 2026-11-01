@@ -24,3 +24,16 @@
 ## 5. Docs and tests
 - [x] 5.1 Authoring guide and llms.txt: `minimumStackbar`, `homepage`
 - [x] 5.2 Tests: versions, manifest compatibility, index build, gating, withdrawals, review, signing (macOS)
+
+## 6. Store fixes (Naveen, 2026-11-01)
+- [x] 6.1 Uninstall drops the install record, stops every copy and trashes every file
+- [x] 6.2 A "Turned on" switch per plugin in Settings
+- [x] 6.3 Store pane refreshes after install, update and uninstall, with an Uninstall button
+
+## 7. First-party plugins move to the store (Naveen, 2026-11-01)
+- [x] 7.1 Clipboard, PR Cockpit, Quicklinks, Snippets, Stay Awake and Up Next live in navbytes/stackbar-plugins with their old ids
+- [x] 7.2 `Plugins/` becomes `Tests/Fixtures/BundledPlugins/`, kept for the host tests
+- [x] 7.3 `stackbarctl index fetch`; the app build carries their signed bundles for offline first run
+- [x] 7.4 `BundledStore`: untouched old copies become store installs of the same id, edited ones stay; per-file settings follow
+- [x] 7.5 install.sh stops copying plugin sources; Stackbar 0.11.0
+- [ ] 7.6 Publish them from stackbar-plugins and check an install from a clean plugins folder on a Mac

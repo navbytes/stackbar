@@ -3,7 +3,8 @@
 # it on this Mac:
 #   - /Applications/Stackbar.app (replacing a running copy)
 #   - stackbarctl linked into ~/.local/bin
-#   - the bundled plugins (Plugins/) copied into Stackbar's plugins folder
+#   - the first-party plugins' signed bundles, which Stackbar installs from
+#     the store on first run (scripts/embed-stackbarkit.sh)
 #
 # Needs Xcode 26, xcodegen (brew install xcodegen) and an Xcode account for
 # the team in project.yml. The first run on a Mac may need
@@ -48,10 +49,6 @@ ditto "$APP" "$DEST/Stackbar.app"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$DEST/Stackbar.app/Contents/MacOS/stackbarctl" "$HOME/.local/bin/stackbarctl"
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "install: add ~/.local/bin to PATH to use stackbarctl" ;; esac
-
-PLUGINS="$HOME/Library/Application Support/Stackbar/Plugins"
-mkdir -p "$PLUGINS"
-for plugin in Plugins/*/*.swift; do cp "$plugin" "$PLUGINS/"; done
 
 open "$DEST/Stackbar.app"
 echo "installed $DEST/Stackbar.app"
