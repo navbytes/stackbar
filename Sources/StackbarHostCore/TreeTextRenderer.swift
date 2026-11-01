@@ -63,8 +63,19 @@ public enum TreeTextRenderer {
         case .chart(let values, let kind, let label, _, let options):
             if kind == .donut {
                 let names = options?.labels ?? []
-                let parts = values.enumerated().map { index, value in "\(index < names.count ? names[index] : "#\(index + 1)") \(format(value))\(options?.unit ?? "")" }
+                let total = values.reduce(0, +)
+                let parts = values.enumerated().map { index, value in
+                    "\(index < names.count ? names[index] : "#\(index + 1)") \(ChartNumber.format(value))\(options?.unit ?? "")"
+                        + (total > 0 ? String(format: " (%.1f%%)", value / total * 100) : "")
+                }
                 return [pad + (label.map { "\($0): " } ?? "") + parts.joined(separator: ", ") + " (donut)"]
+            }
+            if kind == .heatmap {
+                let peak = values.indices.max { values[$0] < values[$1] }
+                let busiest = peak.map { index in
+                    ", busiest " + ((options?.labels).flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? "day \(index + 1)") + " \(ChartNumber.format(values[index]))\(options?.unit ?? "")"
+                } ?? ""
+                return [pad + (label.map { "\($0) " } ?? "") + sparkline(values) + " (heatmap: \(values.count) days, \(values.filter { $0 > 0 }.count) active\(busiest))"]
             }
             let names = options?.labels.map { " [" + $0.joined(separator: " ") + "]" } ?? ""
             return [pad + (label.map { "\($0) " } ?? "") + sparkline(values) + (kind == .line ? "" : " (\(kind.rawValue))") + names]

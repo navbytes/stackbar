@@ -147,9 +147,10 @@ public final class HostServices: Sendable {
 
         case .http(let request):
             guard requests.allow(granted.id) else { return .failure("too many HTTP requests; at most 300 a minute") }
-            let result = await http.perform(request, pluginID: granted.id, allowedHosts: granted.networkHosts)
+            let allowed = granted.networkHosts + userServerHosts(granted)
+            let result = await http.perform(request, pluginID: granted.id, allowedHosts: allowed)
             if case .failure = result, let host = URLParts.host(of: request.url),
-               !URLParts.host(host, matches: granted.networkHosts), URLParts.host(host, matches: declared.networkHosts) {
+               !URLParts.host(host, matches: allowed), URLParts.host(host, matches: declared.networkHosts + userServerHosts(declared)) {
                 return Self.awaitingApproval(granted, "to reach \(host)")
             }
             return result
@@ -403,6 +404,15 @@ public final class HostServices: Sendable {
     enum CheckedButtons {
         case success([NotificationAction])
         case failure(String)
+    }
+
+    /// The hosts of the servers the user entered for `.userServer` secrets.
+    /// Only the host counts: a URL's scheme, port and path don't widen it.
+    func userServerHosts(_ manifest: Manifest) -> [String] {
+        manifest.userServerSecrets.compactMap { name in
+            guard let value = try? secrets.secret(name) else { return nil }
+            return URLParts.host(of: value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
     }
 
     private static func awaitingApproval(_ granted: Manifest, _ what: String) -> HostResult {

@@ -509,8 +509,7 @@ struct ChartNodeView: View {
     }
 
     private func formatted(_ value: Double) -> String {
-        let number = abs(value - value.rounded()) < 0.05 ? String(Int(value.rounded())) : String(format: "%.1f", value)
-        return number + (options.unit ?? "")
+        ChartNumber.format(value) + (options.unit ?? "")
     }
 
     private func color(_ index: Int) -> Color {
@@ -524,6 +523,7 @@ struct ChartNodeView: View {
             return "\(options.labels == nil ? "" : points[index].name + " ")\(formatted(points[index].value))"
         }
         guard let last = points.last else { return nil }
+        if kind == .heatmap { return "\(values.filter { $0 > 0 }.count) active days" }
         return kind == .bar ? "Total \(formatted(values.reduce(0, +)))" : "Now \(formatted(last.value))"
     }
 
@@ -536,10 +536,10 @@ struct ChartNodeView: View {
                     Text(summary).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
-            if kind == .donut {
-                donut
-            } else {
-                series
+            switch kind {
+            case .donut: donut
+            case .heatmap: HeatmapView(values: values, names: options.labels ?? [], unit: options.unit ?? "", color: role.color)
+            case .line, .bar, .area: series
             }
         }
         .accessibilityElement(children: .combine)
@@ -624,11 +624,61 @@ struct ChartNodeView: View {
                         Circle().fill(color(point.index)).frame(width: 8, height: 8)
                         Text(point.name).font(.caption).lineLimit(1)
                         Spacer(minLength: 4)
-                        Text(formatted(point.value)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        Text(formatted(point.value)).font(.caption.monospacedDigit())
+                        if total > 0 {
+                            Text(String(format: "%.1f%%", point.value / total * 100))
+                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                .frame(minWidth: 40, alignment: .trailing)
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/// Days as squares in week columns, Sunday on top, like a contribution
+/// graph: five shades of the role's color by quartile of the active days.
+struct HeatmapView: View {
+    let values: [Double]
+    let names: [String]
+    let unit: String
+    let color: Color
+
+    var body: some View {
+        let layout = HeatmapLayout(count: values.count, todayRow: Calendar.current.component(.weekday, from: Date()) - 1)
+        let levels = HeatmapLayout.levels(values)
+        let gap = 0.25
+        VStack(alignment: .trailing, spacing: 6) {
+            Canvas { context, size in
+                let side = size.width / (Double(layout.columns) * (1 + gap) - gap)
+                for index in values.indices {
+                    let (column, row) = layout.cell(index)
+                    let rect = CGRect(x: Double(column) * side * (1 + gap), y: Double(row) * side * (1 + gap), width: side, height: side)
+                    context.fill(Path(roundedRect: rect, cornerRadius: side * 0.22), with: .color(shade(levels[index])))
+                }
+            }
+            .aspectRatio((Double(layout.columns) * (1 + gap) - gap) / (7 * (1 + gap) - gap), contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(summary)
+            HStack(spacing: 3) {
+                Text("Less").font(.caption2).foregroundStyle(.secondary)
+                ForEach(0..<5, id: \.self) { level in
+                    RoundedRectangle(cornerRadius: 2).fill(shade(level)).frame(width: 9, height: 9)
+                }
+                Text("More").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var summary: String {
+        guard let peak = values.indices.max(by: { values[$0] < values[$1] }) else { return "No days" }
+        let name = names.indices.contains(peak) ? names[peak] : "day \(peak + 1)"
+        return "\(values.filter { $0 > 0 }.count) active days; busiest \(name), \(ChartNumber.format(values[peak]))\(unit)"
+    }
+
+    private func shade(_ level: Int) -> Color {
+        level == 0 ? Color.primary.opacity(0.08) : color.opacity([0, 0.3, 0.5, 0.75, 1][min(level, 4)])
     }
 }
 

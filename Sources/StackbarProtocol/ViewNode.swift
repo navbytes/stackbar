@@ -97,6 +97,10 @@ public enum ChartKind: String, Codable, Sendable, CaseIterable {
     case area
     /// Shares of a whole, one slice per value, named by `ChartOptions.labels`.
     case donut
+    /// One square per day, oldest first, in week columns like a contribution
+    /// graph; darker is more. `labels` name the days ("2026-10-31") and the
+    /// last value is today. Stackbar 0.11.0 and later.
+    case heatmap
 }
 
 /// What a chart's points mean, so the host can label them.

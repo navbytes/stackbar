@@ -21,7 +21,7 @@ renderer and the menu-bar renderer all handle it.
 | `progress` | ProgressView | ProgressView | ProgressView | 12 pt ring | As panel | As panel | Not listed | `[####......] 40%` |
 | `divider` | Divider | Divider | Divider | Hidden | As panel | As panel | Not listed | `----` |
 | `labeled` | LabeledContent | LabeledContent | LabeledContent | Label and value | As panel | As panel | Not listed | `label: value` |
-| `chart` | Swift Charts line, bar, area or donut, with labels, unit and goal | Swift Charts line, bar, area or donut, with labels, unit and goal | Swift Charts line, bar, area or donut, with labels, unit and goal | 32 pt sparkline | As panel | As panel | Not listed | Block sparkline; donut as named values |
+| `chart` | Swift Charts line, bar, area or donut, with labels, unit and goal; a day heatmap | Swift Charts line, bar, area or donut, with labels, unit and goal; a day heatmap | Swift Charts line, bar, area or donut, with labels, unit and goal; a day heatmap | 32 pt sparkline | As panel | As panel | Not listed | Block sparkline; donut as named values |
 | `textField` | TextField; return submits | TextField; return submits | TextField; return submits | Hidden (click opens the panel) | Drawn disabled | As panel | Not listed | `[text____] {id}` |
 | `picker` | Picker | Picker | Picker | Hidden (click opens the panel) | Drawn disabled | As panel | Not listed | `title: a | *b* {id}` |
 | `slider` | Slider; sends on release | Slider; sends on release | Slider; sends on release | Hidden (click opens the panel) | Drawn disabled | As panel | Not listed | `title: v (min...max) {id}` |

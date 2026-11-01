@@ -12,7 +12,7 @@ public enum SandboxEntitlements {
         var result = ["com.apple.security.app-sandbox": true]
         for capability in manifest.capabilities {
             switch capability {
-            case .network, .oauth:
+            case .network, .oauth, .userServer:
                 result["com.apple.security.network.client"] = true
             case .files, .run, .secret, .clipboard, .power, .calendar, .context, .openURLs, .storage:
                 // Files are opened up path by path (`fileExceptions`).
@@ -95,6 +95,7 @@ extension Capability {
         case .openURLs(let schemes):
             return schemes.contains("*") ? "Opens any link, file or folder, in any app" : "Opens " + schemes.map { "\($0):" }.joined(separator: ", ") + " links"
         case .storage(let megabytes): return "Stores up to \(megabytes) MB"
+        case .userServer(let name): return "Connects to the server you enter as \(name), and no other"
         }
     }
 
@@ -112,6 +113,7 @@ extension Capability {
         case .context: return "context"
         case .openURLs: return "openURLs"
         case .storage: return "storage"
+        case .userServer: return "userServer"
         }
     }
 }
