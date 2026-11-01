@@ -156,6 +156,7 @@ public final class HostClient: @unchecked Sendable {
         case .publish(let topic, _): return "publishing to \(topic)"
         case .notify: return "notification"
         case .alert: return "alert"
+        case .playSound(let sound): return "playing \(sound.rawValue)"
         case .openURL(let url): return "opening \(url)"
         case .open(let url, _): return "opening \(url)"
         case .copy: return "copying"
@@ -279,6 +280,12 @@ public enum Stackbar {
     /// missed. Buttons open their URLs. At most one a minute.
     public static func alert(_ title: String, body: String? = nil, actions: [NotificationAction] = []) {
         HostClient.shared.fire(.alert(title: title, body: body, actions: actions))
+    }
+
+    /// Plays a macOS system sound, like `Stackbar.play(.glass)` when a timer
+    /// ends. At most 10 a minute.
+    public static func play(_ sound: SystemSound) {
+        HostClient.shared.fire(.playSound(sound))
     }
 
     public static func open(_ url: String) {

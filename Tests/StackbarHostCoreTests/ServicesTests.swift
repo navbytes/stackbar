@@ -167,6 +167,19 @@ final class HostServicesTests: XCTestCase {
         guard case .failure = await services.handle(.notify(title: "spam", body: nil), for: manifest) else { return XCTFail("notifications are rate limited") }
     }
 
+    func testSystemSoundsPlayAndAreRateLimited() async {
+        let played = Log()
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(playSound: { played.add(.log(.info, $0.rawValue)) }))
+        let manifest = Manifest(id: "dev.test.sound", name: "Sound")
+        for _ in 0..<10 {
+            let ok = await services.handle(.playSound(.glass), for: manifest)
+            XCTAssertEqual(ok, .ok, "sounds need no capability")
+        }
+        guard case .failure(let message) = await services.handle(.playSound(.glass), for: manifest) else { return XCTFail("sounds are rate limited") }
+        XCTAssertTrue(message.contains("10 a minute"), message)
+        XCTAssertEqual(played.all.count, 10)
+    }
+
     func testHTTPGoesOnlyToDeclaredHostsAndRedirectsStayInside() async throws {
         let server = try LoopbackServer { request in
             switch request.path {

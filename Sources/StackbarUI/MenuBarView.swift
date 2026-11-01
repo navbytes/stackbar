@@ -4,7 +4,7 @@ import StackbarProtocol
 
 /// The menu-bar surface: the whole tree drawn compactly on one line.
 ///
-/// Text, labels, badges, labeled values, progress and charts are shown;
+/// Text, labels, badges, labeled values, progress, charts, symbols and timers are shown;
 /// controls and lists are not, because a click on the status item opens the
 /// panel, where they live. `SurfaceParity` records the same choices.
 public struct MenuBarView: View {
@@ -48,11 +48,11 @@ public struct MenuBarView: View {
     /// True when nothing in the tree has a menu-bar form.
     public static func isBlank(_ node: ViewNode) -> Bool {
         switch node {
-        case .text, .label, .badge, .progress, .labeled, .chart, .empty:
+        case .text, .label, .badge, .progress, .labeled, .chart, .empty, .image, .timer:
             return false
-        case .stack(_, _, let children):
-            return children.allSatisfy(isBlank)
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form:
+        case .stack, .styled:
+            return node.children.allSatisfy(isBlank)
+        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable:
             return true
         }
     }
@@ -78,11 +78,9 @@ struct MenuBarNode: View {
                 Text(label).foregroundStyle(.secondary)
                 Text(value).foregroundStyle(tint(role))
             }
-        case .progress(let value, let total, _, let role):
-            let fraction = total > 0 ? min(1, max(0, value / total)) : 0
-            ZStack {
-                Circle().stroke(Color.primary.opacity(0.25), lineWidth: 2)
-                Circle().trim(from: 0, to: fraction).stroke(tint(role), style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90))
+        case .progress(let value, let total, _, let role, _, let timing):
+            TimedFraction(value: value, total: total, timing: timing) { fraction in
+                RingView(fraction: fraction, paint: AnyShapeStyle(tint(role)), lineWidth: 2, track: Color.primary.opacity(0.25))
             }
             .frame(width: 12, height: 12)
         case .chart(let values, _, _, let role, _):
@@ -92,17 +90,27 @@ struct MenuBarNode: View {
                 if let symbol { Image(systemName: symbol) }
                 Text(title)
             }
-        case .stack(_, _, let children):
-            HStack(spacing: 4) {
-                ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-                    if !MenuBarView.isBlank(child) { MenuBarNode(node: child) }
-                }
-            }
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form:
+        case .stack(.depth, _, _, let children):
+            ZStack { visible(children) }
+        case .stack(_, _, _, let children):
+            HStack(spacing: 4) { visible(children) }
+        case .styled(let child, _):
+            MenuBarNode(node: child)
+        case .image(.symbol(let symbol)):
+            Image(systemName: symbol)
+        case .timer(let range, let countsDown):
+            Text(timerInterval: range.start...range.end, countsDown: countsDown).font(.system(size: 13).monospacedDigit())
+        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable:
             EmptyView()
         }
     }
 
     private func tint(_ role: Role) -> Color { MenuBarView.tint(role) }
+
+    private func visible(_ children: [ViewNode]) -> some View {
+        ForEach(Array(children.enumerated()), id: \.offset) { _, child in
+            if !MenuBarView.isBlank(child) { MenuBarNode(node: child) }
+        }
+    }
 }
 #endif

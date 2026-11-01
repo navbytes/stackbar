@@ -26,8 +26,12 @@ public struct WidgetContentView: View {
         switch node {
         case .list(_, let children):
             return .list(searchable: false, children: Array(children.prefix(maxRows)).map { trimmed($0, maxRows: maxRows) })
-        case .stack(let axis, let spacing, let children):
-            return .stack(axis: axis, spacing: spacing, children: children.map { trimmed($0, maxRows: maxRows) })
+        case .stack(let axis, let spacing, let alignment, let children):
+            return .stack(axis: axis, spacing: spacing, alignment: alignment, children: children.map { trimmed($0, maxRows: maxRows) })
+        case .styled(let child, let style):
+            return .styled(trimmed(child, maxRows: maxRows), style: style)
+        case .tappable(let child, let action):
+            return .tappable(trimmed(child, maxRows: maxRows), action: action)
         case .section(let title, let children):
             return .section(title: title, children: children.map { trimmed($0, maxRows: maxRows) })
         default:

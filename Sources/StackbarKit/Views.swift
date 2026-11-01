@@ -34,31 +34,59 @@ public struct Label: StackbarView {
     }
 }
 
-public struct VStack: StackbarView {
-    var spacing: Double?
-    var content: ViewContent
+/// What VStack, HStack and ZStack share: they differ only in their axis.
+@MainActor
+protocol AxisStack: StackbarView {
+    static var axis: StackAxis { get }
+    var alignment: StackAlignment? { get }
+    var spacing: Double? { get }
+    var content: ViewContent { get }
+}
 
-    public init(spacing: Double? = nil, @ViewBuilder content: () -> ViewContent) {
-        self.spacing = spacing
-        self.content = content()
-    }
-
+extension AxisStack {
     public func resolve(in context: RenderContext) -> [ViewNode] {
-        [.stack(axis: .vertical, spacing: spacing, children: content.resolve(in: context))]
+        [.stack(axis: Self.axis, spacing: spacing, alignment: alignment, children: content.resolve(in: context))]
     }
 }
 
-public struct HStack: StackbarView {
+/// Children top to bottom, leading-aligned unless `alignment` says otherwise.
+public struct VStack: AxisStack {
+    static let axis = StackAxis.vertical
+    var alignment: StackAlignment?
     var spacing: Double?
     var content: ViewContent
 
-    public init(spacing: Double? = nil, @ViewBuilder content: () -> ViewContent) {
+    public init(alignment: StackAlignment? = nil, spacing: Double? = nil, @ViewBuilder content: () -> ViewContent) {
+        self.alignment = alignment
         self.spacing = spacing
         self.content = content()
     }
+}
 
-    public func resolve(in context: RenderContext) -> [ViewNode] {
-        [.stack(axis: .horizontal, spacing: spacing, children: content.resolve(in: context))]
+/// Children left to right, vertically centered unless `alignment` says otherwise.
+public struct HStack: AxisStack {
+    static let axis = StackAxis.horizontal
+    var alignment: StackAlignment?
+    var spacing: Double?
+    var content: ViewContent
+
+    public init(alignment: StackAlignment? = nil, spacing: Double? = nil, @ViewBuilder content: () -> ViewContent) {
+        self.alignment = alignment
+        self.spacing = spacing
+        self.content = content()
+    }
+}
+
+/// Children layered back to front, centered: a ring behind a button.
+public struct ZStack: AxisStack {
+    static let axis = StackAxis.depth
+    var alignment: StackAlignment?
+    let spacing: Double? = nil
+    var content: ViewContent
+
+    public init(alignment: StackAlignment? = nil, @ViewBuilder content: () -> ViewContent) {
+        self.alignment = alignment
+        self.content = content()
     }
 }
 
@@ -201,6 +229,7 @@ public struct Button: StackbarView {
     var symbol: String?
     var role: Role
     var key: String?
+    var label: ViewContent?
     var handler: RenderContext.Handler
 
     public init(_ title: String, symbol: String? = nil, role: Role = .primary, key: String? = nil, action: @escaping @MainActor () async throws -> Void) {
@@ -211,9 +240,20 @@ public struct Button: StackbarView {
         self.handler = { _ in try await action() }
     }
 
+    /// A button drawn as any content: a round icon, a tile, a chip. Give it a
+    /// `key` when the content has no text, so its action id stays stable.
+    public init(key: String? = nil, action: @escaping @MainActor () async throws -> Void, @ViewBuilder label: () -> ViewContent) {
+        self.init("", key: key, action: action)
+        self.label = label()
+    }
+
     public func resolve(in context: RenderContext) -> [ViewNode] {
-        let id = context.register("button/\(key ?? title)", handler)
-        return [.button(title: title, symbol: symbol, role: role, action: id)]
+        guard let label else {
+            return [.button(title: title, symbol: symbol, role: role, action: context.register("button/\(key ?? title)", handler))]
+        }
+        let nodes = label.resolve(in: context)
+        let content = nodes.count == 1 ? nodes[0] : .stack(axis: .horizontal, children: nodes)
+        return [.tappable(content, action: context.register("button/\(key ?? content.plainText)", handler))]
     }
 }
 
@@ -251,16 +291,27 @@ public struct ProgressBar: StackbarView {
     var total: Double
     var label: String?
     var role: Role
+    var style: ProgressStyle?
+    var timing: TimeRange?
 
-    public init(_ label: String? = nil, value: Double, total: Double = 1, role: Role = .accent) {
+    /// `style: .ring(lineWidth:)` draws a ring in place of a bar.
+    public init(_ label: String? = nil, value: Double, total: Double = 1, role: Role = .accent, style: ProgressStyle? = nil) {
         self.label = label
         self.value = value
         self.total = total
         self.role = role
+        self.style = style
+    }
+
+    /// Progress through `timing` that the host animates from the clock, so
+    /// it moves smoothly without the plugin rendering again.
+    public init(_ label: String? = nil, timing: TimeRange, role: Role = .accent, style: ProgressStyle? = nil) {
+        self.init(label, value: 0, role: role, style: style)
+        self.timing = timing
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] {
-        [.progress(value: value, total: total, label: label, role: role)]
+        [.progress(value: value, total: total, label: label, role: role, style: style, timing: timing)]
     }
 }
 
@@ -342,13 +393,16 @@ public struct Picker: StackbarView {
     var title: String
     var options: [String]
     var selection: String?
+    var style: ChoiceStyle?
     var key: String?
     var onChange: @MainActor (String) async throws -> Void
 
-    public init(_ title: String, options: [String], selection: String?, key: String? = nil, onChange: @escaping @MainActor (String) async throws -> Void) {
+    /// `style: .segmented` draws side-by-side segments, for a few short options.
+    public init(_ title: String, options: [String], selection: String?, style: ChoiceStyle? = nil, key: String? = nil, onChange: @escaping @MainActor (String) async throws -> Void) {
         self.title = title
         self.options = options
         self.selection = selection
+        self.style = style
         self.key = key
         self.onChange = onChange
     }
@@ -359,7 +413,7 @@ public struct Picker: StackbarView {
         let id = context.register("picker/\(key ?? title)") { value in
             if case .text(let choice) = value, options.contains(choice) { try await change(choice) }
         }
-        return [.picker(title: title, options: options, selection: selection, action: id)]
+        return [.picker(title: title, options: options, selection: selection, style: style, action: id)]
     }
 }
 

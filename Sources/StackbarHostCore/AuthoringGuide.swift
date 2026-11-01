@@ -184,7 +184,7 @@ for a form to flag. Errors name the placeholder that failed.
   `.preview(text:imageID:caption:)` shows the full text or a kept clipboard
   image under the list while the row is selected; search looks through it.
 - `Row(...).appIcon("com.apple.Safari")` draws that app's icon instead of the symbol (the symbol stays as the fallback).
-- `Badge(text, role:)`, `ProgressBar(label, value:, total:)`, `LabeledContent(label, value:)`
+- `Badge(text, role:)`, `ProgressBar(label, value:, total:, style: .ring(lineWidth: 6))`, `LabeledContent(label, value:)`
 - `Chart(label, values: [Double], kind: .line|.bar|.area|.donut|.heatmap, role:, labels: ["Mon", …], unit: "h", goal: 4, highlight: 6)`
   `labels` name the points (or a donut's slices), `unit` follows values, `goal`
   draws a target line, `highlight` emphasizes one point. `.heatmap` takes one
@@ -194,14 +194,41 @@ for a form to flag. Errors name the placeholder that failed.
   rows is drawn as a card, so group charts and values in one; an `HStack` of
   such sections makes a row of stat tiles.
 - `Button(title, symbol:, role:) { }`, `Toggle(title, isOn:) { newValue in }`
-- `TextField(placeholder, text:) { submitted in }`, `Picker(title, options:, selection:) { choice in }`
+- `TextField(placeholder, text:) { submitted in }`, `Picker(title, options:, selection:, style: .segmented) { choice in }`
 - `Slider(title, value:, in: 0...10, step:) { value in }`, `Link(title, url:)`
 - `ContentUnavailableView(title, symbol:, message:)`
 
-Roles: `.primary .secondary .accent .success .warning .critical`. Never pick
-colors or sizes; the host does, per surface and appearance. In the menu bar
-`.accent` and `.success` draw in the bar's own color (blue vanishes on it), so
-show an active state with the symbol, such as a filled variant.
+Roles: `.primary .secondary .accent .success .warning .critical`. Without
+styling the host picks colors and sizes per surface and appearance, which is
+right for most plugins. In the menu bar `.accent` and `.success` draw in the
+bar's own color (blue vanishes on it), so show an active state with the
+symbol, such as a filled variant.
+
+### Custom look (minimumStackbar 0.12.0)
+
+When a plugin wants its own look, style it like SwiftUI. Modifiers apply in
+the order written:
+
+- `.font(size:, weight: .heavy, design: .rounded, monospacedDigit: true)`, `.foreground(paint)`
+- `.padding(8)`, `.padding(horizontal:, vertical:)`, `.frame(width:, height:, fillWidth: true, alignment: .center)`
+- `.background(paint, in: .capsule | .circle | .rectangle | .roundedRectangle(cornerRadius: 12))`, `.border(paint, width:, in:)`
+- `.clipShape(shape)`, `.cornerRadius(12)`, `.shadow(radius:, x:, y:)`, `.opacity(0.5)`, `.animation(.spring)`
+- `.accessibilityLabel("Start")`: give one to every button without text
+- Paints: `.hex("#F28C38", dark: "#FF9F4F")` (always give a dark variant for
+  backgrounds), `.role(.accent)`, `.gradient(["#F28C38", "#FFB36B"], angle: 90)`
+- `ZStack { }` layers views; `VStack(alignment: .center)`, `HStack(alignment: .start)`; `Spacer()`
+- `Circle()`, `Capsule()`, `Rectangle()`, `RoundedRectangle(cornerRadius:)` with `.fill(paint)` and `.stroke(paint, lineWidth:)`
+- `Image(systemName: "play.fill")`, sized by `.font(size:)` and colored by `.foreground`
+- `Button(key: "start") { … } label: { Image(systemName: "play.fill").frame(width: 72, height: 72).background(orange, in: .circle) }` makes anything a button
+- `TimerText(TimeRange(start:, end:))` counts down to `0:00` on its own (`countsDown: false` counts up), and
+  `ProgressBar(timing: range, style: .ring(lineWidth: 6))` fills with the clock. Render once when the
+  timer starts, not every second; an `.every(.seconds(1))` trigger lets `refresh()` notice the end
+  (re-renders that come out the same are not sent).
+- `Stackbar.play(.glass)` plays a system sound (at most 10 a minute).
+
+`stackbarctl render` flags text under 4.5:1 contrast in light or dark mode
+and buttons without text. The menu bar ignores styling so the bar stays
+legible, but shows symbols, timers and timed rings.
 
 Action ids come from content: `button/<title>`, `toggle/<title>`,
 `row/<key>/<action title>`, `field/<placeholder>`, `picker/<title>`,
