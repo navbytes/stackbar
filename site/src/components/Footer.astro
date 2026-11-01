@@ -1,0 +1,46 @@
+---
+import { href, repo, store, version } from '../lib/site';
+---
+<footer class="footer stage">
+  <div class="wrap grid">
+    <div class="brand">
+      <img src={href('/icon.svg')} alt="" width="48" height="48" />
+      <p><strong>Stackbar</strong> is a native macOS host for live apps written in Swift. Free and open source under the MIT license.</p>
+    </div>
+    <nav aria-label="Product">
+      <h2>Product</h2>
+      <a href={href('/download/')}>Download</a>
+      <a href={href('/plugins/')}>Plugins</a>
+      <a href={`${repo}/releases`}>Release notes</a>
+    </nav>
+    <nav aria-label="Build">
+      <h2>Build</h2>
+      <a href={`${repo}#a-plugin`}>Your first plugin</a>
+      <a href={`${repo}/blob/main/llms.txt`}>llms.txt for agents</a>
+      <a href={`${store.repository}/blob/main/CONTRIBUTING.md`}>Publish to the store</a>
+    </nav>
+    <nav aria-label="Project">
+      <h2>Project</h2>
+      <a href={repo}>GitHub</a>
+      <a href={store.repository}>Plugin store repo</a>
+      <a href={`${repo}/issues`}>Report an issue</a>
+    </nav>
+  </div>
+  <div class="wrap legal">
+    <span>Stackbar {version} · MIT license · Made by navbytes</span>
+    <span>macOS and Mac are trademarks of Apple Inc.</span>
+  </div>
+</footer>
+
+<style>
+  .footer { padding-block: 72px 32px; margin-top: 0; border-top: 1px solid var(--line); }
+  .grid { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 40px; }
+  .brand { display: grid; gap: 16px; max-width: 36ch; color: var(--ink-2); }
+  .brand strong { color: var(--ink); }
+  nav { display: grid; gap: 10px; align-content: start; }
+  nav h2 { font: 600 var(--step--1)/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); margin-bottom: 6px; }
+  nav a { text-decoration: none; color: var(--ink); opacity: 0.85; }
+  nav a:hover { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+  .legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: var(--step--1); }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr 1fr; } .brand { grid-column: 1 / -1; } }
+</style>

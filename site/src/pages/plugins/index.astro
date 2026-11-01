@@ -1,0 +1,78 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import PluginCard from '../../components/PluginCard.astro';
+import { byName, categories, categorySlug } from '../../lib/plugins';
+import { href, store } from '../../lib/site';
+
+const plugins = (await getCollection('plugins')).sort(byName);
+const present = categories.filter((c) => plugins.some((p) => p.data.category === c));
+---
+<Base title="Plugins" description={`${plugins.length} reviewed, signed plugins for Stackbar: menu-bar apps for developers, focus, monitoring and your Mac.`} hue="pink">
+  <section class="hero stage">
+    <div class="wrap head">
+      <p class="eyebrow">The Stackbar store</p>
+      <h1>Apps that live in your <span class="gradient-text">menu bar.</span></h1>
+      <p class="lede">Every plugin is one Swift file, reviewed, built in CI, rendered on every surface it declares and signed before it reaches you. Install from <strong>Settings → Store</strong> in Stackbar.</p>
+      <div class="tools">
+        <label class="search">
+          <span class="visually-hidden">Search plugins</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input type="search" placeholder={`Search ${plugins.length} plugins`} data-search />
+        </label>
+        <nav class="chips" aria-label="Categories">
+          {present.map((c) => <a href={href(`/plugins/category/${categorySlug(c)}/`)}>{c}</a>)}
+        </nav>
+      </div>
+    </div>
+  </section>
+
+  <section class="section list">
+    <div class="wrap">
+      <div class="cards" data-cards>
+        {plugins.map((p) => <PluginCard plugin={p.data} />)}
+      </div>
+      <p class="empty" data-empty hidden>No plugin matches that yet. <a href={`${store.repository}/blob/main/CONTRIBUTING.md`}>Write it?</a></p>
+    </div>
+  </section>
+</Base>
+
+<script>
+  function wire() {
+    const input = document.querySelector<HTMLInputElement>('[data-search]');
+    if (!input) return;
+    const cards = [...document.querySelectorAll<HTMLElement>('[data-cards] > a')];
+    const empty = document.querySelector<HTMLElement>('[data-empty]')!;
+    input.addEventListener('input', () => {
+      const words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const card of cards) {
+        const match = words.every((w) => card.dataset.text!.includes(w));
+        card.hidden = !match;
+        if (match) shown++;
+      }
+      empty.hidden = shown > 0;
+    });
+  }
+  document.addEventListener('astro:page-load', wire);
+</script>
+
+<style>
+  .hero { padding-block: clamp(56px, 8vw, 104px); background:
+      radial-gradient(40% 70% at 10% 0%, color-mix(in srgb, var(--brand-2-to) 40%, transparent), transparent 70%),
+      radial-gradient(40% 70% at 95% 30%, color-mix(in srgb, var(--brand-3-to) 35%, transparent), transparent 70%), var(--stage); }
+  .head { display: grid; gap: 22px; }
+  .head h1 { font-size: var(--step-5); font-weight: 800; letter-spacing: -0.04em; max-width: 14ch; }
+  .tools { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 12px; }
+  .search { display: flex; align-items: center; gap: 10px; flex: 1 1 320px; max-width: 480px; padding: 0 18px; height: 52px; border-radius: 999px; background: #FFFFFF14; box-shadow: inset 0 0 0 1px #FFFFFF26; }
+  .search:focus-within { box-shadow: inset 0 0 0 2px var(--brand-2-from); }
+  .search svg { width: 20px; height: 20px; color: var(--stage-ink-2); flex: none; }
+  .search input { flex: 1; height: 100%; border: 0; background: transparent; color: var(--stage-ink); font: inherit; outline: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips a { padding: 10px 16px; border-radius: 999px; text-decoration: none; background: #FFFFFF0F; box-shadow: inset 0 0 0 1px #FFFFFF1F; font-weight: 500; }
+  .chips a:hover { background: #FFFFFF1F; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .cards > :global([hidden]) { display: none; }
+  .list { padding-top: clamp(40px, 5vw, 64px); }
+  .empty { margin-top: 24px; color: var(--ink-2); }
+</style>

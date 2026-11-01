@@ -1,0 +1,59 @@
+---
+import Base from '../layouts/Base.astro';
+import Button from '../components/Button.astro';
+import Glyph from '../components/Glyph.astro';
+import { href, repo, version } from '../lib/site';
+
+// The newest release on GitHub at build time; the site rebuilds daily.
+type Release = { tag_name: string; html_url: string; published_at: string; assets: { name: string; browser_download_url: string; size: number }[] };
+let release: Release | undefined;
+try {
+  const headers: Record<string, string> = { accept: 'application/vnd.github+json' };
+  if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const response = await fetch('https://api.github.com/repos/navbytes/stackbar/releases/latest', { headers });
+  if (response.ok) release = await response.json();
+} catch {}
+const dmg = release?.assets.find((a) => a.name.endsWith('.dmg'));
+---
+<Base title="Download" description="Download Stackbar for macOS. Free and open source under the MIT license.">
+  <section class="hero stage">
+    <div class="wrap inner">
+      <img src={href('/icon.svg')} alt="" width="160" height="160" />
+      <h1>Get <span class="gradient-text">Stackbar</span></h1>
+      {dmg ? (
+        <>
+          <p class="lede">Version {release!.tag_name.replace(/^v/, '')} for macOS 26 or later. Stackbar updates itself after this.</p>
+          <Button href={dmg.browser_download_url} size="l"><Glyph name="download" /> Download {dmg.name} ({Math.round(dmg.size / 1e6)} MB)</Button>
+          <a class="notes" href={release!.html_url}>Release notes</a>
+        </>
+      ) : (
+        <>
+          <p class="lede">The first signed release is on its way. Until then, build Stackbar {version} from source on macOS 26 with Xcode.</p>
+          <div class="ctas">
+            <Button href={`${repo}#readme`} size="l">Build from source</Button>
+            <Button href={`${repo}/releases`} variant="ghost" size="l"><Glyph name="star" /> Watch releases</Button>
+          </div>
+        </>
+      )}
+      <ul class="facts">
+        <li><Glyph name="check" /> Free, MIT licensed</li>
+        <li><Glyph name="shield" /> Plugins run sandboxed</li>
+        <li><Glyph name="lock" /> No account, no tracking by default</li>
+      </ul>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero { min-height: calc(100svh - 68px); display: grid; place-items: center; padding-block: 80px; background:
+      radial-gradient(40% 50% at 50% 30%, color-mix(in srgb, var(--brand-2-to) 35%, transparent), transparent 70%), var(--stage); }
+  .inner { display: grid; justify-items: center; gap: 24px; text-align: center; }
+  img { filter: drop-shadow(0 30px 60px #C548E866); animation: float 6s ease-in-out infinite alternate; }
+  @keyframes float { to { transform: translateY(-10px) rotate(-2deg); } }
+  h1 { font-size: var(--step-5); font-weight: 800; letter-spacing: -0.04em; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .notes { color: var(--ink-2); }
+  .facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 28px; list-style: none; padding: 0; margin: 16px 0 0; color: var(--ink-2); }
+  .facts li { display: flex; align-items: center; gap: 8px; }
+  .facts :global(svg) { width: 18px; height: 18px; color: var(--kit-green); }
+</style>

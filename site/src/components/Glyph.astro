@@ -1,0 +1,28 @@
+---
+// Small line icons for drawn menu bars and feature tiles (24-unit grid, stroke 1.75).
+interface Props { name: string; }
+const { name } = Astro.props;
+const paths: Record<string, string> = {
+  flame: 'M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1.5-5 1-8.5Z',
+  cpu: 'M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4',
+  calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18',
+  clip: 'M9 4h6v3H9zM7 5.5H5V21h14V5.5h-2M8.5 12h7M8.5 16h5',
+  music: 'M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
+  cup: 'M4 9h13v5a6 6 0 0 1-12 0V9ZM17 10h1.5a2.5 2.5 0 0 1 0 5H17M7 3c0 1.5 1 1.5 1 3M11 3c0 1.5 1 1.5 1 3',
+  bolt: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z',
+  window: 'M3 5h18v14H3zM3 9h18M6 7h.01M8.5 7h.01',
+  widget: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  palette: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-4-4',
+  agent: 'M12 3v3M5 8h14v11H5zM9 13h.01M15 13h.01M9.5 16.5h5',
+  shield: 'M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3ZM9 12l2 2 4-4',
+  menubar: 'M3 5h18v4H3zM14 7h4M6 7h3M14 9v6h7v-6',
+  swift: 'M5 14c4 3 9 4 12 2 1.5 1 2 2.5 2 2.5s1-2.5-.5-4.5C20 9 16 4 11 2c3 3 4 6 3 8.5C11 9 7 6 5 4c2 3 4 5.5 6 7-2 .5-4 .5-6-1Z',
+  download: 'M12 3v12M7 10l5 5 5-5M4 21h16',
+  star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z',
+  lock: 'M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+  check: 'M5 12.5 10 17l9-10',
+};
+const d = paths[name] ?? paths.bolt;
+---
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={d} /></svg>

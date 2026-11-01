@@ -1,0 +1,114 @@
+---
+// A Mac desktop drawn in HTML: a menu bar whose status items are plugins, and
+// the active item's panel (a real render, passed in the slot) dropping from it.
+// The wallpaper takes the given hues. Times tick when `live` is set.
+import Glyph from './Glyph.astro';
+
+export interface Item {
+  text: string;
+  glyph?: 'flame' | 'cpu' | 'calendar' | 'globe' | 'clip' | 'music' | 'cup' | 'bolt';
+  active?: boolean;
+  /** `countdown` ticks mm:ss down, `clock` shows the visitor's time. */
+  live?: 'countdown' | 'clock';
+}
+interface Props { items: Item[]; hues?: string[]; label: string; compact?: boolean; }
+const { items, hues = ['violet', 'pink', 'amber'], label, compact = false } = Astro.props;
+const [a, b, c] = [hues[0], hues[1] ?? hues[0], hues[2] ?? hues[0]];
+---
+<figure class:list={['scene', { compact }]} style={`--a: var(--kit-${a}-dark); --b: var(--kit-${b}-dark); --c: var(--kit-${c}-dark); --a-deep: var(--kit-${a}-light); --b-deep: var(--kit-${b}-light)`} aria-label={label}>
+  <div class="wallpaper" aria-hidden="true"></div>
+  <div class="menubar">
+    <span class="menus" aria-hidden="true"><b>Stackbar</b><span>File</span><span>Edit</span></span>
+    <span class="status">
+      {items.map((item) => (
+        <span class:list={['item', { active: item.active }]} data-live={item.live}>
+          {item.glyph && <Glyph name={item.glyph} />}
+          <span class="text">{item.text}</span>
+        </span>
+      ))}
+      <span class="item clock" data-live="clock" aria-hidden="true">Mon 9:41</span>
+    </span>
+  </div>
+  <div class="panel"><slot /></div>
+</figure>
+
+<script>
+  function tick() {
+    const now = new Date();
+    document.querySelectorAll<HTMLElement>('.scene [data-live="clock"]').forEach((el) => {
+      const text = el.querySelector('.text') ?? el;
+      text.textContent = now.toLocaleTimeString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
+    });
+    document.querySelectorAll<HTMLElement>('.scene [data-live="countdown"] .text').forEach((el) => {
+      const [m, s] = (el.textContent ?? '0:00').split(':').map(Number);
+      const left = Math.max(0, m * 60 + s - 1) || 25 * 60;
+      el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    });
+  }
+  // Hang each panel under its active menu-bar item, as macOS does.
+  function align() {
+    document.querySelectorAll<HTMLElement>('.scene').forEach((scene) => {
+      const item = scene.querySelector<HTMLElement>('.item.active');
+      const panel = scene.querySelector<HTMLElement>('.panel');
+      if (!item || !panel || scene.clientWidth < 560) return;
+      const left = item.getBoundingClientRect().left - scene.getBoundingClientRect().left - 8;
+      const max = scene.clientWidth - panel.offsetWidth - 12;
+      panel.style.margin = '10px 0 0';
+      panel.style.left = `${Math.max(12, Math.min(left, max))}px`;
+      panel.style.right = 'auto';
+    });
+  }
+  let timer: number | undefined;
+  function start() {
+    align();
+    clearInterval(timer);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { tick(); return; }
+    tick();
+    timer = window.setInterval(tick, 1000);
+  }
+  document.addEventListener('astro:page-load', start);
+  addEventListener('resize', align);
+</script>
+
+<style>
+  .scene {
+    position: relative; margin: 0; overflow: hidden; isolation: isolate;
+    border-radius: var(--radius-l); width: 100%; min-width: 0; min-height: 480px; padding-bottom: 56px;
+    box-shadow: 0 0 0 1px #FFFFFF1A, 0 50px 120px -40px #000000CC;
+    container-type: inline-size;
+  }
+  .compact { min-height: 420px; }
+  .wallpaper {
+    position: absolute; inset: -20%; z-index: -1;
+    background:
+      radial-gradient(40% 50% at 18% 30%, var(--a) 0%, transparent 70%),
+      radial-gradient(45% 55% at 85% 20%, var(--b) 0%, transparent 70%),
+      radial-gradient(50% 60% at 60% 95%, var(--c) 0%, transparent 70%),
+      linear-gradient(160deg, var(--a-deep), var(--b-deep));
+    filter: saturate(1.15);
+    animation: drift 24s ease-in-out infinite alternate;
+  }
+  @keyframes drift { to { transform: translate3d(4%, -3%, 0) rotate(4deg) scale(1.05); } }
+  .menubar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    height: 30px; padding: 0 10px 0 16px;
+    background: #FFFFFF2E; backdrop-filter: blur(30px) saturate(160%); -webkit-backdrop-filter: blur(30px) saturate(160%);
+    color: #FFFFFF; font: 500 13px/1 var(--font-text); text-shadow: 0 1px 1px #00000040;
+  }
+  .menus { display: flex; gap: 18px; white-space: nowrap; overflow: hidden; }
+  .status { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+  .item { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+  .item.active { background: #FFFFFF40; }
+  .item :global(svg) { width: 14px; height: 14px; flex: none; }
+  .panel {
+    position: relative; width: fit-content; margin: 10px 0 0 auto; right: clamp(16px, 9cqi, 120px);
+    animation: drop 0.7s var(--ease-out) 0.3s both;
+  }
+  @keyframes drop { from { opacity: 0; transform: translateY(-12px) scale(0.98); } }
+  .panel :global(.shot) { width: min(300px, 62cqi); }
+  @container (max-width: 700px) { .menus span { display: none; } }
+  @container (max-width: 560px) {
+    .menus span, .item:not(.active):not(.clock) { display: none; }
+    .panel { right: auto; margin: 10px auto 0; animation: none; }
+  }
+</style>

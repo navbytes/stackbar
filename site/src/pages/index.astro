@@ -1,0 +1,234 @@
+---
+import { getCollection } from 'astro:content';
+import { Code } from 'astro:components';
+import Base from '../layouts/Base.astro';
+import Button from '../components/Button.astro';
+import Glyph from '../components/Glyph.astro';
+import MenuBarScene from '../components/MenuBarScene.astro';
+import PluginCard from '../components/PluginCard.astro';
+import Screenshot from '../components/Screenshot.astro';
+import { href, repo, version } from '../lib/site';
+import { hueOf, byName } from '../lib/plugins';
+// The example the repository builds and tests, shown as it is.
+import clock from '../../../Examples/ClockPlugin/Clock.swift?raw';
+
+const plugins = (await getCollection('plugins')).sort(byName);
+const pomodoro = plugins.find((p) => p.data.slug === 'pomodoro')?.data;
+const featured = ['pomodoro', 'pr-cockpit', 'system-monitor', 'clipboard', 'litellm', 'world-clock']
+  .map((slug) => plugins.find((p) => p.data.slug === slug))
+  .filter((p) => p !== undefined);
+
+const surfaces = [
+  { glyph: 'menubar', title: 'Menu bar', text: 'Live text, symbols, progress and colour, updated as often as you like.', span: 'wide' },
+  { glyph: 'window', title: 'Panels and windows', text: 'Lists, charts, forms, gauges and tabs drawn natively, one click from the bar.' },
+  { glyph: 'widget', title: 'Desktop widgets', text: 'The same view as a widget on your desktop.' },
+  { glyph: 'palette', title: 'Command palette', text: 'Plugin commands with search, arguments and results, from one hotkey.' },
+  { glyph: 'agent', title: 'Tools for agents', text: 'Every plugin tool is an MCP tool, so Claude and friends can use your apps.' },
+];
+const safety = [
+  { glyph: 'shield', title: 'Its own sandbox', text: 'Every plugin runs in its own process in the App Sandbox. One crash never takes down the rest.' },
+  { glyph: 'lock', title: 'Asks first', text: 'Network hosts, files, secrets: a plugin declares what it needs, and you approve it in plain English.' },
+  { glyph: 'check', title: 'Signed store', text: 'Store plugins are reviewed, built in CI and signed. Stackbar checks every signature before it installs.' },
+  { glyph: 'bolt', title: 'Pulled if bad', text: 'A withdrawn version is removed from every Mac that installed it, automatically.' },
+];
+---
+<Base title="Stackbar" description="Stackbar is a native macOS menu-bar host for live apps you or your AI write in one Swift file. Menu bar, panels, widgets, a command palette and MCP tools. Free and open source.">
+  <section class="hero stage">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Stackbar {version} · Free and open source</p>
+        <h1>Your menu bar, <span class="gradient-text">rewritten in&nbsp;Swift.</span></h1>
+        <p class="lede">Stackbar runs live little apps in your menu bar, panels, widgets and command palette. Each one is a single Swift file, so you can write one in minutes, or ask your AI to.</p>
+        <div class="ctas">
+          <Button href={href('/download/')} size="l"><Glyph name="download" /> Download for Mac</Button>
+          <Button href={href('/plugins/')} variant="ghost" size="l">Browse {plugins.length} plugins</Button>
+        </div>
+        <p class="fine">macOS 26 or later · Free · MIT license</p>
+      </div>
+      <MenuBarScene label="A Mac menu bar running Stackbar plugins, with Pomodoro's panel open" hues={['violet', 'pink', 'orange']}
+        items={[
+          { text: '24:59', glyph: 'flame', active: true, live: 'countdown' },
+          { text: '23%', glyph: 'cpu' },
+          { text: 'Standup in 12m', glyph: 'calendar' },
+          { text: 'SF 07:41', glyph: 'globe' },
+        ]}>
+        <Screenshot src={pomodoro?.screenshot} alt="Pomodoro's panel: Focus mode, 25 minutes, a play button in a progress ring" eager />
+      </MenuBarScene>
+    </div>
+  </section>
+
+  <div class="marquee stage" aria-hidden="true">
+    <div class="track">
+      {[0, 1].map(() => plugins.map((p) => <span style={`--h: var(--kit-${hueOf(p.data)}-dark)`}>{p.data.name}</span>))}
+    </div>
+  </div>
+
+  <section class="section" id="build">
+    <div class="wrap split">
+      <div class="section-head">
+        <p class="eyebrow">One file is an app</p>
+        <h2>About fifty lines. A real Mac app.</h2>
+        <p class="lede">Declare what it shows in a SwiftUI-like syntax. Stackbar builds it, runs it in its own process and draws it natively. State marked <code>@Stored</code> survives restarts. No Xcode project, no bundle, no signing.</p>
+        <ul class="ticks">
+          <li><Glyph name="check" /><span>Type-checked by the Swift compiler, not a shell</span></li>
+          <li><Glyph name="check" /><span>Renders headless with <code>stackbarctl render</code>, so you can test it in CI</span></li>
+          <li><Glyph name="check" /><span>Charts, gauges, timers, forms and a shared design system built in</span></li>
+        </ul>
+      </div>
+      <div class="code">
+        <div class="code-bar"><span></span><span></span><span></span><b>Clock.swift</b></div>
+        <Code code={clock.replace(/^\/\/\/.*\n/gm, '').trim()} lang="swift" themes={{ light: 'github-light', dark: 'github-dark' }} />
+      </div>
+    </div>
+  </section>
+
+  <section class="section surfaces">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Everywhere on your Mac</p>
+        <h2>One plugin, every surface.</h2>
+        <p class="lede">Write the view once. Stackbar puts it where it belongs.</p>
+      </div>
+      <div class="bento">
+        {surfaces.map((s, i) => (
+          <article class:list={['tile', s.span]} style={`--h: var(--kit-${['violet', 'blue', 'teal', 'pink', 'orange'][i]})`}>
+            <span class="tile-icon"><Glyph name={s.glyph} /></span>
+            <h3>{s.title}</h3>
+            <p>{s.text}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section ai stage">
+    <div class="wrap split reverse">
+      <div class="terminal" role="img" aria-label="A terminal: stackbarctl new, build and render a plugin">
+        <div class="code-bar"><span></span><span></span><span></span><b>Terminal</b></div>
+        <pre><code><em># scaffold, build and look at a plugin without the app</em>
+<i>$</i> stackbarctl new Weather.swift --name "Weather"
+<i>$</i> stackbarctl build Weather.swift
+<i>$</i> stackbarctl render Weather.swift --surface panel
+<i>$</i> stackbarctl render Weather.swift --event refresh
+
+<em># the same loop as tools for your coding agent</em>
+<i>$</i> stackbarctl mcp</code></pre>
+      </div>
+      <div class="section-head">
+        <p class="eyebrow">Built for you and your AI</p>
+        <h2>Describe it. Your agent ships it.</h2>
+        <p class="lede">Stackbar comes with an <code>llms.txt</code>, an authoring MCP server and a headless renderer. An agent writes the file, builds it, reads the render and fixes what it sees, without you opening the app.</p>
+        <div class="ctas"><Button href={`${repo}/blob/main/llms.txt`} variant="ghost">Read llms.txt</Button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="safety">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Safe by default</p>
+        <h2>Powerful plugins. On a short leash.</h2>
+      </div>
+      <div class="four">
+        {safety.map((s) => (
+          <article class="safe">
+            <span class="tile-icon"><Glyph name={s.glyph} /></span>
+            <h3>{s.title}</h3>
+            <p>{s.text}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section shelf">
+    <div class="wrap">
+      <div class="section-head row">
+        <div>
+          <p class="eyebrow">The store</p>
+          <h2>Start with a few of ours.</h2>
+        </div>
+        <Button href={href('/plugins/')} variant="ghost">See all {plugins.length}</Button>
+      </div>
+      <div class="cards">
+        {featured.map((p) => <PluginCard plugin={p.data} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="closer stage">
+    <div class="wrap closer-inner">
+      <h2>Make the menu bar <span class="gradient-text">yours.</span></h2>
+      <div class="ctas">
+        <Button href={href('/download/')} size="l"><Glyph name="download" /> Download for Mac</Button>
+        <Button href={repo} variant="ghost" size="l"><Glyph name="star" /> Star on GitHub</Button>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero { position: relative; overflow: hidden; padding-block: clamp(56px, 8vw, 112px) clamp(64px, 9vw, 128px); }
+  .glow { position: absolute; inset: -30% -10% auto; height: 120%; background:
+      radial-gradient(35% 45% at 15% 20%, color-mix(in srgb, var(--brand-1-to) 35%, transparent), transparent 70%),
+      radial-gradient(30% 40% at 55% 10%, color-mix(in srgb, var(--brand-2-to) 35%, transparent), transparent 70%),
+      radial-gradient(35% 45% at 90% 40%, color-mix(in srgb, var(--brand-3-to) 35%, transparent), transparent 70%);
+    filter: blur(40px); pointer-events: none; }
+  .hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
+  .hero-copy { display: grid; gap: 24px; }
+  .hero h1 { font-size: clamp(2.8rem, 1.6rem + 4.2vw, 5.4rem); font-weight: 800; letter-spacing: -0.04em; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+  .fine { color: var(--ink-2); font-size: var(--step--1); }
+  @media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr; } }
+
+  .marquee { overflow: hidden; padding-block: 18px 22px; border-block: 1px solid var(--line); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+  .track { display: flex; gap: 40px; width: max-content; animation: scroll 60s linear infinite; }
+  .track span { font: 700 var(--step-2)/1 var(--font-display); letter-spacing: -0.02em; color: var(--h); white-space: nowrap; }
+  .track span::after { content: '✦'; margin-left: 40px; color: var(--stage-ink-2); font-size: 0.6em; vertical-align: middle; }
+  @keyframes scroll { to { transform: translateX(-50%); } }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 5vw, 80px); align-items: center; }
+  .split .section-head { margin: 0; }
+  .split .section-head h2 { font-size: var(--step-3); }
+  @media (max-width: 980px) { .split { grid-template-columns: 1fr; } .reverse .terminal { order: 2; } }
+  .ticks { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 10px; color: var(--ink-2); }
+  .ticks li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; }
+  .ticks :global(svg) { width: 20px; height: 20px; margin-top: 3px; color: var(--kit-green); }
+
+  .code, .terminal { border-radius: var(--radius-m); overflow: hidden; background: light-dark(#FFFFFF, #0D0F18); border: 1px solid var(--line-2); box-shadow: var(--shadow-2); }
+  .code-bar { display: flex; align-items: center; gap: 7px; padding: 12px 14px; border-bottom: 1px solid var(--line); font: 500 12px/1 var(--font-mono); color: var(--ink-2); }
+  .code-bar span { width: 11px; height: 11px; border-radius: 50%; background: var(--line-2); }
+  .code-bar b { margin-left: 8px; font-weight: 500; }
+  .code :global(pre) { margin: 0; padding: 20px 24px; max-height: 620px; overflow: auto; font-size: 14px; line-height: 1.65; background: transparent !important; }
+  :global(:root[data-theme='dark']) .code :global(.astro-code), :global(:root[data-theme='dark']) .code :global(.astro-code span) { color: var(--shiki-dark) !important; }
+  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme='light'])) .code :global(.astro-code), :global(:root:not([data-theme='light'])) .code :global(.astro-code span) { color: var(--shiki-dark) !important; } }
+  .terminal pre { margin: 0; padding: 20px; font-size: 13px; line-height: 1.7; overflow: auto; color: var(--stage-ink); }
+  .terminal i { color: var(--brand-1-from); font-style: normal; }
+  .terminal em { color: var(--stage-ink-2); font-style: normal; }
+
+  .bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .tile, .safe { position: relative; display: grid; gap: 10px; align-content: start; padding: 28px; border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); overflow: hidden; }
+  .tile.wide { grid-column: span 2; }
+  .tile::after { content: ''; position: absolute; right: -60px; bottom: -60px; width: 220px; height: 220px; border-radius: 50%; background: var(--h); opacity: 0.14; filter: blur(30px); }
+  .tile h3, .safe h3 { font-size: var(--step-2); }
+  .tile p, .safe p { color: var(--ink-2); max-width: 46ch; }
+  .tile-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: color-mix(in srgb, var(--h, var(--accent)) 16%, transparent); color: var(--h, var(--accent)); }
+  .tile-icon :global(svg) { width: 26px; height: 26px; }
+  @media (max-width: 860px) { .bento { grid-template-columns: 1fr; } .tile.wide { grid-column: auto; } }
+
+  .four { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .safe { --h: var(--kit-green); }
+  .safe h3 { font-size: var(--step-1); }
+  @media (max-width: 980px) { .four { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .four { grid-template-columns: 1fr; } }
+
+  .shelf { background: var(--page-2); }
+  .section-head.row { display: flex; justify-content: space-between; align-items: end; max-width: none; gap: 24px; flex-wrap: wrap; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+
+  .closer { padding-block: clamp(80px, 12vw, 160px); text-align: center; background:
+      radial-gradient(50% 80% at 50% 120%, color-mix(in srgb, var(--brand-2-to) 45%, transparent), transparent 70%), var(--stage); }
+  .closer-inner { display: grid; justify-items: center; gap: 32px; }
+  .closer h2 { font-size: var(--step-5); font-weight: 800; letter-spacing: -0.04em; }
+</style>
