@@ -122,7 +122,8 @@ digits and `-`, stable forever (aliases, hotkeys and links remember them);
 titles can change. `invocation["name"]` is nil when an argument was left
 empty; `invocation.source` says where it started (`.palette`, `.hotkey`,
 `.link`, `.spotlight`, `.shortcuts`, ...) and `invocation.context` carries the
-front app and selected text for plugins with `.context`.
+front app, window title and selected text for plugins with `.context`, read
+when the command was triggered, before Stackbar's palette took focus.
 
 A form in a view (or a panel) submits every field at once:
 
@@ -180,7 +181,9 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `Stackbar.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
 | `Stackbar.notify(title, body:, actions: [NotificationAction("Join", url:)])`, `Stackbar.alert(title, body:, actions:)` (full screen, one a minute), `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
 | `try await Stackbar.open(url, with: "com.apple.Safari")`; links other than https, http, mailto, tel and meeting apps, and files or folders | `.openURLs(schemes: ["slack"])`; `["*"]` for any scheme and paths |
-| `invocation.context` in commands: front app, window title, selected text, Finder selection | `.context` |
+| `try await Stackbar.run("brew", ["outdated", "--json=v2"], timeout: .seconds(120))` returns `RunResult` (status, stdout, stderr, text, truncated, timedOut); a non-zero exit is not thrown | `.run(commands: ["brew"])` |
+| `for try await event in Stackbar.stream("docker", ["logs", "-f", id]) { switch event { case .stdout(let data), .stderr(let data): …; case .exit(let exit): … } }`; leaving the loop stops it | `.run(commands: ["docker"])` |
+| `invocation.context` in commands, or `try await Stackbar.context()` now: frontmostApp, windowTitle, selectedText (nil when the app doesn't share it); `try await Stackbar.finderSelection()` returns paths | `.context` |
 | `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing |
 | `try await Stackbar.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
 | `try await Stackbar.setClipboard(.text/.files/.image(id:)/.stored(id:))`, `try await Stackbar.paste(content)` (into the app the user was in; needs Accessibility for Stackbar) | `.clipboard` |
@@ -191,6 +194,25 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 Don't use URLSession, Process or files directly: plugins run sandboxed and
 only host calls are allowed through. Errors from host calls say which
 capability to add.
+
+Commands run by the host, never through a shell: arguments arrive exactly as
+given. A bare name is found in /opt/homebrew/bin, /usr/local/bin, /usr/bin,
+/bin, /usr/sbin or /sbin (never the user's PATH), and the user approves the
+path it resolves to; if it later resolves elsewhere, the run fails until they
+approve again. The environment is PATH, HOME, LANG and TMPDIR (the plugin's
+own temporary folder) plus `environment:`; the working directory is the
+plugin's own folder unless `workingDirectory:` names one inside a `.files`
+path. At most 4 at once, 8 MB of output a channel, a 60 second timeout by
+default and 10 minutes at most; on timeout the whole process group is
+stopped. Declaring a shell or interpreter (sh, zsh, python3, node,
+osascript, ...) is allowed but the install sheet warns it can run any program;
+prefer the tool itself.
+
+Selected text comes through Accessibility and is cut to 100 KB. Apps built
+on the standard macOS text views share it; others may not, so always handle
+nil (offer the clipboard, or an argument, instead). On Linux and in `stackbarctl`, the context is simulated: pass
+`--selected-text` and `--frontmost-app` (or `selected_text` and
+`frontmost_app` to the MCP command tools).
 
 Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
 `.file(path: "~/x")`, `.topic(name: "t")`, `.clipboard`.

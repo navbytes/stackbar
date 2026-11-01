@@ -300,9 +300,95 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         return String(format: "#%02X%02X%02X", value(rgb.redComponent), value(rgb.greenComponent), value(rgb.blueComponent))
     }
 
+    // MARK: Context
+
+    func context() async -> InvocationContext {
+        await MainActor.run {
+            let frontmost = NSWorkspace.shared.frontmostApplication
+            // Stackbar's own palette or panel is in front: the user's app is
+            // the one before it.
+            let app = frontmost?.processIdentifier == getpid() ? previousApp : frontmost
+            return MacContext.read(app)
+        }
+    }
+
+    func finderSelection() async throws -> [String] {
+        try await MacContext.finderSelection()
+    }
+
     private func onMain<T: Sendable>(_ body: @MainActor () -> T) -> T {
         if Thread.isMainThread { return MainActor.assumeIsolated(body) }
         return DispatchQueue.main.sync { MainActor.assumeIsolated(body) }
+    }
+}
+/// Reads what the user is in: the app, its focused window's title and the
+/// selected text through Accessibility, and Finder's selection through Apple
+/// Events. Nothing here is logged; it goes only to the plugin that asked.
+@MainActor
+enum MacContext {
+    /// Read when a command is triggered, before any Stackbar window takes
+    /// focus. Without Accessibility access the title and selection are nil.
+    static func capture() -> InvocationContext {
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        return read(frontmost?.processIdentifier == getpid() ? nil : frontmost)
+    }
+
+    static func read(_ app: NSRunningApplication?) -> InvocationContext {
+        guard let app else { return InvocationContext() }
+        var context = InvocationContext(frontmostApp: .init(bundleID: app.bundleIdentifier ?? "", name: app.localizedName ?? ""))
+        guard AXIsProcessTrusted() else { return context }
+        let element = AXUIElementCreateApplication(app.processIdentifier)
+        // An app that doesn't answer must not hold up the hotkey.
+        AXUIElementSetMessagingTimeout(element, 0.25)
+        if let window = Self.element(element, kAXFocusedWindowAttribute) {
+            context.windowTitle = Self.string(window, kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 }
+        }
+        if let focused = Self.element(element, kAXFocusedUIElementAttribute),
+           let selected = Self.string(focused, kAXSelectedTextAttribute), !selected.isEmpty {
+            context.selectedText = InvocationContext.capped(selected)
+        }
+        return context
+    }
+
+    private static func element(_ parent: AXUIElement, _ attribute: String) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(parent, attribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement) // swiftlint:disable:this force_cast
+    }
+
+    private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
+        return value as? String
+    }
+
+    /// Asks Finder through `osascript`, off the main thread: the first time,
+    /// macOS asks the user to let Stackbar control Finder, and a call must
+    /// not block the app while that question is up.
+    nonisolated static func finderSelection() async throws -> [String] {
+        let script = """
+        tell application "Finder"
+            set out to ""
+            repeat with chosen in (get selection)
+                set out to out & POSIX path of (chosen as alias) & linefeed
+            end repeat
+            return out
+        end tell
+        """
+        let gate = CommandRunGate(root: StackbarPaths.runDirectory)
+        let request = RunRequest(command: "/usr/bin/osascript", arguments: ["-e", script], timeout: 60)
+        switch await gate.run(request, id: 0, grant: .init(pluginID: "io.navbytes.stackbar.finder")) {
+        case .failure(let refusal):
+            throw SystemServiceError("could not ask Finder: \(refusal)")
+        case .success(let result) where !result.succeeded:
+            if result.errorText.contains("-1743") {
+                throw SystemServiceError("Stackbar isn't allowed to read Finder's selection: System Settings > Privacy & Security > Automation > Stackbar > Finder")
+            }
+            throw SystemServiceError("Finder did not answer: \(result.errorText.trimmingCharacters(in: .whitespacesAndNewlines))")
+        case .success(let result):
+            return result.text.split(separator: "\n").map(String.init).filter { !$0.isEmpty }.map { $0.count > 1 && $0.hasSuffix("/") ? String($0.dropLast()) : $0 }
+        }
     }
 }
 #endif

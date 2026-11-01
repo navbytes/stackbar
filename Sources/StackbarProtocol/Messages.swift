@@ -8,7 +8,8 @@ public enum StackbarProtocolVersion {
     /// 5 added the menu-bar click action, notification buttons and row previews.
     /// 6 added full-screen alerts.
     /// 7 added commands, command views, forms and row navigation.
-    public static let current = 7
+    /// 8 added running declared commands and reading the user's context.
+    public static let current = 8
 }
 
 /// Host → plugin.
@@ -41,6 +42,10 @@ public enum HostMessage: Codable, Equatable, Sendable {
     case updateView(session: Int, query: CommandQuery, seq: Int)
     /// The view was closed or popped; its handlers can go.
     case closeView(session: Int)
+    /// Output of a streamed `run`, whose request had this id.
+    case runOutput(id: Int, channel: RunChannel, data: Data)
+    /// A streamed `run` ended; nothing more comes for this id.
+    case runExit(id: Int, exit: RunExit)
 }
 
 public enum TriggerReason: String, Codable, Sendable {
@@ -160,6 +165,19 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// Events overlapping `from..<to`, at most 31 days (`[CalendarEvent]` as
     /// JSON). Needs `.calendar`; the host asks the user for calendar access.
     case calendarEvents(from: Date, to: Date)
+    /// Runs a command the manifest declares in `.run(commands:)`. Answers
+    /// with `RunResult` as JSON, or, when `stream` is set, `.ok` once it
+    /// started, followed by `runOutput` and `runExit` messages carrying this
+    /// request's id.
+    case run(RunRequest)
+    /// Stops the streamed run started by the request with this id.
+    case cancelRun(id: Int)
+    /// The frontmost app, its window title and the selected text, now
+    /// (`InvocationContext` as JSON). Needs `.context`.
+    case context
+    /// The paths selected in Finder (`[String]` as JSON). Needs `.context`;
+    /// macOS asks the user once to let Stackbar control Finder.
+    case finderSelection
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

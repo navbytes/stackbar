@@ -372,8 +372,12 @@ public actor PluginSupervisor {
         inFlight += 1
         let granted = granted
         let declared = manifest
+        // A streamed run writes to this helper directly, from the run's own
+        // threads; once the helper is gone the writes go nowhere.
+        let process = process
+        let emit: @Sendable (HostMessage) -> Void = { message in process?.send(message) }
         Task { [weak self] in
-            let result = await services.handle(call, for: granted, declared: declared)
+            let result = await services.handle(call, for: granted, declared: declared, id: id, emit: emit)
             await self?.respond(id, result, generation: callGeneration)
         }
     }

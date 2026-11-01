@@ -19,6 +19,16 @@ public protocol SystemServices: Sendable {
     func keepAwake(_ request: KeepAwakeRequest?, pluginID: String) throws
     func systemStatus() -> SystemStatus
     func calendarEvents(from: Date, to: Date) async throws -> [CalendarEvent]
+    /// The frontmost app, its focused window's title and the selected text
+    /// (at most `InvocationContext.maxSelectedText`), read now.
+    func context() async -> InvocationContext
+    /// The paths selected in Finder's frontmost window, read now.
+    func finderSelection() async throws -> [String]
+}
+
+extension SystemServices {
+    public func context() async -> InvocationContext { InvocationContext() }
+    public func finderSelection() async throws -> [String] { throw SystemServiceError("Finder is not available on this platform") }
 }
 
 public struct SystemServiceError: Error, CustomStringConvertible, Sendable {
@@ -51,6 +61,7 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     private var events: [CalendarEvent]
     /// Plain text of simulated formatted copies, by content id.
     private var stored: [String: String] = [:]
+    private var simulatedContext = InvocationContext(frontmostApp: .init(bundleID: "com.apple.Safari", name: "Safari"), windowTitle: "Stackbar")
     /// Every paste, in order (for tests).
     public private(set) var pasted: [ClipboardContent] = []
 
@@ -59,13 +70,38 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
         self.events = events ?? Self.sampleDay()
     }
 
-    /// Reads `STACKBAR_CALENDAR` (a JSON file of `[CalendarEvent]`) when set.
+    /// Reads `STACKBAR_CALENDAR` (a JSON file of `[CalendarEvent]`) and
+    /// `STACKBAR_CONTEXT` (`InvocationContext` as JSON, inline or a file)
+    /// when set.
     public static func fromEnvironment() -> SimulatedSystem {
+        let environment = ProcessInfo.processInfo.environment
         var events: [CalendarEvent]?
-        if let path = ProcessInfo.processInfo.environment["STACKBAR_CALENDAR"], let text = try? String(contentsOfFile: path, encoding: .utf8) {
+        if let path = environment["STACKBAR_CALENDAR"], let text = try? String(contentsOfFile: path, encoding: .utf8) {
             events = try? SystemCodec.decode([CalendarEvent].self, from: text)
         }
-        return SimulatedSystem(events: events)
+        let system = SimulatedSystem(events: events)
+        if let value = environment["STACKBAR_CONTEXT"] {
+            let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
+            if let context = try? SystemCodec.decode(InvocationContext.self, from: text) { system.simulate(context: context) }
+        }
+        return system
+    }
+
+    /// What the user is in: `context()` and `finderSelection()` return it.
+    public func simulate(context: InvocationContext) { lock.withLock { simulatedContext = context } }
+    public var currentContext: InvocationContext { lock.withLock { simulatedContext } }
+
+    public func context() async -> InvocationContext {
+        lock.withLock {
+            var context = simulatedContext
+            context.finderSelection = nil
+            context.selectedText = context.selectedText.map(InvocationContext.capped)
+            return context
+        }
+    }
+
+    public func finderSelection() async throws -> [String] {
+        lock.withLock { simulatedContext.finderSelection ?? [] }
     }
 
     /// The user copied something in another app.

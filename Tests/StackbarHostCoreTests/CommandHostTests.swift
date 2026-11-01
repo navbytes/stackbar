@@ -229,7 +229,7 @@ final class CommandRunnerTests: XCTestCase {
             id == "fixture" ? .supervisor(supervisor) : id == "waiting" ? .unavailable("waiting for your approval") : nil
         }
         await supervisor.start()
-        let listed = await waitUntil { registry.entries.count == 5 }
+        let listed = await waitUntil { registry.entries.count == 8 }
         XCTAssertTrue(listed, "commands reach the registry: \(registry.entries.map(\.key))")
         func key(_ id: String) -> CommandKey { CommandKey(pluginID: "fixture", commandID: id) }
 

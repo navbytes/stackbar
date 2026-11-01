@@ -72,6 +72,19 @@ final class PluginController: Identifiable {
     }
 
     var isWaitingForApproval: Bool { !pendingApproval.isEmpty }
+    /// Granted `.context`: commands get what the user was in.
+    var readsContext: Bool { manifest?.capabilities.contains(.context) == true && !pendingApproval.contains(.context) }
+
+    /// A declared command now resolves to another program: show the
+    /// approval again, and stop granting that command until the user agrees.
+    func reviewAgain() {
+        guard let manifest, let model else { return }
+        let review = model.ledger.review(manifest)
+        guard case .needsApproval(let added, _, let granted, let isNew) = review else { return }
+        pendingApproval = added
+        isNewInstall = isNew
+        Task { await supervisor?.grant(granted) }
+    }
 
     /// Builds the plugin if it is a `.swift` file, checks its capabilities
     /// against what was approved, then starts its helper.

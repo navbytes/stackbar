@@ -56,6 +56,9 @@ final class PaletteSession {
     private(set) var problem: String?
     /// A view command is waiting for its plugin.
     private(set) var opening = false
+    /// What the user was in when the palette opened; commands started from
+    /// it get this.
+    var context: InvocationContext?
     /// Changes each time the palette opens, to take focus again.
     private(set) var shownCount = 0
     @ObservationIgnored var dismiss: () -> Void = {}
@@ -82,6 +85,7 @@ final class PaletteSession {
         showingActions = false
         problem = nil
         opening = false
+        context = nil
     }
 
     /// Esc: hides ⌘K, then pops a stage. False at the root (close).
@@ -174,7 +178,7 @@ final class PaletteSession {
         case .view:
             opening = true
             Task {
-                let opened = await model.commands.openView(entry.key, query: CommandQuery(text: text, arguments: arguments))
+                let opened = await model.commands.openView(entry.key, query: CommandQuery(text: text, arguments: arguments), context: context)
                 opening = false
                 switch opened {
                 case .success(let view):
@@ -201,8 +205,9 @@ final class PaletteSession {
     /// Closes the palette first, so a paste goes to the app the user was in.
     private func run(_ entry: CommandRegistry.Entry, _ arguments: [String: String], source: InvocationSource) {
         let commands = model.commands
+        let context = context
         finish()
-        Task { await commands?.run(entry.key, arguments: arguments, source: source) }
+        Task { await commands?.run(entry.key, arguments: arguments, source: source, context: context) }
     }
 
     // MARK: - A command view

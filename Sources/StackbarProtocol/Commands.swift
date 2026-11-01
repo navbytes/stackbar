@@ -144,6 +144,22 @@ public struct InvocationContext: Codable, Equatable, Sendable {
         self.selectedText = selectedText
         self.finderSelection = finderSelection
     }
+
+    /// Selected text is cut to this many UTF-8 bytes.
+    public static let maxSelectedText = 100 * 1024
+
+    /// `text` cut to `maxSelectedText` bytes, on a character boundary.
+    public static func capped(_ text: String) -> String {
+        guard text.utf8.count > maxSelectedText else { return text }
+        var result = ""
+        var bytes = 0
+        for character in text {
+            bytes += character.utf8.count
+            if bytes > maxSelectedText { break }
+            result.append(character)
+        }
+        return result
+    }
 }
 
 /// How a command was started, so a plugin can tell a hotkey from Spotlight.

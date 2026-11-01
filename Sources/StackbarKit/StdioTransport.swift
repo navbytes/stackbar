@@ -52,6 +52,10 @@ final class StdioTransport: Sendable {
                             // Straight to the waiting call, not behind the
                             // refresh that is awaiting it.
                             HostClient.shared.resolve(id: id, result: result)
+                        } else if case .runOutput = message {
+                            HostClient.shared.deliver(run: message)
+                        } else if case .runExit = message {
+                            HostClient.shared.deliver(run: message)
                         } else {
                             continuation.yield(message)
                         }

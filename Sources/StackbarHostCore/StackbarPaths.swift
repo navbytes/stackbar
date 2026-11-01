@@ -31,6 +31,8 @@ public enum StackbarPaths {
 
     public static var pluginsDirectory: URL { dataDirectory.appendingPathComponent("Plugins", isDirectory: true) }
     public static var storageDirectory: URL { dataDirectory.appendingPathComponent("Storage", isDirectory: true) }
+    /// Each plugin's folder for the commands it runs (`Run/<id>`, with `tmp`).
+    public static var runDirectory: URL { dataDirectory.appendingPathComponent("Run", isDirectory: true) }
     public static var buildCache: URL { cacheDirectory.appendingPathComponent("builds", isDirectory: true) }
     public static var ledgerFile: URL { dataDirectory.appendingPathComponent("approvals.json") }
     public static var publishersFile: URL { dataDirectory.appendingPathComponent("publishers.json") }

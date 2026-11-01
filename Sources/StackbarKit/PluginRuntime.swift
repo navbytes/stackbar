@@ -94,6 +94,11 @@ public final class PluginRuntime {
             }
         case .closeView(let session):
             views[session] = nil
+        case .runOutput, .runExit:
+            // The transport hands these to `HostClient` directly; a test
+            // driving the runtime by hand lands here.
+            HostClient.shared.deliver(run: message)
+            return true
         }
         send(.settled)
         return true

@@ -8,6 +8,8 @@
 	<array>
 		<string>group.io.navbytes.stackbar</string>
 	</array>
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
 	<key>com.apple.security.personal-information.calendars</key>
 	<true/>
 </dict>

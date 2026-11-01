@@ -34,8 +34,9 @@ public final class ChildProcess: @unchecked Sendable {
     }
 
     /// Starts `executable`. `environment` nil inherits the host's.
-    /// `discardStderr` sends stderr to /dev/null.
-    public init(executable: String, arguments: [String] = [], environment: [String: String]? = nil, discardStderr: Bool = false) throws {
+    /// `discardStderr` sends stderr to /dev/null. `workingDirectory` nil
+    /// keeps the host's.
+    public init(executable: String, arguments: [String] = [], environment: [String: String]? = nil, discardStderr: Bool = false, workingDirectory: String? = nil) throws {
         let input = try Self.pipe()
         let output = try Self.pipe()
         let errors = try Self.pipe()
@@ -60,14 +61,22 @@ public final class ChildProcess: @unchecked Sendable {
         } else {
             posix_spawn_file_actions_adddup2(&actions, errors.write, 2)
         }
+        if let workingDirectory {
+            posix_spawn_file_actions_addchdir_np(&actions, workingDirectory)
+        }
         // A fresh process group, and default signal handling: the host ignores
         // SIGPIPE, and an ignored signal would otherwise be inherited.
         var defaults = sigset_t()
         sigemptyset(&defaults)
         sigaddset(&defaults, SIGPIPE)
         posix_spawnattr_setsigdefault(&attributes, &defaults)
+        // Nothing blocked either: a mask inherited from the spawning thread
+        // would make the child deaf to SIGTERM.
+        var unblocked = sigset_t()
+        sigemptyset(&unblocked)
+        posix_spawnattr_setsigmask(&attributes, &unblocked)
         posix_spawnattr_setpgroup(&attributes, 0)
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF))
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
 
         let argv = [executable] + arguments
         let env = (environment ?? ProcessInfo.processInfo.environment).map { "\($0.key)=\($0.value)" }

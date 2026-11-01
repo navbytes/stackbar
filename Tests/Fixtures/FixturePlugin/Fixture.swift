@@ -10,7 +10,7 @@ final class Fixture: StackbarPlugin {
         id: "io.navbytes.stackbar.test.fixture",
         name: "Fixture",
         triggers: [.launch, .topic(name: "fixture.inbox")],
-        capabilities: [.secret(name: "FIXTURE_SECRET"), .network("127.0.0.1")]
+        capabilities: [.secret(name: "FIXTURE_SECRET"), .network("127.0.0.1"), .run(commands: ["echo", "sh"]), .context]
     )
 
     var count = 0
@@ -82,6 +82,25 @@ final class Fixture: StackbarPlugin {
             .stackbarOnly()
         Command("echo", title: "Echo")
             .view { invocation in Text("query \(invocation.text)") }
+        Command("shell", title: "Run Echo") { invocation in
+            let result = try await Stackbar.run("echo", [invocation["text"] ?? "hi"])
+            return .message("ran: \(result.text.trimmingCharacters(in: .newlines)) (\(result.status))")
+        }
+        .argument("text", required: false)
+        Command("stream", title: "Stream Shell") { _ in
+            var lines: [String] = []
+            var status: Int32 = -1
+            for try await event in Stackbar.stream("sh", ["-c", "echo one; echo two >&2; echo three"]) {
+                switch event {
+                case .stdout(let data), .stderr(let data): lines.append(String(decoding: data, as: UTF8.self).trimmingCharacters(in: .newlines))
+                case .exit(let exit): status = exit.status
+                }
+            }
+            return .message("streamed \(lines.joined(separator: ",")) exit \(status)")
+        }
+        Command("selection", title: "Selection") { invocation in
+            .message("selected \(invocation.context?.selectedText ?? "nothing") in \(invocation.context?.frontmostApp?.name ?? "nowhere")")
+        }
     }
 
     func receive(topic: String, payload: String, from sender: String) async throws {

@@ -82,7 +82,14 @@ or a hotkey even though Stackbar's palette took focus afterwards.
 - **Window title** is `kAXFocusedWindowAttribute`, then `kAXTitleAttribute`.
 - **Finder selection** uses Apple Events to Finder. It needs the
   `com.apple.security.automation.apple-events` entitlement and an
-  `NSAppleEventsUsageDescription`, and macOS asks the user once.
+  `NSAppleEventsUsageDescription`, and macOS asks the user once. The host
+  sends them through `/usr/bin/osascript` run by `CommandRunGate`, not
+  `NSAppleScript`: NSAppleScript must run on the main thread, and the first
+  call blocks until the user answers the Automation prompt. Stackbar is the
+  responsible process, so the prompt and the permission are Stackbar's.
+- **Capture** reads context only when a plugin granted `.context` could
+  receive it (the triggered command's plugin, or any for the palette), and
+  never prompts for Accessibility; without it, title and selection are nil.
 - **Privacy.** Context goes only to the plugin being invoked, only when it
   holds `.context`, and is never logged. The install sheet says "Reads the
   text you select and which app you're in."

@@ -38,13 +38,16 @@ final class PaletteController {
 
     /// Opens the palette on a command: its view, its argument fields, or
     /// (with everything it needs) runs it straight away.
-    func open(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], query: String = "", source: InvocationSource) {
+    /// `context` is what the user was in when the command was triggered;
+    /// without one, it is read now.
+    func open(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], query: String = "", source: InvocationSource, context: InvocationContext? = nil) {
         if entry.spec.kind == .run, entry.spec.arguments.isEmpty || entry.spec.requiredArguments.allSatisfy({ !(arguments[$0.name] ?? "").isEmpty }) {
             hide()
-            Task { await model.commands.run(entry.key, arguments: arguments, source: source) }
+            let context = context ?? model.commands.captureContext(for: entry.pluginID)
+            Task { await model.commands.run(entry.key, arguments: arguments, source: source, context: context) }
             return
         }
-        show()
+        show(context: context)
         session.enter(entry, arguments: arguments, query: query, source: source)
     }
 
@@ -53,8 +56,12 @@ final class PaletteController {
         session.reset()
     }
 
-    private func show() {
-        if !isVisible { session.reset() }
+    private func show(context: InvocationContext? = nil) {
+        if !isVisible {
+            session.reset()
+            // Read before Stackbar activates, while the user's app is in front.
+            session.context = context ?? model.commands.captureContext()
+        }
         let panel = self.panel ?? makePanel()
         self.panel = panel
         if let frame = NSScreen.main?.visibleFrame {

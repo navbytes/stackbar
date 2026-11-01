@@ -40,6 +40,9 @@ public final class HostServices: Sendable {
         public var secretMissing: @Sendable (_ pluginID: String, _ name: String) -> Void
         /// The clipboard, power and calendar.
         public var system: any SystemServices
+        /// A declared command now resolves to another program: the plugin's
+        /// approval should be shown again.
+        public var approvalNeeded: @Sendable (_ pluginID: String) -> Void
 
         public init(
             notify: @escaping @Sendable (HostNotification) -> Void = { _ in },
@@ -48,8 +51,10 @@ public final class HostServices: Sendable {
             openWith: @escaping @Sendable (URL, String) async throws -> Void = { _, _ in throw SystemServiceError("opening with a chosen app is not available here") },
             copy: @escaping @Sendable (String) -> Void = { _ in },
             secretMissing: @escaping @Sendable (String, String) -> Void = { _, _ in },
-            system: any SystemServices = UnsupportedSystem()
+            system: any SystemServices = UnsupportedSystem(),
+            approvalNeeded: @escaping @Sendable (String) -> Void = { _ in }
         ) {
+            self.approvalNeeded = approvalNeeded
             self.notify = notify
             self.alert = alert
             self.open = open
@@ -67,6 +72,12 @@ public final class HostServices: Sendable {
     public let oauth: OAuthBroker
     public let bus: PluginBus
     public let platform: Platform
+    /// Runs declared commands, and keeps the audit of what ran.
+    public let runs: CommandRunGate
+    /// The programs the user approved each plugin to run, by declared name
+    /// (the capability ledger's). `nil`: every granted name runs what it
+    /// resolves to now, as in `stackbarctl` and tests.
+    private let approvedCommands: (@Sendable (String) -> [String: String])?
     private let notifications = RateLimiter(limit: 10, per: 60)
     private let alerts = RateLimiter(limit: 1, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
@@ -74,7 +85,9 @@ public final class HostServices: Sendable {
     private let calls = RateLimiter(limit: 1200, per: 60)
     private let requests = RateLimiter(limit: 300, per: 60)
 
-    public init(storage: StorageStore, secrets: any SecretStore, platform: Platform = Platform(), audit: NetworkAudit = NetworkAudit(), bus: PluginBus = PluginBus(), oauthTimeout: Double = 300) {
+    public init(storage: StorageStore, secrets: any SecretStore, platform: Platform = Platform(), audit: NetworkAudit = NetworkAudit(), bus: PluginBus = PluginBus(), oauthTimeout: Double = 300, runs: CommandRunGate? = nil, approvedCommands: (@Sendable (String) -> [String: String])? = nil) {
+        self.runs = runs ?? CommandRunGate(root: FileManager.default.temporaryDirectory.appendingPathComponent("stackbar-run", isDirectory: true))
+        self.approvedCommands = approvedCommands
         self.storage = storage
         self.secrets = secrets
         self.audit = audit
@@ -95,7 +108,10 @@ public final class HostServices: Sendable {
     /// `granted` (its manifest with the approved capability list). `declared`
     /// is the manifest as written: a call it covers but `granted` does not is
     /// refused as waiting for approval, not as undeclared.
-    public func handle(_ call: HostCall, for granted: Manifest, declared: Manifest? = nil) async -> HostResult {
+    ///
+    /// `id` is the plugin's request id, which names a streamed run; `emit`
+    /// sends a streamed run's output to the plugin.
+    public func handle(_ call: HostCall, for granted: Manifest, declared: Manifest? = nil, id: Int = 0, emit: (@Sendable (HostMessage) -> Void)? = nil) async -> HostResult {
         let declared = declared ?? granted
         func missing(_ capability: Capability, _ what: String) -> HostResult {
             declared.capabilities.contains(capability)
@@ -244,13 +260,60 @@ public final class HostServices: Sendable {
             } catch {
                 return .failure("\(error)")
             }
+
+        case .run(let request):
+            return await run(request, id: id, granted: granted, declared: declared, emit: emit)
+
+        case .cancelRun(let runID):
+            runs.cancel(pluginID: granted.id, id: runID)
+            return .ok
+
+        case .context:
+            guard granted.capabilities.contains(.context) else { return missing(.context, "read the selected text and frontmost app") }
+            return .value(SystemCodec.encode(await platform.system.context()))
+
+        case .finderSelection:
+            guard granted.capabilities.contains(.context) else { return missing(.context, "read Finder's selection") }
+            do {
+                return .value(SystemCodec.encode(try await platform.system.finderSelection()))
+            } catch {
+                return .failure("\(error)")
+            }
         }
     }
 
-    /// Lets go of anything the plugin holds in the OS (its power assertion).
-    /// The supervisor calls it whenever the helper stops or exits.
+    private func run(_ request: RunRequest, id: Int, granted: Manifest, declared: Manifest, emit: (@Sendable (HostMessage) -> Void)?) async -> HostResult {
+        let name = request.command
+        guard granted.runCommands.contains(name) else {
+            if declared.runCommands.contains(name) { return Self.awaitingApproval(granted, "to run \(name)") }
+            return .failure("\(name) is not declared; add .run(commands: [\"\(name)\"]) to the manifest's capabilities")
+        }
+        let folders = granted.capabilities.flatMap { capability -> [String] in
+            if case .files(let paths) = capability { return paths }
+            return []
+        }
+        let grant = CommandRunGate.Grant(pluginID: granted.id, approvedPaths: approvedCommands?(granted.id), folders: folders)
+        func refused(_ refusal: CommandRunGate.Refusal) -> HostResult {
+            if refusal.kind == .moved { platform.approvalNeeded(granted.id) }
+            return .failure(refusal.description)
+        }
+        if request.stream {
+            guard let emit else { return .failure("streaming runs are not available here") }
+            if let refusal = runs.stream(request, id: id, grant: grant, emit: emit) { return refused(refusal) }
+            return .ok
+        }
+        switch await runs.run(request, id: id, grant: grant) {
+        case .success(let result): return .value(SystemCodec.encode(result))
+        case .failure(let refusal): return refused(refusal)
+        }
+    }
+
+    /// Lets go of anything the plugin holds in the OS (its power assertion)
+    /// and stops the commands it is running. The supervisor calls it
+    /// whenever the helper stops or exits.
     public func release(pluginID: String) {
         try? platform.system.keepAwake(nil, pluginID: pluginID)
+        runs.cancelAll(pluginID: pluginID)
     }
 
     /// URL schemes a plugin may open: the web, mail, and the meeting apps
