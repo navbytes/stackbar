@@ -110,6 +110,16 @@ struct PressableButtonStyle: ButtonStyle {
 }
 
 extension Paint {
+    /// One color for things that take a color, not a style (chart marks):
+    /// a gradient gives its first stop.
+    var flatColor: Color {
+        switch self {
+        case .role(let role): return role.color
+        case .color(let color): return color.color
+        case .linearGradient(let colors, _): return colors.first?.color ?? .accentColor
+        }
+    }
+
     var shapeStyle: AnyShapeStyle {
         switch self {
         case .role(let role):
