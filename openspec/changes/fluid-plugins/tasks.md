@@ -75,6 +75,6 @@
 - [ ] 4.11 Full-screen alert appears over a full-screen app; Join opens the call; Esc dismisses
 - [ ] 4.12 PR Cockpit inbox with a classic token; mark as read clears it on github.com
 - [ ] 4.13 Stay Awake holds while a display is plugged in, while a VPN is up and during a large download, and lets go after
-- [ ] 4.15 Open PR Cockpit's window, switch apps: ⌘Tab and the Dock find it; closing it removes the Dock icon; the icon click brings it back
-- [ ] 4.16 Pin a plugin window: it stays above Safari after you click into Safari; unpinning lets it fall behind; the pin is remembered next time
+- [x] 4.15 Open PR Cockpit's window, switch apps: ⌘Tab and the Dock find it; closing it removes the Dock icon; the icon click brings it back
+- [x] 4.16 Pin a plugin window: it stays above Safari after you click into Safari; unpinning lets it fall behind; the pin is remembered next time
 - [ ] 4.14 ⌘⇧V in TextEdit, Notes and Xcode opens Clipboard History under the cursor; in a browser it falls back to the menu bar
