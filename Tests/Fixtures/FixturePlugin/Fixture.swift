@@ -92,7 +92,8 @@ final class Fixture: StackbarPlugin {
             var status: Int32 = -1
             for try await event in Stackbar.stream("sh", ["-c", "echo one; echo two >&2; echo three"]) {
                 switch event {
-                case .stdout(let data), .stderr(let data): lines.append(String(decoding: data, as: UTF8.self).trimmingCharacters(in: .newlines))
+                // A chunk can hold several lines, or part of one.
+                case .stdout(let data), .stderr(let data): lines += String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init)
                 case .exit(let exit): status = exit.status
                 }
             }
