@@ -15,7 +15,7 @@ usage:
   stackbarctl manifest <plugin.swift | helper>
   stackbarctl render <plugin.swift | helper> [--surface menuBar|panel|window|widget]
                   [--event <action-id>[=value]]... [--tool name[:json]] [--copy <text>]...
-                  [--json] [--png <dir>] [--verbose]
+                  [--json] [--png <dir> [--dark]] [--verbose]
                   [--command <id> [--query <text>] [--arg name=value]...]
                   --command opens a view command; --event then presses things inside it
                   --copy pretends you copied text in another app (clipboard plugins);
@@ -100,9 +100,9 @@ func makeServices() -> HostServices {
     )
 }
 
-func pngRenderer() -> AuthoringTools.PNGRenderer? {
+func pngRenderer(dark: Bool = false) -> AuthoringTools.PNGRenderer? {
     #if canImport(StackbarUI) && os(macOS)
-    return { node, surface in await MainActor.run { Snapshot.png(node, surface: surface) } }
+    return { node, surface in await MainActor.run { Snapshot.png(node, surface: surface, dark: dark) } }
     #else
     return nil
     #endif
@@ -133,6 +133,7 @@ func render(_ path: String, options: [String]) async {
     var steps: [(kind: String, name: String, value: String?)] = []
     var asJSON = false
     var pngDirectory: String?
+    var dark = false
     var verbose = false
     var command: String?
     var query = ""
@@ -156,6 +157,7 @@ func render(_ path: String, options: [String]) async {
             steps.append(("copy", value(after: "--copy", in: options, at: &index), nil))
         case "--json": asJSON = true
         case "--png": pngDirectory = value(after: "--png", in: options, at: &index)
+        case "--dark": dark = true
         case "--verbose": verbose = true
         case "--command": command = value(after: "--command", in: options, at: &index)
         case "--query": query = value(after: "--query", in: options, at: &index)
@@ -169,7 +171,7 @@ func render(_ path: String, options: [String]) async {
         index += 1
     }
 
-    let tools = AuthoringTools(builder: builder, services: makeServices(), png: pngRenderer())
+    let tools = AuthoringTools(builder: builder, services: makeServices(), png: pngRenderer(dark: dark))
     func run(_ name: String, _ arguments: [String: JSONValue]) async -> MCPToolResult {
         var arguments = arguments
         arguments["path"] = .string(path)

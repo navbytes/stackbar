@@ -31,7 +31,16 @@ struct StyleModifier: ViewModifier {
             .ifLet(style.border) { view, border in view.overlay { border.shape.view(fill: nil, stroke: border.paint.shapeStyle, lineWidth: border.width) } }
             .ifLet(style.clip) { $0.clipShape($1.anyShape) }
             .ifLet(style.shadow) { view, shadow in
-                view.shadow(color: shadow.color?.color ?? .black.opacity(0.25), radius: shadow.radius, x: shadow.x, y: shadow.y)
+                let color = shadow.color?.color ?? .black.opacity(0.25)
+                if let fill = style.background {
+                    // Cast by the background shape, like a box shadow, so the
+                    // border and content inside are not drawn twice.
+                    view.background {
+                        fill.shape.anyShape.fill(color).offset(x: shadow.x, y: shadow.y).blur(radius: shadow.radius)
+                    }
+                } else {
+                    view.shadow(color: color, radius: shadow.radius, x: shadow.x, y: shadow.y)
+                }
             }
             .ifLet(style.opacity) { $0.opacity($1) }
             .ifLet(style.accessibilityLabel) { $0.accessibilityElement(children: .combine).accessibilityLabel($1) }
@@ -41,7 +50,7 @@ struct StyleModifier: ViewModifier {
 
 extension View {
     /// Applies `transform` when `value` is set.
-    @ViewBuilder func ifLet<Value, Result: View>(_ value: Value?, _ transform: (Self, Value) -> Result) -> some View {
+    @ViewBuilder func ifLet<Value, Result: View>(_ value: Value?, @ViewBuilder _ transform: (Self, Value) -> Result) -> some View {
         if let value { transform(self, value) } else { self }
     }
 }
@@ -76,11 +85,14 @@ struct RingView: View {
         let clamped = min(max(fraction.isFinite ? fraction : 0, 0), 1)
         ZStack {
             Circle().strokeBorder(track, lineWidth: lineWidth)
-            Circle()
-                .inset(by: lineWidth / 2)
-                .trim(from: 0, to: clamped)
-                .stroke(paint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+            // At zero the round cap alone would draw a stray dot.
+            if clamped > 0 {
+                Circle()
+                    .inset(by: lineWidth / 2)
+                    .trim(from: 0, to: clamped)
+                    .stroke(paint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
         }
         .accessibilityElement()
         .accessibilityValue(Text("\(Int((clamped * 100).rounded())) percent"))
