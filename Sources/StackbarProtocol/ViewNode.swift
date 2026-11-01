@@ -285,19 +285,10 @@ extension ViewNode {
         return children.flatMap(\.rows)
     }
 
-    /// Every action id this tree can send, in order. The palette and the agent
-    /// gateway use it to list what can be pressed.
+    /// Every action id this tree can send, in order: its `affordances`
+    /// without links. The agent gateway checks events against it.
     public var actions: [ActionID] {
-        switch self {
-        case .row(let row):
-            return row.actions.map(\.id)
-        case .button(_, _, _, let action), .toggle(_, _, let action), .textField(_, _, let action), .picker(_, _, _, _, let action), .slider(_, _, _, _, _, let action), .tappable(_, let action):
-            return [action] + children.flatMap(\.actions)
-        case .form(let form):
-            return [form.action]
-        default:
-            return children.flatMap(\.actions)
-        }
+        affordances.compactMap(\.action)
     }
 
     /// The words this tree shows, joined by spaces: what names a `tappable`
