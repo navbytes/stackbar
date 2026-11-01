@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
+        NSApp.mainMenu = mainMenu()
         if Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" {
             UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         }
@@ -72,6 +73,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit Stackbar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
         emptyStateItem = statusItem
+    }
+
+    /// Seen only while a plugin window puts Stackbar in the Dock, but its
+    /// shortcuts (⌘W, ⌘C/⌘V, ⌘Q) work in every Stackbar window and panel.
+    private func mainMenu() -> NSMenu {
+        func menu(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {
+            let submenu = NSMenu(title: title)
+            items.forEach(submenu.addItem)
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.submenu = submenu
+            return item
+        }
+        func key(_ title: String, _ action: Selector, _ key: String, _ modifiers: NSEvent.ModifierFlags = .command) -> NSMenuItem {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.keyEquivalentModifierMask = modifiers
+            return item
+        }
+        let settings = key("Settings…", #selector(openSettings), ",")
+        settings.target = self
+        let window = menu("Window", [
+            key("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
+            key("Zoom", #selector(NSWindow.performZoom(_:)), ""),
+            .separator(),
+            key("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)), ""),
+        ])
+        NSApp.windowsMenu = window.submenu
+        let main = NSMenu()
+        [
+            menu("Stackbar", [
+                key("About Stackbar", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
+                .separator(),
+                settings,
+                .separator(),
+                key("Hide Stackbar", #selector(NSApplication.hide(_:)), "h"),
+                key("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
+                .separator(),
+                key("Quit Stackbar", #selector(NSApplication.terminate(_:)), "q"),
+            ]),
+            menu("File", [key("Close Window", #selector(NSWindow.performClose(_:)), "w")]),
+            menu("Edit", [
+                key("Undo", Selector(("undo:")), "z"),
+                key("Redo", Selector(("redo:")), "z", [.command, .shift]),
+                .separator(),
+                key("Cut", #selector(NSText.cut(_:)), "x"),
+                key("Copy", #selector(NSText.copy(_:)), "c"),
+                key("Paste", #selector(NSText.paste(_:)), "v"),
+                key("Select All", #selector(NSText.selectAll(_:)), "a"),
+            ]),
+            window,
+        ].forEach(main.addItem)
+        return main
     }
 
     private func item(title: String, action: Selector) -> NSMenuItem {

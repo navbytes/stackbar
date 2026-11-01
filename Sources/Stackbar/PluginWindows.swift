@@ -1,14 +1,29 @@
 #if os(macOS)
 import AppKit
+import Observation
 import SwiftUI
 import StackbarProtocol
 import StackbarUI
 
 /// Plugin windows: the `window` surface in a resizable window, one per plugin.
+/// While one is open Stackbar shows in the Dock and ⌘Tab, so a window behind
+/// others can be found again; it goes back to menu-bar only after the last.
 @MainActor
+@Observable
 final class PluginWindows: NSObject, NSWindowDelegate {
+    static let dockIconKey = "dockIconWithWindows"
+
     private var windows: [String: NSWindow] = [:]
-    private var controllers: [ObjectIdentifier: PluginController] = [:]
+    @ObservationIgnored private var controllers: [ObjectIdentifier: PluginController] = [:]
+
+    func isOpen(_ pluginID: String) -> Bool {
+        windows[pluginID] != nil
+    }
+
+    func updatePresence() {
+        let dock = !windows.isEmpty && (UserDefaults.standard.object(forKey: Self.dockIconKey) as? Bool ?? true)
+        NSApp.setActivationPolicy(dock ? .regular : .accessory)
+    }
 
     func open(_ controller: PluginController) {
         if let window = windows[controller.pluginID] {
@@ -31,6 +46,7 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         windows[controller.pluginID] = window
         controllers[ObjectIdentifier(window)] = controller
         controller.setVisible(.window, true)
+        updatePresence()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
@@ -43,6 +59,7 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         guard let window = notification.object as? NSWindow, let controller = controllers.removeValue(forKey: ObjectIdentifier(window)) else { return }
         controller.setVisible(.window, false)
         windows[controller.pluginID] = nil
+        updatePresence()
     }
 }
 
