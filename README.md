@@ -137,8 +137,8 @@ scripts/bundle.sh                        # build/Stackbar.app and a zip for dist
 Releases come from the **Release** workflow (Actions tab, or push a `v*` tag
 matching `StackbarVersion.current`). It runs `bundle.sh` on the macOS runner
 and attaches the zip to a GitHub release. It signs with Developer ID and
-notarizes when the `MACOS_CERT_P12`, `MACOS_CERT_PASSWORD`, `APPLE_ID`,
-`APPLE_TEAM_ID` and `APPLE_APP_PASSWORD` secrets are set, and ad-hoc signs
+notarizes when the `APPLE_CERT_P12`, `APPLE_CERT_PASSWORD`, `APPLE_ID`,
+`APPLE_TEAM_ID` and `APPLE_NOTARY_PASSWORD` secrets are set, and ad-hoc signs
 otherwise.
 
 Plugins live in `~/Library/Application Support/Stackbar/Plugins/*.swift`. All

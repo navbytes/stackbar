@@ -6,9 +6,9 @@ name: Release
 # Signing: with the Developer ID secrets below the app is signed, notarized
 # and stapled. Without them it is ad-hoc signed, which runs on any Mac after
 # the Gatekeeper override in the release notes.
-#   MACOS_CERT_P12          base64 of the "Developer ID Application" .p12
-#   MACOS_CERT_PASSWORD     the .p12 password
-#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD   for notarytool
+#   APPLE_CERT_P12          base64 of the "Developer ID Application" .p12
+#   APPLE_CERT_PASSWORD     the .p12 password
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_NOTARY_PASSWORD   for notarytool
 
 on:
   push:
@@ -31,8 +31,8 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     env:
-      HAS_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
-      HAS_NOTARY: ${{ secrets.APPLE_APP_PASSWORD != '' }}
+      HAS_CERT: ${{ secrets.APPLE_CERT_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_NOTARY_PASSWORD != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -48,11 +48,11 @@ jobs:
       - name: Import the Developer ID certificate
         if: env.HAS_CERT == 'true'
         env:
-          P12: ${{ secrets.MACOS_CERT_P12 }}
-          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          P12: ${{ secrets.APPLE_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
         run: |
           KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
           KEYCHAIN_PASSWORD=$(uuidgen)
@@ -65,11 +65,11 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/cert.p12"
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)
-          [ -n "$IDENTITY" ] || { echo "::error::no Developer ID Application identity in MACOS_CERT_P12"; exit 1; }
+          [ -n "$IDENTITY" ] || { echo "::error::no Developer ID Application identity in APPLE_CERT_P12"; exit 1; }
           echo "STACKBAR_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
           if [ "$HAS_NOTARY" = true ]; then
             xcrun notarytool store-credentials stackbar --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
-              --password "$APPLE_APP_PASSWORD" --keychain "$KEYCHAIN"
+              --password "$APPLE_NOTARY_PASSWORD" --keychain "$KEYCHAIN"
             echo "STACKBAR_NOTARY_PROFILE=stackbar" >> "$GITHUB_ENV"
             echo "NOTARY_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
           fi
