@@ -37,8 +37,10 @@ fixed.
    stay as they are, because changing them would lose settings and break the
    store's version gating for no benefit.
 7. **Store lint from the real manifest.** `stackbarctl manifest --json` prints
-   the manifest. The store rules (id prefix, version format) become
-   `Manifest.storeProblems`, which `stackbarctl index build` enforces.
+   the manifest. Rules for any published plugin (an x.y.z version, a summary,
+   `minimumStackbar`) become `Manifest.publishingProblems`, which `sign` and
+   `index build` enforce. The navbytes store's own rules (id prefix, imports)
+   stay in its lint.
    stackbar-plugins' `lint.py` reads that JSON instead of using a regex.
 8. **Authenticated JSON helper in the kit.** `Stackbar.getJSON(_:auth:)` with
    `.bearer(secret:)` and `.header(_:secret:)` replaces the
