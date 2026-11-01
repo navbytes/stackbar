@@ -21,8 +21,13 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// row shortcuts: `cmd+shift+v`, `ctrl+option+k`. At least one of cmd,
     /// ctrl or option, plus one letter, digit, `space` or `f1`...`f12`.
     public var hotkey: String?
+    /// The oldest Stackbar whose StackbarKit this source compiles against,
+    /// like `0.10.0`. A plugin index hides the Install button on older apps.
+    public var minimumStackbar: String?
+    /// Where to read about the plugin: its README or repository.
+    public var homepage: String?
 
-    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil) {
+    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil, minimumStackbar: String? = nil, homepage: String? = nil) {
         self.id = id
         self.name = name
         self.version = version
@@ -31,6 +36,8 @@ public struct Manifest: Codable, Equatable, Sendable {
         self.triggers = triggers
         self.capabilities = capabilities
         self.hotkey = hotkey
+        self.minimumStackbar = minimumStackbar
+        self.homepage = homepage
     }
 
     /// Problems that make the manifest unusable, in words. Empty means valid.
@@ -44,6 +51,12 @@ public struct Manifest: Codable, Equatable, Sendable {
         if surfaces.isEmpty { result.append("surfaces is empty") }
         if let hotkey, HotKeySpec(hotkey) == nil {
             result.append("hotkey \"\(hotkey)\" needs cmd, ctrl or option plus one letter, digit, space or f1...f12, like cmd+shift+v")
+        }
+        if let minimumStackbar, !Self.isVersion(minimumStackbar) {
+            result.append("minimumStackbar \"\(minimumStackbar)\" must be a version like 0.10.0")
+        }
+        if let homepage, !homepage.hasPrefix("https://") {
+            result.append("homepage must be an https URL")
         }
         if triggers.contains(.clipboard), !capabilities.contains(.clipboard) {
             result.append("the .clipboard trigger needs the .clipboard capability")
@@ -82,6 +95,8 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// Secret names are plain words. The host keeps OAuth tokens in the same
     /// store under `oauth/<plugin id>/<provider>`, so a name with a slash
     /// could read another plugin's tokens; such names are refused.
+    public static func isVersion(_ text: String) -> Bool { VersionNumber(text) != nil }
+
     public static func isValidSecretName(_ name: String) -> Bool {
         (1...100).contains(name.utf8.count) && name.unicodeScalars.allSatisfy { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || "_-.".unicodeScalars.contains($0)) }
     }

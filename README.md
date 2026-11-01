@@ -96,8 +96,11 @@ Stackbar menu or Settings). `Examples/` are small plugins that each teach one id
   render, press buttons, read logs). `stackbarctl agent` is the runtime gateway: it
   exposes every running plugin's tools to an agent through the app.
 - **Distribution:** signed `.stackbarplugin` bundles (Ed25519, publisher pinned on
-  first use), a static plugin index, one-click fork into your own plugins
-  folder, and an "edit with Claude" script.
+  first use), static plugin indexes, one-click fork into your own plugins
+  folder, and an "edit with Claude" script. The store lists the official
+  index from [navbytes/stackbar-plugins](https://github.com/navbytes/stackbar-plugins)
+  first, verified against the navbytes key, hides versions that need a newer
+  Stackbar or that their publisher withdrew, and updates installed plugins daily.
 
 ## Running it
 

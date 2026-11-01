@@ -18,6 +18,13 @@ final class AppModel {
     var indexURLs: [String] {
         didSet { UserDefaults.standard.set(indexURLs, forKey: "indexURLs") }
     }
+    /// Install newer versions of store plugins without asking. New
+    /// capabilities in an update still wait for approval.
+    var autoUpdatePlugins: Bool {
+        didSet { UserDefaults.standard.set(autoUpdatePlugins, forKey: "autoUpdatePlugins") }
+    }
+    /// Updates the last store check found and didn't install.
+    private(set) var pendingUpdates: [PluginStore.Update] = []
     var agentGatewayEnabled: Bool {
         didSet {
             UserDefaults.standard.set(agentGatewayEnabled, forKey: "agentGateway")
@@ -36,6 +43,7 @@ final class AppModel {
     @ObservationIgnored private var watcher: DirectoryWatcher?
     @ObservationIgnored private var agentServer: UnixSocketServer?
     @ObservationIgnored var onPluginsChanged: (() -> Void)?
+    @ObservationIgnored private var storeTimer: Timer?
 
     /// Clipboard images and formatted copies the host keeps for plugins.
     nonisolated static let clipboardImages = ClipboardImageStore(directory: StackbarPaths.dataDirectory.appendingPathComponent("ClipboardImages", isDirectory: true))
@@ -50,6 +58,7 @@ final class AppModel {
 
     init() {
         indexURLs = UserDefaults.standard.stringArray(forKey: "indexURLs") ?? []
+        autoUpdatePlugins = UserDefaults.standard.object(forKey: "autoUpdatePlugins") as? Bool ?? true
         agentGatewayEnabled = UserDefaults.standard.object(forKey: "agentGateway") as? Bool ?? true
         let secretRouter = SecretRouter()
         services = HostServices(
@@ -81,6 +90,50 @@ final class AppModel {
         }
         self.watcher = watcher
         updateAgentGateway()
+        Task { await checkStore() }
+        storeTimer = Timer.scheduledTimer(withTimeInterval: 24 * 60 * 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.checkStore() }
+        }
+    }
+
+    // MARK: - Store
+
+    /// The indexes the store reads: the official one first.
+    var storeSources: [PluginStore.Source] { PluginStore.sources(userURLs: indexURLs) }
+
+    /// Compares plugins installed from a store with the indexes: installs
+    /// updates (or lists them when automatic updates are off) and moves
+    /// withdrawn plugins to the Trash.
+    func checkStore() async {
+        let installed = installer.installed
+        guard !installed.isEmpty else { return }
+        let (catalogs, _) = await PluginStore.load(storeSources)
+        let review = PluginStore.review(catalogs, installed: installed)
+        for withdrawn in review.withdrawn {
+            if let controller = controller(for: withdrawn.installed.id) { await remove(controller) }
+            try? FileManager.default.trashItem(at: URL(fileURLWithPath: withdrawn.installed.file), resultingItemURL: nil)
+            try? installer.uninstall(withdrawn.installed.id)
+            Platform.notify(HostNotification(pluginID: withdrawn.installed.id, pluginName: "Stackbar", title: "Removed a withdrawn plugin", body: "\(withdrawn.installed.id) \(withdrawn.installed.version) was withdrawn by its publisher and is in the Trash: \(withdrawn.reason)"))
+        }
+        guard autoUpdatePlugins else {
+            pendingUpdates = review.updates
+            return
+        }
+        var remaining: [PluginStore.Update] = []
+        for update in review.updates {
+            if (try? await installUpdate(update)) == nil { remaining.append(update) }
+        }
+        pendingUpdates = remaining
+    }
+
+    /// Downloads, verifies and writes a newer version; the folder watcher
+    /// then reloads the plugin.
+    func installUpdate(_ update: PluginStore.Update) async throws {
+        let bundle = try await PluginIndex.bundle(for: update.entry, indexURL: update.indexURL)
+        guard bundle.manifest.id == update.entry.id else { throw PluginBundle.BundleError.manifestMismatch }
+        let file = try installer.install(bundle)
+        if let controller = controller(for: update.entry.id) { controller.reload() } else { add(file) }
+        pendingUpdates.removeAll { $0.entry.id == update.entry.id }
     }
 
     func stop() async {
@@ -90,6 +143,8 @@ final class AppModel {
 
     /// The synchronous part of shutting down: stop watching and serving.
     func prepareForTermination() {
+        storeTimer?.invalidate()
+        storeTimer = nil
         watcher?.stop()
         agentServer?.stop()
         agentServer = nil

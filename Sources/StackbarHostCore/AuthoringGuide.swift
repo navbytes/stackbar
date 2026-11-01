@@ -133,6 +133,9 @@ Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
 `.file(path: "~/x")`, `.topic(name: "t")`, `.clipboard`.
 
 `Manifest(..., hotkey: "cmd+shift+v")` opens the panel from anywhere.
+`minimumStackbar: "0.10.0"` names the oldest Stackbar whose StackbarKit the
+source compiles against; a plugin index hides Install on older apps.
+`homepage: "https://..."` links the plugin's README from the store.
 
 ## Loop
 
