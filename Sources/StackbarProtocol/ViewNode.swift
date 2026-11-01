@@ -7,13 +7,17 @@
 /// in parity (see `SurfaceParity` in StackbarHostCore and docs/surface-parity.md),
 /// and named after SwiftUI so an AI already knows it.
 ///
-/// Every node carries *meaning* (a `Role`, a `TextStyle`), never pixels, so the
-/// host decides colors, fonts and spacing for light and dark mode on every
-/// surface.
+/// Nodes carry *meaning* (a `Role`, a `TextStyle`) by default, so the host
+/// picks colors, fonts and spacing for light and dark mode on every surface.
+/// Since protocol 11 a plugin can also take over the look: `styled` sets
+/// fonts, colors, padding, frames, backgrounds and more; `shape`, `image`,
+/// `timer` and `tappable` build custom controls.
 public indirect enum ViewNode: Codable, Equatable, Sendable {
     case text(String, style: TextStyle = .body, role: Role = .primary)
     case label(String, symbol: String, role: Role = .primary)
-    case stack(axis: StackAxis, spacing: Double? = nil, children: [ViewNode])
+    /// `alignment` lines children up across the axis (protocol 11); `nil`
+    /// keeps leading for vertical stacks and center otherwise.
+    case stack(axis: StackAxis, spacing: Double? = nil, alignment: StackAlignment? = nil, children: [ViewNode])
     /// A scrolling list of rows. `searchable` asks the host for a filter field
     /// that narrows rows by title and subtitle.
     case list(searchable: Bool = false, children: [ViewNode])
@@ -23,7 +27,9 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     case button(title: String, symbol: String? = nil, role: Role = .primary, action: ActionID)
     case toggle(title: String, isOn: Bool, action: ActionID)
     /// A determinate gauge; `value` is clamped to `0...total` by renderers.
-    case progress(value: Double, total: Double = 1, label: String? = nil, role: Role = .accent)
+    /// With `timing` (protocol 11) the host computes the value from the clock
+    /// and animates it; `style` draws a ring in place of a bar.
+    case progress(value: Double, total: Double = 1, label: String? = nil, role: Role = .accent, style: ProgressStyle? = nil, timing: TimeRange? = nil)
     case divider
     /// A label and its value on one line, like SwiftUI's `LabeledContent`.
     case labeled(label: String, value: String, role: Role = .primary)
@@ -33,7 +39,7 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     /// A one-line text input. Submitting sends `.text` with the field's contents.
     case textField(placeholder: String, text: String, action: ActionID)
     /// A choice among a few options. Choosing sends `.text` with the option.
-    case picker(title: String, options: [String], selection: String?, action: ActionID)
+    case picker(title: String, options: [String], selection: String?, style: ChoiceStyle? = nil, action: ActionID)
     /// A continuous value. Releasing sends `.number`.
     case slider(title: String, value: Double, min: Double, max: Double, step: Double? = nil, action: ActionID)
     /// Opens a URL. The host opens it; the plugin never hears about the click.
@@ -43,6 +49,20 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     /// Several fields submitted together. Submitting sends `.fields` with
     /// every field's value by name.
     case form(FormNode)
+    /// The child drawn with a `Style`: fonts, colors, padding, frame,
+    /// background, border, clip, shadow, opacity. Protocol 11.
+    case styled(ViewNode, style: Style)
+    /// A filled or stroked shape. Protocol 11.
+    case shape(ShapeNode)
+    /// An image, sized by the font and colored by the foreground. Protocol 11.
+    case image(ImageSource)
+    /// Live clock text the host counts through `range` on its own: down to
+    /// `0:00`, or up from it. Protocol 11.
+    case timer(TimeRange, countsDown: Bool = true)
+    /// Flexible space along the enclosing stack's axis. Protocol 11.
+    case spacer(minLength: Double? = nil)
+    /// Any content as a button: a click sends `action`. Protocol 11.
+    case tappable(ViewNode, action: ActionID)
 }
 
 /// A form: fields, a submit button and the action it sends.
@@ -220,6 +240,8 @@ public enum TextStyle: String, Codable, Sendable, CaseIterable {
 
 public enum StackAxis: String, Codable, Sendable {
     case vertical, horizontal
+    /// Children layered front to back, like SwiftUI's `ZStack`. Protocol 11.
+    case depth
 }
 
 /// Where a plugin can appear.
@@ -242,35 +264,82 @@ public enum Surface: String, Codable, Sendable, CaseIterable {
 }
 
 extension ViewNode {
-    /// Rows anywhere below this node, in order. Hosts use it for list filtering;
-    /// tests use it to find things without spelling out the whole tree.
-    public var rows: [RowNode] {
+    /// The nodes this one contains, in order: a container's children, or the
+    /// child of a `styled` or `tappable` node. A row's accessories are part
+    /// of the row, not children.
+    public var children: [ViewNode] {
         switch self {
-        case .row(let row):
-            return [row]
-        case .stack(_, _, let children), .list(_, let children), .section(_, let children):
-            return children.flatMap(\.rows)
-        default:
+        case .stack(_, _, _, let children), .list(_, let children), .section(_, let children):
+            return children
+        case .styled(let child, _), .tappable(let child, _):
+            return [child]
+        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .spacer:
             return []
         }
     }
-}
 
-extension ViewNode {
+    /// Rows anywhere below this node, in order. Hosts use it for list filtering;
+    /// tests use it to find things without spelling out the whole tree.
+    public var rows: [RowNode] {
+        if case .row(let row) = self { return [row] }
+        return children.flatMap(\.rows)
+    }
+
     /// Every action id this tree can send, in order. The palette and the agent
     /// gateway use it to list what can be pressed.
     public var actions: [ActionID] {
         switch self {
         case .row(let row):
             return row.actions.map(\.id)
-        case .button(_, _, _, let action), .toggle(_, _, let action), .textField(_, _, let action), .picker(_, _, _, let action), .slider(_, _, _, _, _, let action):
-            return [action]
-        case .stack(_, _, let children), .list(_, let children), .section(_, let children):
-            return children.flatMap(\.actions)
+        case .button(_, _, _, let action), .toggle(_, _, let action), .textField(_, _, let action), .picker(_, _, _, _, let action), .slider(_, _, _, _, _, let action), .tappable(_, let action):
+            return [action] + children.flatMap(\.actions)
         case .form(let form):
             return [form.action]
-        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .link, .empty:
-            return []
+        default:
+            return children.flatMap(\.actions)
         }
+    }
+
+    /// The words this tree shows, joined by spaces: what names a `tappable`
+    /// in the palette and the agent text. An accessibility label stands in
+    /// for its child.
+    public var plainText: String {
+        switch self {
+        case .text(let string, _, _), .badge(let string, _):
+            return string
+        case .label(let title, _, _), .button(let title, _, _, _):
+            return title
+        case .styled(_, let style) where style.accessibilityLabel != nil:
+            return style.accessibilityLabel ?? ""
+        default:
+            return children.map(\.plainText).filter { !$0.isEmpty }.joined(separator: " ")
+        }
+    }
+
+    /// How many nodes the tree has and how deep it goes, counting row
+    /// accessories. The host refuses renders past `RenderLimits`.
+    public var size: (count: Int, depth: Int) {
+        let inner = (children + accessories).map(\.size)
+        return (1 + inner.reduce(0) { $0 + $1.count }, 1 + (inner.map(\.depth).max() ?? 0))
+    }
+
+    private var accessories: [ViewNode] {
+        if case .row(let row) = self { return row.accessories }
+        return []
+    }
+}
+
+/// The largest tree a plugin may render, so a runaway render can't stall the
+/// host's UI.
+public enum RenderLimits {
+    public static let maxNodes = 5_000
+    public static let maxDepth = 64
+
+    /// Why `node` is over the limits, or `nil` when it is within them.
+    public static func violation(_ node: ViewNode) -> String? {
+        let size = node.size
+        if size.count > maxNodes { return "the view has \(size.count) nodes; at most \(maxNodes) are allowed" }
+        if size.depth > maxDepth { return "the view is \(size.depth) levels deep; at most \(maxDepth) are allowed" }
+        return nil
     }
 }

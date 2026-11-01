@@ -161,7 +161,7 @@ final class StackbarKitTests: XCTestCase {
         let plugin = Inputs()
         let runtime = PluginRuntime(plugin: plugin, send: outbox.send)
         await runtime.handle(.hello(protocolVersion: 2, surfaces: [.panel]))
-        guard case .render(.panel, .stack(.vertical, _, let nodes)) = outbox.take()[1] else { return XCTFail("expected a panel stack") }
+        guard case .render(.panel, .stack(.vertical, _, _, let nodes)) = outbox.take()[1] else { return XCTFail("expected a panel stack") }
         XCTAssertEqual(nodes[0], .labeled(label: "Build", value: "green", role: .success))
         XCTAssertEqual(nodes[1], .chart(values: [1, 3, 0], kind: .bar, label: "Load", role: .accent), "non-finite values become 0")
         XCTAssertEqual(nodes[5], .link(title: "Docs", url: "https://example.com"))

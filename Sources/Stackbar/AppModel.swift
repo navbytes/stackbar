@@ -73,6 +73,7 @@ final class AppModel {
             platform: HostServices.Platform(
                 notify: { note in Task { @MainActor in Platform.notify(note) } },
                 alert: { note in Task { @MainActor in AlertPresenter.shared.show(note) } },
+                playSound: { sound in Task { @MainActor in NSSound(named: NSSound.Name(sound.rawValue))?.play() } },
                 open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },
                 openWith: { url, bundleID in try await Platform.open(url, with: bundleID) },
                 copy: { text in Task { @MainActor in Platform.copy(text) } },

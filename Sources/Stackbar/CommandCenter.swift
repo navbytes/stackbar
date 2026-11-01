@@ -399,8 +399,7 @@ extension ViewNode {
     var hasFormErrors: Bool {
         switch self {
         case .form(let form): return form.fields.contains { $0.error != nil }
-        case .stack(_, _, let children), .list(_, let children), .section(_, let children): return children.contains(where: \.hasFormErrors)
-        default: return false
+        default: return children.contains(where: \.hasFormErrors)
         }
     }
 }

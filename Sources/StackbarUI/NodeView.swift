@@ -24,6 +24,10 @@ extension EnvironmentValues {
     /// Changes every time the host shows the surface again (the popover
     /// reopens), so lists reset their filter and take focus.
     @Entry public var stackbarShownCount: Int = 0
+    /// A `styled` font, used by text in place of its text style's font.
+    @Entry var stackbarFont: FontSpec? = nil
+    /// A `styled` foreground, used in place of role colors.
+    @Entry var stackbarForeground: Paint? = nil
 }
 
 /// Draws one `ViewNode` for the panel and window surfaces. Every case of the
@@ -34,6 +38,8 @@ public struct NodeView: View {
     let node: ViewNode
     let send: SendAction
     @Environment(\.stackbarReadOnly) private var readOnly
+    @Environment(\.stackbarFont) private var font
+    @Environment(\.stackbarForeground) private var foreground
 
     public init(node: ViewNode, send: @escaping SendAction) {
         self.node = node
@@ -43,13 +49,15 @@ public struct NodeView: View {
     public var body: some View {
         switch node {
         case .text(let string, let style, let role):
-            Text(string).font(style.font).foregroundStyle(role.color).textSelection(.enabled)
+            Text(string).font(textFont(style)).foregroundStyle(tint(role)).textSelection(.enabled)
         case .label(let title, let symbol, let role):
-            Label(title, systemImage: symbol).foregroundStyle(role.color)
-        case .stack(.vertical, let spacing, let children):
-            VStack(alignment: .leading, spacing: spacing.map { CGFloat($0) }) { NodeList(children: children, send: send) }
-        case .stack(.horizontal, let spacing, let children):
-            HStack(spacing: spacing.map { CGFloat($0) }) { NodeList(children: children, send: send) }
+            Label(title, systemImage: symbol).foregroundStyle(tint(role))
+        case .stack(.vertical, let spacing, let alignment, let children):
+            VStack(alignment: alignment?.horizontal ?? .leading, spacing: spacing.map { CGFloat($0) }) { NodeList(children: children, send: send) }
+        case .stack(.horizontal, let spacing, let alignment, let children):
+            HStack(alignment: alignment?.vertical ?? .center, spacing: spacing.map { CGFloat($0) }) { NodeList(children: children, send: send) }
+        case .stack(.depth, _, let alignment, let children):
+            ZStack(alignment: alignment.map { Alignment(horizontal: $0.horizontal, vertical: $0.vertical) } ?? .center) { NodeList(children: children, send: send) }
         case .list(let searchable, let children):
             ListNodeView(searchable: searchable, children: children, send: send)
         case .section(let title, let children):
@@ -85,12 +93,18 @@ public struct NodeView: View {
         case .toggle(let title, let isOn, let action):
             Toggle(title, isOn: Binding(get: { isOn }, set: { send(action, .bool($0)) }))
                 .disabled(readOnly)
-        case .progress(let value, let total, let label, let role):
-            VStack(alignment: .leading, spacing: 4) {
-                if let label { Text(label).font(.caption) }
-                BarView(fraction: total > 0 ? clamp(value, total) / total : 0, color: role.color)
+        case .progress(let value, let total, let label, let role, let style, let timing):
+            TimedFraction(value: value, total: total, timing: timing) { fraction in
+                VStack(alignment: .leading, spacing: 4) {
+                    if let label { Text(label).font(.caption) }
+                    if case .ring(let lineWidth) = style {
+                        RingView(fraction: fraction, paint: tint(role), lineWidth: lineWidth ?? 4)
+                    } else {
+                        BarView(fraction: fraction, paint: tint(role))
+                    }
+                }
+                .accessibilityElement(children: .combine)
             }
-            .accessibilityElement(children: .combine)
         case .divider:
             Divider()
         case .labeled(let label, let value, let role):
@@ -100,9 +114,16 @@ public struct NodeView: View {
         case .textField(let placeholder, let text, let action):
             FieldNodeView(placeholder: placeholder, text: text, action: action, send: send)
                 .disabled(readOnly)
-        case .picker(let title, let options, let selection, let action):
-            Picker(title, selection: Binding(get: { selection ?? "" }, set: { send(action, .text($0)) })) {
+        case .picker(let title, let options, let selection, let style, let action):
+            let picker = Picker(title, selection: Binding(get: { selection ?? "" }, set: { send(action, .text($0)) })) {
                 ForEach(options, id: \.self) { Text($0).tag($0) }
+            }
+            Group {
+                if style == .segmented {
+                    picker.pickerStyle(.segmented).labelsHidden()
+                } else {
+                    picker
+                }
             }
             .disabled(readOnly)
         case .slider(let title, let value, let low, let high, let step, let action):
@@ -123,10 +144,32 @@ public struct NodeView: View {
         case .form(let form):
             FormNodeView(form: form, send: send)
                 .disabled(readOnly)
+        case .styled(let child, let style):
+            NodeView(node: child, send: send).modifier(StyleModifier(style: style, animationValue: child))
+        case .shape(let shape):
+            shape.kind.view(fill: (shape.fill ?? (shape.stroke == nil ? foreground ?? .role(.primary) : nil))?.shapeStyle, stroke: shape.stroke?.shapeStyle, lineWidth: shape.lineWidth ?? 1)
+        case .image(.symbol(let symbol)):
+            Image(systemName: symbol)
+        case .timer(let range, let countsDown):
+            Text(timerInterval: range.start...range.end, countsDown: countsDown)
+                .font(textFont(.body))
+                .foregroundStyle(tint(.primary))
+        case .spacer(let minLength):
+            Spacer(minLength: minLength.map { CGFloat($0) })
+        case .tappable(let content, let action):
+            Button { send(action, nil) } label: {
+                NodeView(node: content, send: send).contentShape(Rectangle())
+            }
+            .buttonStyle(PressableButtonStyle())
+            .allowsHitTesting(!readOnly)
         }
     }
 
-    private func clamp(_ value: Double, _ total: Double) -> Double { min(max(value, 0), max(total, 0)) }
+    /// A styled font over the text style's, keeping what the style leaves unset.
+    private func textFont(_ style: TextStyle) -> Font { (font ?? FontSpec()).font(for: style) }
+
+    /// A styled foreground when one is set, else the role's color.
+    private func tint(_ role: Role) -> AnyShapeStyle { foreground?.shapeStyle ?? AnyShapeStyle(role.color) }
 }
 
 /// Children of a stack or section, in order.
@@ -455,9 +498,11 @@ public struct RowView: View {
 
     @ViewBuilder private func accessoryView(_ node: ViewNode) -> some View {
         switch node {
-        case .progress(let value, let total, _, let role):
-            BarView(fraction: total > 0 ? min(max(value, 0), total) / total : 0, color: role.color)
-                .frame(width: 64)
+        case .progress(let value, let total, _, let role, _, let timing):
+            TimedFraction(value: value, total: total, timing: timing) { fraction in
+                BarView(fraction: fraction, paint: AnyShapeStyle(role.color))
+            }
+            .frame(width: 64)
         case .chart(let values, _, _, let role, _):
             Sparkline(values: values).stroke(role.color, lineWidth: 1.5).frame(width: 48, height: 16)
         default:
@@ -763,28 +808,32 @@ extension Role {
 }
 
 extension TextStyle {
-    public var font: Font {
+    public var font: Font { FontSpec().font(for: self) }
+
+    var textStyle: Font.TextStyle {
         switch self {
-        case .title: return .title2.weight(.semibold)
+        case .title: return .title2
         case .headline: return .headline
-        case .body: return .body
+        case .body, .monospaced: return .body
         case .caption: return .caption
-        case .monospaced: return .system(.body, design: .monospaced)
         }
     }
+
+    var weight: Font.Weight? { self == .title ? .semibold : nil }
+    var design: Font.Design { self == .monospaced ? .monospaced : .default }
 }
 /// A determinate bar drawn with shapes rather than `ProgressView`, whose
 /// AppKit-backed style renders as a placeholder in `ImageRenderer` snapshots.
 struct BarView: View {
     var fraction: Double
-    var color: Color
+    var paint: AnyShapeStyle
 
     var body: some View {
         let clamped = min(max(fraction.isFinite ? fraction : 0, 0), 1)
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.secondary.opacity(0.25))
-                Capsule().fill(color).frame(width: proxy.size.width * clamped)
+                Capsule().fill(paint).frame(width: proxy.size.width * clamped)
             }
         }
         .frame(height: 6)

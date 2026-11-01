@@ -7,11 +7,12 @@ import StackbarProtocol
 /// Action ids are printed next to the controls that carry them, so the output
 /// doubles as a list of what `stackbarctl render --event <id>` can press.
 public enum TreeTextRenderer {
-    public static func render(_ node: ViewNode, showActions: Bool = true) -> String {
-        lines(node, depth: 0, showActions: showActions).joined(separator: "\n")
+    /// `now` is the moment timers and timed progress are read at.
+    public static func render(_ node: ViewNode, showActions: Bool = true, now: Date = Date()) -> String {
+        lines(node, depth: 0, showActions: showActions, now: now).joined(separator: "\n")
     }
 
-    static func lines(_ node: ViewNode, depth: Int, showActions: Bool) -> [String] {
+    static func lines(_ node: ViewNode, depth: Int, showActions: Bool, now: Date) -> [String] {
         let pad = String(repeating: "  ", count: depth)
         func tag(_ id: ActionID) -> String { showActions ? "  {\(id)}" : "" }
 
@@ -21,22 +22,22 @@ public enum TreeTextRenderer {
             return [pad + body + roleSuffix(role)]
         case .label(let title, let symbol, let role):
             return [pad + "[\(symbol)] \(title)" + roleSuffix(role)]
-        case .stack(.horizontal, _, let children):
-            let parts = children.map { lines($0, depth: 0, showActions: showActions).joined(separator: " ") }
+        case .stack(.horizontal, _, _, let children):
+            let parts = children.map { lines($0, depth: 0, showActions: showActions, now: now).joined(separator: " ") }.filter { !$0.isEmpty }
             return [pad + parts.joined(separator: "  ")]
-        case .stack(.vertical, _, let children):
-            return children.flatMap { lines($0, depth: depth, showActions: showActions) }
+        case .stack(.vertical, _, _, let children), .stack(.depth, _, _, let children):
+            return children.flatMap { lines($0, depth: depth, showActions: showActions, now: now) }
         case .list(let searchable, let children):
             let header = pad + (searchable ? "List (searchable)" : "List")
-            return [header] + children.flatMap { lines($0, depth: depth + 1, showActions: showActions) }
+            return [header] + children.flatMap { lines($0, depth: depth + 1, showActions: showActions, now: now) }
         case .section(let title, let children):
             let header = pad + "-- \(title ?? "") --"
-            return [header] + children.flatMap { lines($0, depth: depth, showActions: showActions) }
+            return [header] + children.flatMap { lines($0, depth: depth, showActions: showActions, now: now) }
         case .row(let row):
             var line = pad + "* " + row.title
             if let subtitle = row.subtitle { line += " - \(subtitle)" }
             for accessory in row.accessories {
-                line += "  " + lines(accessory, depth: 0, showActions: showActions).joined(separator: " ")
+                line += "  " + lines(accessory, depth: 0, showActions: showActions, now: now).joined(separator: " ")
             }
             if !row.actions.isEmpty {
                 let actions = row.actions.map { action in
@@ -51,8 +52,8 @@ public enum TreeTextRenderer {
             return [pad + "(\(title))" + roleSuffix(role) + tag(action)]
         case .toggle(let title, let isOn, let action):
             return [pad + (isOn ? "[x] " : "[ ] ") + title + tag(action)]
-        case .progress(let value, let total, let label, _):
-            let fraction = total > 0 ? min(1, max(0, value / total)) : 0
+        case .progress(let value, let total, let label, _, _, let timing):
+            let fraction = timing?.fraction(at: now) ?? (total > 0 ? min(1, max(0, value / total)) : 0)
             let filled = Int((fraction * 10).rounded())
             let bar = String(repeating: "#", count: filled) + String(repeating: ".", count: 10 - filled)
             return [pad + (label.map { "\($0) " } ?? "") + "[\(bar)] \(Int((fraction * 100).rounded()))%"]
@@ -81,7 +82,7 @@ public enum TreeTextRenderer {
             return [pad + (label.map { "\($0) " } ?? "") + sparkline(values) + (kind == .line ? "" : " (\(kind.rawValue))") + names]
         case .textField(let placeholder, let text, let action):
             return [pad + "[\(text.isEmpty ? placeholder : text)____]" + tag(action)]
-        case .picker(let title, let options, let selection, let action):
+        case .picker(let title, let options, let selection, _, let action):
             let choices = options.map { $0 == selection ? "*\($0)*" : $0 }.joined(separator: " | ")
             return [pad + "\(title): \(choices)" + tag(action)]
         case .slider(let title, let value, let min, let max, _, let action):
@@ -98,6 +99,21 @@ public enum TreeTextRenderer {
             }
             result.append(pad + "  (\(form.submitTitle))" + tag(form.action))
             return result
+        case .styled(let child, let style):
+            if let label = style.accessibilityLabel {
+                // The label names the child; its actions stay pressable.
+                if case .tappable(_, let action) = child { return [pad + "(\(label))" + tag(action)] }
+                return [pad + label + child.actions.map(tag).joined()]
+            }
+            return lines(child, depth: depth, showActions: showActions, now: now)
+        case .shape, .spacer:
+            return []
+        case .image(.symbol(let symbol)):
+            return [pad + "[\(symbol)]"]
+        case .timer(let range, let countsDown):
+            return [pad + range.clock(at: now, countsDown: countsDown)]
+        case .tappable(let content, let action):
+            return [pad + "(\(content.plainText))" + tag(action)]
         }
     }
 

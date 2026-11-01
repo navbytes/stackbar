@@ -149,9 +149,12 @@ public struct PaletteIndex: Sendable {
             return [entry("\(isOn ? "Turn off" : "Turn on") \(title)", nil, isOn ? "switch.2" : "switch.2", .action(action, value: .bool(!isOn)))]
         case .link(let title, let url):
             return [entry(title, url, "link", .open(url))]
-        case .stack(_, _, let children), .list(_, let children), .section(_, let children):
-            return children.flatMap { entries(in: $0, pluginID: pluginID, pluginName: pluginName) }
-        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form:
+        case .tappable(let content, let action):
+            let title = content.plainText
+            return title.isEmpty ? [] : [entry(title, nil, nil, .action(action, value: nil))]
+        case .stack, .list, .section, .styled:
+            return node.children.flatMap { entries(in: $0, pluginID: pluginID, pluginName: pluginName) }
+        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form, .shape, .image, .timer, .spacer:
             return []
         }
     }

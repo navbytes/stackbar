@@ -11,7 +11,9 @@ public enum StackbarProtocolVersion {
     /// 8 added running declared commands and reading the user's context.
     /// 9 added file panels, finding apps and rows with an app's icon.
     /// 10 added paste options (restoring the clipboard, the cursor) and storage grants.
-    public static let current = 10
+    /// 11 added styling, shapes, images, timers, tappable content, layered
+    /// stacks, segmented pickers, ring and timed progress, and system sounds.
+    public static let current = 11
 }
 
 /// Host → plugin.
@@ -143,6 +145,8 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// missed (a meeting starting). Buttons open URLs, like notification
     /// buttons; Esc or Dismiss closes it. At most one a minute.
     case alert(title: String, body: String?, actions: [NotificationAction])
+    /// Plays a macOS system sound. At most 10 a minute. Protocol 11.
+    case playSound(SystemSound)
     /// Opens a URL with the default app (https, mailto, or a file URL).
     case openURL(String)
     /// Opens a URL or an absolute path, with an app by bundle id when given.

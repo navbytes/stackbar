@@ -32,6 +32,8 @@ public final class HostServices: Sendable {
         public var notify: @Sendable (HostNotification) -> Void
         /// A full-screen alert; `actions` are already checked.
         public var alert: @Sendable (HostNotification) -> Void
+        /// Plays a system sound.
+        public var playSound: @Sendable (SystemSound) -> Void
         public var open: @Sendable (URL) -> Void
         /// Opens with a specific app by bundle id; throws when it isn't installed.
         public var openWith: @Sendable (URL, String) async throws -> Void
@@ -47,6 +49,7 @@ public final class HostServices: Sendable {
         public init(
             notify: @escaping @Sendable (HostNotification) -> Void = { _ in },
             alert: @escaping @Sendable (HostNotification) -> Void = { _ in },
+            playSound: @escaping @Sendable (SystemSound) -> Void = { _ in },
             open: @escaping @Sendable (URL) -> Void = { _ in },
             openWith: @escaping @Sendable (URL, String) async throws -> Void = { _, _ in throw SystemServiceError("opening with a chosen app is not available here") },
             copy: @escaping @Sendable (String) -> Void = { _ in },
@@ -57,6 +60,7 @@ public final class HostServices: Sendable {
             self.approvalNeeded = approvalNeeded
             self.notify = notify
             self.alert = alert
+            self.playSound = playSound
             self.open = open
             self.openWith = openWith
             self.copy = copy
@@ -80,6 +84,7 @@ public final class HostServices: Sendable {
     private let approvedCommands: (@Sendable (String) -> [String: String])?
     private let notifications = RateLimiter(limit: 10, per: 60)
     private let alerts = RateLimiter(limit: 1, per: 60)
+    private let sounds = RateLimiter(limit: 10, per: 60)
     private let panels = RateLimiter(limit: 10, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
@@ -182,6 +187,11 @@ public final class HostServices: Sendable {
                 platform.notify(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
                 return .ok
             }
+
+        case .playSound(let sound):
+            guard sounds.allow(granted.id) else { return .failure("too many sounds; at most 10 a minute") }
+            platform.playSound(sound)
+            return .ok
 
         case .alert(let title, let body, let actions):
             guard alerts.allow(granted.id) else { return .failure("too many alerts; at most one a minute") }

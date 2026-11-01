@@ -33,6 +33,7 @@ public enum SurfaceParity {
     public enum Kind: String, CaseIterable, Sendable {
         case text, label, stack, list, section, row, badge, button, toggle, progress, divider
         case labeled, chart, textField, picker, slider, link, empty, form
+        case styled, shape, image, timer, spacer, tappable
 
         public init(_ node: ViewNode) {
             switch node {
@@ -55,6 +56,12 @@ public enum SurfaceParity {
             case .link: self = .link
             case .empty: self = .empty
             case .form: self = .form
+            case .styled: self = .styled
+            case .shape: self = .shape
+            case .image: self = .image
+            case .timer: self = .timer
+            case .spacer: self = .spacer
+            case .tappable: self = .tappable
             }
         }
     }
@@ -74,23 +81,29 @@ public enum SurfaceParity {
         switch kind {
         case .text: return "Text with style and role"
         case .label: return "Label with SF Symbol"
-        case .stack: return "VStack / HStack"
+        case .stack: return "VStack / HStack / ZStack, aligned"
         case .list: return "List; filter field when searchable"
         case .section: return "Captioned group"
         case .row: return "Row with app icon or symbol; click = first action, context menu = all"
         case .badge: return "Capsule"
         case .button: return "Button"
         case .toggle: return "Toggle"
-        case .progress: return "ProgressView"
+        case .progress: return "Bar or ring; a timed range animates on its own"
         case .divider: return "Divider"
         case .labeled: return "LabeledContent"
         case .chart: return "Swift Charts line, bar, area or donut, with labels, unit and goal; a day heatmap"
         case .textField: return "TextField; return submits"
-        case .picker: return "Picker"
+        case .picker: return "Picker; segmented when asked"
         case .slider: return "Slider; sends on release"
         case .link: return "Link; host opens it"
         case .empty: return "ContentUnavailableView"
         case .form: return "Form; submit sends every field"
+        case .styled: return "Child with font, colors, padding, frame, background, border, clip, shadow, opacity, animation"
+        case .shape: return "Filled or stroked shape"
+        case .image: return "SF Symbol sized by the font"
+        case .timer: return "Live timer text the host counts"
+        case .spacer: return "Spacer"
+        case .tappable: return "Content as a plain button; click sends the action"
         }
     }
 
@@ -98,7 +111,8 @@ public enum SurfaceParity {
         switch kind {
         case .list: return "List filtered by the plugin as the user types"
         case .row: return "Row; Return = first action, ⌘K = all, navigate pushes"
-        case .text, .label, .stack, .section, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form:
+        case .text, .label, .stack, .section, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form,
+             .styled, .shape, .image, .timer, .spacer, .tappable:
             return "As panel"
         }
     }
@@ -107,12 +121,15 @@ public enum SurfaceParity {
         switch kind {
         case .text: return "Inline text"
         case .label: return "Symbol and title"
-        case .stack: return "Children on one line"
+        case .stack: return "Children on one line; layered when depth"
         case .list, .section, .row: return "Hidden (panel only)"
         case .badge: return "Small capsule"
-        case .button, .toggle, .textField, .picker, .slider, .link, .form: return "Hidden (click opens the panel)"
-        case .progress: return "12 pt ring"
-        case .divider: return "Hidden"
+        case .button, .toggle, .textField, .picker, .slider, .link, .form, .tappable: return "Hidden (click opens the panel)"
+        case .progress: return "12 pt ring, timed ones animate"
+        case .divider, .shape, .spacer: return "Hidden"
+        case .styled: return "Child; colors and decoration ignored so the bar stays legible"
+        case .image: return "Symbol"
+        case .timer: return "Live timer text"
         case .labeled: return "Label and value"
         case .chart: return "32 pt sparkline"
         case .empty: return "Symbol and title"
@@ -124,8 +141,9 @@ public enum SurfaceParity {
         case .list: return "First 4 rows, no filter"
         case .row: return "Row, not clickable"
         case .button, .toggle, .textField, .picker, .slider, .form: return "Drawn disabled"
+        case .tappable: return "Drawn, not clickable"
         case .link: return "Link (opens Stackbar's URL)"
-        case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty: return "As panel"
+        case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty, .styled, .shape, .image, .timer, .spacer: return "As panel"
         }
     }
 
@@ -135,8 +153,9 @@ public enum SurfaceParity {
         case .button: return "Entry, runs the button"
         case .toggle: return "Entry, flips the toggle"
         case .link: return "Entry, opens the URL"
-        case .list, .section, .stack: return "Searched through"
-        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form: return "Not listed"
+        case .tappable: return "Entry named by its text"
+        case .list, .section, .stack, .styled: return "Searched through"
+        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form, .shape, .image, .timer, .spacer: return "Not listed"
         }
     }
 
@@ -161,6 +180,11 @@ public enum SurfaceParity {
         case .link: return "`<title> url`"
         case .empty: return "`[symbol] title - message`"
         case .form: return "`Form` then `label: [value____]` lines and `(submit) {id}`"
+        case .styled: return "Child, or its accessibility label with the child's action ids"
+        case .shape, .spacer: return "Nothing"
+        case .image: return "`[symbol]`"
+        case .timer: return "`12:34` as of now"
+        case .tappable: return "`(text) {id}`"
         }
     }
 

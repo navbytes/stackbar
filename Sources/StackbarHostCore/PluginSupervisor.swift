@@ -319,6 +319,13 @@ public actor PluginSupervisor {
         send(.trigger(reason: .clipboard))
     }
 
+    /// The tree, or an error in its place when it is over `RenderLimits`.
+    private func withinLimits(_ root: ViewNode) -> ViewNode {
+        guard let violation = RenderLimits.violation(root) else { return root }
+        onUpdate(.log(.error, "render refused: \(violation)"))
+        return .empty(title: "View too large", symbol: "exclamationmark.triangle", message: violation)
+    }
+
     private func handle(_ event: PluginProcess.Event, generation eventGeneration: Int) {
         guard eventGeneration == generation else { return }
         switch event {
@@ -328,6 +335,7 @@ public actor PluginSupervisor {
             }
             setState(.running)
         case .message(.render(let surface, let root)):
+            let root = withinLimits(root)
             views[surface] = root
             onUpdate(.render(surface, root))
         case .message(.log(let level, let message)):
@@ -350,7 +358,7 @@ public actor PluginSupervisor {
         case .message(.commandResult(let id, let result)):
             finishCommandCall(id, result, generation: eventGeneration)
         case .message(.view(let session, let seq, let root)):
-            onUpdate(.view(session: session, seq: seq, root: root))
+            onUpdate(.view(session: session, seq: seq, root: withinLimits(root)))
         case .stderr(let line):
             emitPluginLog(.debug, line)
         case .undecodable(let line):

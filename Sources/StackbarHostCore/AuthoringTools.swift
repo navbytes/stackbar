@@ -210,8 +210,7 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             if !commands.isEmpty { text += "\n== commands ==\n" + commands.map(Self.describe).joined(separator: "\n") }
             let tools = await session.tools()
             if !tools.isEmpty { text += "\n== tools ==\n" + tools.map { "\($0.name): \($0.description)" }.joined(separator: "\n") }
-            let warnings = await session.logs(last: 10).filter { $0.hasPrefix("[error]") || $0.hasPrefix("[warning]") }
-            if !warnings.isEmpty { text += "\n== recent problems ==\n" + warnings.joined(separator: "\n") }
+            text += await Self.problems(session, views: wanted.compactMap { views[$0] })
             return .text(text)
         }
     }
@@ -226,10 +225,19 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             return .text((try? encoder.encode(root)).map { String(decoding: $0, as: UTF8.self) } ?? "{}")
         }
-        var text = "== command view ==\n" + TreeTextRenderer.render(root)
+        let text = "== command view ==\n" + TreeTextRenderer.render(root) + (await Self.problems(session, views: [root]))
+        return .text(text)
+    }
+
+    /// Style warnings for the rendered views and the plugin's recent errors,
+    /// as sections to append to a text render.
+    private static func problems(_ session: PluginSession, views: [ViewNode]) async -> String {
+        var text = ""
+        let style = views.flatMap(StyleLint.warnings)
+        if !style.isEmpty { text += "\n== style problems ==\n" + style.joined(separator: "\n") }
         let warnings = await session.logs(last: 10).filter { $0.hasPrefix("[error]") || $0.hasPrefix("[warning]") }
         if !warnings.isEmpty { text += "\n== recent problems ==\n" + warnings.joined(separator: "\n") }
-        return .text(text)
+        return text
     }
 
     static func describe(_ spec: CommandSpec) -> String {
