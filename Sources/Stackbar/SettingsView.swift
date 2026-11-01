@@ -29,6 +29,7 @@ struct GeneralSettings: View {
     @Bindable var model: AppModel
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @State private var showInDock = DockPresence.enabled
 
     var body: some View {
         Form {
@@ -37,6 +38,10 @@ struct GeneralSettings: View {
                     .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
                 if let loginError { Text(loginError).font(.caption).foregroundStyle(.red) }
                 LabeledContent("Command palette", value: "⌃⌥Space")
+                Toggle("Show in the Dock while a window is open", isOn: $showInDock)
+                    .onChange(of: showInDock) { _, on in DockPresence.enabled = on }
+                Text("Plugin windows and Settings then appear in ⌘Tab and the Dock, so they're easy to find behind other windows.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Agents") {
                 Toggle("Let agents use plugin tools (MCP)", isOn: $model.agentGatewayEnabled)

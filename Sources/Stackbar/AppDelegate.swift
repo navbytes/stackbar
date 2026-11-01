@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" {
             UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         }
+        DockPresence.installMainMenu(settings: #selector(openSettings), target: self)
         model.onPluginsChanged = { [weak self] in self?.syncItems() }
         model.start()
         _ = palette
@@ -32,6 +33,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.model.controllers.forEach { $0.wake() }
             }
         }
+    }
+
+    /// Clicking the Dock icon (shown while a window is open) brings the
+    /// windows back, minimized ones included.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        for window in NSApp.windows where window.isMiniaturized { window.deminiaturize(nil) }
+        NSApp.arrangeInFront(nil)
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -112,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.center()
             settingsWindow = window
         }
+        if let settingsWindow { DockPresence.shared.track(settingsWindow) }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
     }

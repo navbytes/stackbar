@@ -1,19 +1,32 @@
 #if os(macOS)
 import AppKit
+import Observation
 import SwiftUI
 import StackbarProtocol
 import StackbarUI
 
 /// Plugin windows: the `window` surface in a resizable window, one per plugin.
 @MainActor
+@Observable
 final class PluginWindows: NSObject, NSWindowDelegate {
-    private var windows: [String: NSWindow] = [:]
-    private var controllers: [ObjectIdentifier: PluginController] = [:]
+    @ObservationIgnored private var windows: [String: NSWindow] = [:]
+    @ObservationIgnored private var controllers: [ObjectIdentifier: PluginController] = [:]
+    /// Plugins with a window open, so the panel can say "Show Window".
+    private(set) var openIDs: Set<String> = []
+
+    func isOpen(_ controller: PluginController) -> Bool { openIDs.contains(controller.pluginID) }
+
+    /// The plugin's open window when it isn't already in front of you:
+    /// behind other windows, minimized, or in an app you've left.
+    func buried(_ controller: PluginController) -> NSWindow? {
+        guard let window = windows[controller.pluginID] else { return nil }
+        if window.isMiniaturized || !window.isVisible { return window }
+        return NSApp.isActive && window.isKeyWindow ? nil : window
+    }
 
     func open(_ controller: PluginController) {
         if let window = windows[controller.pluginID] {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            show(window)
             return
         }
         let window = NSWindow(
@@ -30,9 +43,16 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         window.center()
         windows[controller.pluginID] = window
         controllers[ObjectIdentifier(window)] = controller
+        openIDs.insert(controller.pluginID)
         controller.setVisible(.window, true)
-        window.makeKeyAndOrderFront(nil)
+        show(window)
+    }
+
+    func show(_ window: NSWindow) {
+        DockPresence.shared.track(window)
+        if window.isMiniaturized { window.deminiaturize(nil) }
         NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
     }
 
     func close(_ pluginID: String) {
@@ -43,6 +63,7 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         guard let window = notification.object as? NSWindow, let controller = controllers.removeValue(forKey: ObjectIdentifier(window)) else { return }
         controller.setVisible(.window, false)
         windows[controller.pluginID] = nil
+        openIDs.remove(controller.pluginID)
     }
 }
 
