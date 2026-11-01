@@ -220,8 +220,37 @@ the order written:
   (re-renders that come out the same are not sent).
 - `Stackbar.play(.glass)` plays a system sound (at most 10 a minute).
 
+### The shared look (minimumStackbar 0.13.0)
+
+Store plugins share one design system, so build panels from it rather than
+from raw modifiers. Pick one `Theme` for the plugin (`.blue .indigo .violet
+.pink .red .orange .amber .green .teal .cyan .graphite`); `.success`,
+`.warning`, `.critical`, `.neutral` and `.info` are for states only. Every
+theme passes 4.5:1 in both modes.
+
+- `PanelHeader("3 running", subtitle: "Updated 10:42", symbol: "shippingbox.fill", theme: theme) { IconButton(…) }`
+  first in the panel. The footer names the plugin, so the title is the state.
+- `HeroCard(theme:) { }` the one thing an instrument panel is about (a track, a timer, the next meeting).
+- `Card("Title", detail: "8") { }` groups charts and values; native `Row`s stay in a `List` or `Section`.
+- `StatTile("Today", value: "1.2M", caption: "$4.12", symbol: "bolt.fill", theme:)` in an `HStack` of two or three.
+- `Metric("4:32", unit: "left", caption: "Until 17:30")`, `Gauge(value:, total:, theme:) { Text("40%") }` (or `Gauge(timing:)`),
+  `Meter("Memory", reading: "12 of 16 GB", value: 0.75, theme:)`,
+  `DayBar([0.2...0.3, 0.5...0.6], now: 0.4, theme:)` (a day with its meetings or working hours filled; fractions of the span)
+- `TagChips(tags, selection: tag, theme:) { tag in }` filters a library by tag: All, four chips, the rest under More
+- `Pill("Failing", symbol: "xmark", theme: .critical)`, `StatusDot(.success)`, `Banner("Showing numbers from 5 min ago")`
+- `IconButton("arrow.clockwise", label: "Refresh", theme:, prominence: .plain | .tinted | .filled) { }`,
+  `ActionButton("Upgrade All", symbol:, theme:, prominent: true) { }`, `Chip("Running", theme:, selected:) { }`
+- `EmptyState("Nothing running", symbol:, message:, theme:) { ActionButton(…) }` in place of `ContentUnavailableView` in panels
+- `.typography(.hero | .metric | .stat | .title | .headline | .body | .caption | .captionNumber | .overline)`,
+  `Space.xs…xl` (4–24), `Radius.small | .medium | .large`, `Paint.surface | .raised | .hairline`
+
+Leave text in the system's `.primary` and `.secondary` roles and color it with
+the theme only for emphasis. Keep the menu bar plain: a symbol, at most one
+short value, `.secondary` when idle.
+
 `stackbarctl render` flags text under 4.5:1 contrast in light or dark mode
-and buttons without text. `render --png <dir>` draws it on a Mac, and
+(see-through backgrounds are measured over what is behind them) and buttons
+without text. `render --png <dir>` draws it on a Mac, and
 `--dark` draws dark mode. The menu bar ignores styling so the bar stays
 legible, but shows symbols, timers and timed rings.
 

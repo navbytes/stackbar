@@ -39,7 +39,14 @@ final class RichUITests: XCTestCase {
         XCTAssertTrue(warnings[1].contains("in dark mode"), warnings[1])
 
         let inherited = ViewNode.stack(axis: .vertical, children: [ViewNode.text("Hi").styled(Style(background: Fill(.hex("#FFFFFF"))))]).styled(Style(foreground: .hex("#DDDDDD")))
-        XCTAssertEqual(StyleLint.warnings(inherited).count, 2, "an outer foreground counts against an inner background")
+        XCTAssertEqual(StyleLint.warnings(inherited).count, 3, "an outer foreground counts against an inner background, and the panel")
+
+        // A see-through background is seen against what is behind it.
+        let wash = ViewNode.text("Failing").styled(Style(foreground: .hex("#A81E23", dark: "#ED9496"), background: Fill(.hex("#D92D3324", dark: "#DD2F3438"))))
+        XCTAssertEqual(StyleLint.warnings(wash), [], "\(StyleLint.warnings(wash))")
+        let onCream = ViewNode.text("Focus").styled(Style(foreground: .hex("#FFFFFF"), background: Fill(.hex("#00000000")))).styled(Style(background: Fill(.hex("#F7E7D9"))))
+        XCTAssertEqual(StyleLint.warnings(onCream).count, 2, "clear over cream is cream, in both modes: \(StyleLint.warnings(onCream))")
+        XCTAssertTrue(StyleLint.warnings(onCream)[0].contains("on #F7E7D9"))
 
         let unnamed = ViewNode.tappable(.image(.symbol("gearshape")), action: "button/settings")
         XCTAssertEqual(StyleLint.warnings(unnamed), ["button {button/settings} has no text; give it .accessibilityLabel(...)"])

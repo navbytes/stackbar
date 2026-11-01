@@ -108,9 +108,9 @@ public struct NodeView: View {
         case .divider:
             Divider()
         case .labeled(let label, let value, let role):
-            LabeledContent(label) { Text(value).foregroundStyle(role.color).textSelection(.enabled) }
+            LabeledContent(label) { Text(value).foregroundStyle(tint(role)).textSelection(.enabled) }
         case .chart(let values, let kind, let label, let role, let options):
-            ChartNodeView(values: values, kind: kind, label: label, role: role, options: options ?? ChartOptions())
+            ChartNodeView(values: values, kind: kind, label: label, role: role, options: options ?? ChartOptions(), tint: foreground?.flatColor)
         case .textField(let placeholder, let text, let action):
             FieldNodeView(placeholder: placeholder, text: text, action: action, send: send)
                 .disabled(readOnly)
@@ -499,6 +499,11 @@ struct ChartNodeView: View {
     let label: String?
     let role: Role
     let options: ChartOptions
+    /// A styled foreground, which colors the marks in place of the role.
+    var tint: Color? = nil
+
+    /// The series color: the styled foreground, else the role's.
+    private var main: Color { tint ?? role.color }
 
     struct Point: Identifiable {
         let index: Int
@@ -521,7 +526,7 @@ struct ChartNodeView: View {
     }
 
     private func color(_ index: Int) -> Color {
-        index == 0 ? role.color : Self.palette[(index - 1) % Self.palette.count]
+        index == 0 ? main : Self.palette[(index - 1) % Self.palette.count]
     }
 
     /// The highlighted point, or the latest one, as "Mon 3.5h".
@@ -546,7 +551,7 @@ struct ChartNodeView: View {
             }
             switch kind {
             case .donut: donut
-            case .heatmap: HeatmapView(values: values, names: options.labels ?? [], unit: options.unit ?? "", color: role.color)
+            case .heatmap: HeatmapView(values: values, names: options.labels ?? [], unit: options.unit ?? "", color: main)
             case .line, .bar, .area: series
             }
         }
@@ -558,18 +563,18 @@ struct ChartNodeView: View {
             ForEach(points) { point in
                 if kind == .bar {
                     BarMark(x: .value("Point", String(point.index)), y: .value("Value", point.value))
-                        .foregroundStyle(options.highlight == nil || options.highlight == point.index ? role.color : role.color.opacity(0.4))
+                        .foregroundStyle(options.highlight == nil || options.highlight == point.index ? main : main.opacity(0.4))
                         .cornerRadius(3)
                 } else if kind == .area {
                     AreaMark(x: .value("Point", point.index), y: .value("Value", point.value))
-                        .foregroundStyle(LinearGradient(colors: [role.color.opacity(0.35), role.color.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                        .foregroundStyle(LinearGradient(colors: [main.opacity(0.35), main.opacity(0.02)], startPoint: .top, endPoint: .bottom))
                         .interpolationMethod(.monotone)
                     LineMark(x: .value("Point", point.index), y: .value("Value", point.value))
-                        .foregroundStyle(role.color)
+                        .foregroundStyle(main)
                         .interpolationMethod(.monotone)
                 } else {
                     LineMark(x: .value("Point", point.index), y: .value("Value", point.value))
-                        .foregroundStyle(role.color)
+                        .foregroundStyle(main)
                         .interpolationMethod(.monotone)
                 }
             }
@@ -580,7 +585,7 @@ struct ChartNodeView: View {
             }
             if kind != .bar, let index = options.highlight, values.indices.contains(index) {
                 PointMark(x: .value("Point", index), y: .value("Value", values[index]))
-                    .foregroundStyle(role.color)
+                    .foregroundStyle(main)
                     .symbolSize(30)
             }
         }
