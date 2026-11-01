@@ -10,7 +10,7 @@
 - [x] 1.7 Remove the Fluid and `Plugins/` migration code; one `BundledStore` for bundles and examples
 
 ## Wave 2
-- [ ] 2.1 `stackbarctl manifest --json`; `Manifest.storeProblems`; `index build` enforces it
+- [x] 2.1 `stackbarctl manifest --json`; `Manifest.storeProblems`; `index build` enforces it
 - [x] 2.2 `Stackbar.getJSON(_:auth:)`, `StackbarError.missingSecret` and its standard panel view
 
 ## Wave 3 (stackbar-plugins)
