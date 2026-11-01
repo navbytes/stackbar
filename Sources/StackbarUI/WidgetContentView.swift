@@ -14,29 +14,10 @@ public struct WidgetContentView: View {
     }
 
     public var body: some View {
-        NodeView(node: WidgetContentView.trimmed(node, maxRows: maxRows), send: { _, _ in })
+        NodeView(node: node.trimmed(maxRows: maxRows), send: { _, _ in })
             .environment(\.stackbarReadOnly, true)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(12)
-    }
-
-    /// Lists keep their first `maxRows` children; controls stay but are
-    /// disabled by `stackbarReadOnly`.
-    public static func trimmed(_ node: ViewNode, maxRows: Int) -> ViewNode {
-        switch node {
-        case .list(_, let children):
-            return .list(searchable: false, children: Array(children.prefix(maxRows)).map { trimmed($0, maxRows: maxRows) })
-        case .stack(let axis, let spacing, let alignment, let children):
-            return .stack(axis: axis, spacing: spacing, alignment: alignment, children: children.map { trimmed($0, maxRows: maxRows) })
-        case .styled(let child, let style):
-            return .styled(trimmed(child, maxRows: maxRows), style: style)
-        case .tappable(let child, let action):
-            return .tappable(trimmed(child, maxRows: maxRows), action: action)
-        case .section(let title, let children):
-            return .section(title: title, children: children.map { trimmed($0, maxRows: maxRows) })
-        default:
-            return node
-        }
     }
 }
 #endif

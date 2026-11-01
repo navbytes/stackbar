@@ -65,30 +65,6 @@ public enum StackbarPaths {
         return ChainedSecretStore(includeEnvironment ? [primary, EnvironmentSecretStore()] : [primary])
     }
 
-    /// Moves a Mac's data from before the rename (the app was called Fluid
-    /// until November 2026): `~/Library/Application Support/Fluid` and
-    /// `~/Library/Logs/Fluid` become their Stackbar folders, once, and only
-    /// when the Stackbar folder doesn't exist yet. The build cache is not
-    /// moved; plugins rebuild against StackbarKit anyway. Keychain secrets
-    /// are under a new service and have to be entered again.
-    public static func migrateFromFluid() {
-        #if os(macOS)
-        guard ProcessInfo.processInfo.environment["STACKBAR_HOME"] == nil else { return }
-        let fileManager = FileManager.default
-        let library = fileManager.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-        for folder in ["Application Support", "Logs"] {
-            let old = library.appendingPathComponent("\(folder)/Fluid", isDirectory: true)
-            let new = library.appendingPathComponent("\(folder)/Stackbar", isDirectory: true)
-            guard fileManager.fileExists(atPath: old.path), !fileManager.fileExists(atPath: new.path) else { continue }
-            try? fileManager.moveItem(at: old, to: new)
-        }
-        let log = library.appendingPathComponent("Logs/Stackbar/fluid.log")
-        if fileManager.fileExists(atPath: log.path) {
-            try? fileManager.moveItem(at: log, to: logFile.deletingLastPathComponent().appendingPathComponent("fluid-before-rename.log"))
-        }
-        #endif
-    }
-
     /// The package that provides StackbarKit to plugin builds: `STACKBAR_PACKAGE`,
     /// then a copy bundled next to the running executable
     /// (`../Resources/StackbarKit` in an app bundle), then the source checkout this

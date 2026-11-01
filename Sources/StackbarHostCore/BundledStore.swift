@@ -1,46 +1,45 @@
 import Foundation
 import StackbarProtocol
 
-/// The first-party plugins, which live in navbytes/stackbar-plugins and
-/// install and update through the official store. The app carries their
-/// signed bundles (`Resources/StackbarKit/Bundles`, fetched from the store when
-/// the app is built) so a new Mac gets them without a network.
+/// The plugins that ship with the app, in one place:
 ///
-/// Before the move they shipped as source in `Plugins/` and were copied into
-/// the plugins folder by name. `migrate` turns an untouched copy into a store
-/// install of the same plugin id, so its settings, storage and approvals
-/// (all keyed by id) carry over and it starts receiving store updates.
+/// - the first-party plugins, which live in navbytes/stackbar-plugins and
+///   install and update through the official store. The app carries their
+///   signed bundles (`Resources/StackbarKit/Bundles`, fetched from the store
+///   when the app is built) so a new Mac gets them without a network;
+/// - the examples (`Examples/`), small teaching plugins copied into the
+///   plugins folder as source, so they can be read and changed.
+///
+/// An example copy is replaced by a newer one only while it is still exactly
+/// what Stackbar wrote (`bundled.json` keeps that digest). A copy the user
+/// changed is theirs and stays.
 public struct BundledStore {
-    /// The file names the plugins had in `Plugins/`, by plugin id.
-    public static let legacyFiles: [String: String] = [
-        "Clipboard.swift": "io.navbytes.stackbar.clipboard",
-        "PRCockpit.swift": "io.navbytes.stackbar.pr-cockpit",
-        "StayAwake.swift": "io.navbytes.stackbar.stay-awake",
-        "UpNext.swift": "io.navbytes.stackbar.up-next",
-        "Quicklinks.swift": "io.navbytes.stackbar.quicklinks",
-        "Snippets.swift": "io.navbytes.stackbar.snippets",
+    /// The first-party plugins the app carries, fetched by
+    /// `stackbarctl index fetch` when the app is built.
+    public static let pluginIDs: Set<String> = [
+        "io.navbytes.stackbar.clipboard",
+        "io.navbytes.stackbar.pr-cockpit",
+        "io.navbytes.stackbar.quicklinks",
+        "io.navbytes.stackbar.snippets",
+        "io.navbytes.stackbar.stay-awake",
+        "io.navbytes.stackbar.up-next",
     ]
 
-    /// The first-party plugins the app carries.
-    public static var pluginIDs: Set<String> { Set(legacyFiles.values) }
-
-    public struct Migration: Equatable, Sendable {
-        public var old: URL
-        public var new: URL
-    }
-
     public let bundlesDirectory: URL
+    /// The example sources, copied as they are.
+    public let examplesDirectory: URL
     public let pluginsDirectory: URL
-    /// `bundled.json`: what Stackbar last wrote for each copied file.
-    public let bundledRecord: URL
+    /// `bundled.json`: what Stackbar last wrote for each copied example.
+    public let record: URL
     public let installer: PluginInstaller
     /// The key bundles must be signed with; nil accepts none.
     public let publicKey: String?
 
-    public init(bundlesDirectory: URL, pluginsDirectory: URL, bundledRecord: URL, installer: PluginInstaller, publicKey: String? = OfficialIndex.publicKey) {
+    public init(bundlesDirectory: URL, examplesDirectory: URL, pluginsDirectory: URL, record: URL, installer: PluginInstaller, publicKey: String? = OfficialIndex.publicKey) {
         self.bundlesDirectory = bundlesDirectory
+        self.examplesDirectory = examplesDirectory
         self.pluginsDirectory = pluginsDirectory
-        self.bundledRecord = bundledRecord
+        self.record = record
         self.installer = installer
         self.publicKey = publicKey
     }
@@ -61,45 +60,63 @@ public struct BundledStore {
         return newest.values.sorted { $0.manifest.id < $1.manifest.id }
     }
 
-    /// Installs every carried plugin that isn't installed yet and has no
-    /// copy in the plugins folder. Returns the new files.
+    /// Installs every carried plugin that isn't installed yet and copies
+    /// every example that isn't in the plugins folder. Returns the new files.
     @discardableResult
     public func installMissing() -> [URL] {
         let installed = Set(installer.installed.map(\.id))
-        let legacyPresent = Set(Self.legacyFiles.filter { FileManager.default.fileExists(atPath: pluginsDirectory.appendingPathComponent($0.key).path) }.map(\.value))
         var result: [URL] = []
-        for bundle in bundles() where !installed.contains(bundle.manifest.id) && !legacyPresent.contains(bundle.manifest.id) {
+        for bundle in bundles() where !installed.contains(bundle.manifest.id) {
             if let file = try? installer.install(bundle) { result.append(file) }
+        }
+        return result + syncExamples(installMissing: true).installed
+    }
+
+    /// What `syncExamples` did, by file.
+    public struct ExampleSync: Equatable, Sendable {
+        public var installed: [URL] = []
+        public var updated: [URL] = []
+        public var kept: [URL] = []
+    }
+
+    /// Brings example copies up to date. At launch `installMissing` is false,
+    /// so an example the user deleted stays deleted.
+    @discardableResult
+    public func syncExamples(installMissing: Bool = false) -> ExampleSync {
+        let manager = FileManager.default
+        var written = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: record))) ?? [:]
+        var result = ExampleSync()
+        try? manager.createDirectory(at: pluginsDirectory, withIntermediateDirectories: true)
+        for source in exampleSources() {
+            guard let fresh = try? Data(contentsOf: source) else { continue }
+            let name = source.lastPathComponent
+            let destination = pluginsDirectory.appendingPathComponent(name)
+            let digest = SHA256.hex(fresh)
+            guard let current = try? Data(contentsOf: destination) else {
+                if installMissing, (try? fresh.write(to: destination, options: .atomic)) != nil {
+                    written[name] = digest
+                    result.installed.append(destination)
+                }
+                continue
+            }
+            let currentDigest = SHA256.hex(current)
+            if currentDigest == digest {
+                written[name] = digest
+            } else if written[name] == currentDigest, (try? fresh.write(to: destination, options: .atomic)) != nil {
+                written[name] = digest
+                result.updated.append(destination)
+            } else {
+                result.kept.append(destination)
+            }
+        }
+        if let data = try? JSONEncoder().encode(written) {
+            try? data.write(to: record, options: .atomic)
         }
         return result
     }
 
-    /// Replaces each untouched legacy copy (unchanged since Stackbar wrote
-    /// it, or copied without a record by an older install script) with a
-    /// store install of the same plugin. A copy the user edited is left
-    /// alone: it is theirs now. The old file goes to `<name>.swift.bak` when
-    /// there was no record to prove it untouched.
-    @discardableResult
-    public func migrate() -> [Migration] {
-        let manager = FileManager.default
-        var record = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: bundledRecord))) ?? [:]
-        let available = Dictionary(uniqueKeysWithValues: bundles().map { ($0.manifest.id, $0) })
-        let installed = Set(installer.installed.map(\.id))
-        var result: [Migration] = []
-        for (name, id) in Self.legacyFiles.sorted(by: { $0.key < $1.key }) {
-            let old = pluginsDirectory.appendingPathComponent(name)
-            guard let current = try? Data(contentsOf: old), let bundle = available[id], !installed.contains(id) else { continue }
-            let recorded = record[name]
-            if let recorded, recorded != SHA256.hex(current) { continue }
-            guard let new = try? installer.install(bundle) else { continue }
-            if new.standardizedFileURL != old.standardizedFileURL {
-                if recorded == nil { try? current.write(to: old.appendingPathExtension("bak"), options: .atomic) }
-                try? manager.removeItem(at: old)
-            }
-            record[name] = nil
-            result.append(Migration(old: old, new: new))
-        }
-        if let data = try? JSONEncoder().encode(record) { try? data.write(to: bundledRecord, options: .atomic) }
-        return result
+    private func exampleSources() -> [URL] {
+        let files = FileManager.default.enumerator(at: examplesDirectory, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? []
+        return files.filter { $0.pathExtension == "swift" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 }

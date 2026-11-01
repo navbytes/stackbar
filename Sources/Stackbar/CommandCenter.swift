@@ -394,16 +394,6 @@ final class CommandViewModel: Identifiable {
     }
 }
 
-extension ViewNode {
-    /// Whether a form in the tree shows a problem with a field.
-    var hasFormErrors: Bool {
-        switch self {
-        case .form(let form): return form.fields.contains { $0.error != nil }
-        default: return children.contains(where: \.hasFormErrors)
-        }
-    }
-}
-
 /// A short message near the top of the screen: what a command did.
 @MainActor
 final class HUD {

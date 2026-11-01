@@ -153,8 +153,11 @@ stackbarctl install https://example.com/index.json   # or a bundle path
 ```
 
 `render` prints each surface as text with the action id next to every
-control, which is what you pass to `--event`. `stackbarctl` with no arguments
-lists every command.
+control, which is what you pass to `--event`. On macOS, `render`, `run`,
+`commands`, `mcp`, `agent` and `soak` sign the plugin into the same App Sandbox
+the app runs it in, so a missing capability fails the same way;
+`--no-sandbox` runs it unsigned. `stackbarctl` with no arguments lists every
+command.
 
 ## How it fits together
 
@@ -185,6 +188,7 @@ response, and a capped line length on the protocol.
 scripts/check.sh                 # what CI runs: build, every test, and a release build of the app on a Mac
 swift build && swift test        # quick loop
 STACKBAR_BUILD_TESTS=1 swift test   # also compiles real plugins through PluginBuilder
+scripts/generate-docs.sh         # rewrite llms.txt and the docs/surface-parity.md ledger from the code
 ```
 
 Everything except the app, `StackbarUI` and the widget builds and is tested on
@@ -206,8 +210,8 @@ Still to check on a Mac:
 3. **Signing:** Ed25519 bundles and the Keychain store (CryptoKit and Security
    only exist on Apple platforms).
 4. **The sandbox:** every helper is signed ad hoc with App Sandbox
-   entitlements from its manifest (`STACKBAR_SANDBOX=0` turns this off for
-   debugging). `.files` paths become file exceptions and `.network` turns on
+   entitlements from its manifest, by the app and by `stackbarctl`
+   (`STACKBAR_SANDBOX=0` and `--no-sandbox` turn this off for debugging). `.files` paths become file exceptions and `.network` turns on
    outgoing connections; everything else goes through the host.
    `SandboxTests` checks this in the macOS CI job.
 5. **The system services:** clipboard reads and paste (with Accessibility),

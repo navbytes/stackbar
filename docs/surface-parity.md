@@ -2,7 +2,8 @@
 
 Every node in the view vocabulary, and what each surface does with it. The
 table is generated from `SurfaceParity` (Sources/StackbarHostCore/SurfaceParity.swift);
-`SurfaceParityTests` fails when the two disagree and prints the table to paste.
+`SurfaceParityTests` fails when the two disagree; `scripts/generate-docs.sh`
+rewrites it.
 Adding a node to `ViewNode` doesn't compile until `SurfaceParity`, the panel
 renderer and the menu-bar renderer all handle it.
 

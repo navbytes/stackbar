@@ -119,12 +119,14 @@ public final class HostServices: Sendable {
     /// sends a streamed run's output to the plugin.
     public func handle(_ call: HostCall, for granted: Manifest, declared: Manifest? = nil, id: Int = 0, emit: (@Sendable (HostMessage) -> Void)? = nil) async -> HostResult {
         let declared = declared ?? granted
-        func missing(_ capability: Capability, _ what: String) -> HostResult {
-            declared.capabilities.contains(capability)
-                ? Self.awaitingApproval(granted, "to \(what)")
-                : Self.missing(capability, what)
-        }
         guard calls.allow(granted.id) else { return .failure("too many host calls; at most 1200 a minute") }
+        // Capabilities a call needs whatever its arguments; the cases below
+        // check what depends on the manifest's details.
+        if let need = call.requirement, !granted.capabilities.contains(need.capability) {
+            return declared.capabilities.contains(need.capability)
+                ? Self.awaitingApproval(granted, "to \(need.purpose)")
+                : Self.missing(need.capability, need.purpose)
+        }
         switch call {
         case .storageSet(let key, let value):
             do {
@@ -231,11 +233,9 @@ public final class HostServices: Sendable {
             return .ok
 
         case .clipboardRead:
-            guard granted.capabilities.contains(.clipboard) else { return missing(.clipboard, "read the clipboard") }
             return .value(platform.system.readClipboard().map(SystemCodec.encode))
 
         case .clipboardWrite(let content), .paste(let content, _):
-            guard granted.capabilities.contains(.clipboard) else { return missing(.clipboard, "write or paste clipboard content") }
             if case .text(let text) = content, text.utf8.count > 1024 * 1024 { return .failure("text is too large to copy") }
             do {
                 if case .paste(_, let options) = call {
@@ -251,8 +251,6 @@ public final class HostServices: Sendable {
             }
 
         case .keepAwake(let request):
-            // Releasing never needs the capability, so a revoked plugin can let go.
-            guard request == nil || granted.capabilities.contains(.power) else { return missing(.power, "keep the Mac awake") }
             do {
                 try platform.system.keepAwake(request.map { KeepAwakeRequest(display: $0.display, reason: "\(granted.name): \($0.reason.prefix(120))") }, pluginID: granted.id)
                 return .ok
@@ -261,11 +259,9 @@ public final class HostServices: Sendable {
             }
 
         case .systemStatus:
-            guard granted.capabilities.contains(.power) else { return missing(.power, "read battery and running apps") }
             return .value(SystemCodec.encode(platform.system.systemStatus()))
 
         case .calendarEvents(let from, let to):
-            guard granted.capabilities.contains(.calendar) else { return missing(.calendar, "read calendar events") }
             guard to > from else { return .failure("calendarEvents needs to > from") }
             guard to.timeIntervalSince(from) <= 31 * 86400 + 3600 else { return .failure("calendarEvents covers at most 31 days at a time") }
             do {
@@ -287,11 +283,9 @@ public final class HostServices: Sendable {
             return .ok
 
         case .context:
-            guard granted.capabilities.contains(.context) else { return missing(.context, "read the selected text and frontmost app") }
             return .value(SystemCodec.encode(await platform.system.context()))
 
         case .finderSelection:
-            guard granted.capabilities.contains(.context) else { return missing(.context, "read Finder's selection") }
             do {
                 return .value(SystemCodec.encode(try await platform.system.finderSelection()))
             } catch {

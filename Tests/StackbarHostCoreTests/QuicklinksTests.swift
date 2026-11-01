@@ -30,7 +30,7 @@ final class QuicklinksTests: XCTestCase {
             openWith: { url, app in opened.add(url, app) },
             system: system
         ))
-        let session = PluginSession(source: PluginSupervisorTests.helper("QuicklinksPlugin"), builder: nil, services: services)
+        let session = PluginSession(source: PluginSupervisorTests.helper("QuicklinksPlugin"), loader: PluginLoader(builder: nil, sandbox: false), services: services)
         try await session.ensureRunning()
         return session
     }

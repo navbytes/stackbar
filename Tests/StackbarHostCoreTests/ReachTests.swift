@@ -27,6 +27,23 @@ final class PaletteIndexTests: XCTestCase {
         index.update(pluginID: "a", pluginName: "PRs", panel: nil)
         XCTAssertEqual(index.entries.map(\.pluginID), ["b"])
     }
+
+    func testListsWhatCanBePressedWithoutItsControl() {
+        let target = CommandTarget(command: "details", arguments: ["id": "1"])
+        let panel = ViewNode.stack(axis: .vertical, children: [
+            .row(RowNode(key: "1", title: "Fix bug", actions: [ActionRef(id: "row/1/Details", title: "Details", navigate: target)])),
+            .textField(placeholder: "Search", text: "", action: "field/Search"),
+            .picker(title: "Mode", options: ["a"], selection: nil, action: "picker/Mode"),
+            .slider(title: "Volume", value: 0, min: 0, max: 1, action: "slider/Volume"),
+            .form(FormNode(fields: [], action: "form/Save")),
+            .tappable(.stack(axis: .horizontal, children: [.text("Start"), .button(title: "Inner", action: "button/Inner")]), action: "button/Start"),
+            .tappable(.image(.symbol("play.fill")), action: "button/Play"),
+        ])
+        let entries = PaletteIndex.entries(in: panel, pluginID: "p", pluginName: "P")
+        XCTAssertEqual(entries.map(\.title), ["Fix bug", "Start Inner"], "no inputs, nothing inside a tappable, no tappable without words")
+        XCTAssertEqual(entries.map(\.kind), [.navigate(target), .action("button/Start", value: nil)])
+        XCTAssertEqual(entries.first?.subtitle, "Details")
+    }
 }
 
 final class WidgetSnapshotTests: XCTestCase {

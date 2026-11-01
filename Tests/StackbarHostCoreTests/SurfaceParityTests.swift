@@ -11,7 +11,7 @@ final class SurfaceParityTests: XCTestCase {
         }
         let current = String(text[start.upperBound..<end.lowerBound])
         let expected = SurfaceParity.ledger()
-        XCTAssertEqual(current, expected, "docs/surface-parity.md is out of date. Paste this between the markers:\n\n\(expected)\n")
+        XCTAssertEqual(current, expected, "docs/surface-parity.md is out of date; run scripts/generate-docs.sh")
     }
 
     func testEveryNodeKindHasATreatmentEverywhere() {

@@ -50,7 +50,9 @@ usage:
   stackbarctl version
 
 A .swift path is built first (cached by content); anything else is run as an
-already-built helper. STACKBAR_PACKAGE overrides where StackbarKit is found, and
+already-built helper. On macOS, render, commands, run, mcp, agent and soak run
+plugins in the App Sandbox their manifest allows, as the app does; --no-sandbox
+runs them unsigned. STACKBAR_PACKAGE overrides where StackbarKit is found, and
 STACKBAR_HOME where Stackbar keeps its data.
 """
 
@@ -63,7 +65,14 @@ func note(_ message: String) {
     FileHandle.standardError.write(Data((message + "\n").utf8))
 }
 
-let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
+/// Plugins run in the App Sandbox, as the app runs them, unless
+/// `--no-sandbox`. Only macOS has a sandbox to sign them into.
+#if os(macOS)
+let sandbox = !CommandLine.arguments.contains("--no-sandbox")
+#else
+let sandbox = false
+#endif
+let loader = PluginLoader(builder: PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache), sandbox: sandbox)
 
 /// stackbarctl runs plugins against a simulated clipboard, battery and calendar
 /// (`STACKBAR_CALENDAR` points at a JSON file of events; otherwise a sample day).
@@ -109,16 +118,23 @@ func pngRenderer(dark: Bool = false) -> AuthoringTools.PNGRenderer? {
 }
 
 func helper(for path: String) -> URL {
-    let url = URL(fileURLWithPath: path)
-    guard url.pathExtension == "swift" else { return url }
     do {
-        let output = try builder.build(source: url)
+        let output = try loader.helper(for: URL(fileURLWithPath: path))
         if !output.cached { note("built \(output.binary.path)") }
         return output.binary
     } catch let failure as PluginBuilder.Failure {
         fail(failure.description)
     } catch {
         fail("build failed: \(error)")
+    }
+}
+
+/// A plugin ready to supervise: built, checked and sandboxed like the app's.
+func load(_ path: String) -> LoadedPlugin {
+    do {
+        return try loader.load(helper(for: path))
+    } catch {
+        fail("\(path): \(error)")
     }
 }
 
@@ -171,7 +187,7 @@ func render(_ path: String, options: [String]) async {
         index += 1
     }
 
-    let tools = AuthoringTools(builder: builder, services: makeServices(), png: pngRenderer(dark: dark))
+    let tools = AuthoringTools(loader: loader, services: makeServices(), png: pngRenderer(dark: dark))
     func run(_ name: String, _ arguments: [String: JSONValue]) async -> MCPToolResult {
         var arguments = arguments
         arguments["path"] = .string(path)
@@ -240,7 +256,7 @@ func flag(_ name: String, in options: [String]) -> String? {
     return options[index + 1]
 }
 
-let arguments = Array(CommandLine.arguments.dropFirst())
+let arguments = CommandLine.arguments.dropFirst().filter { $0 != "--no-sandbox" }
 guard let command = arguments.first else { fail(usage) }
 let rest = Array(arguments.dropFirst())
 
@@ -260,16 +276,11 @@ case "soak":
         pressEvents: rest.contains("--press"),
         allowedGrowth: (flag("--growth", in: rest).flatMap(Double.init) ?? 15) / 100
     )
-    let executable = helper(for: path)
-    let supervisor: PluginSupervisor
-    do {
-        supervisor = try PluginSupervisor.make(executable: executable, services: makeServices()) { update in
-            if case .log(let level, let message) = update, level != .debug { note("[\(level.rawValue)] \(message)") }
-        }
-    } catch {
-        fail("\(error)")
+    let plugin = load(path)
+    let supervisor = PluginSupervisor(executable: plugin.binary, manifest: plugin.manifest, services: makeServices()) { update in
+        if case .log(let level, let message) = update, level != .debug { note("[\(level.rawValue)] \(message)") }
     }
-    note("soaking \(executable.lastPathComponent) for \(minutes) minutes")
+    note("soaking \(plugin.manifest.name) for \(minutes) minutes")
     let report = await soak.run(supervisor) { tick, bytes in
         if tick % 30 == 0 { note(String(format: "tick %d: %.1f MB", tick, Double(bytes) / 1_048_576)) }
     }
@@ -298,7 +309,7 @@ case "doctor":
     }
     exit(healthy ? 0 : 1)
 case "mcp":
-    let tools = AuthoringTools(builder: builder, services: makeServices(), png: pngRenderer())
+    let tools = AuthoringTools(loader: loader, services: makeServices(), png: pngRenderer())
     let server = MCPServer(name: "stackbar-authoring", version: StackbarVersion.current, instructions: "Tools for writing Stackbar plugins: call stackbar_docs first, then stackbar_new/stackbar_build/stackbar_render/stackbar_send_event.", provider: tools)
     await server.serveStdio()
     await tools.stopAll()
@@ -313,14 +324,10 @@ case "agent":
         let services = makeServices()
         var supervisors: [PluginSupervisor] = []
         for path in rest {
-            let executable = helper(for: path)
-            do {
-                let supervisor = try PluginSupervisor.make(executable: executable, services: services)
-                await supervisor.start()
-                supervisors.append(supervisor)
-            } catch {
-                fail("\(path): \(error)")
-            }
+            let plugin = load(path)
+            let supervisor = PluginSupervisor(executable: plugin.binary, manifest: plugin.manifest, services: services)
+            await supervisor.start()
+            supervisors.append(supervisor)
         }
         let running = supervisors
         let server = MCPServer(name: "stackbar", version: StackbarVersion.current, instructions: "Tools from running Stackbar plugins. Call stackbar_plugins to see them.", provider: RuntimeTools { running })
@@ -473,7 +480,7 @@ case "manifest":
     }
 case "commands", "run":
     guard let path = rest.first else { fail(usage) }
-    let tools = AuthoringTools(builder: builder, services: makeServices(), png: nil)
+    let tools = AuthoringTools(loader: loader, services: makeServices(), png: nil)
     var callArguments: [String: JSONValue] = ["path": .string(path)]
     var toolName = "stackbar_list_commands"
     if command == "run" {

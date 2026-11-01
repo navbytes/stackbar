@@ -6,7 +6,7 @@ import StackbarProtocol
 /// drive plugins through this.
 public actor PluginSession {
     public let source: URL
-    private let builder: PluginBuilder?
+    private let loader: PluginLoader
     private let services: HostServices?
     private var supervisor: PluginSupervisor?
     private var binary: URL?
@@ -18,9 +18,9 @@ public actor PluginSession {
     private var nextSession = 1
     private var nextSeq = 1
 
-    public init(source: URL, builder: PluginBuilder?, services: HostServices?) {
+    public init(source: URL, loader: PluginLoader, services: HostServices?) {
         self.source = source
-        self.builder = builder
+        self.loader = loader
         self.services = services
     }
 
@@ -32,21 +32,17 @@ public actor PluginSession {
     /// `PluginBuilder.Failure` with diagnostics when it doesn't compile.
     @discardableResult
     public func ensureRunning() async throws -> Bool {
-        let built: URL
-        if source.pathExtension == "swift" {
-            guard let builder else { throw SessionError.noBuilder }
-            built = try await Task.detached { try builder.build(source: self.source).binary }.value
-        } else {
-            built = source
-        }
+        let loader = loader
+        let source = source
+        let built = try await Task.detached { try loader.helper(for: source).binary }.value
         if let supervisor, built == binary, await supervisor.state != .stopped {
             if case .failed = await supervisor.state {} else { return false }
         }
         await supervisor?.stop()
-        let manifest = try PluginProcess.readManifest(executable: built)
-        let problems = manifest.problems
-        if !problems.isEmpty { throw SessionError.badManifest(problems) }
-        let next = PluginSupervisor(executable: built, manifest: manifest, policy: BackoffPolicy(initialDelay: 0.2, multiplier: 2, maxDelay: 2, maxConsecutiveFailures: 2), services: services) { [weak self] update in
+        // Loading the built helper rather than the source skips a second
+        // build and still reads, checks and signs it like any other load.
+        let loaded = try await Task.detached { try loader.load(built) }.value
+        let next = PluginSupervisor(executable: loaded.binary, manifest: loaded.manifest, policy: BackoffPolicy(initialDelay: 0.2, multiplier: 2, maxDelay: 2, maxConsecutiveFailures: 2), services: services) { [weak self] update in
             Task { await self?.record(update) }
         }
         supervisor = next
@@ -198,18 +194,14 @@ public actor PluginSession {
     }
 
     public enum SessionError: Error, CustomStringConvertible {
-        case noBuilder
         case notRunning
-        case badManifest([String])
         case unknownAction(ActionID, available: [ActionID])
         case failed(String, logs: [String])
         case timedOut(logs: [String])
 
         public var description: String {
             switch self {
-            case .noBuilder: return "no plugin builder is configured"
             case .notRunning: return "the plugin is not running"
-            case .badManifest(let problems): return "the manifest has problems:\n- " + problems.joined(separator: "\n- ")
             case .unknownAction(let action, let available):
                 return "no control has the action id \(action). Available: " + (available.isEmpty ? "none" : available.map(\.rawValue).joined(separator: ", "))
             case .failed(let reason, let logs): return "the plugin failed (\(reason)). Recent log:\n" + logs.joined(separator: "\n")

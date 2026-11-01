@@ -414,7 +414,7 @@ struct CommandViewBody: View {
         if let problem = view.problem {
             ContentUnavailableView(problem, systemImage: "exclamationmark.triangle")
         } else if let root = view.root {
-            if let items = PaletteSession.items(root, query: view.query) {
+            if let items = RowFilter.items(in: root, query: view.query) {
                 list(items)
             } else {
                 ScrollView {
@@ -428,7 +428,7 @@ struct CommandViewBody: View {
         }
     }
 
-    private func list(_ items: [PaletteSession.ListItem]) -> some View {
+    private func list(_ items: [RowFilter.Item]) -> some View {
         let rows = items.compactMap { if case .row(let row) = $0 { return row } else { return nil } }
         let selectedKey = rows.indices.contains(session.selection) ? rows[session.selection].key : nil
         return ScrollViewReader { proxy in

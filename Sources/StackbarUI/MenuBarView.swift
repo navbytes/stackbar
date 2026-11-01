@@ -18,7 +18,7 @@ public struct MenuBarView: View {
 
     public var body: some View {
         HStack(spacing: 4) {
-            if let node, !MenuBarView.isBlank(node) {
+            if let node, !node.isBlankInMenuBar {
                 MenuBarNode(node: node)
             } else {
                 if let symbol = fallback.symbol { Image(systemName: symbol) }
@@ -42,18 +42,6 @@ public struct MenuBarView: View {
         case .primary, .accent, .success: return .primary
         case .secondary: return .secondary
         case .warning, .critical: return role.color
-        }
-    }
-
-    /// True when nothing in the tree has a menu-bar form.
-    public static func isBlank(_ node: ViewNode) -> Bool {
-        switch node {
-        case .text, .label, .badge, .progress, .labeled, .chart, .empty, .image, .timer:
-            return false
-        case .stack, .styled:
-            return node.children.allSatisfy(isBlank)
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable:
-            return true
         }
     }
 }
@@ -109,7 +97,7 @@ struct MenuBarNode: View {
 
     private func visible(_ children: [ViewNode]) -> some View {
         ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-            if !MenuBarView.isBlank(child) { MenuBarNode(node: child) }
+            if !child.isBlankInMenuBar { MenuBarNode(node: child) }
         }
     }
 }
