@@ -149,6 +149,7 @@ stackbarctl soak MyPlugin.swift --minutes 60 --press # fails if memory grows
 stackbarctl doctor                                   # toolchain, StackbarKit and data directories
 stackbarctl logs -n 200                              # the host log
 stackbarctl secret set GITHUB_TOKEN <value>
+stackbarctl manifest MyPlugin.swift --json          # the declared manifest and its problems, for scripts
 stackbarctl sign MyPlugin.swift --publisher me       # a .stackbarplugin bundle (macOS)
 stackbarctl install https://example.com/index.json   # or a bundle path
 ```
@@ -157,8 +158,12 @@ stackbarctl install https://example.com/index.json   # or a bundle path
 control, which is what you pass to `--event`. On macOS, `render`, `run`,
 `commands`, `mcp`, `agent` and `soak` sign the plugin into the same App Sandbox
 the app runs it in, so a missing capability fails the same way;
-`--no-sandbox` runs it unsigned. `stackbarctl` with no arguments lists every
-command.
+`--no-sandbox` runs it unsigned. `manifest --json` prints
+`{"manifest", "problems", "publishingProblems"}`: `problems` stop the host
+running the plugin, and `publishingProblems` (a version that isn't `x.y.z`, no
+`summary` or no `minimumStackbar`) stop `sign` and `index build`, so a store's
+lint can read the real manifest instead of the source. `stackbarctl` with no
+arguments lists every command.
 
 ## How it fits together
 

@@ -85,6 +85,27 @@ public struct Manifest: Codable, Equatable, Sendable {
         return result
     }
 
+    /// What a plugin also needs before any index lists it, on top of
+    /// `problems`. A plugin a person runs from a file may skip these; a
+    /// published one reaches apps of every version through a store card, so
+    /// it must say what it does and which Stackbar it needs, and its version
+    /// must order updates the same way in every app. A store's own policy
+    /// (its id prefix, allowed imports) stays in that store's lint.
+    public var publishingProblems: [String] {
+        var result: [String] = []
+        let parts = version.split(separator: ".", omittingEmptySubsequences: false)
+        if parts.count != 3 || parts.contains(where: { $0.isEmpty || !$0.allSatisfy(\.isASCII) || !$0.allSatisfy(\.isNumber) }) {
+            result.append("version \"\(version)\" must be three numbers, like 1.2.0")
+        }
+        if summary?.trimmingCharacters(in: .whitespaces).isEmpty ?? true {
+            result.append("summary is missing; the store shows it on the plugin's card")
+        }
+        if minimumStackbar == nil {
+            result.append("minimumStackbar is missing; without it an older app offers a plugin it can't build")
+        }
+        return result
+    }
+
     public static let maxStorageMegabytes = 64
 
     /// The storage quota the manifest asks for, in bytes; nil means the

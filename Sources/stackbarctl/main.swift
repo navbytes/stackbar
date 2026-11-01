@@ -12,7 +12,8 @@ let usage = """
 usage:
   stackbarctl new <plugin.swift> [--name "Display Name"] [--id dev.example.x]
   stackbarctl build <plugin.swift>
-  stackbarctl manifest <plugin.swift | helper>
+  stackbarctl manifest <plugin.swift | helper> [--json]
+                                    --json prints {manifest, problems, publishingProblems}
   stackbarctl render <plugin.swift | helper> [--surface menuBar|panel|window|widget]
                   [--event <action-id>[=value]]... [--tool name[:json]] [--copy <text>]...
                   [--json] [--png <dir> [--dark]] [--verbose]
@@ -35,7 +36,8 @@ usage:
   stackbarctl install <bundle.stackbarplugin | https://…> | --index <url> <plugin-id>
   stackbarctl index build <dir> [--name <name>] [--homepage <url>] [--revoked <file.json>] [--key <file>]
                                     writes <dir>/index.json from every bundle under <dir>;
-                                    a subfolder is the category; --key signs it (macOS)
+                                    a subfolder is the category; --key signs it (macOS);
+                                    sign and index build refuse a manifest with publishingProblems
   stackbarctl index verify <index.json | https://…> --public-key <base64>
   stackbarctl index search <url> [query] [--public-key <base64>]
   stackbarctl index fetch <dir> [--index <url>] [--public-key <base64>]
@@ -353,6 +355,7 @@ case "sign":
         guard let key = Data(base64Encoded: try String(contentsOfFile: keyFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) else { fail("\(keyFile) is not a key; run stackbarctl keygen") }
         let source = try String(contentsOfFile: path, encoding: .utf8)
         let manifest = try PluginProcess.readManifest(executable: helper(for: path))
+        try PluginIndex.checkPublishable(manifest)
         let bundle = try Signing.bundle(source: source, manifest: manifest, publisherName: publisher, privateKey: key)
         let out = URL(fileURLWithPath: flag("-o", in: rest) ?? (PluginBuilder.sanitizedName(manifest.id) + "." + PluginBundle.fileExtension))
         try bundle.encoded().write(to: out)
@@ -470,11 +473,15 @@ case "manifest":
     guard let path = rest.first else { fail(usage) }
     do {
         let manifest = try PluginProcess.readManifest(executable: helper(for: path))
-        print("\(manifest.name) \(manifest.version) (\(manifest.id))")
-        if let summary = manifest.summary { print(summary) }
-        print("surfaces: " + manifest.surfaces.map(\.rawValue).joined(separator: ", "))
-        for line in SandboxEntitlements.summary(for: manifest) { print("- \(line)") }
-        for problem in manifest.problems { print("! \(problem)") }
+        if rest.contains("--json") {
+            print(String(decoding: try ManifestReport(manifest).encoded(), as: UTF8.self))
+        } else {
+            print("\(manifest.name) \(manifest.version) (\(manifest.id))")
+            if let summary = manifest.summary { print(summary) }
+            print("surfaces: " + manifest.surfaces.map(\.rawValue).joined(separator: ", "))
+            for line in SandboxEntitlements.summary(for: manifest) { print("- \(line)") }
+            for problem in manifest.problems { print("! \(problem)") }
+        }
     } catch {
         fail("\(error)")
     }

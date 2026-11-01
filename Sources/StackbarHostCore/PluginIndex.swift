@@ -238,10 +238,18 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         return PluginIndex(name: name, plugins: entries, homepage: homepage, generated: formatter.string(from: generated), revoked: revoked?.isEmpty == false ? revoked : nil)
     }
 
+    /// Throws unless `manifest` may be signed or listed: valid, and meeting
+    /// what every published plugin needs (`publishingProblems`).
+    public static func checkPublishable(_ manifest: Manifest) throws {
+        let problems = manifest.problems + manifest.publishingProblems
+        if !problems.isEmpty { throw IndexError.notPublishable(manifest.id, problems) }
+    }
+
     private static func entry(for file: URL, path: String) throws -> Entry {
         let data = try Data(contentsOf: file)
         let bundle = try PluginBundle.decode(data)
         let manifest = bundle.manifest
+        try checkPublishable(manifest)
         let modified = (try? FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date) ?? nil
         let day = modified.map { date -> String in
             let formatter = ISO8601DateFormatter()
@@ -273,6 +281,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         case unsupportedFormat(Int)
         case revoked(String, String)
         case needsNewerStackbar(String, String)
+        case notPublishable(String, [String])
 
         public var description: String {
             switch self {
@@ -286,6 +295,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             case .unsupportedFormat(let format): return "index format \(format) is newer than this Stackbar understands"
             case .revoked(let id, let reason): return "\(id) was withdrawn by its publisher: \(reason)"
             case .needsNewerStackbar(let id, let version): return "\(id) needs Stackbar \(version) or later"
+            case .notPublishable(let id, let problems): return "\(id) can't be published:\n- " + problems.joined(separator: "\n- ")
             }
         }
     }

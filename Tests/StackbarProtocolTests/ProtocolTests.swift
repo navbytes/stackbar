@@ -92,6 +92,21 @@ final class SystemProtocolTests: XCTestCase {
         XCTAssertTrue(Manifest(id: "a.b", name: "A", triggers: [.clipboard], capabilities: [.clipboard]).problems.isEmpty)
     }
 
+    func testPublishingProblems() {
+        let ready = Manifest(id: "a.b", name: "A", version: "1.10.0", summary: "Does a thing.", minimumStackbar: "0.10.0")
+        XCTAssertEqual(ready.publishingProblems, [])
+        for version in ["1.0", "v1.0.0", "1.0.0-beta.1", "1.0.0.0", "1..0", "１.0.0"] {
+            var manifest = ready
+            manifest.version = version
+            XCTAssertEqual(manifest.publishingProblems.count, 1, version)
+        }
+        var bare = ready
+        bare.summary = " "
+        bare.minimumStackbar = nil
+        XCTAssertEqual(bare.publishingProblems.count, 2, "a blank summary and no minimumStackbar")
+        XCTAssertTrue(bare.problems.isEmpty, "a plugin run from a file doesn't need them")
+    }
+
     func testOldManifestsWithoutAHotkeyStillDecode() throws {
         let json = #"{"id":"a.b","name":"A","version":"1","surfaces":["menuBar"],"triggers":[],"capabilities":[]}"#
         XCTAssertNil(try LineCodec.decode(Manifest.self, from: Data(json.utf8)).hotkey)

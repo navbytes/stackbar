@@ -30,7 +30,7 @@ final class VersionNumberTests: XCTestCase {
 }
 
 final class PluginStoreTests: XCTestCase {
-    func bundle(id: String, version: String, minimum: String? = nil, publisher: String = "navbytes") -> PluginBundle {
+    func bundle(id: String, version: String, minimum: String? = "0.9.0", publisher: String = "navbytes") -> PluginBundle {
         let source = "// \(id) \(version)"
         let manifest = Manifest(id: id, name: id.split(separator: ".").last.map(String.init) ?? id, version: version, summary: "s", minimumStackbar: minimum)
         return PluginBundle(manifest: manifest, source: source, sourceDigest: SHA256.hex(Data(source.utf8)), publisher: .init(name: publisher, publicKey: "AAAA"), signature: "AAAA")
@@ -72,6 +72,31 @@ final class PluginStoreTests: XCTestCase {
         try index.encoded().write(to: indexFile)
         let fetched = try awaitResult { try await PluginIndex.fetch(indexFile) }
         XCTAssertEqual(fetched, index)
+    }
+
+    func testBuildRefusesABundleThatCantBePublished() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try bundle(id: "dev.t.draft", version: "1.0", minimum: nil).encoded().write(to: root.appendingPathComponent("draft.stackbarplugin"))
+        XCTAssertThrowsError(try PluginIndex.build(name: "Test", root: root)) { error in
+            guard case .notPublishable(let id, let problems) = error as? PluginIndex.IndexError else { return XCTFail("\(error)") }
+            XCTAssertEqual(id, "dev.t.draft")
+            XCTAssertEqual(problems.count, 2, "the version and the missing minimumStackbar: \(problems)")
+        }
+    }
+
+    func testManifestReportShape() throws {
+        let manifest = Manifest(id: "dev.t.clock", name: "Clock", version: "1.0", summary: "The time.", minimumStackbar: "0.10.0", homepage: "http://x")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: ManifestReport(manifest).encoded()) as? [String: Any])
+        XCTAssertEqual(Set(json.keys), ["manifest", "problems", "publishingProblems"])
+        let declared = try XCTUnwrap(json["manifest"] as? [String: Any])
+        XCTAssertEqual(declared["id"] as? String, "dev.t.clock")
+        XCTAssertEqual(declared["version"] as? String, "1.0")
+        XCTAssertEqual(json["problems"] as? [String], ["homepage must be an https URL"])
+        XCTAssertEqual(json["publishingProblems"] as? [String], ["version \"1.0\" must be three numbers, like 1.2.0"])
+        let text = String(decoding: try ManifestReport(manifest).encoded(), as: UTF8.self)
+        XCTAssertLessThan(try XCTUnwrap(text.range(of: "\"manifest\"")).lowerBound, try XCTUnwrap(text.range(of: "\"problems\"")).lowerBound, "keys are sorted")
     }
 
     func testRevokedAndTooNewEntriesAreNotInstallable() throws {
