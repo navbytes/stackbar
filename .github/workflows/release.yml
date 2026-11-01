@@ -84,7 +84,7 @@ jobs:
           "$APP/Contents/MacOS/stackbarctl" version
           [ -d "$APP/Contents/Resources/StackbarKit/Sources/StackbarKit" ]
           ls "$APP/Contents/Resources/StackbarKit/Bundles"
-          shasum -a 256 build/Stackbar-*.zip | tee build/SHA256SUMS.txt
+          (cd build && shasum -a 256 Stackbar-*.zip) | tee build/SHA256SUMS.txt
 
       - name: Publish
         env:
