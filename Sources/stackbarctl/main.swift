@@ -26,8 +26,11 @@ usage:
   stackbarctl sign <plugin.swift> --publisher <name> [--key <file>] [-o <out.stackbarplugin>]
   stackbarctl verify <bundle.stackbarplugin>
   stackbarctl install <bundle.stackbarplugin | https://…> | --index <url> <plugin-id>
-  stackbarctl index build <dir> [--name <name>]       writes <dir>/index.json
-  stackbarctl index search <url> [query]
+  stackbarctl index build <dir> [--name <name>] [--homepage <url>] [--revoked <file.json>] [--key <file>]
+                                    writes <dir>/index.json from every bundle under <dir>;
+                                    a subfolder is the category; --key signs it (macOS)
+  stackbarctl index verify <index.json | https://…> --public-key <base64>
+  stackbarctl index search <url> [query] [--public-key <base64>]
   stackbarctl docs                     the plugin authoring reference
   stackbarctl parity                   the surface parity ledger
   stackbarctl soak <plugin> [--minutes 10] [--interval 1] [--press] [--growth 15]
@@ -314,7 +317,8 @@ case "install":
         if let index = flag("--index", in: rest) {
             guard let id = rest.last, id != index, let url = URL(string: index) else { fail(usage) }
             let catalog = try await PluginIndex.fetch(url)
-            guard let entry = catalog.plugins.first(where: { $0.id == id }) else { fail("\(id) is not in \(catalog.name)") }
+            guard let entry = catalog.plugins.filter({ $0.id == id }).max(by: { $1.isNewer(than: $0.version) }) else { fail("\(id) is not in \(catalog.name)") }
+            try catalog.checkInstallable(entry)
             bundle = try await PluginIndex.bundle(for: entry, indexURL: url)
         } else if let target = rest.first, target.hasPrefix("https://"), let url = URL(string: target) {
             bundle = try PluginBundle.decode(try await PluginIndex.download(url))
@@ -338,18 +342,28 @@ case "index":
         switch rest[0] {
         case "build":
             let directory = URL(fileURLWithPath: rest[1])
-            let bundles = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == PluginBundle.fileExtension }
-            let index = try PluginIndex.build(name: flag("--name", in: rest) ?? directory.lastPathComponent, bundles: bundles)
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            let revoked = try flag("--revoked", in: rest).map { try JSONDecoder().decode([PluginIndex.Revocation].self, from: Data(contentsOf: URL(fileURLWithPath: $0))) }
+            var index = try PluginIndex.build(name: flag("--name", in: rest) ?? directory.lastPathComponent, root: directory, homepage: flag("--homepage", in: rest), revoked: revoked)
+            if let keyFile = flag("--key", in: rest) {
+                guard let key = Data(base64Encoded: try String(contentsOfFile: keyFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) else { fail("\(keyFile) is not a key; run stackbarctl keygen") }
+                index = try index.signed(privateKey: key)
+            }
             let out = directory.appendingPathComponent("index.json")
-            try encoder.encode(index).write(to: out)
-            print("\(out.path): \(index.plugins.count) plugins")
+            try index.encoded().write(to: out)
+            print("\(out.path): \(index.plugins.count) plugins" + (index.signature == nil ? ", unsigned" : ", signed"))
+        case "verify":
+            guard let key = flag("--public-key", in: rest) else { fail(usage) }
+            let url = rest[1].hasPrefix("https://") ? URL(string: rest[1]) : URL(fileURLWithPath: rest[1])
+            guard let url else { fail(usage) }
+            let index = try await PluginIndex.fetch(url, publicKey: key)
+            print("valid: \(index.name), \(index.plugins.count) plugins, \(index.revoked?.count ?? 0) revoked")
         case "search":
             guard let url = URL(string: rest[1]) else { fail(usage) }
-            let index = try await PluginIndex.fetch(url)
-            for entry in index.search(rest.count > 2 ? rest[2] : "") {
-                print("\(entry.id)  \(entry.name) \(entry.version) by \(entry.publisher)" + (entry.summary.map { " — \($0)" } ?? ""))
+            let index = try await PluginIndex.fetch(url, publicKey: flag("--public-key", in: rest))
+            let query = rest.count > 2 && !rest[2].hasPrefix("--") ? rest[2] : ""
+            for entry in index.search(query) {
+                let needs = entry.requiredStackbar().map { " (needs Stackbar \($0))" } ?? ""
+            print("\(entry.id)  \(entry.name) \(entry.version) by \(entry.publisher)\(needs)" + (entry.summary.map { " — \($0)" } ?? ""))
             }
         default:
             fail(usage)

@@ -194,11 +194,12 @@ struct PluginDetail: View {
     }
 }
 
-/// The plugin store: browse the configured indexes and install signed bundles.
+/// The plugin store: browse the official index and any added ones, install
+/// signed bundles, and update them.
 struct StoreView: View {
     @Bindable var model: AppModel
     @State private var newIndex = ""
-    @State private var catalogs: [(url: URL, index: PluginIndex)] = []
+    @State private var catalogs: [PluginStore.Catalog] = []
     @State private var query = ""
     @State private var status: String?
     @State private var loading = false
@@ -206,30 +207,50 @@ struct StoreView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                TextField("Index URL (https://…/index.json)", text: $newIndex).textFieldStyle(.roundedBorder)
+                TextField("Add an index URL (https://…/index.json)", text: $newIndex).textFieldStyle(.roundedBorder)
                 Button("Add") {
                     let trimmed = newIndex.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty, !model.indexURLs.contains(trimmed) else { return }
+                    guard !trimmed.isEmpty, !model.indexURLs.contains(trimmed), trimmed != OfficialIndex.url.absoluteString else { return }
                     model.indexURLs.append(trimmed)
                     newIndex = ""
                     Task { await load() }
                 }
             }
-            TextField("Search", text: $query).textFieldStyle(.roundedBorder)
+            HStack {
+                TextField("Search", text: $query).textFieldStyle(.roundedBorder)
+                Toggle("Update automatically", isOn: $model.autoUpdatePlugins).toggleStyle(.checkbox)
+            }
             if loading { ProgressView().controlSize(.small) }
             if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
             List {
-                ForEach(catalogs, id: \.url) { catalog in
-                    Section(catalog.index.name) {
-                        ForEach(catalog.index.search(query)) { entry in
-                            StoreRow(entry: entry, installed: model.controller(for: entry.id) != nil) {
-                                Task { await install(entry, from: catalog.url) }
+                ForEach(catalogs, id: \.source.url) { catalog in
+                    Section {
+                        ForEach(catalog.index.byCategory(catalog.index.search(query)), id: \.category) { group in
+                            Text(group.category).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                            ForEach(group.entries) { entry in
+                                StoreRow(entry: entry, indexURL: catalog.source.url, state: state(of: entry)) {
+                                    Task { await install(entry, from: catalog) }
+                                }
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text(catalog.index.name)
+                            if catalog.source.isOfficial {
+                                Text("Signed by navbytes").font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Spacer()
+                                Button("Remove") {
+                                    model.indexURLs.removeAll { $0 == catalog.source.url.absoluteString }
+                                    Task { await load() }
+                                }
+                                .buttonStyle(.link)
                             }
                         }
                     }
                 }
             }
-            if model.indexURLs.isEmpty {
+            if model.storeSources.isEmpty {
                 Text("Add an index to browse plugins. Anyone can publish one with `stackbarctl index build`.").font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -237,29 +258,29 @@ struct StoreView: View {
         .task { await load() }
     }
 
+    private func state(of entry: PluginIndex.Entry) -> StoreRow.Availability {
+        if let needed = entry.requiredStackbar() { return .needsStackbar(needed) }
+        if let record = model.installer.installed.first(where: { $0.id == entry.id }) {
+            return entry.isNewer(than: record.version) ? .update(from: record.version) : .installed
+        }
+        return model.controller(for: entry.id) != nil ? .installed : .available
+    }
+
     private func load() async {
         loading = true
         defer { loading = false }
-        var loaded: [(URL, PluginIndex)] = []
-        var problems: [String] = []
-        for string in model.indexURLs {
-            guard let url = URL(string: string) else { continue }
-            do {
-                loaded.append((url, try await PluginIndex.fetch(url)))
-            } catch {
-                problems.append("\(string): \(error)")
-            }
-        }
-        catalogs = loaded.map { (url: $0.0, index: $0.1) }
-        status = problems.isEmpty ? nil : problems.joined(separator: "\n")
+        let result = await PluginStore.load(model.storeSources)
+        catalogs = result.catalogs
+        status = result.problems.isEmpty ? nil : result.problems.joined(separator: "\n")
     }
 
-    private func install(_ entry: PluginIndex.Entry, from indexURL: URL) async {
+    private func install(_ entry: PluginIndex.Entry, from catalog: PluginStore.Catalog) async {
         do {
-            let bundle = try await PluginIndex.bundle(for: entry, indexURL: indexURL)
+            try catalog.index.checkInstallable(entry)
+            let bundle = try await PluginIndex.bundle(for: entry, indexURL: catalog.source.url)
             let file = try model.installer.install(bundle)
-            model.add(file)
-            status = "Installed \(entry.name). Open it from the menu bar to allow what it asks for."
+            if let controller = model.controller(for: entry.id) { controller.reload() } else { model.add(file) }
+            status = "Installed \(entry.name) \(entry.version). Open it from the menu bar to allow what it asks for."
         } catch {
             status = "Could not install \(entry.name): \(error)"
         }
@@ -267,20 +288,46 @@ struct StoreView: View {
 }
 
 struct StoreRow: View {
+    enum Availability: Equatable {
+        case available
+        case installed
+        case update(from: String)
+        case needsStackbar(String)
+    }
+
     let entry: PluginIndex.Entry
-    let installed: Bool
+    let indexURL: URL
+    let state: Availability
     let install: () -> Void
 
     var body: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 12) {
+            if let screenshot = entry.screenshot, let url = URL(string: screenshot, relativeTo: indexURL) {
+                AsyncImage(url: url.absoluteURL) { image in
+                    image.resizable().scaledToFit()
+                } placeholder: {
+                    Color.secondary.opacity(0.1)
+                }
+                .frame(width: 96, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(entry.name) \(entry.version)").font(.headline)
                 if let summary = entry.summary { Text(summary).font(.callout) }
-                Text("by \(entry.publisher)").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("by \(entry.publisher)")
+                    if let homepage = entry.homepage, let url = URL(string: homepage) { Link("Read more", destination: url) }
+                }
+                .font(.caption).foregroundStyle(.secondary)
                 ForEach(entry.capabilities, id: \.self) { Text("• " + $0).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer()
-            Button(installed ? "Installed" : "Install", action: install).disabled(installed)
+            switch state {
+            case .available: Button("Install", action: install)
+            case .installed: Button("Installed", action: {}).disabled(true)
+            case .update(let from): Button("Update", action: install).help("Installed: \(from)")
+            case .needsStackbar(let version): Text("Needs Stackbar \(version)").font(.caption).foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 4)
     }

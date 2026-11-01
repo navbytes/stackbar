@@ -35,7 +35,7 @@ targets:
       properties:
         NSCalendarsFullAccessUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
         NSCalendarsUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
-        CFBundleShortVersionString: "0.9.0"
+        CFBundleShortVersionString: "0.10.0"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
     # Not sandboxed: the host runs the Swift toolchain and launches plugin helpers, each in its own sandbox.
@@ -64,7 +64,7 @@ targets:
     info:
       path: Packaging/Widget-Info.generated.plist
       properties:
-        CFBundleShortVersionString: "0.9.0"
+        CFBundleShortVersionString: "0.10.0"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
