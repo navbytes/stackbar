@@ -22,7 +22,7 @@ plugins to Stackbar.app would break its signature.
 | `.appex` in a container app, ad-hoc signed, sandboxed | Yes |
 | Registered from Application Support and discovered | Yes, with `lsregister -f -R -trusted` |
 | Discovered without a user step | No: one switch per plugin in the extensions browser |
-| Renders once switched on | Yes: Naveen switched it on and it rendered (2026-11-01) |
+| Renders once switched on | Yes (2026-11-01): a running host sees it within seconds, no restart; 149–164 ms to connect cold, 194–208 ms to first frame, 12 MB, within about 20 ms of the in-bundle one |
 | Shown in a popover with `EXHostViewController` | Yes, interactive |
 | Host survives `kill -9` of the extension | Yes; placeholder until the configuration is set again (143 ms) |
 | Time to first frame, cold | About 135 ms to activate, 180 ms to first `onAppear` |
@@ -42,6 +42,9 @@ plugins to Stackbar.app would break its signature.
 - The host declares the extension point with a classic
   `.appextensionpoint` plist in `Contents/Extensions`, which needs no Xcode
   metadata step.
+- The host chooses the extension by its identity, never the first one
+  discovered, because the in-bundle and plugin extensions share the
+  extension point.
 - The host must pin the placeholder's size, and after a crash set the
   configuration again on the next show.
 - The extension process stays alive while the popover is closed, so
