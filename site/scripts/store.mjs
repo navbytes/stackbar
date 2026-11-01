@@ -56,8 +56,21 @@ export function parseReadme(markdown) {
   return { description: rest.join('\n').trim(), facts };
 }
 
-export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch }) {
-  const response = await fetch(indexURL);
+/** Fetches with a few retries, since GitHub Pages sometimes drops a request. */
+export async function fetchWithRetry(fetch, url, init, tries = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch(url, init);
+      if (response.ok || response.status === 404 || attempt >= tries) return response;
+    } catch (error) {
+      if (attempt >= tries) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+  }
+}
+
+export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch, log = console.warn }) {
+  const response = await fetchWithRetry(fetch, indexURL);
   if (!response.ok) throw new Error(`store: ${indexURL} answered ${response.status}`);
   const index = verifyIndex(await response.json(), publicKey);
   const base = new URL('.', indexURL);
@@ -72,13 +85,20 @@ export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch
     const url = readmeURL(entry.homepage);
     let readme = { description: entry.summary ?? '', facts: [] };
     if (url) {
-      const page = await fetch(url);
+      const page = await fetchWithRetry(fetch, url);
       if (page.ok) readme = parseReadme(await page.text());
+    }
+    // A screenshot that can't be fetched leaves the page without one rather
+    // than failing the whole build (the image pipeline would).
+    let screenshot = entry.screenshot ? new URL(entry.screenshot, base).href : undefined;
+    if (screenshot) {
+      const head = await fetchWithRetry(fetch, screenshot, { method: 'HEAD' }).catch(() => undefined);
+      if (!head?.ok) { log(`store: no screenshot for ${entry.id} (${head?.status ?? 'unreachable'})`); screenshot = undefined; }
     }
     plugins.push({
       ...entry,
       slug,
-      screenshot: entry.screenshot ? new URL(entry.screenshot, base).href : undefined,
+      screenshot,
       bundle: new URL(entry.bundle, base).href,
       readme,
     });

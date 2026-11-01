@@ -33,14 +33,25 @@ test('a README splits into its description and facts', () => {
 });
 
 test('fetchStore resolves URLs, reads READMEs and refuses a forged index', async () => {
-  const fake = async (url) => url.endsWith('index.json')
-    ? { ok: true, json: async () => index }
-    : { ok: true, text: async () => '# X\n\nLong text.\n\n- **Needs:** nothing.' };
-  const store = await fetchStore({ indexURL: 'https://navbytes.github.io/stackbar-plugins/index.json', publicKey, fetch: fake });
+  let flaky = 1;
+  const fake = async (url) => {
+    if (url.endsWith('index.json')) {
+      if (flaky-- > 0) return { ok: false, status: 503 };   // one dropped request, retried
+      return { ok: true, json: async () => index };
+    }
+    if (url.endsWith('.png')) return url.includes('clipboard') ? { ok: false, status: 404 } : { ok: true, status: 200 };
+    return { ok: true, text: async () => '# X\n\nLong text.\n\n- **Needs:** nothing.' };
+  };
+  const warnings = [];
+  const store = await fetchStore({ indexURL: 'https://navbytes.github.io/stackbar-plugins/index.json', publicKey, fetch: fake, log: (m) => warnings.push(m) });
   assert.equal(store.plugins.length, index.plugins.length);
   const first = store.plugins[0];
   assert.match(first.bundle, /^https:\/\/navbytes\.github\.io\/stackbar-plugins\/.+\.stackbarplugin$/);
   assert.equal(first.readme.description, 'Long text.');
+  // A missing screenshot drops the image, not the build.
+  assert.equal(store.plugins.find((p) => p.slug === 'clipboard').screenshot, undefined);
+  assert.match(warnings.join(), /no screenshot for io\.navbytes\.stackbar\.clipboard/);
+  assert.ok(store.plugins.find((p) => p.slug === 'pomodoro').screenshot);
   const forged = async () => ({ ok: true, json: async () => ({ ...index, name: 'Evil' }) });
   await assert.rejects(fetchStore({ indexURL: 'https://x/index.json', publicKey, fetch: forged }), /does not verify/);
 });
