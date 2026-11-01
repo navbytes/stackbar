@@ -11,8 +11,8 @@
 - [x] 1.8 `stackbarctl render` lint: contrast, missing accessibility labels
 - [x] 1.9 Authoring guide and llms.txt
 - [x] 1.10 Protocol version 11 and Stackbar 0.12.0
-- [ ] 1.11 Pomodoro plugin in stackbar-plugins (Productivity/Pomodoro)
-- [ ] 1.12 Look at the Pomodoro panel on a Mac (stackbarctl render --png)
+- [x] 1.11 Pomodoro plugin in stackbar-plugins (Productivity/Pomodoro)
+- [x] 1.12 Look at the Pomodoro panel on a Mac (stackbarctl render --png, light and --dark); fixed box shadows and the empty ring cap (#38)
 
 ## Tier 2 spike
 - [x] 2.1 Build an `.appex` in a container app, ad-hoc signed
@@ -20,4 +20,4 @@
 - [x] 2.3 Host its scene in a popover with `EXHostViewController`
 - [x] 2.4 Sandbox, enablement, latency and memory
 - [x] 2.5 Write `spike.md` with the go/no-go (go; one Enable switch per native plugin)
-- [ ] 2.6 Confirm a separate-app extension renders once switched on (one manual click)
+- [x] 2.6 Confirm a separate-app extension renders once switched on (one manual click; confirmed 2026-11-01)
