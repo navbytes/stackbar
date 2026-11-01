@@ -77,7 +77,9 @@ var menuBarClick: MenuBarAction? {
 Commands are what people find by name in the palette (⌃⌥Space), give an
 alias or a hotkey in Settings → Commands, start from a
 `stackbar://commands/<plugin-id>/<command-id>?arg=value` link, and (unless
-`.stackbarOnly()`) from Spotlight and Shortcuts. A plugin can have commands
+`.stackbarOnly()`) from Spotlight and Shortcuts: commands show in ⌘Space
+results, and "Run Stackbar Command" in Shortcuts takes any of them, with its
+first argument as the input. A plugin can have commands
 and no menu-bar item at all: leave `.menuBar` out of `surfaces`.
 
 ```swift

@@ -261,3 +261,43 @@ final class CommandRunnerTests: XCTestCase {
         XCTAssertEqual(outcome, .failure("Fixture is stopped"))
     }
 }
+
+final class CommandIndexingTests: XCTestCase {
+    func testOnlyExposedCommandsAreIndexedAndDiffed() throws {
+        let registry = CommandRegistry(file: nil)
+        registry.update(pluginID: "gh", pluginName: "PR Cockpit", specs: [
+            CommandSpec(id: "search", title: "Search Pull Requests", subtitle: "GitHub", keywords: ["github"], kind: .view),
+            CommandSpec(id: "inside", title: "Inside", exposure: .stackbarOnly),
+            CommandSpec(id: "off", title: "Switched Off"),
+            CommandSpec(id: "hidden", title: "Not in Spotlight"),
+        ])
+        let preferences = CommandPreferences(file: nil)
+        try preferences.set(CommandPreference(enabled: false), for: CommandKey(pluginID: "gh", commandID: "off"))
+        try preferences.set(CommandPreference(showInSpotlight: false), for: CommandKey(pluginID: "gh", commandID: "hidden"))
+        try preferences.set(CommandPreference(alias: "pr"), for: CommandKey(pluginID: "gh", commandID: "search"))
+        let usage = PaletteUsage(file: nil)
+        for _ in 0..<7 { usage.record("gh/search") }
+
+        let items = CommandIndexing.items(registry: registry, preferences: preferences, usage: usage)
+        XCTAssertEqual(items.map(\.id), ["gh/search"])
+        XCTAssertEqual(items[0].summary, "PR Cockpit · GitHub")
+        XCTAssertEqual(items[0].keywords, ["github", "PR Cockpit", "pr"])
+        XCTAssertEqual(items[0].priority, 6)
+        XCTAssertEqual(items[0].symbol, "list.bullet.rectangle")
+
+        XCTAssertEqual(CommandIndexing.search("github", registry: registry, preferences: preferences, usage: usage).map(\.id), ["gh/search"])
+        XCTAssertTrue(CommandIndexing.search("inside", registry: registry, preferences: preferences, usage: usage).isEmpty)
+
+        var changed = items[0]
+        changed.title = "Find Pull Requests"
+        let added = CommandIndexItem(id: "gh/new", title: "New", summary: "PR Cockpit", symbol: "command", keywords: [], kind: .run, priority: 0)
+        let gone = CommandIndexItem(id: "gh/gone", title: "Gone", summary: "PR Cockpit", symbol: "command", keywords: [], kind: .run, priority: 0)
+        let diff = CommandIndexing.diff(from: items + [gone], to: [changed, added])
+        XCTAssertEqual(diff.upsert.map(\.id), ["gh/search", "gh/new"])
+        XCTAssertEqual(diff.delete, ["gh/gone"])
+        XCTAssertTrue(CommandIndexing.diff(from: items, to: items).upsert.isEmpty)
+
+        preferences.spotlightEnabled = false
+        XCTAssertTrue(CommandIndexing.items(registry: registry, preferences: preferences, usage: usage).isEmpty)
+    }
+}
