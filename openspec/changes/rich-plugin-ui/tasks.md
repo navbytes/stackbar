@@ -11,8 +11,8 @@
 - [x] 1.8 `stackbarctl render` lint: contrast, missing accessibility labels
 - [x] 1.9 Authoring guide and llms.txt
 - [x] 1.10 Protocol version 11 and Stackbar 0.12.0
-- [ ] 1.11 Pomodoro plugin in stackbar-plugins (Productivity/Pomodoro)
-- [ ] 1.12 Look at the Pomodoro panel on a Mac (stackbarctl render --png)
+- [x] 1.11 Pomodoro plugin in stackbar-plugins (Productivity/Pomodoro)
+- [x] 1.12 Look at the Pomodoro panel on a Mac (stackbarctl render --png, light and --dark); fixed box shadows and the empty ring cap (#38)
 
 ## Tier 2 spike
 - [x] 2.1 Build an `.appex` in a container app, ad-hoc signed
