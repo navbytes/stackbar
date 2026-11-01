@@ -40,7 +40,7 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 
 if [ -n "${STACKBAR_NOTARY_PROFILE:-}" ]; then
     [ "$IDENTITY" != "-" ] || { echo "bundle: notarizing needs STACKBAR_SIGN_IDENTITY" >&2; exit 1; }
-    xcrun notarytool submit "$ZIP" --keychain-profile "$STACKBAR_NOTARY_PROFILE" --wait
+    xcrun notarytool submit "$ZIP" --keychain-profile "$STACKBAR_NOTARY_PROFILE" ${NOTARY_KEYCHAIN:+--keychain "$NOTARY_KEYCHAIN"} --wait
     xcrun stapler staple "$APP"
     rm -f "$ZIP"
     ditto -c -k --keepParent "$APP" "$ZIP"
