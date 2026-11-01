@@ -134,6 +134,13 @@ scripts/bundle.sh                        # build/Stackbar.app and a zip for dist
 (59J9RQXYYP). The first run on a new Mac may need
 `STACKBAR_ALLOW_PROVISIONING=1` so Xcode can register the App IDs.
 
+Releases come from the **Release** workflow (Actions tab, or push a `v*` tag
+matching `StackbarVersion.current`). It runs `bundle.sh` on the macOS runner
+and attaches the zip to a GitHub release. It signs with Developer ID and
+notarizes when the `MACOS_CERT_P12`, `MACOS_CERT_PASSWORD`, `APPLE_ID`,
+`APPLE_TEAM_ID` and `APPLE_APP_PASSWORD` secrets are set, and ad-hoc signs
+otherwise.
+
 Plugins live in `~/Library/Application Support/Stackbar/Plugins/*.swift`. All
 plugins build in one shared workspace, so StackbarKit compiles once and each new
 plugin builds in seconds. Builds are cached by content.

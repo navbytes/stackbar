@@ -14,6 +14,9 @@ VERSION=$(sed -n 's/.*static let current = "\(.*\)".*/\1/p' Sources/StackbarHost
 BUILD=build
 APP="$BUILD/Stackbar.app"
 IDENTITY=${STACKBAR_SIGN_IDENTITY:--}
+# Notarization needs a secure timestamp; an ad-hoc signature cannot carry one.
+TIMESTAMP=--timestamp
+[ "$IDENTITY" != "-" ] || TIMESTAMP=--timestamp=none
 
 swift build -c release --product Stackbar
 swift build -c release --product stackbarctl
@@ -27,8 +30,8 @@ scripts/embed-stackbarkit.sh "$APP" "$BIN"
 mkdir -p "$APP/Contents/Resources"
 cp Packaging/AppIcon.icns "$APP/Contents/Resources/"
 
-codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$APP/Contents/MacOS/stackbarctl"
-codesign --force --options runtime --timestamp=none --entitlements Packaging/Stackbar.entitlements --sign "$IDENTITY" "$APP"
+codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/stackbarctl"
+codesign --force --options runtime "$TIMESTAMP" --entitlements Packaging/Stackbar.entitlements --sign "$IDENTITY" "$APP"
 codesign --verify --strict "$APP"
 
 ZIP="$BUILD/Stackbar-$VERSION.zip"

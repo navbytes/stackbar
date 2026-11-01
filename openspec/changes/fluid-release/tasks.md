@@ -17,7 +17,7 @@
 - [ ] 3.1 `scripts/release.sh`: Xcode build, embed, sign with a secure timestamp, notarize, staple, DMG and zip
 - [ ] 3.2 Version from the tag, build number that always rises; one Info.plist source
 - [ ] 3.3 Mac CI builds the Xcode project (`xcodebuild`), not only `swift build`
-- [ ] 3.4 Tag-driven release job on the macos-26 runner, publishing to GitHub Releases
+- [x] 3.4 Tag-driven release job on the macos-26 runner, publishing to GitHub Releases (`.github/workflows/release.yml`; ad-hoc signed until the Developer ID secrets are set)
 - [ ] 3.5 Homebrew cask
 
 ## 4. Updates and crash reports
