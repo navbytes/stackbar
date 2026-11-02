@@ -20,7 +20,7 @@ usage:
                   [--command <id> [--query <text>] [--arg name=value]...]
                   --command opens a view command; --event then presses things inside it
                   --copy pretends you copied text in another app (clipboard plugins);
-                  the clipboard, battery and calendar are simulated (STACKBAR_CALENDAR=<events.json>)
+                  the clipboard, battery, calendar and windows are simulated (STACKBAR_CALENDAR=<events.json>, STACKBAR_WINDOWS=<snapshot.json>)
   stackbarctl commands <plugin.swift | helper>        lists the plugin's commands
   stackbarctl run <plugin.swift | helper> <command> [--arg name=value]...
                                     runs a command and prints its result
