@@ -97,8 +97,26 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         shownAt = Date()
+        // The popover's window is reused after the first show, so this
+        // applies before every later show; the first gets it just after.
+        Self.joinActiveSpace(popover.contentViewController?.view.window)
         popover.show(relativeTo: rect, of: view, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
+        if let window = popover.contentViewController?.view.window {
+            Self.joinActiveSpace(window)
+            window.makeKey()
+        }
+    }
+
+    /// Lets the popover open over a full-screen app. Without it the window
+    /// server put the popover on the desktop Space behind the full-screen
+    /// one, so clicking the item there seemed to do nothing.
+    private static func joinActiveSpace(_ window: NSWindow?) {
+        guard let window else { return }
+        let wanted: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        guard !window.collectionBehavior.isSuperset(of: wanted) else { return }
+        window.collectionBehavior.subtract([.moveToActiveSpace, .managed])
+        window.collectionBehavior.formUnion(wanted)
+        if window.isVisible { window.orderFrontRegardless() }
     }
 
     func popoverShouldClose(_ popover: NSPopover) -> Bool {
