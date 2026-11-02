@@ -18,7 +18,7 @@
 - [ ] 3.2 Version from the tag, build number that always rises; one Info.plist source
 - [ ] 3.3 Mac CI builds the Xcode project (`xcodebuild`), not only `swift build`
 - [x] 3.4 Tag-driven release job on the macos-26 runner, publishing to GitHub Releases (`.github/workflows/release.yml`; ad-hoc signed until the Developer ID secrets are set)
-- [ ] 3.5 Homebrew cask
+- [x] 3.5 Homebrew cask (`scripts/update-homebrew-cask.sh` opens a PR on navbytes/homebrew-tap from the Release workflow when `HOMEBREW_TAP_TOKEN` is set) and a one-line installer served at stackbar.navbytes.io/install.sh (`scripts/get-stackbar.sh`)
 
 ## 4. Updates and crash reports
 

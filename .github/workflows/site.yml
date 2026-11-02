@@ -7,9 +7,9 @@ name: Site
 on:
   push:
     branches: [main]
-    paths: [site/**, Sources/StackbarKit/Design.swift, Sources/StackbarHostCore/OfficialIndex.swift, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, .github/workflows/site.yml]
+    paths: [site/**, scripts/get-stackbar.sh, Sources/StackbarKit/Design.swift, Sources/StackbarHostCore/OfficialIndex.swift, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, .github/workflows/site.yml]
   pull_request:
-    paths: [site/**, Sources/StackbarKit/Design.swift, Sources/StackbarHostCore/OfficialIndex.swift, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, .github/workflows/site.yml]
+    paths: [site/**, scripts/get-stackbar.sh, Sources/StackbarKit/Design.swift, Sources/StackbarHostCore/OfficialIndex.swift, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, .github/workflows/site.yml]
   schedule:
     - cron: '17 * * * *'
   repository_dispatch:

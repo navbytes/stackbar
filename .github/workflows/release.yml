@@ -9,6 +9,10 @@ name: Release
 #   APPLE_CERT_P12          base64 of the "Developer ID Application" .p12
 #   APPLE_CERT_PASSWORD     the .p12 password
 #   APPLE_ID, APPLE_TEAM_ID, APPLE_NOTARY_PASSWORD   for notarytool
+#
+# Homebrew: with HOMEBREW_TAP_TOKEN (a fine-grained PAT with contents and pull
+# request write on navbytes/homebrew-tap) a notarized release also opens a PR
+# there updating Casks/stackbar.rb. Without it the step is skipped.
 
 on:
   push:
@@ -33,6 +37,7 @@ jobs:
     env:
       HAS_CERT: ${{ secrets.APPLE_CERT_P12 != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_NOTARY_PASSWORD != '' }}
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -94,7 +99,17 @@ jobs:
         run: |
           TAG="v$VERSION"
           if [ -n "${STACKBAR_NOTARY_PROFILE:-}" ]; then
-            INSTALL="Signed with Developer ID and notarized: unzip, drag **Stackbar.app** into /Applications and open it."
+            INSTALL=$(cat <<'NOTES'
+          Signed with Developer ID and notarized. Install with Homebrew or the one-line installer (both also put `stackbarctl` on your PATH):
+
+          ```sh
+          brew install --cask navbytes/tap/stackbar
+          curl -fsSL https://stackbar.navbytes.io/install.sh | bash
+          ```
+
+          Or unzip, drag **Stackbar.app** into /Applications and open it.
+          NOTES
+          )
           else
             INSTALL=$(cat <<'NOTES'
           **Test build, not notarized.** It is ad-hoc signed, so macOS blocks the first launch. To install:
@@ -127,6 +142,14 @@ jobs:
             gh release create "$TAG" build/Stackbar-"$VERSION".zip build/SHA256SUMS.txt \
               --target "$GITHUB_SHA" --title "Stackbar $VERSION" --notes-file build/notes.md $FLAGS
           fi
+
+      # Only notarized builds go to the tap: an ad-hoc one would not open.
+      - name: Update the Homebrew cask (navbytes/homebrew-tap)
+        if: env.HOMEBREW_TAP_TOKEN != '' && env.STACKBAR_NOTARY_PROFILE != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ZIP: build/Stackbar-${{ steps.version.outputs.version }}.zip
+        run: scripts/update-homebrew-cask.sh
 
       - name: Remove the signing keychain
         if: always() && env.HAS_CERT == 'true'
