@@ -14,7 +14,7 @@ public enum SandboxEntitlements {
             switch capability {
             case .network, .oauth, .userServer:
                 result["com.apple.security.network.client"] = true
-            case .files, .run, .secret, .clipboard, .power, .calendar, .context, .openURLs, .storage:
+            case .files, .run, .secret, .clipboard, .power, .calendar, .context, .openURLs, .storage, .windows:
                 // Files are opened up path by path (`fileExceptions`).
                 // Children inherit the sandbox; secrets, the clipboard, power
                 // assertions and calendar events all go through the host.
@@ -96,6 +96,7 @@ extension Capability {
             return schemes.contains("*") ? "Opens any link, file or folder, in any app" : "Opens " + schemes.map { "\($0):" }.joined(separator: ", ") + " links"
         case .storage(let megabytes): return "Stores up to \(megabytes) MB"
         case .userServer(let name): return "Connects to the server you enter as \(name), and no other"
+        case .windows: return "Sees which windows you have open and where, moves them, and opens apps"
         }
     }
 
@@ -114,6 +115,7 @@ extension Capability {
         case .openURLs: return "openURLs"
         case .storage: return "storage"
         case .userServer: return "userServer"
+        case .windows: return "windows"
         }
     }
 }

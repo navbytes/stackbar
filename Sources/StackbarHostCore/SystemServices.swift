@@ -31,6 +31,11 @@ public protocol SystemServices: Sendable {
     func saveFile(name: String, data: Data, for pluginName: String) async throws -> String?
     /// An installed app's bundle id, from its name, path or bundle id.
     func resolveApplication(_ nameOrPath: String) async -> String?
+    /// The displays and the regular apps' windows, front to back.
+    func windows() async throws -> WindowSnapshot
+    /// Moves windows to the placements (matched with `WindowMatcher`),
+    /// opening apps that aren't running first when `launch` is set.
+    func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult
 }
 
 extension SystemServices {
@@ -39,6 +44,8 @@ extension SystemServices {
     public func chooseFile(types: [String], for pluginName: String) async throws -> ChosenFile? { throw SystemServiceError("choosing files is not available on this platform") }
     public func saveFile(name: String, data: Data, for pluginName: String) async throws -> String? { throw SystemServiceError("saving files is not available on this platform") }
     public func resolveApplication(_ nameOrPath: String) async -> String? { nil }
+    public func windows() async throws -> WindowSnapshot { throw SystemServiceError("windows are not available on this platform") }
+    public func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult { throw SystemServiceError("windows are not available on this platform") }
 }
 
 public struct SystemServiceError: Error, CustomStringConvertible, Sendable {
@@ -85,8 +92,8 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     }
 
     /// Reads `STACKBAR_CALENDAR` (a JSON file of `[CalendarEvent]`) and
-    /// `STACKBAR_CONTEXT` (`InvocationContext` as JSON, inline or a file)
-    /// when set.
+    /// `STACKBAR_CONTEXT` (`InvocationContext` as JSON, inline or a file) and
+    /// `STACKBAR_WINDOWS` (`WindowSnapshot` as JSON, inline or a file) when set.
     public static func fromEnvironment() -> SimulatedSystem {
         let environment = ProcessInfo.processInfo.environment
         var events: [CalendarEvent]?
@@ -94,6 +101,10 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
             events = try? SystemCodec.decode([CalendarEvent].self, from: text)
         }
         let system = SimulatedSystem(events: events)
+        if let value = environment["STACKBAR_WINDOWS"] {
+            let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
+            if let windows = try? SystemCodec.decode(WindowSnapshot.self, from: text) { system.simulate(windows: windows) }
+        }
         if let value = environment["STACKBAR_CONTEXT"] {
             let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
             if let context = try? SystemCodec.decode(InvocationContext.self, from: text) { system.simulate(context: context) }
@@ -126,6 +137,66 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
         if apps.values.contains(nameOrPath) { return nameOrPath }
         let name = nameOrPath.hasSuffix(".app") ? ((nameOrPath as NSString).lastPathComponent as NSString).deletingPathExtension : nameOrPath
         return apps.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+
+    private var simulatedWindows = SimulatedSystem.sampleWindows()
+    /// Apps `arrangeWindows(launch: true)` can open, with the windows they
+    /// come up with (by default: one window at the main display's top-left).
+    public var launchable: [String: [WindowInfo]] = [:]
+
+    /// The displays and windows `windows()` reports and `arrangeWindows` moves.
+    public func simulate(windows: WindowSnapshot) { lock.withLock { simulatedWindows = windows } }
+    public var currentWindows: WindowSnapshot { lock.withLock { simulatedWindows } }
+
+    public func windows() async throws -> WindowSnapshot { lock.withLock { simulatedWindows } }
+
+    public func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult {
+        lock.withLock {
+            var snapshot = simulatedWindows
+            var result = ArrangeResult()
+            if launch {
+                let running = Set(snapshot.windows.map(\.appID))
+                var openedIDs: [String] = []
+                for placement in placements where !running.contains(placement.appID) && !openedIDs.contains(placement.appID) {
+                    guard let windows = launchable[placement.appID] ?? (applications.values.contains(placement.appID) ? [WindowInfo(appID: placement.appID, appName: placement.appName, frame: WindowRect(x: 0, y: 25, width: 800, height: 600))] : nil) else { continue }
+                    openedIDs.append(placement.appID)
+                    result.opened.append(placement.appName)
+                    snapshot.windows += windows
+                }
+            }
+            let match = WindowMatcher.match(placements, to: snapshot.windows)
+            for assignment in match.assignments.reversed() {
+                let placement = placements[assignment.placement]
+                var window = snapshot.windows[assignment.window]
+                if window.frame != placement.frame || window.isMinimized != placement.isMinimized { result.moved += 1 }
+                window.frame = placement.frame
+                window.isMinimized = placement.isMinimized
+                window.displayID = snapshot.display(for: placement.frame)?.id
+                snapshot.windows[assignment.window] = window
+            }
+            result.missing = match.missing.map { placements[$0].appName }
+            // Restored windows come to the front in the saved order; the
+            // rest keep theirs behind them.
+            let front = match.assignments.sorted { $0.placement < $1.placement }.map(\.window)
+            let rest = snapshot.windows.indices.filter { !front.contains($0) }.sorted { snapshot.windows[$0].order < snapshot.windows[$1].order }
+            var ordered = (front + rest).map { snapshot.windows[$0] }
+            for index in ordered.indices { ordered[index].order = index }
+            simulatedWindows = WindowSnapshot(displays: snapshot.displays, windows: ordered)
+            return result
+        }
+    }
+
+    /// A laptop on a desk display: Xcode and Safari on the big screen,
+    /// Slack on the laptop.
+    public static func sampleWindows() -> WindowSnapshot {
+        let desk = DisplayInfo(id: "9C1E4F2B-7A1D-4E59-8C3A-5B2F6D0E1A44", name: "Studio Display", frame: WindowRect(x: 0, y: 0, width: 2560, height: 1440), visibleFrame: WindowRect(x: 0, y: 33, width: 2560, height: 1407), isMain: true)
+        let laptop = DisplayInfo(id: "37D8832A-2D66-02CA-B9F7-8F30A301B230", name: "Built-in Retina Display", frame: WindowRect(x: 2560, y: 458, width: 1512, height: 982), isBuiltIn: true)
+        return WindowSnapshot(displays: [desk, laptop], windows: [
+            WindowInfo(appID: "com.apple.dt.Xcode", appName: "Xcode", title: "Stackbar — Windows.swift", frame: WindowRect(x: 0, y: 33, width: 1700, height: 1407), displayID: desk.id, order: 0),
+            WindowInfo(appID: "com.apple.Safari", appName: "Safari", title: "Stackbar docs", frame: WindowRect(x: 1700, y: 33, width: 860, height: 1407), displayID: desk.id, order: 1),
+            WindowInfo(appID: "com.tinyspeck.slackmacgap", appName: "Slack", title: "Slack — navbytes", frame: WindowRect(x: 2560, y: 458, width: 1512, height: 982), displayID: laptop.id, order: 2),
+            WindowInfo(appID: "com.apple.Safari", appName: "Safari", title: "Pull requests", frame: WindowRect(x: 400, y: 200, width: 1200, height: 900), displayID: desk.id, order: 3, isMinimized: true),
+        ])
     }
 
     /// What the user is in: `context()` and `finderSelection()` return it.

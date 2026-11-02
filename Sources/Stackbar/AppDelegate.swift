@@ -35,6 +35,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.model.controllers.forEach { $0.wake() }
             }
         }
+        // Fires several times while macOS settles a change; plugins hear
+        // once, after it has been quiet for 1.5 seconds.
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.displaysChangedSoon()
+            }
+        }
+    }
+
+    private var displaysDebounce: Task<Void, Never>?
+
+    private func displaysChangedSoon() {
+        displaysDebounce?.cancel()
+        displaysDebounce = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(1500))
+            guard !Task.isCancelled else { return }
+            self?.model.controllers.forEach { $0.displaysChanged() }
+        }
     }
 
     /// Clicking the Dock icon (shown while a window is open) brings the

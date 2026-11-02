@@ -209,6 +209,9 @@ public enum Trigger: Codable, Hashable, Sendable {
     /// When anything new is copied to the clipboard, in any app. Needs the
     /// `.clipboard` capability; read the item with `Stackbar.clipboard()`.
     case clipboard
+    /// When a display is plugged in, unplugged or rearranged. Stackbar
+    /// 0.15.0 and later.
+    case displays
 
     public static func every(_ duration: Duration) -> Trigger {
         let (seconds, attoseconds) = duration.components
@@ -258,6 +261,10 @@ public enum Capability: Codable, Hashable, Sendable {
     /// and the plugin may reach that URL's host and no other. Stackbar 0.11.0
     /// and later.
     case userServer(secret: String)
+    /// Reads where every window is and moves them (`Stackbar.windows()`,
+    /// `Stackbar.arrangeWindows`), and opens apps to place their windows.
+    /// The host needs Accessibility access. Stackbar 0.15.0 and later.
+    case windows
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

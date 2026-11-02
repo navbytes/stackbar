@@ -183,6 +183,11 @@ public enum Stackbar {
     /// Saved values, also available as `@Stored` properties.
     @MainActor public static let storage = PluginStorage()
 
+    /// Why the running `refresh()` was called: `.wake`, `.displays`, an
+    /// interval and so on. `nil` outside a refresh, and with hosts older than
+    /// Stackbar 0.15.0 for reasons they don't send.
+    @MainActor public internal(set) static var refreshReason: TriggerReason?
+
     /// A secret the manifest declares with `.secret(name:)`, or `nil` when the
     /// user hasn't entered it yet (the host asks them for it).
     public static func secret(_ name: String) async throws -> String? {
@@ -345,6 +350,26 @@ public enum Stackbar {
     public static func calendarEvents(from: Date, to: Date) async throws -> [CalendarEvent] {
         guard let json = try await value(.calendarEvents(from: from, to: to)) else { return [] }
         return try SystemCodec.decode([CalendarEvent].self, from: json)
+    }
+
+    // MARK: Windows
+
+    /// The displays and the regular apps' windows, front to back, with the
+    /// monitor setup's id (`WindowSnapshot.setupID`). Needs `.windows`; the
+    /// host asks for Accessibility access the first time. Stackbar 0.15.0.
+    public static func windows() async throws -> WindowSnapshot {
+        guard let json = try await value(.windows) else { throw HostError("no windows") }
+        return try SystemCodec.decode(WindowSnapshot.self, from: json)
+    }
+
+    /// Moves and resizes windows to `placements` (take them from
+    /// `WindowPlacement.capture(snapshot)`), matching by app, then title,
+    /// then order. With `launch`, apps that aren't running are opened first.
+    /// At most 200 placements and 10 calls a minute. Needs `.windows`.
+    @discardableResult
+    public static func arrangeWindows(_ placements: [WindowPlacement], launch: Bool = false) async throws -> ArrangeResult {
+        guard let json = try await value(.arrangeWindows(placements, launch: launch)) else { throw HostError("no result from arranging windows") }
+        return try SystemCodec.decode(ArrangeResult.self, from: json)
     }
 
     // MARK: Commands and context

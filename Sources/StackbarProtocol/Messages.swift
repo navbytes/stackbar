@@ -15,7 +15,8 @@ public enum StackbarProtocolVersion {
     /// stacks, segmented pickers, ring and timed progress, and system sounds.
     /// 12 added radial, angular and glass paints, remote images, blur, symbol
     /// effects, numeric transitions, hover and grids.
-    public static let current = 12
+    /// 13 added listing and arranging windows, and the displays trigger.
+    public static let current = 13
 }
 
 /// Host → plugin.
@@ -55,7 +56,7 @@ public enum HostMessage: Codable, Equatable, Sendable {
 }
 
 public enum TriggerReason: String, Codable, Sendable {
-    case launch, interval, wake, manual, file, topic, clipboard
+    case launch, interval, wake, manual, file, topic, clipboard, displays
 }
 
 /// The value that came with an event: a toggle's new state, a slider's number.
@@ -199,6 +200,14 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// The bundle id of an installed app named by its name ("Safari"), its
     /// path or its bundle id, or `nil` when there is none.
     case resolveApplication(String)
+    /// The displays and the regular apps' windows, front to back
+    /// (`WindowSnapshot` as JSON). Needs `.windows`, and Accessibility
+    /// access for the host. Protocol 13.
+    case windows
+    /// Moves and resizes windows to these placements, matching them by app,
+    /// title and order; with `launch`, opens apps that aren't running first.
+    /// Answers `ArrangeResult` as JSON. Needs `.windows`. Protocol 13.
+    case arrangeWindows([WindowPlacement], launch: Bool)
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

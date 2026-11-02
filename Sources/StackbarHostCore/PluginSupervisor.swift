@@ -158,6 +158,12 @@ public actor PluginSupervisor {
         if manifest.triggers.contains(.wake) { send(.trigger(reason: .wake)) }
     }
 
+    /// A display was plugged in, unplugged or rearranged. Only plugins that
+    /// asked for `.displays` hear it.
+    public func displaysChanged() {
+        if manifest.triggers.contains(.displays) { send(.trigger(reason: .displays)) }
+    }
+
     public func setVisible(_ surface: Surface, _ visible: Bool) {
         send(.visibility(surface: surface, visible: visible))
     }

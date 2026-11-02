@@ -88,6 +88,7 @@ public final class HostServices: Sendable {
     private let alerts = RateLimiter(limit: 1, per: 60)
     private let sounds = RateLimiter(limit: 10, per: 60)
     private let panels = RateLimiter(limit: 10, per: 60)
+    private let arrangements = RateLimiter(limit: 10, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
     private let calls = RateLimiter(limit: 1200, per: 60)
@@ -317,6 +318,22 @@ public final class HostServices: Sendable {
 
         case .resolveApplication(let nameOrPath):
             return .value(await platform.system.resolveApplication(nameOrPath))
+
+        case .windows:
+            do {
+                return .value(SystemCodec.encode(try await platform.system.windows()))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .arrangeWindows(let placements, let launch):
+            guard placements.count <= WindowPlacement.maxPerCall else { return .failure("at most \(WindowPlacement.maxPerCall) windows at a time") }
+            guard arrangements.allow(granted.id) else { return .failure("too many window arrangements; at most 10 a minute") }
+            do {
+                return .value(SystemCodec.encode(try await platform.system.arrangeWindows(placements, launch: launch)))
+            } catch {
+                return .failure("\(error)")
+            }
         }
     }
 
