@@ -366,7 +366,9 @@ public struct Chart: StackbarView {
     }
 }
 
-/// A one-line text input. `onSubmit` gets the text when the user presses return.
+/// A one-line text input. `onSubmit` gets the text when the user presses return,
+/// and the field then goes back to `text`: an add field (`text: ""`) clears for
+/// the next entry, and an edit field shows whatever the plugin renders next.
 public struct TextField: StackbarView {
     var placeholder: String
     var text: String

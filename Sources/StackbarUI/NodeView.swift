@@ -793,7 +793,13 @@ struct FieldNodeView: View {
     var body: some View {
         TextField(placeholder, text: $draft)
             .textFieldStyle(.roundedBorder)
-            .onSubmit { send(action, .text(draft)) }
+            .onSubmit {
+                send(action, .text(draft))
+                // Back to what the plugin last said: empty for an add field,
+                // so the next entry starts fresh. A plugin that keeps the
+                // text sends it back and onChange restores it.
+                draft = text
+            }
             .onAppear { draft = text }
             .onChange(of: text) { _, newValue in draft = newValue }
     }
