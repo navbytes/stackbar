@@ -13,6 +13,26 @@ The vision and architecture are in the design doc
 All four phases of its roadmap are built. What still needs a real Mac is listed
 under "Status".
 
+## Install
+
+Apple Silicon, macOS 26 or later:
+
+```sh
+brew install --cask navbytes/tap/stackbar
+```
+
+Or without Homebrew:
+
+```sh
+curl -fsSL https://stackbar.navbytes.io/install.sh | bash
+```
+
+Both install the notarized app into /Applications and put `stackbarctl` on your
+PATH. Plugins are compiled on your Mac, so you also need Xcode or the Command
+Line Tools (`xcode-select --install`). The installer is
+[`scripts/get-stackbar.sh`](scripts/get-stackbar.sh) (`--help` for options), or
+download the zip from [Releases](https://github.com/navbytes/stackbar/releases).
+
 ## A plugin
 
 ```swift
@@ -122,7 +142,7 @@ small plugins that each teach one idea.
 
 ## Running it
 
-On a Mac with Xcode 26 or its Command Line Tools:
+To build from source, on a Mac with Xcode 26 or its Command Line Tools:
 
 ```sh
 scripts/install.sh                       # signed app + widget into /Applications, stackbarctl, bundled plugins
@@ -139,7 +159,8 @@ matching `StackbarVersion.current`). It runs `bundle.sh` on the macOS runner
 and attaches the zip to a GitHub release. It signs with Developer ID and
 notarizes when the `APPLE_CERT_P12`, `APPLE_CERT_PASSWORD`, `APPLE_ID`,
 `APPLE_TEAM_ID` and `APPLE_NOTARY_PASSWORD` secrets are set, and ad-hoc signs
-otherwise.
+otherwise. With `HOMEBREW_TAP_TOKEN` set as well, a notarized release opens a
+PR on navbytes/homebrew-tap that bumps `Casks/stackbar.rb`.
 
 Plugins live in `~/Library/Application Support/Stackbar/Plugins/*.swift`. All
 plugins build in one shared workspace, so StackbarKit compiles once and each new

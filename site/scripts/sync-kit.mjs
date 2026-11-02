@@ -1,4 +1,4 @@
-// Writes src/generated/ and public/icon.svg from the Swift sources (see kit.mjs).
+// Writes src/generated/, public/icon.svg and public/install.sh from the Swift sources (see kit.mjs).
 // Runs before dev, build and check; the outputs are not committed.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,4 +13,6 @@ fs.writeFileSync(path.join(site, 'src/generated/kit.json'), JSON.stringify({
 }, null, 2) + '\n');
 fs.mkdirSync(path.join(site, 'public'), { recursive: true });
 fs.copyFileSync(path.join(repoRoot, 'Packaging/Icon/AppIcon.svg'), path.join(site, 'public/icon.svg'));
+// `curl -fsSL https://stackbar.navbytes.io/install.sh | bash`
+fs.copyFileSync(path.join(repoRoot, 'scripts/get-stackbar.sh'), path.join(site, 'public/install.sh'));
 console.log(`site: kit synced (${Object.keys(design.hues).length} hues, Stackbar ${readVersion()})`);

@@ -4,26 +4,47 @@ import Button from '../components/Button.astro';
 import Glyph from '../components/Glyph.astro';
 import { href, repo, version } from '../lib/site';
 
-// The newest release on GitHub at build time; the site rebuilds daily.
-type Release = { tag_name: string; html_url: string; published_at: string; assets: { name: string; browser_download_url: string; size: number }[] };
+// The newest release on GitHub at build time; the site rebuilds hourly.
+// /releases/latest skips pre-releases, so fall back to the newest release of
+// any kind while every build is still marked as one.
+type Release = { tag_name: string; html_url: string; published_at: string; draft: boolean; assets: { name: string; browser_download_url: string; size: number }[] };
 let release: Release | undefined;
 try {
   const headers: Record<string, string> = { accept: 'application/vnd.github+json' };
   if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-  const response = await fetch('https://api.github.com/repos/navbytes/stackbar/releases/latest', { headers });
-  if (response.ok) release = await response.json();
+  const api = 'https://api.github.com/repos/navbytes/stackbar/releases';
+  const latest = await fetch(`${api}/latest`, { headers });
+  if (latest.ok) release = await latest.json();
+  else {
+    const all = await fetch(`${api}?per_page=5`, { headers });
+    if (all.ok) release = ((await all.json()) as Release[]).find((r) => !r.draft);
+  }
 } catch {}
-const dmg = release?.assets.find((a) => a.name.endsWith('.dmg'));
+const download = release?.assets.find((a) => a.name.endsWith('.dmg'))
+  ?? release?.assets.find((a) => /^Stackbar-.*\.zip$/.test(a.name));
+const installers = [
+  { label: 'Homebrew', command: 'brew install --cask navbytes/tap/stackbar' },
+  { label: 'Without Homebrew', command: `curl -fsSL ${new URL(href('/install.sh'), Astro.site).href} | bash` },
+];
 ---
 <Base title="Download" description="Download Stackbar for macOS. Free and open source under the MIT license.">
   <section class="hero stage">
     <div class="wrap inner">
       <img src={href('/icon.svg')} alt="" width="160" height="160" />
       <h1>Get <span class="gradient-text">Stackbar</span></h1>
-      {dmg ? (
+      {download ? (
         <>
-          <p class="lede">Version {release!.tag_name.replace(/^v/, '')} for macOS 26 or later. Stackbar updates itself after this.</p>
-          <Button href={dmg.browser_download_url} size="l"><Glyph name="download" /> Download {dmg.name} ({Math.round(dmg.size / 1e6)} MB)</Button>
+          <p class="lede">Version {release!.tag_name.replace(/^v/, '')} for Apple Silicon Macs on macOS 26 or later. Signed and notarized.</p>
+          <div class="installers">
+            {installers.map((i) => (
+              <div class="cmd">
+                <div class="cmd-head"><span>{i.label}</span><button type="button" data-copy={i.command}>Copy</button></div>
+                <pre><code>{i.command}</code></pre>
+              </div>
+            ))}
+          </div>
+          <p class="fine">Both install Stackbar.app into /Applications and put <code>stackbarctl</code> on your PATH. Plugins build with Swift, so you also need Xcode or the Command Line Tools (<code>xcode-select --install</code>).</p>
+          <Button href={download.browser_download_url} variant="ghost" size="l"><Glyph name="download" /> Download the app ({Math.round(download.size / 1e6)} MB)</Button>
           <a class="notes" href={release!.html_url}>Release notes</a>
         </>
       ) : (
@@ -44,15 +65,33 @@ const dmg = release?.assets.find((a) => a.name.endsWith('.dmg'));
   </section>
 </Base>
 
+<script>
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
+      button.onclick = async () => {
+        try { await navigator.clipboard.writeText(button.dataset.copy!); button.textContent = 'Copied'; }
+        catch { button.textContent = 'Select and copy'; }
+        setTimeout(() => (button.textContent = 'Copy'), 1600);
+      };
+    });
+  });
+</script>
+
 <style>
   .hero { min-height: calc(100svh - 68px); display: grid; place-items: center; padding-block: 80px; background:
       radial-gradient(40% 50% at 50% 30%, color-mix(in srgb, var(--brand-2-to) 35%, transparent), transparent 70%), var(--stage); }
-  .inner { display: grid; justify-items: center; gap: 24px; text-align: center; }
+  .inner { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 24px; text-align: center; }
   img { filter: drop-shadow(0 30px 60px #C548E866); animation: float 6s ease-in-out infinite alternate; }
   @keyframes float { to { transform: translateY(-10px) rotate(-2deg); } }
   h1 { font-size: var(--step-5); font-weight: 800; letter-spacing: -0.04em; }
   .ctas { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
   .notes { color: var(--ink-2); }
+  .installers { display: grid; gap: 12px; width: min(100%, 620px); text-align: left; }
+  .cmd { border-radius: var(--radius-m); background: #0D0F18; color: var(--stage-ink); overflow: hidden; border: 1px solid #FFFFFF14; }
+  .cmd-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #FFFFFF14; font-size: 12px; color: var(--stage-ink-2); }
+  .cmd button { border: 0; border-radius: 999px; padding: 6px 12px; background: #FFFFFF1A; color: var(--stage-ink); font: 600 12px/1 var(--font-text); cursor: pointer; }
+  .cmd pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  .fine { max-width: 620px; color: var(--ink-2); font-size: var(--step--1); }
   .facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 28px; list-style: none; padding: 0; margin: 16px 0 0; color: var(--ink-2); }
   .facts li { display: flex; align-items: center; gap: 8px; }
   .facts :global(svg) { width: 18px; height: 18px; color: var(--kit-green); }
