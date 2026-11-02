@@ -44,8 +44,10 @@ public final class PluginRuntime {
             surfaces = declared.filter(offered.contains)
             send(.ready(protocolVersion: StackbarProtocolVersion.current))
             render()
-        case .trigger:
+        case .trigger(let reason):
+            Stackbar.refreshReason = reason
             await run("refresh") { try await self.plugin.refresh() }
+            Stackbar.refreshReason = nil
             render()
         case .event(let action, let value):
             guard let handler = handler(for: action) else {

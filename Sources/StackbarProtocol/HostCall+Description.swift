@@ -30,6 +30,8 @@ extension HostCall {
         case .chooseFile: return "choosing a file"
         case .saveFile(let name, _): return "saving \(name)"
         case .resolveApplication(let name): return "finding the app \(name)"
+        case .windows: return "reading windows"
+        case .arrangeWindows: return "arranging windows"
         }
     }
 
@@ -48,6 +50,8 @@ extension HostCall {
         case .calendarEvents: return (.calendar, "read calendar events")
         case .context: return (.context, "read the selected text and frontmost app")
         case .finderSelection: return (.context, "read Finder's selection")
+        case .windows: return (.windows, "read your windows")
+        case .arrangeWindows: return (.windows, "move and resize windows")
         case .storageSet, .secret, .http, .oauthToken, .publish, .notify, .alert, .playSound,
              .openURL, .open, .copy, .run, .cancelRun, .chooseFile, .saveFile, .resolveApplication:
             return nil
