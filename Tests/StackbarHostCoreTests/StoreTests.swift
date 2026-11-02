@@ -110,6 +110,16 @@ final class PluginStoreTests: XCTestCase {
         XCTAssertEqual(entry("x.y", "1", minimum: "0.10.0").requiredStackbar(running: "0.9.9"), "0.10.0")
     }
 
+    func testTheStoreListsEachPluginOnceAtItsNewestBuildableVersion() {
+        let index = PluginIndex(name: "T", plugins: [
+            entry("dev.t.a", "1.0.0"), entry("dev.t.a", "1.3.0", minimum: "0.14.0"), entry("dev.t.a", "1.2.0"),
+            entry("dev.t.b", "1.0.0", minimum: "99.0.0"), entry("dev.t.b", "2.0.0", minimum: "99.0.0"),
+        ])
+        XCTAssertEqual(index.search("", running: "0.14.0").map { "\($0.id) \($0.version)" }, ["dev.t.a 1.3.0", "dev.t.b 2.0.0"])
+        XCTAssertEqual(index.search("", running: "0.13.0").map(\.version), ["1.2.0", "2.0.0"],
+                       "an older app lists the newest version it can build, or the newest when it can build none")
+    }
+
     func testReviewFindsUpdatesAndWithdrawals() {
         let official = PluginStore.Source(url: URL(string: "https://example.com/official.json")!, publicKey: "KEY", isOfficial: true)
         let other = PluginStore.Source(url: URL(string: "https://example.com/other.json")!)
