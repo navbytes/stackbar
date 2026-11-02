@@ -117,13 +117,37 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         self.signature = signature
     }
 
-    public func search(_ query: String) -> [Entry] {
+    /// What the store lists: one entry per plugin, matching `query`. An index
+    /// keeps every published version so an older Stackbar can still install
+    /// one it can build; the store shows the newest that `running` can build,
+    /// or the newest when it can build none.
+    public func search(_ query: String, running: String = StackbarVersion.current) -> [Entry] {
         let query = query.trimmingCharacters(in: .whitespaces).lowercased()
-        let listed = plugins.filter { revocation(for: $0.id, version: $0.version) == nil }
+        let listed = PluginIndex.newest(plugins.filter { revocation(for: $0.id, version: $0.version) == nil }, running: running)
         guard !query.isEmpty else { return listed }
         return listed.filter { entry in
             [entry.name, entry.id, entry.summary ?? "", entry.publisher, entry.category ?? ""].contains { $0.lowercased().contains(query) }
         }
+    }
+
+    /// One entry per plugin id, in first-seen order: the newest version
+    /// `running` can build, otherwise the newest version.
+    static func newest(_ entries: [Entry], running: String) -> [Entry] {
+        var order: [String] = []
+        var best: [String: Entry] = [:]
+        for entry in entries {
+            guard let current = best[entry.id] else {
+                order.append(entry.id)
+                best[entry.id] = entry
+                continue
+            }
+            let buildable = entry.requiredStackbar(running: running) == nil
+            let currentBuildable = current.requiredStackbar(running: running) == nil
+            if buildable != currentBuildable ? buildable : entry.isNewer(than: current.version) {
+                best[entry.id] = entry
+            }
+        }
+        return order.compactMap { best[$0] }
     }
 
     /// The revocation covering this plugin version, if any.
