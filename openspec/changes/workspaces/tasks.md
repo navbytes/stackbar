@@ -9,10 +9,10 @@
 - [x] 1.6 StackbarKit `Stackbar.windows()` / `arrangeWindows`; authoring guide rows; Stackbar 0.15.0
 
 ## 2. Plugin (navbytes/stackbar-plugins)
-- [ ] 2.1 `Productivity/Workspaces`: save, restore, delete, default per setup
-- [ ] 2.2 Auto-restore on displays and wake; reopen apps setting
-- [ ] 2.3 Commands per layout, agent tools
-- [ ] 2.4 Tests; raise the Stackbar pin
+- [x] 2.1 `Productivity/Workspaces`: save, restore, delete, default per setup
+- [x] 2.2 Auto-restore on displays and wake; reopen apps setting
+- [x] 2.3 Commands per layout, agent tools
+- [x] 2.4 Tests; raise the Stackbar pin (stackbar-plugins #19)
 
 ## 3. Check
 - [x] 3.1 `swift build && swift test`
