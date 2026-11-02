@@ -176,6 +176,12 @@ struct PluginDetail: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if controller.isEnabled, let manifest = controller.manifest, !manifest.surfaces.contains(.menuBar) {
+                    // Without this, a palette-only plugin looks like it didn't install.
+                    Text("\(controller.name) has no menu bar item. Press ⌃⌥Space and type its name" + (manifest.hotkey.map { ", or press \($0)" } ?? "") + ".")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if controller.isEnabled, controller.manifest?.surfaces.contains(.menuBar) == true {
                     Toggle("Show in menu bar", isOn: Binding(get: { !controller.hiddenFromMenuBar }, set: { controller.hiddenFromMenuBar = !$0 }))
                     if controller.hiddenFromMenuBar {
