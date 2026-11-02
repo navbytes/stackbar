@@ -285,7 +285,10 @@ final class AppModel {
     // MARK: - Cross-plugin features
 
     func panelChanged(_ controller: PluginController) {
-        palette.update(pluginID: controller.pluginID, pluginName: controller.name, panel: controller.panel)
+        // On a copy: mutating `palette` in place tells an open palette it
+        // changed even when this render offered the same things.
+        var next = palette
+        if next.update(pluginID: controller.pluginID, pluginName: controller.name, panel: controller.panel) { palette = next }
     }
 
     /// The registry or preferences changed: rebuild the palette's commands.

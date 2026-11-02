@@ -236,8 +236,7 @@ struct PaletteView: View {
         case .view(let view): return view.entry.pluginName
         case .arguments(let entry, _): return entry.pluginName
         case .none:
-            let results = session.results
-            return results.indices.contains(session.selection) ? results[session.selection].pluginName : "Stackbar"
+            return session.selectedEntry?.pluginName ?? "Stackbar"
         }
     }
 
@@ -290,19 +289,23 @@ struct RootResults: View {
 
     var body: some View {
         let results = session.results
+        let selected = session.selectedEntry?.id
         ScrollViewReader { proxy in
             ScrollView {
+                // One identity per row, the entry's: the highlight and the
+                // scroll follow the entry, not its position in the list.
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(results.enumerated()), id: \.element.id) { index, entry in
-                        PaletteRow(entry: entry, selected: index == session.selection)
-                            .id(index)
+                    ForEach(results) { entry in
+                        PaletteRow(entry: entry, selected: entry.id == selected)
                             .contentShape(Rectangle())
                             .onTapGesture { session.activate(entry) }
                     }
                 }
                 .padding(.vertical, 4)
             }
-            .onChange(of: session.selection) { _, newValue in proxy.scrollTo(newValue) }
+            .onChange(of: selected) { _, newValue in
+                if let newValue { proxy.scrollTo(newValue) }
+            }
         }
         .overlay {
             if results.isEmpty {
@@ -430,7 +433,7 @@ struct CommandViewBody: View {
 
     private func list(_ items: [RowFilter.Item]) -> some View {
         let rows = items.compactMap { if case .row(let row) = $0 { return row } else { return nil } }
-        let selectedKey = rows.indices.contains(session.selection) ? rows[session.selection].key : nil
+        let selectedKey = session.selectedRow(of: view)?.key
         return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -454,8 +457,8 @@ struct CommandViewBody: View {
                 .padding(.vertical, 4)
             }
             .environment(\.stackbarSelectedRow, selectedKey)
-            .onChange(of: session.selection) { _, _ in
-                if let selectedKey { proxy.scrollTo(selectedKey) }
+            .onChange(of: selectedKey) { _, newValue in
+                if let newValue { proxy.scrollTo(newValue) }
             }
             .overlay {
                 if rows.isEmpty {
