@@ -26,7 +26,7 @@ extension MacSystem {
 /// so a layout covers the current Space.
 @MainActor
 enum MacWindows {
-    static let untrusted = SystemServiceError("Stackbar needs Accessibility access to see and move windows: System Settings > Privacy & Security > Accessibility")
+    nonisolated static let untrusted = SystemServiceError("Stackbar needs Accessibility access to see and move windows: System Settings > Privacy & Security > Accessibility")
 
     /// What is on screen, with each window's Accessibility element and the
     /// process it belongs to, in the same order as `snapshot.windows`.
