@@ -20,6 +20,20 @@ public enum PluginStore {
     public struct Catalog: Equatable, Sendable {
         public var source: Source
         public var index: PluginIndex
+        /// The store's renders and READMEs, when it publishes them.
+        public var site: StoreSite?
+
+        public init(source: Source, index: PluginIndex, site: StoreSite? = nil) {
+            self.source = source
+            self.index = index
+            self.site = site
+        }
+
+        /// The entry's page on the Stackbar website. Only the official
+        /// index has pages there.
+        public func webPage(for entry: PluginIndex.Entry) -> URL? {
+            source.isOfficial ? OfficialIndex.webPage(for: entry.id) : nil
+        }
     }
 
     public struct Update: Equatable, Sendable {
@@ -52,17 +66,29 @@ public enum PluginStore {
     }
 
     /// Fetches every source; a source that fails is reported, not fatal.
-    public static func load(_ sources: [Source]) async -> (catalogs: [Catalog], problems: [String]) {
+    /// With `site`, also each store's `site.json` (renders and READMEs), which
+    /// only the store's pages need, not the background update check.
+    public static func load(_ sources: [Source], site: Bool = false) async -> (catalogs: [Catalog], problems: [String]) {
         var catalogs: [Catalog] = []
         var problems: [String] = []
         for source in sources {
             do {
-                catalogs.append(Catalog(source: source, index: try await PluginIndex.fetch(source.url, publicKey: source.publicKey)))
+                let index = try await PluginIndex.fetch(source.url, publicKey: source.publicKey)
+                catalogs.append(Catalog(source: source, index: index, site: site ? await StoreSite.fetch(beside: source.url) : nil))
             } catch {
                 problems.append("\(source.url.absoluteString): \(error)")
             }
         }
         return (catalogs, problems)
+    }
+
+    /// The listed entry for a plugin id (what the store shows for it: the
+    /// newest version this app can build), from the first catalog that has it.
+    public static func find(_ pluginID: String, in catalogs: [Catalog], running: String = StackbarVersion.current) -> (catalog: Catalog, entry: PluginIndex.Entry)? {
+        for catalog in catalogs {
+            if let entry = catalog.index.search("", running: running).first(where: { $0.id == pluginID }) { return (catalog, entry) }
+        }
+        return nil
     }
 
     /// Updates for plugins installed from a store, offered only by an entry

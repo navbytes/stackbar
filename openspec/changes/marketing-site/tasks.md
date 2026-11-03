@@ -21,7 +21,7 @@
 - [ ] 3.2 StackbarKit previews and `stackbarctl render --preview <name>`
 - [x] 3.3 `publish.sh`: render every surface light and dark per version, write `site.json`, add the redirect `index.html` (stackbar-plugins #8)
 - [x] 3.4 Gallery on plugin pages: every surface, both appearances, with a light/dark switch
-- [ ] 3.5 `stackbar://store/<id>` opens the plugin in Settings → Store; "Get it in Stackbar" uses it
+- [x] 3.5 `stackbar://store/<id>` opens the plugin's page in Settings → Store (a native detail view from the index and the store's site.json, which now carries each README); "Get it in Stackbar" uses it and falls back to the install steps (Stackbar 0.15.0)
 
 ## 4. Polish
 - [ ] 4.1 Open Graph cards per plugin in its hue

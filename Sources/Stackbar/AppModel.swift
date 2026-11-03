@@ -17,6 +17,8 @@ final class AppModel {
     var settingsPlugin: PluginController.ID?
     /// The command Settings → Commands shows.
     var settingsCommand: CommandKey?
+    /// The plugin a `stackbar://store/<id>` link asked Settings → Store to show.
+    var storeFocus: String?
     var indexURLs: [String] {
         didSet { UserDefaults.standard.set(indexURLs, forKey: "indexURLs") }
     }

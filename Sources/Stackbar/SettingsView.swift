@@ -261,6 +261,8 @@ struct StoreView: View {
     @State private var query = ""
     @State private var status: String?
     @State private var loading = false
+    /// The plugin whose page is open.
+    @State private var page: StorePage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -287,12 +289,14 @@ struct StoreView: View {
                             Text(group.category).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                             ForEach(group.entries) { entry in
                                 let controller = model.controller(for: entry.id)
-                                StoreRow(entry: entry, indexURL: catalog.source.url, state: state(of: entry), isOn: controller?.isEnabled) {
+                                StoreRow(entry: entry, catalog: catalog, state: state(of: entry), isOn: controller?.isEnabled) {
                                     Task { await install(entry, from: catalog) }
                                 } uninstall: { deleteData in
                                     Task { await uninstall(entry, deleteData: deleteData) }
                                 } setOn: { on in
                                     controller?.isEnabled = on
+                                } open: {
+                                    page = StorePage(pluginID: entry.id, indexURL: catalog.source.url)
                                 }
                             }
                         }
@@ -319,6 +323,40 @@ struct StoreView: View {
         }
         .padding()
         .task { await load() }
+        .onChange(of: model.storeFocus) { openFocus() }
+        .sheet(item: $page) { page in
+            if let catalog = catalogs.first(where: { $0.source.url == page.indexURL }),
+               let entry = catalog.index.search("").first(where: { $0.id == page.pluginID }) {
+                let controller = model.controller(for: entry.id)
+                StorePluginPage(entry: entry, catalog: catalog, state: state(of: entry), isOn: controller?.isEnabled) {
+                    Task { await install(entry, from: catalog) }
+                } uninstall: { deleteData in
+                    Task { await uninstall(entry, deleteData: deleteData) }
+                } setOn: { on in
+                    controller?.isEnabled = on
+                } close: {
+                    self.page = nil
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Text("This plugin is no longer listed.")
+                    Button("Done") { self.page = nil }.keyboardShortcut(.defaultAction)
+                }
+                .padding(40)
+            }
+        }
+    }
+
+    /// Opens the page a `stackbar://store/<id>` link asked for, once the
+    /// stores have loaded.
+    private func openFocus() {
+        guard let id = model.storeFocus, !loading, !catalogs.isEmpty else { return }
+        model.storeFocus = nil
+        if let found = PluginStore.find(id, in: catalogs) {
+            page = StorePage(pluginID: found.entry.id, indexURL: found.catalog.source.url)
+        } else {
+            status = "None of your stores lists \(id)."
+        }
     }
 
     private func state(of entry: PluginIndex.Entry) -> StoreRow.Availability {
@@ -333,9 +371,11 @@ struct StoreView: View {
         loading = true
         defer { loading = false }
         model.refreshInstalled()
-        let result = await PluginStore.load(model.storeSources)
+        let result = await PluginStore.load(model.storeSources, site: true)
         catalogs = result.catalogs
         status = result.problems.isEmpty ? nil : result.problems.joined(separator: "\n")
+        loading = false
+        openFocus()
     }
 
     private func install(_ entry: PluginIndex.Entry, from catalog: PluginStore.Catalog) async {
@@ -367,6 +407,13 @@ extension StoreView {
     }
 }
 
+/// Which plugin's page is open in the store.
+struct StorePage: Identifiable, Equatable {
+    var pluginID: String
+    var indexURL: URL
+    var id: String { indexURL.absoluteString + "#" + pluginID }
+}
+
 struct StoreRow: View {
     enum Availability: Equatable {
         case available
@@ -376,70 +423,69 @@ struct StoreRow: View {
     }
 
     let entry: PluginIndex.Entry
-    let indexURL: URL
+    let catalog: PluginStore.Catalog
     let state: Availability
     /// Whether the installed plugin is on; nil when it isn't loaded.
     let isOn: Bool?
     let install: () -> Void
     let uninstall: (_ deleteData: Bool) -> Void
     let setOn: (Bool) -> Void
-    @State private var confirmingUninstall = false
+    /// Opens the plugin's page.
+    let open: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// This version's most telling render from the store's site.json, then
+    /// the index's single screenshot.
+    private var thumbnail: URL? {
+        let path = catalog.site?.thumbnail(entry.id, version: entry.version)?.path(dark: colorScheme == .dark) ?? entry.screenshot
+        return path.flatMap { URL(string: $0, relativeTo: catalog.source.url)?.absoluteURL }
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            if let screenshot = entry.screenshot, let url = URL(string: screenshot, relativeTo: indexURL) {
-                AsyncImage(url: url.absoluteURL) { image in
-                    image.resizable().scaledToFit()
-                } placeholder: {
-                    Color.secondary.opacity(0.1)
+            Button(action: open) {
+                HStack(alignment: .top, spacing: 12) {
+                    if let thumbnail {
+                        AsyncImage(url: thumbnail) { image in
+                            image.resizable().scaledToFit()
+                        } placeholder: {
+                            StorePluginIcon(entry: entry, size: 40)
+                        }
+                        .frame(width: 96, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        StorePluginIcon(entry: entry, size: 40).frame(width: 96, height: 64)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            StorePluginIcon(entry: entry, size: 16)
+                            Text("\(entry.name) \(entry.version)").font(.headline)
+                        }
+                        if let summary = entry.summary { Text(summary).font(.callout).multilineTextAlignment(.leading) }
+                        Text("by \(entry.publisher)").font(.caption).foregroundStyle(.secondary)
+                        ForEach(entry.capabilities, id: \.self) { Text("• " + $0).font(.caption).foregroundStyle(.secondary) }
+                    }
                 }
-                .frame(width: 96, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(entry.name) \(entry.version)").font(.headline)
-                if let summary = entry.summary { Text(summary).font(.callout) }
-                HStack(spacing: 6) {
-                    Text("by \(entry.publisher)")
-                    if let homepage = entry.homepage, let url = URL(string: homepage) { Link("Read more", destination: url) }
-                }
-                .font(.caption).foregroundStyle(.secondary)
-                ForEach(entry.capabilities, id: \.self) { Text("• " + $0).font(.caption).foregroundStyle(.secondary) }
-            }
+            .buttonStyle(.plain)
+            .help("Show \(entry.name)'s page")
             Spacer()
-            switch state {
-            case .available: Button("Install", action: install)
-            case .installed:
-                VStack(alignment: .trailing) {
-                    if isOn == false { OffBadge() }
-                    HStack {
-                        onOffButton
-                        Button("Uninstall…", role: .destructive) { confirmingUninstall = true }
+            VStack(alignment: .trailing, spacing: 4) {
+                StoreActions(entry: entry, state: state, isOn: isOn, install: install, uninstall: uninstall, setOn: setOn)
+                HStack(spacing: 8) {
+                    Button("Details", action: open)
+                    if let page = catalog.webPage(for: entry) {
+                        Link("Web Page", destination: page)
+                    } else if let homepage = entry.homepage, let url = URL(string: homepage) {
+                        Link("Homepage", destination: url)
                     }
                 }
-            case .update(let from):
-                VStack(alignment: .trailing) {
-                    if isOn == false { OffBadge() }
-                    Button("Update", action: install).help("Installed: \(from)")
-                    HStack {
-                        onOffButton.buttonStyle(.link)
-                        Button("Uninstall…", role: .destructive) { confirmingUninstall = true }.buttonStyle(.link)
-                    }
-                }
-            case .needsStackbar(let version): Text("Needs Stackbar \(version)").font(.caption).foregroundStyle(.secondary)
+                .buttonStyle(.link)
+                .font(.caption)
             }
         }
         .padding(.vertical, 4)
-        .modifier(UninstallDialog(isPresented: $confirmingUninstall, name: entry.name, canTurnOff: isOn == true, uninstall: uninstall) {
-            setOn(false)
-        })
-    }
-
-    @ViewBuilder private var onOffButton: some View {
-        if let isOn {
-            Button(isOn ? "Turn Off" : "Turn On") { setOn(!isOn) }
-                .help(isOn ? "Stops it and takes it out of the menu bar, the palette and widgets. Its settings and data stay." : "Runs it again")
-        }
     }
 }
 

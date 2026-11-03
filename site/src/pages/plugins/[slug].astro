@@ -37,6 +37,9 @@ const panel = plugin.gallery.find((shot) => shot.surface === 'panel');
 const heroShot = panel?.dark ?? panel?.light ?? plugin.screenshot;
 const surfaces = plugin.surfaces.filter((s) => s !== 'settings');
 const installCommand = `stackbarctl install --index ${store.indexURL} ${plugin.id}`;
+// Opens this plugin's page in Stackbar → Settings → Store (Stackbar 0.15.0);
+// the script below falls back to the install steps when nothing opens it.
+const appLink = `stackbar://store/${plugin.id}`;
 const details: [string, string][] = [
   ['Version', plugin.version],
   ['Updated', new Date(`${plugin.updated}T00:00:00Z`).toLocaleDateString('en', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })],
@@ -59,7 +62,7 @@ const details: [string, string][] = [
           <p class="lede">{plugin.summary}</p>
         </div>
         <div class="ctas">
-          <Button href="#install" variant="accent" size="l">Get it in Stackbar</Button>
+          <span data-app-link><Button href={appLink} variant="accent" size="l">Get it in Stackbar</Button></span>
           <Button href={plugin.homepage} variant="ghost" size="l">View source</Button>
         </div>
         <ul class="badges">
@@ -123,8 +126,8 @@ const details: [string, string][] = [
         <p class="eyebrow">Install</p>
         <h2>Two clicks in Stackbar.</h2>
         <ol class="steps">
-          <li>Open <strong>Stackbar → Settings → Store</strong>.</li>
-          <li>Find <strong>{plugin.name}</strong> and choose <strong>Install</strong>.</li>
+          <li><a href={appLink}>Open it in Stackbar</a>, or open <strong>Stackbar → Settings → Store</strong> and find <strong>{plugin.name}</strong>.</li>
+          <li>Choose <strong>Install</strong>.</li>
           {surfaces.length > 0 && <li>It appears in your {surfaces.map((s) => (surfaceNames[s] ?? s).toLowerCase()).join(', ')}.</li>}
         </ol>
         <p class="fine">Don't have Stackbar yet? <a href={href('/download/')}>Download it free</a>.</p>
@@ -154,6 +157,22 @@ const details: [string, string][] = [
 
 <script>
   document.addEventListener('astro:page-load', () => {
+    // A stackbar:// link does nothing visible without the app (or with one
+    // too old to know store links), so if the page keeps focus, show the
+    // install steps instead.
+    document.querySelectorAll<HTMLAnchorElement>('[data-app-link] a').forEach((link) => {
+      link.onclick = () => {
+        let left = false;
+        const away = () => { left = true; };
+        window.addEventListener('blur', away, { once: true });
+        document.addEventListener('visibilitychange', away, { once: true });
+        setTimeout(() => {
+          window.removeEventListener('blur', away);
+          document.removeEventListener('visibilitychange', away);
+          if (!left) document.getElementById('install')?.scrollIntoView({ behavior: 'smooth' });
+        }, 1200);
+      };
+    });
     document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
       button.onclick = async () => {
         try { await navigator.clipboard.writeText(button.dataset.copy!); button.textContent = 'Copied'; }

@@ -229,7 +229,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// `stackbar://commands/<plugin>/<command>?name=value`. A view opens in
     /// the palette, where the user sees it before anything happens. A run
     /// command runs only once the user allowed links to run it.
+    /// `stackbar://store/<plugin>` opens the plugin's page in Settings →
+    /// Store; installing still takes the user's click there.
     private func openLink(_ url: URL) {
+        if let link = StoreLink(url) {
+            model.settingsTab = .store
+            model.storeFocus = link.pluginID
+            showSettings()
+            return
+        }
         guard let link = CommandLink(url.absoluteString) else {
             HUD.shared.show("Stackbar doesn't know the link \(url.absoluteString)", isError: true)
             return
