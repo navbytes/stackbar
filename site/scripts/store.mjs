@@ -69,17 +69,46 @@ export async function fetchWithRetry(fetch, url, init, tries = 3) {
   }
 }
 
+/** Compares dotted versions numerically: negative when a is older. */
+export function compareVersions(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/** Whether a withdrawal covers this version: no `versions` withdraws them all. */
+export function isWithdrawn(index, entry) {
+  return (index.revoked ?? []).some((r) => r.id === entry.id && (!r.versions || r.versions.some((v) => compareVersions(v, entry.version) === 0)));
+}
+
+/**
+ * What the site lists, like the app's store: withdrawn versions left out, then
+ * one entry per plugin, its newest version. A plugin whose every version is
+ * withdrawn (one retired or replaced) has no page.
+ */
+export function listed(index) {
+  const best = new Map();
+  for (const entry of index.plugins) {
+    if (isWithdrawn(index, entry)) continue;
+    const current = best.get(entry.id);
+    if (!current || compareVersions(entry.version, current.version) > 0) best.set(entry.id, entry);
+  }
+  return [...best.values()];
+}
+
 export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch, log = console.warn }) {
   const response = await fetchWithRetry(fetch, indexURL);
   if (!response.ok) throw new Error(`store: ${indexURL} answered ${response.status}`);
   const index = verifyIndex(await response.json(), publicKey);
   const base = new URL('.', indexURL);
   const renders = await fetchRenders(fetch, new URL('site.json', base).href, log);
-  const revoked = new Set((index.revoked ?? []).map((r) => `${r.id}@${r.version}`));
   const seen = new Map();
   const plugins = [];
-  for (const entry of index.plugins) {
-    if (revoked.has(`${entry.id}@${entry.version}`)) continue;
+  for (const entry of listed(index)) {
     const slug = slugOf(entry.id);
     if (seen.has(slug) && seen.get(slug) !== entry.id) throw new Error(`store: ${entry.id} and ${seen.get(slug)} share the page /plugins/${slug}`);
     seen.set(slug, entry.id);
