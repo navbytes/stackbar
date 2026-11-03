@@ -39,12 +39,18 @@ const plugins = defineCollection({
     surfaces: z.array(z.string()),
     /** Renders of this version's surfaces, from the store's site.json. */
     gallery: z.array(z.object({ surface: z.string(), light: z.url().optional(), dark: z.url().optional() })),
+    /** Scenes with sample data (Stackbar 0.17.0), in the plugin's order; `hero` first by convention. */
+    previews: z.array(z.object({ name: z.string(), title: z.string(), surface: z.string(), light: z.url().optional(), dark: z.url().optional() })).default([]),
     capabilities: z.array(z.string()),
     readme: z.object({
       description: z.string(),
       facts: z.array(z.object({ label: z.string(), text: z.string() })),
       /** `## What's new in <version>` sections, newest first. */
       changes: z.array(z.object({ version: z.string(), notes: z.array(z.string()) })).default([]),
+      /** `## Highlights`: feature stories, each optionally pictured by a preview. */
+      highlights: z.array(z.object({ title: z.string(), text: z.string(), preview: z.string().optional() })).default([]),
+      /** `## FAQ`: questions and answers. */
+      faq: z.array(z.object({ question: z.string(), answer: z.string() })).default([]),
     }),
   }),
 });

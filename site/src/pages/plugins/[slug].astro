@@ -4,11 +4,12 @@ import Base from '../../layouts/Base.astro';
 import Button from '../../components/Button.astro';
 import Gallery from '../../components/Gallery.astro';
 import Glyph from '../../components/Glyph.astro';
-import MenuBarScene from '../../components/MenuBarScene.astro';
+import HeroRotator from '../../components/HeroRotator.astro';
 import PluginCard from '../../components/PluginCard.astro';
 import PluginIcon from '../../components/PluginIcon.astro';
 import Screenshot from '../../components/Screenshot.astro';
-import { byName, categorySlug, hueOf, surfaceNames } from '../../lib/plugins';
+import ThemedShot from '../../components/ThemedShot.astro';
+import { byName, categorySlug, heroShot, hueOf, surfaceNames } from '../../lib/plugins';
 import { href, store, version as stackbarVersion } from '../../lib/site';
 
 export async function getStaticPaths() {
@@ -24,18 +25,28 @@ const all = await getCollection('plugins');
 const related = all.filter((p) => p.data.category === plugin.category && p.id !== entry.id).sort(byName).slice(0, 3);
 
 // README facts the page shows elsewhere (needs → privacy card, surfaces and
-// requirements → details) are left out of the feature tiles.
-const shownElsewhere = new Set(['Needs', 'Surfaces', 'Requires']);
+// requirements → details, commands and agent tools → their own sections) are
+// left out of the feature tiles.
+const fact = (label: string) => plugin.readme.facts.find((f) => f.label === label)?.text;
+const shownElsewhere = new Set(['Needs', 'Surfaces', 'Requires', 'Commands', 'Agent tools']);
 const features = plugin.readme.facts.filter((f) => !shownElsewhere.has(f.label));
-const needs = plugin.readme.facts.find((f) => f.label === 'Needs')?.text;
-const whatsNew = plugin.readme.changes.find((c) => c.version === plugin.version && c.notes.length > 0);
+const needs = fact('Needs');
+// "Search Clipboard History, Paste Last Copy as Plain Text, Pause …."
+const commands = (fact('Commands') ?? '').replace(/\.$/, '').split(/,\s+(?:and\s+)?|\s+and\s+/).map((c) => c.trim()).filter(Boolean);
+// "`recent_clips`, `search_clips` and `copy_clip`."
+const tools = [...(fact('Agent tools') ?? '').matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+const history = plugin.readme.changes.filter((c) => c.notes.length > 0);
+// Feature stories: the README's Highlights, each pictured by the preview it
+// names; without Highlights, the previews themselves (after the hero) tell it.
+const sceneOf = (name?: string) => plugin.previews.find((p) => p.name === name);
+const highlights = plugin.readme.highlights.length > 0
+  ? plugin.readme.highlights.map((h) => ({ title: h.title, text: h.text, scene: sceneOf(h.preview) }))
+  : plugin.previews.filter((p) => p.name !== 'hero').map((p) => ({ title: p.title, text: '', scene: p }));
 const inline = (text: string) => text
   .replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/`([^`]+)`/g, '<code>$1</code>')
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-// The hero sits on the always-dark stage, so it prefers the dark panel render.
-const panel = plugin.gallery.find((shot) => shot.surface === 'panel');
-const heroShot = panel?.dark ?? panel?.light ?? plugin.screenshot;
+const hasHero = !!heroShot(plugin, 'dark');
 const surfaces = plugin.surfaces.filter((s) => s !== 'settings');
 const installCommand = `stackbarctl install --index ${store.indexURL} ${plugin.id}`;
 // Opens this plugin's page in Stackbar → Settings → Store (Stackbar 0.15.0);
@@ -72,10 +83,9 @@ const details: [string, string][] = [
           <li>v{plugin.version}</li>
         </ul>
       </div>
-      <MenuBarScene label={`${plugin.name} open from the menu bar`} hues={[hue, hue, 'graphite']} compact
-        items={[{ text: plugin.name, glyph: 'bolt', active: true }, { text: '23%', glyph: 'cpu' }]}>
-        <Screenshot src={heroShot} alt={`${plugin.name}'s panel`} eager>Screenshot coming with the next release</Screenshot>
-      </MenuBarScene>
+      {hasHero
+        ? <HeroRotator plugins={[plugin]} captions={false} label={`${plugin.name} open from the menu bar`} />
+        : <Screenshot alt={`${plugin.name}'s panel`}>Screenshot coming with the next release</Screenshot>}
     </div>
   </section>
 
@@ -96,11 +106,23 @@ const details: [string, string][] = [
     </div>
   </section>
 
-  {whatsNew && (
-    <section class="section whats-new" aria-labelledby="new">
-      <div class="wrap">
-        <div class="section-head"><p class="eyebrow">Version {whatsNew.version}</p><h2 id="new">What's new</h2></div>
-        <ul class="notes">{whatsNew.notes.map((note) => <li set:html={inline(note)} />)}</ul>
+  {highlights.length > 0 && (
+    <section class="section highlights" aria-label="Highlights">
+      <div class="wrap stories">
+        {highlights.map((h, i) => (
+          <article class:list={['story', { flip: i % 2 === 1, bare: !h.scene }]}>
+            <div class="story-copy">
+              <p class="eyebrow">{h.scene ? (surfaceNames[h.scene.surface] ?? h.scene.surface) : 'Highlight'}</p>
+              <h2>{h.title}</h2>
+              {h.text && h.text.split(/\n{2,}/).map((para) => <p set:html={inline(para.replace(/\n/g, ' '))} />)}
+            </div>
+            {h.scene && (
+              <div class:list={['story-shot', h.scene.surface]}>
+                <ThemedShot light={h.scene.light} dark={h.scene.dark} alt={`${plugin.name}: ${h.scene.title}`} />
+              </div>
+            )}
+          </article>
+        ))}
       </div>
     </section>
   )}
@@ -110,6 +132,32 @@ const details: [string, string][] = [
       <div class="wrap">
         <div class="section-head"><p class="eyebrow">Gallery</p><h2 id="looks">Every place it shows up.</h2></div>
         <Gallery name={plugin.name} gallery={plugin.gallery} />
+      </div>
+    </section>
+  )}
+
+  {(commands.length > 0 || tools.length > 0) && (
+    <section class="section actions" aria-labelledby="do">
+      <div class="wrap">
+        <div class="section-head"><p class="eyebrow">From anywhere</p><h2 id="do">Run it without opening it.</h2></div>
+        <div class="do-grid">
+          {commands.length > 0 && (
+            <div class="palette" role="img" aria-label={`${plugin.name}'s commands in Stackbar's command palette`}>
+              <div class="palette-search"><Glyph name="palette" /> <span>{plugin.name.split(' ')[0].toLowerCase()}</span><kbd>⌥ Space</kbd></div>
+              <ul>{commands.map((c, i) => <li class:list={{ first: i === 0 }}><span class="cmd-icon"><PluginIcon name={plugin.name} hue={hue} size={22} /></span><span>{c}</span><small>{plugin.name}</small></li>)}</ul>
+            </div>
+          )}
+          <div class="do-copy">
+            {commands.length > 0 && <p>Every command is in Stackbar's palette, and can have its own hotkey, a <code>stackbar://</code> link, or a Shortcuts action.</p>}
+            {tools.length > 0 && (
+              <div class="agent">
+                <h3><Glyph name="agent" /> Tools for your AI</h3>
+                <p>Claude and other agents can call these over MCP while Stackbar runs:</p>
+                <ul class="tool-chips">{tools.map((t) => <li><code>{t}</code></li>)}</ul>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </section>
   )}
@@ -154,6 +202,38 @@ const details: [string, string][] = [
       </div>
     </div>
   </section>
+
+  {(history.length > 0 || plugin.readme.faq.length > 0) && (
+    <section class="section notes-section">
+      <div class="wrap notes-grid">
+        {history.length > 0 && (
+          <div aria-labelledby="new">
+            <div class="section-head"><p class="eyebrow">Version history</p><h2 id="new">What's new</h2></div>
+            <ol class="versions">
+              {history.map((change, i) => (
+                <li>
+                  <details open={i === 0}>
+                    <summary><b>{change.version}</b>{i === 0 && <span class="latest">Latest</span>}</summary>
+                    <ul class="notes">{change.notes.map((note) => <li set:html={inline(note)} />)}</ul>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+        {plugin.readme.faq.length > 0 && (
+          <div aria-labelledby="faq">
+            <div class="section-head"><p class="eyebrow">Questions</p><h2 id="faq">Good to know</h2></div>
+            <div class="faq">
+              {plugin.readme.faq.map((q) => (
+                <details><summary>{q.question}</summary><p set:html={inline(q.answer.replace(/\n/g, ' '))} /></details>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  )}
 
   {related.length > 0 && (
     <section class="section more">
@@ -249,6 +329,47 @@ const details: [string, string][] = [
   .details .full { grid-column: 1 / -1; }
   @media (max-width: 860px) { .install-grid { grid-template-columns: 1fr; } }
 
+  .stories { display: grid; gap: clamp(56px, 8vw, 112px); }
+  .story { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 96px); align-items: center; }
+  .story.flip .story-copy { order: 2; }
+  .story.bare { grid-template-columns: minmax(0, 1fr); max-width: 72ch; }
+  .story-copy { display: grid; gap: 14px; }
+  .story-copy h2 { font-size: var(--step-3); letter-spacing: -0.03em; text-wrap: balance; }
+  .story-copy p:not(.eyebrow) { color: var(--ink-2); font-size: var(--step-1); line-height: 1.55; max-width: 46ch; }
+  .story-copy :global(code) { font-size: 0.85em; padding: 1px 5px; border-radius: 5px; background: var(--page-2); }
+  .story-shot { justify-self: center; width: min(100%, 400px); padding: clamp(20px, 4vw, 44px); border-radius: var(--radius-l);
+    background: radial-gradient(70% 70% at 30% 20%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 70%), var(--page-2); }
+  .story-shot.window { width: min(100%, 520px); }
+  .story-shot.widget { width: min(100%, 360px); }
+  @media (max-width: 860px) { .story { grid-template-columns: 1fr; } .story.flip .story-copy { order: 0; } }
+
+  .do-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: start; }
+  .palette { border-radius: 16px; background: light-dark(#FFFFFF, #1C1D26); border: 1px solid var(--line-2); box-shadow: var(--shadow-2); overflow: hidden; }
+  .palette-search { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: var(--step-1); }
+  .palette-search :global(svg) { width: 20px; height: 20px; color: var(--ink-2); }
+  .palette-search kbd { margin-left: auto; font: 500 12px/1 var(--font-mono); color: var(--ink-2); padding: 5px 7px; border-radius: 6px; background: var(--page-2); }
+  .palette ul { list-style: none; margin: 0; padding: 6px; display: grid; gap: 2px; }
+  .palette li { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 9px; }
+  .palette li.first { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .palette li small { color: var(--ink-2); }
+  .cmd-icon { display: grid; place-items: center; }
+  .do-copy { display: grid; gap: 20px; font-size: var(--step-1); color: var(--ink-2); }
+  .do-copy code { font-size: 0.85em; padding: 1px 5px; border-radius: 5px; background: var(--page-2); }
+  .agent { display: grid; gap: 10px; padding: 24px; border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); }
+  .agent h3 { display: flex; gap: 8px; align-items: center; color: var(--ink); font-size: var(--step-1); }
+  .agent h3 :global(svg) { width: 22px; height: 22px; color: var(--accent); }
+  .tool-chips { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tool-chips code { display: inline-block; padding: 6px 10px; border-radius: 8px; background: var(--page-2); color: var(--ink); }
+  @media (max-width: 860px) { .do-grid { grid-template-columns: 1fr; } }
+
+  .notes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: clamp(32px, 5vw, 80px); align-items: start; }
+  .versions { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .versions details, .faq details { border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); padding: 14px 18px; }
+  .versions summary, .faq summary { cursor: pointer; display: flex; gap: 10px; align-items: center; font-weight: 600; }
+  .latest { font: 600 11px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+  .versions .notes { margin-top: 12px; font-size: var(--step-0); }
+  .faq { display: grid; gap: 10px; }
+  .faq p { margin: 10px 0 0; color: var(--ink-2); }
   .notes { display: grid; gap: 12px; max-width: 72ch; padding-left: 1.2em; margin: 0; font-size: var(--step-1); line-height: 1.55; }
   .notes li::marker { color: var(--accent); }
   .notes :global(code) { font-size: 0.85em; padding: 1px 5px; border-radius: 5px; background: var(--page-2); }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { verifyIndex, parseReadme, readmeURL, slugOf, fetchStore, galleryOf, listed } from './store.mjs';
+import { verifyIndex, parseReadme, readmeURL, slugOf, fetchStore, galleryOf, previewsOf, listed } from './store.mjs';
 import { readStore } from './kit.mjs';
 
 // A copy of the published index, signed by the navbytes key.
@@ -88,4 +88,38 @@ test('a gallery lists surfaces in order and drops renders that are missing', asy
   assert.equal(gallery[0].dark, undefined);
   assert.match(warnings.join(), /missing render .*window/);
   assert.deepEqual(await galleryOf(fake, undefined, base), []);
+});
+
+test("a README's Highlights and FAQ become stories and questions, not description", () => {
+  const readme = parseReadme([
+    '# Clipboard', '', 'Everything you copy.', '',
+    '## Highlights', '',
+    '### Search everything', 'Type to filter.', 'Return pastes.', '<!-- preview: search -->', '',
+    '### Secrets stay secret', 'Tokens are masked.', '',
+    '## FAQ', '', '### Does it sync?', 'No, it stays on this Mac.', '',
+    "## What's new in 1.5.0", '', '- Previews.', '',
+  ].join('\n'));
+  assert.equal(readme.description, 'Everything you copy.');
+  assert.deepEqual(readme.highlights, [
+    { title: 'Search everything', text: 'Type to filter.\nReturn pastes.', preview: 'search' },
+    { title: 'Secrets stay secret', text: 'Tokens are masked.' },
+  ]);
+  assert.deepEqual(readme.faq, [{ question: 'Does it sync?', answer: 'No, it stays on this Mac.' }]);
+  assert.deepEqual(readme.changes, [{ version: '1.5.0', notes: ['Previews.'] }]);
+});
+
+test('previews keep their order and drop renders that are missing', async () => {
+  const base = new URL('https://navbytes.github.io/stackbar-plugins/');
+  const scenes = [
+    { name: 'hero', title: 'In use', surface: 'panel', light: 'S/shots/a/1/light/previews/hero/panel.png', dark: 'S/shots/a/1/dark/previews/hero/panel.png' },
+    { name: 'gone', title: 'Missing', surface: 'window', dark: 'S/shots/a/1/dark/previews/gone/window.png' },
+  ];
+  const fake = async (url) => (url.includes('gone') ? { ok: false, status: 404 } : { ok: true, status: 200 });
+  const warnings = [];
+  const previews = await previewsOf(fake, scenes, base, (m) => warnings.push(m));
+  assert.deepEqual(previews, [{ name: 'hero', title: 'In use', surface: 'panel',
+    light: 'https://navbytes.github.io/stackbar-plugins/S/shots/a/1/light/previews/hero/panel.png',
+    dark: 'https://navbytes.github.io/stackbar-plugins/S/shots/a/1/dark/previews/hero/panel.png' }]);
+  assert.match(warnings.join(), /missing preview .*gone/);
+  assert.deepEqual(await previewsOf(fake, undefined, base), []);
 });

@@ -1,0 +1,155 @@
+---
+// The home hero's Mac: a menu bar whose status items are real plugins (their
+// own menu-bar renders), and each one's panel (its `hero` preview, or the
+// panel render) dropping from it in turn, as if clicked. Five seconds each;
+// hovering or focusing pauses it, clicking an item shows it, and with reduced
+// motion it stays on the first. The caption under it links to the plugin.
+import { Image } from 'astro:assets';
+import Glyph from './Glyph.astro';
+import { href } from '../lib/site';
+import { hueOf, heroShot, menuBarShot, type Plugin } from '../lib/plugins';
+
+interface Props { plugins: Plugin[]; label: string; captions?: boolean; }
+const { plugins, label, captions = true } = Astro.props;
+const slides = plugins
+  .map((plugin) => ({ plugin, panel: heroShot(plugin, 'dark'), menuBar: menuBarShot(plugin, 'dark'), hue: hueOf(plugin) }))
+  .filter((slide) => slide.panel);
+const caption = (plugin: Plugin) => plugin.previews.find((p) => p.name === 'hero')?.title ?? plugin.summary;
+---
+<figure class:list={['rotator', { single: slides.length === 1 }]} aria-label={label} aria-roledescription="carousel" data-rotator>
+  <div class="wallpaper" aria-hidden="true">
+    {slides.map((slide, i) => <span class:list={{ on: i === 0 }} style={`--h: var(--kit-${slide.hue}-dark); --h-deep: var(--kit-${slide.hue}-light)`}></span>)}
+  </div>
+  <div class="menubar">
+    <span class="menus" aria-hidden="true"><b>Stackbar</b><span>File</span><span>Edit</span></span>
+    <span class="status" role="tablist" aria-label="Plugins in the menu bar">
+      {slides.map((slide, i) => (
+        <button type="button" role="tab" class="item" aria-selected={i === 0 ? 'true' : 'false'} aria-controls={`panel-${slide.plugin.slug}`} aria-label={slide.plugin.name} data-index={i}>
+          {slide.menuBar
+            ? <Image src={slide.menuBar} alt="" inferSize class="mb" loading="eager" />
+            : <span class="fallback"><Glyph name="bolt" />{slide.plugin.name}</span>}
+        </button>
+      ))}
+      <span class="clock" data-clock aria-hidden="true">Mon 9:41</span>
+    </span>
+  </div>
+  <div class="panels">
+    {slides.map((slide, i) => (
+      <div class:list={['panel', { on: i === 0 }]} id={`panel-${slide.plugin.slug}`} role="tabpanel" aria-hidden={i === 0 ? 'false' : 'true'} data-index={i}>
+        <Image src={slide.panel!} alt={`${slide.plugin.name}: ${caption(slide.plugin)}`} inferSize widths={[360, 720]} sizes="360px" loading={i === 0 ? 'eager' : 'lazy'} class="shot" />
+      </div>
+    ))}
+  </div>
+  {captions && <figcaption aria-live="polite">
+    {slides.map((slide, i) => (
+      <a class:list={['caption', { on: i === 0 }]} href={href(`/plugins/${slide.plugin.slug}/`)} data-index={i} tabindex={i === 0 ? undefined : -1} style={`--h: var(--kit-${slide.hue}-dark)`}>
+        <b>{slide.plugin.name}</b> <span>{caption(slide.plugin)}</span> <i aria-hidden="true">→</i>
+      </a>
+    ))}
+    <span class="dots" aria-hidden="true">{slides.map((_, i) => <span class:list={{ on: i === 0 }}></span>)}</span>
+  </figcaption>}
+</figure>
+
+<script>
+  const DWELL = 5000;
+  function setUp(root: HTMLElement) {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('.item')];
+    const groups = ['.wallpaper > span', '.panel', '.caption', '.dots > span'].map((selector) => [...root.querySelectorAll<HTMLElement>(selector)]);
+    const panels = root.querySelector<HTMLElement>('.panels')!;
+    let at = 0;
+    let timer: number | undefined;
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function show(index: number) {
+      at = (index + tabs.length) % tabs.length;
+      tabs.forEach((tab, i) => tab.setAttribute('aria-selected', String(i === at)));
+      for (const group of groups) group.forEach((el, i) => el.classList.toggle('on', i === at));
+      root.querySelectorAll<HTMLElement>('.panel').forEach((el, i) => el.setAttribute('aria-hidden', String(i !== at)));
+      root.querySelectorAll<HTMLAnchorElement>('.caption').forEach((el, i) => (i === at ? el.removeAttribute('tabindex') : el.setAttribute('tabindex', '-1')));
+      // Hang the panel under its item, as macOS does.
+      const item = tabs[at].getBoundingClientRect(), box = root.getBoundingClientRect();
+      const panel = root.querySelectorAll<HTMLElement>('.panel')[at];
+      if (box.width >= 560) {
+        const left = item.left - box.left + item.width / 2 - panel.offsetWidth / 2;
+        panels.style.setProperty('--x', `${Math.max(12, Math.min(left, box.width - panel.offsetWidth - 12))}px`);
+      } else {
+        panels.style.removeProperty('--x');
+      }
+    }
+    function play() {
+      clearInterval(timer);
+      if (still || tabs.length < 2) return;
+      timer = window.setInterval(() => { if (!root.matches(':hover, :focus-within')) show(at + 1); }, DWELL);
+    }
+    tabs.forEach((tab, i) => {
+      tab.onclick = () => { show(i); play(); };
+      tab.onkeydown = (event) => {
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        show(at + (event.key === 'ArrowRight' ? 1 : -1));
+        tabs[at].focus();
+        play();
+      };
+    });
+    root.classList.toggle('still', still);
+    show(0);
+    play();
+    addEventListener('resize', () => show(at));
+    const clock = root.querySelector<HTMLElement>('[data-clock]');
+    const tick = () => { if (clock) clock.textContent = new Date().toLocaleTimeString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', ''); };
+    tick();
+    setInterval(tick, 30_000);
+  }
+  document.addEventListener('astro:page-load', () => document.querySelectorAll<HTMLElement>('[data-rotator]').forEach(setUp));
+</script>
+
+<style>
+  .rotator { position: relative; margin: 0; isolation: isolate; overflow: hidden; border-radius: var(--radius-l); width: 100%; min-width: 0;
+    box-shadow: 0 0 0 1px #FFFFFF1A, 0 50px 120px -40px #000000CC; display: grid; grid-template-rows: auto 1fr auto; min-height: 600px; }
+  .wallpaper { position: absolute; inset: 0; z-index: -1; background: #120E22; }
+  .wallpaper span { position: absolute; inset: -20%; opacity: 0; transition: opacity 0.9s ease;
+    background: radial-gradient(40% 50% at 18% 30%, var(--h) 0%, transparent 70%), radial-gradient(45% 55% at 85% 20%, var(--h-deep) 0%, transparent 70%),
+      radial-gradient(50% 60% at 60% 95%, color-mix(in srgb, var(--h) 60%, #FF5FA2) 0%, transparent 70%), linear-gradient(160deg, #1A1033, #0E0B1C); }
+  .wallpaper span.on { opacity: 1; }
+
+  /* A dark menu bar, so the dark menu-bar renders sit in it as they do on a Mac. */
+  .menubar { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 32px; padding: 0 10px 0 16px;
+    background: #1E1E1ED9; backdrop-filter: blur(30px) saturate(160%); -webkit-backdrop-filter: blur(30px) saturate(160%);
+    color: #FFFFFF; font: 500 13px/1 var(--font-text); }
+  .menus { display: flex; gap: 18px; white-space: nowrap; overflow: hidden; }
+  .status { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .item { all: unset; cursor: pointer; display: inline-flex; align-items: center; height: 24px; padding: 0 4px; border-radius: 6px; flex: none; }
+  .item[aria-selected='true'] { background: #FFFFFF33; }
+  .item:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 1px; }
+  .item :global(.mb) { height: 24px; width: auto; display: block; mix-blend-mode: lighten; }
+  .fallback { display: inline-flex; gap: 5px; align-items: center; padding: 0 4px; }
+  .fallback :global(svg) { width: 14px; height: 14px; }
+  .clock { padding: 0 6px 0 10px; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
+
+  .panels { position: relative; min-height: 0; }
+  .panel { position: absolute; top: 10px; left: var(--x, 50%); translate: var(--x-shift, 0); width: min(340px, 78%);
+    opacity: 0; visibility: hidden; transform: translateY(-10px) scale(0.98); transition: opacity 0.35s ease, transform 0.45s var(--ease-out), visibility 0s 0.35s, left 0.4s var(--ease-out); }
+  .panels:not([style*='--x']) .panel { --x-shift: -50%; }
+  .panel.on { opacity: 1; visibility: visible; transform: none; transition: opacity 0.35s ease, transform 0.45s var(--ease-out), left 0.4s var(--ease-out); }
+  /* A tall panel is cut at the scene's foot, the way a long panel scrolls. */
+  .panel :global(.shot) { width: 100%; height: auto; max-height: 470px; object-fit: cover; object-position: top; display: block; border-radius: 14px;
+    box-shadow: 0 0 0 0.5px #00000040, 0 30px 60px -18px #00000080, 0 8px 18px -8px #00000040; }
+
+  figcaption { position: relative; display: grid; gap: 10px; padding: 14px 18px 16px; background: linear-gradient(transparent, #00000066); }
+  .caption { display: none; color: #FFFFFF; text-decoration: none; font-size: var(--step-0); line-height: 1.4; }
+  .caption.on { display: block; }
+  .caption b { color: var(--h); }
+  .caption span { color: #FFFFFFD0; }
+  .caption i { font-style: normal; display: inline-block; transition: translate 0.2s; }
+  .caption:hover i { translate: 4px 0; }
+  .dots { display: flex; gap: 6px; }
+  .dots span { width: 22px; height: 3px; border-radius: 2px; background: #FFFFFF33; overflow: hidden; }
+  .dots span.on::after { content: ''; display: block; height: 100%; background: #FFFFFF; animation: fill 5s linear forwards; }
+  .rotator:hover .dots span.on::after, .rotator:focus-within .dots span.on::after { animation-play-state: paused; }
+  .still .dots span.on::after { animation: none; width: 100%; }
+  @keyframes fill { from { width: 0; } to { width: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .panel, .wallpaper span { transition: none; } }
+  @media (max-width: 700px) { .menus span { display: none; } }
+  .single { min-height: 540px; }
+  .single .item { cursor: default; }
+  @media (max-width: 560px) { .rotator { min-height: 560px; } .menus { display: none; } }
+</style>
