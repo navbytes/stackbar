@@ -15,6 +15,16 @@ public enum OfficialIndex {
 
     public static var isAvailable: Bool { publicKey != nil }
 
+    /// The Stackbar website, which has a page for every plugin in this index.
+    public static let website = URL(string: "https://stackbar.navbytes.io")!
+
+    /// A plugin's page on the website: `/plugins/<slug>/`, the slug being the
+    /// id's last part (`site/scripts/store.mjs` names pages the same way).
+    public static func webPage(for pluginID: String) -> URL {
+        let slug = pluginID.split(separator: ".").last.map(String.init) ?? pluginID
+        return website.appendingPathComponent("plugins").appendingPathComponent(slug).appendingPathComponent("")
+    }
+
     /// Downloads and verifies the official index.
     public static func fetch() async throws -> PluginIndex {
         guard let publicKey else { throw PluginIndex.IndexError.unsigned }
