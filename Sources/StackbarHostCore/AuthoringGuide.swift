@@ -309,6 +309,8 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.systemStatus()`: batteryLevel, onACPower, lowPowerMode, runningApps, externalDisplays, networkBytesReceived, vpnActive | `.power` |
 | `try await Stackbar.calendarEvents(from:, to:)` returns `[CalendarEvent]` (title, start, end, location, notes, url, participation), 31 days at most | `.calendar` |
 | `try await Stackbar.windows()` returns `WindowSnapshot` (displays, windows front to back with app, title, frame, displayID, isMinimized; `setupID` names the monitor setup); `try await Stackbar.arrangeWindows(WindowPlacement.capture(snapshot), launch: true)` puts them back and returns `ArrangeResult` (moved, opened, missing, failed); 0.15.0, needs Accessibility for Stackbar | `.windows` |
+| `try await Stackbar.runningApps()` returns `[RunningApp]` (id, name, path, isActive, isHidden); `try await Stackbar.activateApp("com.apple.Safari", launch: true)`, `Stackbar.hideApp(id)`; 0.16.0 | `.apps` |
+| `try await Stackbar.setKeyLayer(KeyLayer(trigger: .rightCommand, bindings: [KeyBinding(key: "s", apps: ["com.apple.Safari"], launch: true)], secondPress: .hide, assignCommand: "assign"))`: while Right ⌘ is held, S switches to Safari (the host decides each press itself; set the whole map again when it changes); Right ⌘ ⌥ + a key runs command `assign` with `key` and `app`; returns `KeyLayerStatus` (listening, needsAccessibility, secureInputApp, conflict), also `Stackbar.keyLayerStatus()`; 0.16.0 | `.keyLayer` |
 
 `auth:` reads a declared secret and adds the header: `.bearer(secret: "GITHUB_TOKEN")`
 sends `Authorization: Bearer …`, `.header("Authorization", secret: "LINEAR_API_KEY")`
@@ -358,7 +360,8 @@ nil (offer the clipboard, or an argument, instead). On Linux and in `stackbarctl
 
 Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
 `.file(path: "~/x")`, `.topic(name: "t")`, `.clipboard`, `.displays` (a
-display plugged in, unplugged or rearranged; 0.15.0). `Stackbar.refreshReason`
+display plugged in, unplugged or rearranged; 0.15.0), `.apps` (an app opened
+or quit; 0.16.0). `Stackbar.refreshReason`
 says which one called the running `refresh()`.
 
 `Manifest(..., hotkey: "cmd+shift+v")` opens the panel from anywhere.

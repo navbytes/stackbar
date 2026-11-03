@@ -89,6 +89,7 @@ public final class HostServices: Sendable {
     private let sounds = RateLimiter(limit: 10, per: 60)
     private let panels = RateLimiter(limit: 10, per: 60)
     private let arrangements = RateLimiter(limit: 10, per: 60)
+    private let appSwitches = RateLimiter(limit: 120, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
     private let calls = RateLimiter(limit: 1200, per: 60)
@@ -326,6 +327,41 @@ public final class HostServices: Sendable {
                 return .failure("\(error)")
             }
 
+        case .runningApps:
+            do {
+                return .value(SystemCodec.encode(try await platform.system.runningApps()))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .activateApp(let id, let launch):
+            guard appSwitches.allow(granted.id) else { return .failure("too many app switches; at most 120 a minute") }
+            do {
+                try await platform.system.activateApp(id, launch: launch)
+                return .ok
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .hideApp(let id):
+            guard appSwitches.allow(granted.id) else { return .failure("too many app switches; at most 120 a minute") }
+            do {
+                try await platform.system.hideApp(id)
+                return .ok
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .setKeyLayer(let layer):
+            do {
+                return .value(SystemCodec.encode(try platform.system.setKeyLayer(layer, pluginID: granted.id, pluginName: granted.name)))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .keyLayerStatus:
+            return .value(SystemCodec.encode(platform.system.keyLayerStatus(pluginID: granted.id)))
+
         case .arrangeWindows(let placements, let launch):
             guard placements.count <= WindowPlacement.maxPerCall else { return .failure("at most \(WindowPlacement.maxPerCall) windows at a time") }
             guard arrangements.allow(granted.id) else { return .failure("too many window arrangements; at most 10 a minute") }
@@ -368,6 +404,7 @@ public final class HostServices: Sendable {
     /// whenever the helper stops or exits.
     public func release(pluginID: String) {
         try? platform.system.keepAwake(nil, pluginID: pluginID)
+        _ = try? platform.system.setKeyLayer(nil, pluginID: pluginID, pluginName: "")
         runs.cancelAll(pluginID: pluginID)
     }
 

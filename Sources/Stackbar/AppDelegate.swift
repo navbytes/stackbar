@@ -43,6 +43,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.displaysChangedSoon()
             }
         }
+        // Apps opening and quitting come in bursts at login; plugins hear
+        // once, half a second after the last.
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.appsChangedSoon()
+                }
+            }
+        }
+    }
+
+    private var appsDebounce: Task<Void, Never>?
+
+    private func appsChangedSoon() {
+        appsDebounce?.cancel()
+        appsDebounce = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            self?.model.controllers.forEach { $0.appsChanged() }
+        }
     }
 
     private var displaysDebounce: Task<Void, Never>?

@@ -36,6 +36,15 @@ public protocol SystemServices: Sendable {
     /// Moves windows to the placements (matched with `WindowMatcher`),
     /// opening apps that aren't running first when `launch` is set.
     func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult
+    /// The regular apps that are running, in launch order.
+    func runningApps() async throws -> [RunningApp]
+    /// Brings a running app to the front; with `launch`, opens it when it
+    /// isn't running.
+    func activateApp(_ id: String, launch: Bool) async throws
+    func hideApp(_ id: String) async throws
+    /// Registers (or with `nil` removes) a plugin's key layer.
+    func setKeyLayer(_ layer: KeyLayer?, pluginID: String, pluginName: String) throws -> KeyLayerStatus
+    func keyLayerStatus(pluginID: String) -> KeyLayerStatus
 }
 
 extension SystemServices {
@@ -46,6 +55,14 @@ extension SystemServices {
     public func resolveApplication(_ nameOrPath: String) async -> String? { nil }
     public func windows() async throws -> WindowSnapshot { throw SystemServiceError("windows are not available on this platform") }
     public func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult { throw SystemServiceError("windows are not available on this platform") }
+    public func runningApps() async throws -> [RunningApp] { throw SystemServiceError("apps are not available on this platform") }
+    public func activateApp(_ id: String, launch: Bool) async throws { throw SystemServiceError("apps are not available on this platform") }
+    public func hideApp(_ id: String) async throws { throw SystemServiceError("apps are not available on this platform") }
+    public func setKeyLayer(_ layer: KeyLayer?, pluginID: String, pluginName: String) throws -> KeyLayerStatus {
+        if layer == nil { return .off }
+        throw SystemServiceError("key layers are not available on this platform")
+    }
+    public func keyLayerStatus(pluginID: String) -> KeyLayerStatus { .off }
 }
 
 public struct SystemServiceError: Error, CustomStringConvertible, Sendable {
@@ -93,7 +110,8 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
 
     /// Reads `STACKBAR_CALENDAR` (a JSON file of `[CalendarEvent]`) and
     /// `STACKBAR_CONTEXT` (`InvocationContext` as JSON, inline or a file) and
-    /// `STACKBAR_WINDOWS` (`WindowSnapshot` as JSON, inline or a file) when set.
+    /// `STACKBAR_WINDOWS` (`WindowSnapshot` as JSON, inline or a file) and
+    /// `STACKBAR_APPS` (`[RunningApp]` as JSON, inline or a file) when set.
     public static func fromEnvironment() -> SimulatedSystem {
         let environment = ProcessInfo.processInfo.environment
         var events: [CalendarEvent]?
@@ -104,6 +122,10 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
         if let value = environment["STACKBAR_WINDOWS"] {
             let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
             if let windows = try? SystemCodec.decode(WindowSnapshot.self, from: text) { system.simulate(windows: windows) }
+        }
+        if let value = environment["STACKBAR_APPS"] {
+            let text = value.hasPrefix("[") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
+            if let apps = try? SystemCodec.decode([RunningApp].self, from: text) { system.simulate(apps: apps) }
         }
         if let value = environment["STACKBAR_CONTEXT"] {
             let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
@@ -184,6 +206,93 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
             simulatedWindows = WindowSnapshot(displays: snapshot.displays, windows: ordered)
             return result
         }
+    }
+
+    // MARK: Apps and key layers
+
+    private var simulatedApps = SimulatedSystem.sampleApps()
+    /// Every key layer registered, and what presses do with them.
+    public let keyLayers = KeyLayerRegistry()
+    /// Every app the simulated windows cycled, hid or opened, in order (for
+    /// tests): `"cycleWindows com.apple.Safari"` and so on.
+    public private(set) var appActions: [String] = []
+
+    /// The apps `runningApps()` reports; one `isActive` is the frontmost.
+    public func simulate(apps: [RunningApp]) { lock.withLock { simulatedApps = apps } }
+    public var currentApps: [RunningApp] { lock.withLock { simulatedApps } }
+
+    public func runningApps() async throws -> [RunningApp] { lock.withLock { simulatedApps } }
+
+    public func activateApp(_ id: String, launch: Bool) async throws {
+        try lock.withLock {
+            if simulatedApps.contains(where: { $0.id == id }) {
+                frontLocked(id)
+            } else if launch, let name = applications.first(where: { $0.value == id })?.key {
+                simulatedApps.append(RunningApp(id: id, name: name, path: "/Applications/\(name).app"))
+                appActions.append("launch \(id)")
+                frontLocked(id)
+            } else {
+                throw SystemServiceError(launch ? "no app \(id) is installed" : "\(id) isn't running")
+            }
+        }
+    }
+
+    public func hideApp(_ id: String) async throws {
+        try lock.withLock {
+            guard let index = simulatedApps.firstIndex(where: { $0.id == id }) else { throw SystemServiceError("\(id) isn't running") }
+            simulatedApps[index].isHidden = true
+            if simulatedApps[index].isActive {
+                simulatedApps[index].isActive = false
+                // The next visible app comes forward, as on the Mac.
+                if let next = simulatedApps.firstIndex(where: { !$0.isHidden }) { simulatedApps[next].isActive = true }
+            }
+            appActions.append("hide \(id)")
+        }
+    }
+
+    private func frontLocked(_ id: String) {
+        for index in simulatedApps.indices {
+            simulatedApps[index].isActive = simulatedApps[index].id == id
+            if simulatedApps[index].id == id { simulatedApps[index].isHidden = false }
+        }
+    }
+
+    public func setKeyLayer(_ layer: KeyLayer?, pluginID: String, pluginName: String) throws -> KeyLayerStatus {
+        try keyLayers.set(layer, pluginID: pluginID, pluginName: pluginName)
+        return keyLayerStatus(pluginID: pluginID)
+    }
+
+    public func keyLayerStatus(pluginID: String) -> KeyLayerStatus {
+        guard keyLayers.registration(for: pluginID) != nil else { return .off }
+        let conflict = keyLayers.conflict(for: pluginID)
+        return KeyLayerStatus(listening: conflict == nil, conflict: conflict)
+    }
+
+    /// Presses `key` with `held` down, as the Mac tap would, and applies what
+    /// the router decides. Returns the decision; an assignment is returned
+    /// for the caller to run as a command.
+    @discardableResult
+    public func pressKeyLayer(_ key: String, held: Set<KeyLayerTrigger> = [.rightCommand]) async -> KeyLayerRouter.Decision {
+        let decision = KeyLayerRouter.route(key: key, held: held, layers: keyLayers.listening, running: currentApps)
+        switch decision {
+        case .activate(let id): try? await activateApp(id, launch: false)
+        case .launch(let id): try? await activateApp(id, launch: true)
+        case .hide(let id): try? await hideApp(id)
+        case .cycleWindows(let id): lock.withLock { appActions.append("cycleWindows \(id)") }
+        case .passThrough, .swallow, .assign: break
+        }
+        return decision
+    }
+
+    /// Safari in front, with Xcode, Slack and Spotify behind it.
+    public static func sampleApps() -> [RunningApp] {
+        [
+            RunningApp(id: "com.apple.finder", name: "Finder", path: "/System/Library/CoreServices/Finder.app"),
+            RunningApp(id: "com.apple.Safari", name: "Safari", path: "/Applications/Safari.app", isActive: true),
+            RunningApp(id: "com.apple.dt.Xcode", name: "Xcode", path: "/Applications/Xcode.app"),
+            RunningApp(id: "com.tinyspeck.slackmacgap", name: "Slack", path: "/Applications/Slack.app"),
+            RunningApp(id: "com.spotify.client", name: "Spotify", path: "/Applications/Spotify.app"),
+        ]
     }
 
     /// A laptop on a desk display: Xcode and Safari on the big screen,

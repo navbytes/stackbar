@@ -352,6 +352,47 @@ public enum Stackbar {
         return try SystemCodec.decode([CalendarEvent].self, from: json)
     }
 
+    // MARK: Apps and the key layer
+
+    /// The regular apps that are running, in launch order, with the one in
+    /// front marked `isActive`. Needs `.apps`. Stackbar 0.16.0.
+    public static func runningApps() async throws -> [RunningApp] {
+        guard let json = try await value(.runningApps) else { throw HostError("no running apps") }
+        return try SystemCodec.decode([RunningApp].self, from: json)
+    }
+
+    /// Brings the app with this bundle id to the front, unhiding it; with
+    /// `launch`, opens it when it isn't running. Needs `.apps`; at most 120
+    /// switches a minute. Stackbar 0.16.0.
+    public static func activateApp(_ id: String, launch: Bool = false) async throws {
+        try await ok(.activateApp(id, launch: launch))
+    }
+
+    /// Hides the app with this bundle id. Needs `.apps`. Stackbar 0.16.0.
+    public static func hideApp(_ id: String) async throws {
+        try await ok(.hideApp(id))
+    }
+
+    /// Registers this plugin's key layer, replacing the last one, or removes
+    /// it with `nil`. While the layer's trigger (Right ⌘) is held, its keys
+    /// switch apps: the host decides each press itself, so set the whole map
+    /// up front and set it again when it changes (the `.apps` trigger says
+    /// when an app opened or quit). Answers whether it is listening. Needs
+    /// `.keyLayer`; the host asks for Accessibility access. Stackbar 0.16.0.
+    @discardableResult
+    public static func setKeyLayer(_ layer: KeyLayer?) async throws -> KeyLayerStatus {
+        guard let json = try await value(.setKeyLayer(layer)) else { throw HostError("no key layer status") }
+        return try SystemCodec.decode(KeyLayerStatus.self, from: json)
+    }
+
+    /// Whether this plugin's key layer is listening, and if not, why: missing
+    /// Accessibility access, an app holding Secure Input, or another plugin
+    /// on the same trigger. Needs `.keyLayer`. Stackbar 0.16.0.
+    public static func keyLayerStatus() async throws -> KeyLayerStatus {
+        guard let json = try await value(.keyLayerStatus) else { throw HostError("no key layer status") }
+        return try SystemCodec.decode(KeyLayerStatus.self, from: json)
+    }
+
     // MARK: Windows
 
     /// The displays and the regular apps' windows, front to back, with the

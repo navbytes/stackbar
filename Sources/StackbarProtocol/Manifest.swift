@@ -212,6 +212,8 @@ public enum Trigger: Codable, Hashable, Sendable {
     /// When a display is plugged in, unplugged or rearranged. Stackbar
     /// 0.15.0 and later.
     case displays
+    /// When a regular app opens or quits. Stackbar 0.16.0 and later.
+    case apps
 
     public static func every(_ duration: Duration) -> Trigger {
         let (seconds, attoseconds) = duration.components
@@ -265,6 +267,14 @@ public enum Capability: Codable, Hashable, Sendable {
     /// `Stackbar.arrangeWindows`), and opens apps to place their windows.
     /// The host needs Accessibility access. Stackbar 0.15.0 and later.
     case windows
+    /// Lists the running apps and brings one to the front, opens or hides it
+    /// (`Stackbar.runningApps()`, `Stackbar.activateApp`, `Stackbar.hideApp`).
+    /// Stackbar 0.16.0 and later.
+    case apps
+    /// Switches apps from a held key and a letter (`Stackbar.setKeyLayer`).
+    /// The host listens to the keyboard for the plugin and needs
+    /// Accessibility access. Stackbar 0.16.0 and later.
+    case keyLayer
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }
