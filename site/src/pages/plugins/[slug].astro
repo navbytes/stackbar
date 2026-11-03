@@ -28,6 +28,7 @@ const related = all.filter((p) => p.data.category === plugin.category && p.id !=
 const shownElsewhere = new Set(['Needs', 'Surfaces', 'Requires']);
 const features = plugin.readme.facts.filter((f) => !shownElsewhere.has(f.label));
 const needs = plugin.readme.facts.find((f) => f.label === 'Needs')?.text;
+const whatsNew = plugin.readme.changes.find((c) => c.version === plugin.version && c.notes.length > 0);
 const inline = (text: string) => text
   .replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -94,6 +95,15 @@ const details: [string, string][] = [
       </aside>
     </div>
   </section>
+
+  {whatsNew && (
+    <section class="section whats-new" aria-labelledby="new">
+      <div class="wrap">
+        <div class="section-head"><p class="eyebrow">Version {whatsNew.version}</p><h2 id="new">What's new</h2></div>
+        <ul class="notes">{whatsNew.notes.map((note) => <li set:html={inline(note)} />)}</ul>
+      </div>
+    </section>
+  )}
 
   {plugin.gallery.length > 0 && (
     <section class="section gallery-section" aria-labelledby="looks">
@@ -238,6 +248,10 @@ const details: [string, string][] = [
   .details dd { margin: 0; font-weight: 500; }
   .details .full { grid-column: 1 / -1; }
   @media (max-width: 860px) { .install-grid { grid-template-columns: 1fr; } }
+
+  .notes { display: grid; gap: 12px; max-width: 72ch; padding-left: 1.2em; margin: 0; font-size: var(--step-1); line-height: 1.55; }
+  .notes li::marker { color: var(--accent); }
+  .notes :global(code) { font-size: 0.85em; padding: 1px 5px; border-radius: 5px; background: var(--page-2); }
 
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 </style>

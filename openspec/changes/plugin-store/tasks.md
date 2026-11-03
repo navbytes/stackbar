@@ -43,3 +43,10 @@
 - [x] 8.2 A plugin that is off isn't built; store updates still install for it
 - [x] 8.3 An "Off" badge in the plugin list and the store; Turn On / Turn Off next to Uninstall
 - [x] 8.4 Uninstall asks: keep its data, delete its data (storage and sign-ins; shared secrets stay), or turn it off instead
+
+## 9. Store front and release notes (Naveen, 2026-11-03)
+- [x] 9.1 The store reads the store's `site.json`: renders per version and each README (description, facts, `## What's new in <version>` notes); stackbar-plugins' publish.sh writes them and lint.py requires a section for the current version
+- [x] 9.2 A page per plugin (gallery, what it does, what it asks for, details, web page and source links); `stackbar://store/<id>` opens it
+- [x] 9.3 A grid of cards with category chips, All / Installed / Updates (n), Update All, a "New and updated" shelf and the plugin sources folded away (`StoreListing`)
+- [x] 9.4 What's new on the plugin page, on the card and on the Update button; the website's plugin pages show it too
+- [ ] 9.5 Check the store front, a deep link and Update All on a Mac with 0.15.0

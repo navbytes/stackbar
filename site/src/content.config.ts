@@ -43,6 +43,8 @@ const plugins = defineCollection({
     readme: z.object({
       description: z.string(),
       facts: z.array(z.object({ label: z.string(), text: z.string() })),
+      /** `## What's new in <version>` sections, newest first. */
+      changes: z.array(z.object({ version: z.string(), notes: z.array(z.string()) })).default([]),
     }),
   }),
 });

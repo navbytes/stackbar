@@ -46,14 +46,27 @@ export function parseReadme(markdown) {
   if (lines[0]?.startsWith('# ')) lines.shift();
   const facts = [];
   const rest = [];
+  const changes = [];
   for (let i = 0; i < lines.length; i++) {
+    // `## What's new in 1.2.0` and its bullets: release notes, newest first.
+    const heading = lines[i].match(/^## What's new in (\S+)\s*$/);
+    if (heading) {
+      const notes = [];
+      while (i + 1 < lines.length && !lines[i + 1].startsWith('#')) {
+        const line = lines[++i];
+        if (line.startsWith('- ')) notes.push(line.slice(2).trim());
+        else if (/^\s{2,}\S/.test(line) && notes.length) notes[notes.length - 1] += ` ${line.trim()}`;
+      }
+      changes.push({ version: heading[1], notes });
+      continue;
+    }
     const fact = lines[i].match(/^- \*\*(.+?):\*\*\s*(.*)$/);
     if (!fact) { rest.push(lines[i]); continue; }
     let text = fact[2];
     while (i + 1 < lines.length && /^\s{2,}\S/.test(lines[i + 1])) text += ` ${lines[++i].trim()}`;
     facts.push({ label: fact[1], text });
   }
-  return { description: rest.join('\n').trim(), facts };
+  return { description: rest.join('\n').trim(), facts, changes };
 }
 
 /** Fetches with a few retries, since GitHub Pages sometimes drops a request. */
@@ -113,7 +126,7 @@ export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch
     if (seen.has(slug) && seen.get(slug) !== entry.id) throw new Error(`store: ${entry.id} and ${seen.get(slug)} share the page /plugins/${slug}`);
     seen.set(slug, entry.id);
     const url = readmeURL(entry.homepage);
-    let readme = { description: entry.summary ?? '', facts: [] };
+    let readme = { description: entry.summary ?? '', facts: [], changes: [] };
     if (url) {
       const page = await fetchWithRetry(fetch, url);
       if (page.ok) readme = parseReadme(await page.text());

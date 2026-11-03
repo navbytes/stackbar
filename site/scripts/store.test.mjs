@@ -41,6 +41,13 @@ test('a README splits into its description and facts', () => {
   assert.deepEqual(facts, [{ label: 'Needs', text: 'nothing.' }, { label: 'In the panel', text: 'the tag chip cycles tags.' }]);
 });
 
+test("a README's What's new sections become release notes, not description", () => {
+  const { description, facts, changes } = parseReadme("# T\n\nIntro.\n\n- **Needs:** nothing.\n\n## What's new in 1.2.0\n\n- Faster\n  and calmer.\n- **Fixed:** a crash.\n\n## What's new in 1.1.0\n\n- First.\n");
+  assert.equal(description, 'Intro.');
+  assert.deepEqual(facts, [{ label: 'Needs', text: 'nothing.' }]);
+  assert.deepEqual(changes, [{ version: '1.2.0', notes: ['Faster and calmer.', '**Fixed:** a crash.'] }, { version: '1.1.0', notes: ['First.'] }]);
+});
+
 test('fetchStore resolves URLs, reads READMEs and refuses a forged index', async () => {
   let flaky = 1;
   const fake = async (url) => {
