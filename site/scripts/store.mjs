@@ -47,7 +47,33 @@ export function parseReadme(markdown) {
   const facts = [];
   const rest = [];
   const changes = [];
+  const highlights = [];
+  const faq = [];
   for (let i = 0; i < lines.length; i++) {
+    // `## Highlights`: `### Title`, a paragraph, and an optional
+    // `<!-- preview: name -->` naming the scene that pictures it.
+    if (/^## Highlights\s*$/.test(lines[i])) {
+      while (i + 1 < lines.length && !/^## /.test(lines[i + 1])) {
+        const title = lines[++i].match(/^### (.+?)\s*$/);
+        if (title) highlights.push({ title: title[1], text: '' });
+        else if (highlights.length) {
+          const marker = lines[i].match(/^<!--\s*preview:\s*([a-z0-9-]+)\s*-->\s*$/);
+          const last = highlights[highlights.length - 1];
+          if (marker) last.preview = marker[1];
+          else last.text = `${last.text}\n${lines[i]}`.trim();
+        }
+      }
+      continue;
+    }
+    // `## FAQ`: `### Question` then its answer.
+    if (/^## (FAQ|Questions)\s*$/.test(lines[i])) {
+      while (i + 1 < lines.length && !/^## /.test(lines[i + 1])) {
+        const question = lines[++i].match(/^### (.+?)\s*$/);
+        if (question) faq.push({ question: question[1], answer: '' });
+        else if (faq.length) faq[faq.length - 1].answer = `${faq[faq.length - 1].answer}\n${lines[i]}`.trim();
+      }
+      continue;
+    }
     // `## What's new in 1.2.0` and its bullets: release notes, newest first.
     const heading = lines[i].match(/^## What's new in (\S+)\s*$/);
     if (heading) {
@@ -66,7 +92,7 @@ export function parseReadme(markdown) {
     while (i + 1 < lines.length && /^\s{2,}\S/.test(lines[i + 1])) text += ` ${lines[++i].trim()}`;
     facts.push({ label: fact[1], text });
   }
-  return { description: rest.join('\n').trim(), facts, changes };
+  return { description: rest.join('\n').trim(), facts, changes, highlights, faq };
 }
 
 /** Fetches with a few retries, since GitHub Pages sometimes drops a request. */
@@ -126,7 +152,7 @@ export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch
     if (seen.has(slug) && seen.get(slug) !== entry.id) throw new Error(`store: ${entry.id} and ${seen.get(slug)} share the page /plugins/${slug}`);
     seen.set(slug, entry.id);
     const url = readmeURL(entry.homepage);
-    let readme = { description: entry.summary ?? '', facts: [], changes: [] };
+    let readme = { description: entry.summary ?? '', facts: [], changes: [], highlights: [], faq: [] };
     if (url) {
       const page = await fetchWithRetry(fetch, url);
       if (page.ok) readme = parseReadme(await page.text());
@@ -138,12 +164,14 @@ export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch
       const head = await fetchWithRetry(fetch, screenshot, { method: 'HEAD' }).catch(() => undefined);
       if (!head?.ok) { log(`store: no screenshot for ${entry.id} (${head?.status ?? 'unreachable'})`); screenshot = undefined; }
     }
-    const gallery = await galleryOf(fetch, renders[entry.id]?.[entry.version], base, log);
+    const gallery = await galleryOf(fetch, renders.plugins[entry.id]?.[entry.version], base, log);
+    const previews = await previewsOf(fetch, renders.previews[entry.id]?.[entry.version], base, log);
     plugins.push({
       ...entry,
       slug,
       screenshot,
       gallery,
+      previews,
       bundle: new URL(entry.bundle, base).href,
       readme,
     });
@@ -154,12 +182,33 @@ export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch
 /** The order the gallery shows surfaces in. */
 export const surfaceOrder = ['menuBar', 'panel', 'window', 'widget', 'palette', 'settings'];
 
-/** The store's site.json (renders per plugin version), or none yet. */
+/**
+ * The store's site.json: renders per plugin version, and previews (sample-data
+ * scenes, Stackbar 0.17.0) per plugin version, or none yet.
+ */
 async function fetchRenders(fetch, url, log) {
+  const none = { plugins: {}, previews: {} };
   const response = await fetchWithRetry(fetch, url).catch(() => undefined);
-  if (!response?.ok) { log(`store: no renders yet (${url} answered ${response?.status ?? 'nothing'})`); return {}; }
+  if (!response?.ok) { log(`store: no renders yet (${url} answered ${response?.status ?? 'nothing'})`); return none; }
   const site = await response.json();
-  return site.format === 1 && site.plugins ? site.plugins : {};
+  if (site.format !== 1) return none;
+  return { plugins: site.plugins ?? {}, previews: site.previews ?? {} };
+}
+
+/** One version's previews, in the plugin's order, each with the renders that answer. */
+export async function previewsOf(fetch, scenes = [], base, log = console.warn) {
+  const previews = [];
+  for (const scene of scenes) {
+    const item = { name: scene.name, title: scene.title, surface: scene.surface ?? 'panel' };
+    for (const appearance of ['light', 'dark']) {
+      if (!scene[appearance]) continue;
+      const url = new URL(scene[appearance], base).href;
+      const head = await fetchWithRetry(fetch, url, { method: 'HEAD' }).catch(() => undefined);
+      if (head?.ok) item[appearance] = url; else log(`store: missing preview ${url}`);
+    }
+    if (item.light || item.dark) previews.push(item);
+  }
+  return previews;
 }
 
 /** One version's renders, each surface's light and dark image that answers. */

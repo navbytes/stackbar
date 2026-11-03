@@ -1,0 +1,17 @@
+---
+// A render in the site's appearance: the dark one on the dark site, the light
+// one after the theme toggle, whichever exists when only one does.
+import { Image } from 'astro:assets';
+interface Props { light?: string; dark?: string; alt: string; class?: string; }
+const { light, dark, alt, class: className } = Astro.props;
+const both = !!light && !!dark;
+---
+{dark && <Image class:list={['shot', className, { 'on-dark': both }]} src={dark} alt={alt} inferSize widths={[400, 800]} sizes="(max-width: 700px) 92vw, 400px" loading="lazy" />}
+{light && <Image class:list={['shot', className, { 'on-light': both }]} src={light} alt={alt} inferSize widths={[400, 800]} sizes="(max-width: 700px) 92vw, 400px" loading="lazy" />}
+
+<style>
+  .shot { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 0 0 0.5px #00000040, 0 30px 60px -18px #00000080, 0 8px 18px -8px #00000040; }
+  .on-light { display: none; }
+  :global(:root[data-theme='light']) .on-light { display: block; }
+  :global(:root[data-theme='light']) .on-dark { display: none; }
+</style>

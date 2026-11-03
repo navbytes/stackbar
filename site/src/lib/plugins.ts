@@ -23,3 +23,22 @@ export const categorySlug = (category: string) => category.toLowerCase();
 export function byName(a: { data: Plugin }, b: { data: Plugin }) {
   return a.data.name.localeCompare(b.data.name);
 }
+
+type Appearance = 'light' | 'dark';
+const pick = (shot: { light?: string; dark?: string } | undefined, appearance: Appearance) =>
+  shot ? shot[appearance] ?? shot[appearance === 'dark' ? 'light' : 'dark'] : undefined;
+
+/**
+ * The picture that stands for a plugin: its `hero` preview (sample data,
+ * Stackbar 0.17.0) when it has one, else its first panel preview, else the
+ * panel render, else the store screenshot.
+ */
+export function heroShot(plugin: Plugin, appearance: Appearance = 'dark'): string | undefined {
+  const hero = plugin.previews.find((p) => p.name === 'hero') ?? plugin.previews.find((p) => p.surface === 'panel');
+  return pick(hero, appearance) ?? pick(plugin.gallery.find((g) => g.surface === 'panel'), appearance) ?? plugin.screenshot;
+}
+
+/** The plugin's own menu-bar item, as rendered for the store. */
+export function menuBarShot(plugin: Plugin, appearance: Appearance = 'dark'): string | undefined {
+  return pick(plugin.gallery.find((g) => g.surface === 'menuBar'), appearance);
+}

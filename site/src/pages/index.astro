@@ -4,16 +4,19 @@ import { Code } from 'astro:components';
 import Base from '../layouts/Base.astro';
 import Button from '../components/Button.astro';
 import Glyph from '../components/Glyph.astro';
-import MenuBarScene from '../components/MenuBarScene.astro';
+import HeroRotator from '../components/HeroRotator.astro';
 import PluginCard from '../components/PluginCard.astro';
-import Screenshot from '../components/Screenshot.astro';
 import { href, repo, version } from '../lib/site';
 import { hueOf, byName } from '../lib/plugins';
 // The example the repository builds and tests, shown as it is.
 import clock from '../../../Examples/ClockPlugin/Clock.swift?raw';
 
 const plugins = (await getCollection('plugins')).sort(byName);
-const pomodoro = plugins.find((p) => p.data.slug === 'pomodoro')?.data;
+// The hero's menu bar: six plugins that show the range, in the order they
+// take turns. One not published (or without a render) is left out.
+const showcase = ['up-next', 'pr-cockpit', 'clipboard', 'system-monitor', 'world-clock', 'app-switcher']
+  .map((slug) => plugins.find((p) => p.data.slug === slug)?.data)
+  .filter((p) => p !== undefined);
 const featured = ['pomodoro', 'pr-cockpit', 'system-monitor', 'clipboard', 'litellm', 'world-clock']
   .map((slug) => plugins.find((p) => p.data.slug === slug))
   .filter((p) => p !== undefined);
@@ -46,15 +49,7 @@ const safety = [
         </div>
         <p class="fine">macOS 26 or later · Free · MIT license</p>
       </div>
-      <MenuBarScene label="A Mac menu bar running Stackbar plugins, with Pomodoro's panel open" hues={['violet', 'pink', 'orange']}
-        items={[
-          { text: '24:59', glyph: 'flame', active: true, live: 'countdown' },
-          { text: '23%', glyph: 'cpu' },
-          { text: 'Standup in 12m', glyph: 'calendar' },
-          { text: 'SF 07:41', glyph: 'globe' },
-        ]}>
-        <Screenshot src={pomodoro?.screenshot} alt="Pomodoro's panel: Focus mode, 25 minutes, a play button in a progress ring" eager />
-      </MenuBarScene>
+      <HeroRotator plugins={showcase} label="A Mac menu bar running Stackbar plugins, each opening its panel in turn" />
     </div>
   </section>
 
