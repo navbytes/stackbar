@@ -46,7 +46,7 @@ final class Weather: StackbarPlugin {
         Text(temperature.map { "\(Int($0))°\(unit)" } ?? "–").style(.title)
     }
 
-    var settings: ViewContent {             // Stackbar Settings → Plugins → Weather
+    var settings: ViewContent {             // Stackbar Settings → Weather
         Section("Units") {
             Picker("Unit", options: ["C", "F"], selection: unit) { self.unit = $0 }
         }

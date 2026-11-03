@@ -3,7 +3,7 @@ import Foundation
 /// What a store publishes next to its signed index in `site.json`: each
 /// version's renders (every surface, light and dark) and each plugin's README
 /// split into a description and its `- **Label:**` facts. The website builds
-/// its plugin pages from it and Settings → Store its plugin detail page.
+/// its plugin pages from it and the Store window its plugin pages.
 ///
 /// It is not signed: it only decorates entries the index already vouches
 /// for, and it is optional, so a store without one still lists everything.

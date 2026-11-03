@@ -16,7 +16,7 @@ final class AppModel {
     var settingsTab = SettingsTab.general
     /// The command Settings → Commands shows.
     var settingsCommand: CommandKey?
-    /// The plugin a `stackbar://store/<id>` link asked Settings → Store to show.
+    /// The plugin a `stackbar://store/<id>` link asked the Store window to show.
     var storeFocus: String?
     var indexURLs: [String] {
         didSet { UserDefaults.standard.set(indexURLs, forKey: "indexURLs") }
@@ -38,6 +38,9 @@ final class AppModel {
     @ObservationIgnored let services: HostServices
     /// Commands: the registry, preferences, hotkeys and the runner.
     @ObservationIgnored private(set) var commands: CommandCenter!
+    /// The Store's indexes, installs and toasts, shared by the Store window
+    /// and Settings.
+    @ObservationIgnored private(set) var store: StoreModel!
     @ObservationIgnored let ledger: CapabilityLedger
     /// Which plugins are turned off, by id.
     @ObservationIgnored let switches = PluginSwitches()
@@ -89,6 +92,7 @@ final class AppModel {
         )
         secretRouter.model = self
         commands = CommandCenter(model: self, services: services)
+        store = StoreModel(model: self)
     }
 
     // MARK: - Plugins

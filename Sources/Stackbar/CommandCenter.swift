@@ -245,7 +245,7 @@ final class CommandCenter {
             return model.controllers.contains(where: \.building) ? .starting : .missing
         }
         if controller.isWaitingForApproval {
-            return .ready(.unavailable("\(controller.name) is waiting for you to approve what it asks for. Open it from Settings → Plugins."))
+            return .ready(.unavailable("\(controller.name) is waiting for you to approve what it asks for. Open its page in Settings."))
         }
         if let supervisor = controller.supervisor { return .ready(.supervisor(supervisor)) }
         if controller.building { return .starting }

@@ -64,7 +64,7 @@ struct SettingsView: View {
         case .commands: CommandsSettings(model: model)
         case .agents: AgentsSettings(model: model)
         case .privacy: PrivacySettings(model: model)
-        case .store: StoreView(model: model)
+        case .store: StoreSettings(model: model)
         case .plugin(let id):
             if let controller = model.controllers.first(where: { $0.id == id }) {
                 PluginPage(controller: controller, model: model).id(controller.id)
@@ -89,7 +89,7 @@ enum SettingsTab: Hashable {
         case .commands: return "Commands & Hotkeys"
         case .agents: return "Agents"
         case .privacy: return "Privacy & Secrets"
-        case .store: return "Store"
+        case .store: return "Store & Updates"
         case .plugin: return "Plugin"
         }
     }
@@ -627,18 +627,6 @@ struct SecretRow: View {
         value = ""
         editing = false
         isSaved = controller.hasSecret(name)
-    }
-}
-
-/// Marks a plugin that is turned off.
-struct OffBadge: View {
-    var body: some View {
-        Text("Off")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(Capsule().fill(Color.secondary.opacity(0.15)))
     }
 }
 

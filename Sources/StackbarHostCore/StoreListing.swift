@@ -1,6 +1,6 @@
 import Foundation
 
-/// What Settings → Store shows: every store's entries as one list, filtered by
+/// What the Store window shows: every store's entries as one list, filtered by
 /// search, category and whether they're installed or have an update, plus the
 /// "New and updated" shelf. No UI here, so it is tested on Linux.
 public enum StoreListing {
@@ -86,5 +86,16 @@ public enum StoreListing {
             .filter { seen.insert($0.entry.id).inserted }
             .prefix(limit)
             .map { $0 }
+    }
+
+    /// The plugin Discover leads with. Indexes don't name one, so it is the
+    /// most recently published plugin this app can install and doesn't have
+    /// yet; with everything installed, the most recently published one.
+    public static func featured(_ catalogs: [PluginStore.Catalog], installed: Installed = Installed(), running: String = StackbarVersion.current) -> Item? {
+        // `updated` is an ISO 8601 day, so text order is date order.
+        let newest = all(catalogs, running: running).enumerated()
+            .sorted { ($0.element.entry.updated ?? "", -$0.offset) > ($1.element.entry.updated ?? "", -$1.offset) }
+            .map(\.element)
+        return newest.first { !installed.contains($0.entry.id) && $0.entry.requiredStackbar(running: running) == nil } ?? newest.first
     }
 }
