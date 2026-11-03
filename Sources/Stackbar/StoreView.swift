@@ -49,15 +49,7 @@ enum StoreSection: Hashable {
         case .discover: return "sparkles"
         case .installed: return "square.stack.3d.up.fill"
         case .updates: return "arrow.down.circle.fill"
-        case .category(let name):
-            switch name {
-            case "Developer": return "chevron.left.forwardslash.chevron.right"
-            case "Monitoring": return "gauge.with.dots.needle.67percent"
-            case "Productivity": return "checkmark.circle.fill"
-            case "System": return "bolt.fill"
-            case "Network": return "network"
-            default: return "square.grid.2x2.fill"
-            }
+        case .category(let name): return StoreListing.look(ofCategory: name).symbol
         }
     }
 
@@ -66,15 +58,7 @@ enum StoreSection: Hashable {
         case .discover: return .blue
         case .installed: return .gray
         case .updates: return .teal
-        case .category(let name):
-            switch name {
-            case "Developer": return .indigo
-            case "Monitoring": return .green
-            case "Productivity": return .orange
-            case "System": return .yellow
-            case "Network": return .cyan
-            default: return .gray
-            }
+        case .category(let name): return PluginIcon.color(StoreListing.look(ofCategory: name).accent)
         }
     }
 }
@@ -147,7 +131,7 @@ struct StoreBrowser: View {
             }
             Section("Library") {
                 sidebarLabel(.installed)
-                sidebarLabel(.updates).badge(store.updates.count)
+                sidebarLabel(.updates, badge: store.updates.count)
             }
         }
         .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
@@ -163,12 +147,16 @@ struct StoreBrowser: View {
         }
     }
 
-    private func sidebarLabel(_ section: StoreSection) -> some View {
+    /// A sidebar row. The tag must be the row's outermost modifier: a
+    /// `.badge` applied after it hides the tag from the list's selection,
+    /// and the row stops responding to clicks.
+    private func sidebarLabel(_ section: StoreSection, badge: Int = 0) -> some View {
         Label {
             Text(section.title)
         } icon: {
             SettingsIconTile(symbol: section.symbol, color: section.color)
         }
+        .badge(badge)
         .tag(section)
     }
 
@@ -299,7 +287,7 @@ struct StoreHero: View {
     let open: () -> Void
 
     private var entry: PluginIndex.Entry { item.entry }
-    private var color: Color { StorePluginIcon.color(entry.accent) }
+    private var color: Color { StorePluginIcon.color(entry) }
 
     var body: some View {
         HStack(alignment: .center, spacing: 24) {
@@ -550,7 +538,7 @@ struct StoreThumbnail: View {
     var body: some View {
         ZStack {
             if !plain {
-                Rectangle().fill(StorePluginIcon.color(entry.accent).opacity(0.12))
+                Rectangle().fill(StorePluginIcon.color(entry).opacity(0.12))
             }
             if let url {
                 AsyncImage(url: url) { image in

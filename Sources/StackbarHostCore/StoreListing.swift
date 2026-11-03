@@ -1,4 +1,5 @@
 import Foundation
+import StackbarProtocol
 
 /// What the Store window shows: every store's entries as one list, filtered by
 /// search, category and whether they're installed or have an update, plus the
@@ -97,5 +98,18 @@ public enum StoreListing {
             .sorted { ($0.element.entry.updated ?? "", -$0.offset) > ($1.element.entry.updated ?? "", -$1.offset) }
             .map(\.element)
         return newest.first { !installed.contains($0.entry.id) && $0.entry.requiredStackbar(running: running) == nil } ?? newest.first
+    }
+
+    /// A category's own colour and symbol: the store's sidebar draws them,
+    /// and a plugin that declares no `accent` or `symbol` takes them.
+    public static func look(ofCategory category: String?) -> (accent: Accent, symbol: String) {
+        switch category {
+        case "Developer": return (.indigo, "chevron.left.forwardslash.chevron.right")
+        case "Monitoring": return (.green, "gauge.with.dots.needle.67percent")
+        case "Productivity": return (.orange, "checkmark.circle.fill")
+        case "System": return (.amber, "bolt.fill")
+        case "Network": return (.cyan, "network")
+        default: return (.graphite, "puzzlepiece.extension.fill")
+        }
     }
 }

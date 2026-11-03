@@ -269,13 +269,15 @@ struct StorePluginIcon: View {
     var size: CGFloat = 40
 
     var body: some View {
-        PluginIcon(symbol: entry.symbol, accent: entry.accent.flatMap(Accent.init(rawValue:)), size: size)
+        let category = StoreListing.look(ofCategory: entry.category)
+        PluginIcon(symbol: entry.symbol ?? category.symbol, accent: entry.accent.flatMap(Accent.init(rawValue:)) ?? category.accent, size: size)
     }
 
-    /// The tile colour for an index's accent name. An app that predates a
-    /// new hue (the index keeps it as a string) shows grey.
-    static func color(_ accent: String?) -> Color {
-        PluginIcon.color(accent.flatMap(Accent.init(rawValue:)))
+    /// The tile colour for an entry: its accent, else its category's. An
+    /// app that predates a new hue (the index keeps it as a string) uses the
+    /// category's too.
+    static func color(_ entry: PluginIndex.Entry) -> Color {
+        PluginIcon.color(entry.accent.flatMap(Accent.init(rawValue:)) ?? StoreListing.look(ofCategory: entry.category).accent)
     }
 }
 
