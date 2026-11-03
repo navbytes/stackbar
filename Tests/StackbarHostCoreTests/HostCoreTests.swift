@@ -191,6 +191,22 @@ final class PluginSupervisorTests: XCTestCase {
         XCTAssertEqual(stopped, .stopped)
     }
 
+    func testListsPreviewsAndLaunchesIntoOne() async throws {
+        let fixture = Self.helper("FixturePlugin")
+        XCTAssertEqual(try PluginProcess.readPreviews(executable: fixture), [PreviewSpec(name: "hero", title: "Counted to 42")])
+        XCTAssertEqual(try PluginProcess.readPreviews(executable: Self.helper("ClockPlugin")), [], "no previews is an empty list")
+
+        var environment = ProcessInfo.processInfo.environment
+        environment[stackbarPreviewEnvironmentKey] = "hero"
+        let supervisor = PluginSupervisor(executable: fixture, manifest: try PluginProcess.readManifest(executable: fixture), environment: environment)
+        await supervisor.start()
+        let started = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
+        XCTAssertTrue(started)
+        let views = await supervisor.views
+        XCTAssertEqual(views[.menuBar], .text("count 42", style: .body, role: .primary), "the launch trigger leaves the preview's state alone")
+        await supervisor.stop()
+    }
+
     func testRestartsACrashedPluginAndKeepsTheLastTree() async throws {
         let fast = BackoffPolicy(initialDelay: 0.05, multiplier: 1, maxDelay: 0.05, maxConsecutiveFailures: 3)
         let supervisor = try PluginSupervisor.make(executable: Self.helper("FixturePlugin"), policy: fast)

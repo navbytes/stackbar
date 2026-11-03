@@ -375,6 +375,39 @@ the store uses the category's colour and the name's first letter.
 To publish (`stackbarctl sign`, `index build`) a plugin also needs an `x.y.z`
 `version`, a `summary` and a `minimumStackbar`.
 
+## Previews (minimumStackbar 0.17.0)
+
+Screenshots in the store and on the Stackbar site come from previews: named
+scenes with sample data, so a page shows the plugin in use rather than its
+first-run "Connect Jira" screen. Give a published plugin two to five.
+
+```swift
+static let previews: [PreviewScene<Clipboard>] = [
+    PreviewScene("hero", "Everything you copied") { plugin in
+        plugin.items = Clipboard.samples
+    },
+    PreviewScene("pinned", "Pin what you paste every day") { plugin in
+        plugin.items = Clipboard.samples.map { $0.pinned(true) }
+    },
+    PreviewScene("insights", "What you copy, and from where", surface: .window) { plugin in
+        plugin.items = Clipboard.samples
+    },
+]
+```
+
+A scene is about the panel unless `surface:` says otherwise; the store shows
+that surface.
+
+The closure runs on a fresh plugin whose `@Stored` values start at their
+defaults and are never saved, so a scene can't show or overwrite real data.
+The plugin then never refreshes (triggers only re-render), so set every
+property the scene shows. Events still run, so `--event` can press things in a scene.
+Name the first one `hero`: the site's header uses it. Names are lowercase
+with dashes; titles are short captions. Use made-up but believable data, never
+real people's names or emails. Previews never run in the app.
+`stackbarctl previews <file>` lists them, and
+`stackbarctl render <file> --preview <name> [--png <dir> [--dark]]` renders one.
+
 ## Loop
 
 1. `stackbar_new` (or write the file), then `stackbar_build`: fix every diagnostic.

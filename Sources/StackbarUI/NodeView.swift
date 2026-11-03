@@ -111,6 +111,8 @@ public struct NodeView: View {
             }
             .tint(role.color)
             .disabled(readOnly)
+        case .toggle(let title, let isOn, _) where snapshot:
+            SnapshotToggle(title: title, isOn: isOn, trailing: grouped)
         case .toggle(let title, let isOn, let action) where grouped:
             Toggle(title, isOn: Binding(get: { isOn }, set: { send(action, .bool($0)) }))
                 .toggleStyle(TrailingSwitchStyle())
@@ -163,10 +165,14 @@ public struct NodeView: View {
                 }
             }
             .disabled(readOnly)
+        case .slider(let title, let value, let low, let high, _, _) where snapshot:
+            SnapshotSlider(title: title, fraction: high > low ? (value - low) / (high - low) : 0, tint: foreground?.flatColor ?? .accentColor)
         case .slider(let title, let value, let low, let high, let step, let action):
             SliderNodeView(title: title, value: value, range: low...max(high, low), step: step, action: action, send: send)
                 .tint(foreground?.flatColor)
                 .disabled(readOnly)
+        case .link(let title, _) where snapshot:
+            Text(title).foregroundStyle(foreground?.flatColor ?? .accentColor)
         case .link(let title, let url):
             if let destination = URL(string: url) {
                 Link(title, destination: destination)

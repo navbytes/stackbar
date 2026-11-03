@@ -13,6 +13,10 @@ final class Fixture: StackbarPlugin {
         capabilities: [.secret(name: "FIXTURE_SECRET"), .network("127.0.0.1"), .run(commands: ["echo", "sh"]), .context]
     )
 
+    static let previews: [PreviewScene<Fixture>] = [
+        PreviewScene("hero", "Counted to 42") { $0.count = 42 },
+    ]
+
     var count = 0
     @Stored("saved") var saved = 0
     var status = "idle"

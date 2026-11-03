@@ -20,6 +20,9 @@ public final class PluginRuntime {
     private var handlers: [ActionID: RenderContext.Handler] = [:]
     /// Open command views, by session.
     private var views: [Int: OpenView] = [:]
+    /// The preview this runtime shows (see `PreviewScene`): set up after hello,
+    /// and triggers then re-render without refreshing.
+    private let preview: String?
 
     private struct OpenView {
         var command: String
@@ -29,8 +32,9 @@ public final class PluginRuntime {
         var handlers: [ActionID: RenderContext.Handler] = [:]
     }
 
-    public init(plugin: any StackbarPlugin, send: @escaping Send) {
+    public init(plugin: any StackbarPlugin, preview: String? = nil, send: @escaping Send) {
         self.plugin = plugin
+        self.preview = preview
         self.send = send
     }
 
@@ -39,10 +43,16 @@ public final class PluginRuntime {
     public func handle(_ message: HostMessage) async -> Bool {
         switch message {
         case .hello(_, let offered, let storage):
-            Stackbar.storage.load(storage)
+            Stackbar.storage.isScratch = preview != nil
+            Stackbar.storage.load(preview == nil ? storage : [:])
             let declared = type(of: plugin).manifest.surfaces
             surfaces = declared.filter(offered.contains)
             send(.ready(protocolVersion: StackbarProtocolVersion.current))
+            if let preview {
+                await run("preview \(preview)") { try await self.plugin.applyPreview(named: preview) }
+            }
+            render()
+        case .trigger where preview != nil:
             render()
         case .trigger(let reason):
             Stackbar.refreshReason = reason

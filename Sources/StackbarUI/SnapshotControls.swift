@@ -60,4 +60,60 @@ struct SnapshotPicker: View {
         }
     }
 }
+
+/// A slider as `Snapshot` draws it: AppKit's slider is a placeholder block
+/// off screen.
+struct SnapshotSlider: View {
+    let title: String
+    let fraction: Double
+    let tint: Color
+
+    var body: some View {
+        let clamped = min(max(fraction.isFinite ? fraction : 0, 0), 1)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            GeometryReader { proxy in
+                let x = (proxy.size.width - 16) * clamped
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.secondary.opacity(0.25)).frame(height: 4)
+                    Capsule().fill(tint).frame(width: x + 8, height: 4)
+                    Circle().fill(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5)
+                        .frame(width: 16, height: 16)
+                        .offset(x: x)
+                }
+                .frame(maxHeight: .infinity)
+            }
+            .frame(height: 20)
+        }
+    }
+}
+
+/// A toggle as `Snapshot` draws it: a switch after its title in a settings
+/// group, a checkbox before it anywhere else.
+struct SnapshotToggle: View {
+    let title: String
+    let isOn: Bool
+    let trailing: Bool
+
+    var body: some View {
+        if trailing {
+            HStack {
+                Text(title)
+                Spacer(minLength: 12)
+                ZStack(alignment: isOn ? .trailing : .leading) {
+                    Capsule().fill(isOn ? Color.accentColor : Color.secondary.opacity(0.3))
+                    Circle().fill(.white).padding(1.5).shadow(color: .black.opacity(0.2), radius: 0.5, y: 0.5)
+                }
+                .frame(width: 26, height: 15)
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: isOn ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(isOn ? Color.accentColor : .secondary)
+                Text(title)
+            }
+        }
+    }
+}
 #endif
