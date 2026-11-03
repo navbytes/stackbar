@@ -16,4 +16,4 @@
 
 ## 3. Check
 - [x] 3.1 `swift build && swift test`
-- [ ] 3.2 On Naveen's Mac: Accessibility prompt, restore across a dock and undock
+- [x] 3.2 On Naveen's Mac: Accessibility prompt, restore across a dock and undock
