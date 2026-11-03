@@ -382,14 +382,14 @@ scenes with sample data, so a page shows the plugin in use rather than its
 first-run "Connect Jira" screen. Give a published plugin two to five.
 
 ```swift
-static let previews: [Preview<Clipboard>] = [
-    Preview("hero", "Everything you copied") { plugin in
+static let previews: [PreviewScene<Clipboard>] = [
+    PreviewScene("hero", "Everything you copied") { plugin in
         plugin.items = Clipboard.samples
     },
-    Preview("pinned", "Pin what you paste every day") { plugin in
+    PreviewScene("pinned", "Pin what you paste every day") { plugin in
         plugin.items = Clipboard.samples.map { $0.pinned(true) }
     },
-    Preview("insights", "What you copy, and from where", surface: .window) { plugin in
+    PreviewScene("insights", "What you copy, and from where", surface: .window) { plugin in
         plugin.items = Clipboard.samples
     },
 ]

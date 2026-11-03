@@ -49,9 +49,9 @@ public protocol StackbarPlugin: AnyObject {
     /// Another plugin published to a topic this plugin's manifest listens to
     /// with `.topic(name:)`. The plugin re-renders afterwards.
     func receive(topic: String, payload: String, from sender: String) async throws
-    /// Scenes with sample data for screenshots (see `Preview`). The store
+    /// Scenes with sample data for screenshots (see `PreviewScene`). The store
     /// and the website show these instead of the first-run screen.
-    static var previews: [Preview<Self>] { get }
+    static var previews: [PreviewScene<Self>] { get }
 }
 
 extension StackbarPlugin {
@@ -65,7 +65,7 @@ extension StackbarPlugin {
     public var tools: [AgentTool] { [] }
     public var commands: [Command] { [] }
     public func receive(topic: String, payload: String, from sender: String) async throws {}
-    public static var previews: [Preview<Self>] { [] }
+    public static var previews: [PreviewScene<Self>] { [] }
 
     /// The entry point `@main` uses. `--manifest` prints the manifest as JSON
     /// and `--previews` the previews' names and titles, and both exit;

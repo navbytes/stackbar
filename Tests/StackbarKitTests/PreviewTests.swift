@@ -4,9 +4,9 @@ import XCTest
 @MainActor
 final class Previewed: StackbarPlugin {
     static let manifest = Manifest(id: "test.previewed", name: "Previewed", surfaces: [.menuBar], triggers: [.launch])
-    static let previews: [Preview<Previewed>] = [
-        Preview("hero", "Three things") { $0.items = ["a", "b", "c"] },
-        Preview("broken", "Fails", surface: .window) { _ in throw Boom() },
+    static let previews: [PreviewScene<Previewed>] = [
+        PreviewScene("hero", "Three things") { $0.items = ["a", "b", "c"] },
+        PreviewScene("broken", "Fails", surface: .window) { _ in throw Boom() },
     ]
 
     var items: [String] = []
@@ -69,7 +69,7 @@ final class PreviewTests: XCTestCase {
 @MainActor
 final class Remembering: StackbarPlugin {
     static let manifest = Manifest(id: "test.remembering", name: "Remembering", surfaces: [.menuBar])
-    static let previews: [Preview<Remembering>] = [Preview("hero", "Seven") { $0.saved = 7 }]
+    static let previews: [PreviewScene<Remembering>] = [PreviewScene("hero", "Seven") { $0.saved = 7 }]
     @Stored("saved") var saved = 0
     var menuBar: ViewContent { Text("\(saved)") }
 }

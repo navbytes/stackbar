@@ -20,7 +20,7 @@ public final class PluginRuntime {
     private var handlers: [ActionID: RenderContext.Handler] = [:]
     /// Open command views, by session.
     private var views: [Int: OpenView] = [:]
-    /// The preview this runtime shows (see `Preview`): set up after hello,
+    /// The preview this runtime shows (see `PreviewScene`): set up after hello,
     /// and triggers then re-render without refreshing.
     private let preview: String?
 

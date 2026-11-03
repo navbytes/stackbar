@@ -5,11 +5,11 @@ import Foundation
 /// of its first-run screen.
 ///
 /// ```swift
-/// static let previews: [Preview<Clipboard>] = [
-///     Preview("hero", "Everything you copied") { plugin in
+/// static let previews: [PreviewScene<Clipboard>] = [
+///     PreviewScene("hero", "Everything you copied") { plugin in
 ///         plugin.items = Clipboard.sampleItems
 ///     },
-///     Preview("search", "Search everything") { plugin in
+///     PreviewScene("search", "Search everything") { plugin in
 ///         plugin.items = Clipboard.sampleItems
 ///         plugin.query = "invoice"
 ///     },
@@ -26,7 +26,7 @@ import Foundation
 ///
 /// Use made-up but believable data (no real people's names or emails), and
 /// keep `title` short: the website uses it as a caption.
-public struct Preview<Plugin: StackbarPlugin> {
+public struct PreviewScene<Plugin: StackbarPlugin> {
     /// What `--preview` and README `<!-- preview: name -->` markers use:
     /// lowercase letters, digits and dashes.
     public var name: String
