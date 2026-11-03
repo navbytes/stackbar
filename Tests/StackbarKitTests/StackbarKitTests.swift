@@ -228,3 +228,42 @@ final class StackbarKitTests: XCTestCase {
         XCTAssertTrue(outbox.take().contains(.toolResult(id: 9, text: "hi Naveen", isError: false)))
     }
 }
+
+final class MailboxTests: XCTestCase {
+    func testRepeatedTriggersAndVisibilityFoldWhileClicksQueue() async {
+        let mailbox = Mailbox()
+        mailbox.push(.trigger(reason: .manual))
+        mailbox.push(.event(action: "button/A", value: nil))
+        mailbox.push(.trigger(reason: .manual))
+        mailbox.push(.trigger(reason: .wake))
+        mailbox.push(.visibility(surface: .panel, visible: false))
+        mailbox.push(.visibility(surface: .panel, visible: true))
+        mailbox.push(.event(action: "button/A", value: nil))
+        XCTAssertEqual(mailbox.count, 5)
+
+        var got: [(HostMessage, Int)] = []
+        mailbox.finish()
+        while let entry = await mailbox.next() { got.append((entry.message, entry.absorbed)) }
+        XCTAssertEqual(got.map(\.0), [
+            .trigger(reason: .manual),
+            .event(action: "button/A", value: nil),
+            .trigger(reason: .wake),
+            .visibility(surface: .panel, visible: true),
+            .event(action: "button/A", value: nil),
+        ], "clicks keep their order and count; the newest visibility wins")
+        XCTAssertEqual(got.map(\.1), [1, 0, 0, 1, 0], "each folded message is still owed a settled")
+        XCTAssertEqual(got.map(\.1).reduce(0, +) + got.count, 7)
+    }
+
+    func testAWaitingReaderGetsTheNextMessageAndNilAtTheEnd() async {
+        let mailbox = Mailbox()
+        async let first = mailbox.next()
+        try? await Task.sleep(for: .milliseconds(50))
+        mailbox.push(.shutdown)
+        let entry = await first
+        XCTAssertEqual(entry?.message, .shutdown)
+        mailbox.finish()
+        let end = await mailbox.next()
+        XCTAssertNil(end)
+    }
+}
