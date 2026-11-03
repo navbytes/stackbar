@@ -32,6 +32,11 @@ extension HostCall {
         case .resolveApplication(let name): return "finding the app \(name)"
         case .windows: return "reading windows"
         case .arrangeWindows: return "arranging windows"
+        case .runningApps: return "reading running apps"
+        case .activateApp(let id, _): return "switching to \(id)"
+        case .hideApp(let id): return "hiding \(id)"
+        case .setKeyLayer(let layer): return layer == nil ? "removing the key layer" : "setting the key layer"
+        case .keyLayerStatus: return "reading the key layer's status"
         }
     }
 
@@ -52,6 +57,11 @@ extension HostCall {
         case .finderSelection: return (.context, "read Finder's selection")
         case .windows: return (.windows, "read your windows")
         case .arrangeWindows: return (.windows, "move and resize windows")
+        case .runningApps: return (.apps, "read running apps")
+        case .activateApp, .hideApp: return (.apps, "switch, open or hide apps")
+        // Removing never needs the capability, so a revoked plugin can let go.
+        case .setKeyLayer(let layer): return layer == nil ? nil : (.keyLayer, "switch apps from a held key")
+        case .keyLayerStatus: return (.keyLayer, "read the key layer's status")
         case .storageSet, .secret, .http, .oauthToken, .publish, .notify, .alert, .playSound,
              .openURL, .open, .copy, .run, .cancelRun, .chooseFile, .saveFile, .resolveApplication:
             return nil

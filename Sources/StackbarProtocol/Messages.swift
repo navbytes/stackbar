@@ -16,7 +16,8 @@ public enum StackbarProtocolVersion {
     /// 12 added radial, angular and glass paints, remote images, blur, symbol
     /// effects, numeric transitions, hover and grids.
     /// 13 added listing and arranging windows, and the displays trigger.
-    public static let current = 13
+    /// 14 added the app calls, the key layer and the apps trigger.
+    public static let current = 14
 }
 
 /// Host → plugin.
@@ -56,7 +57,7 @@ public enum HostMessage: Codable, Equatable, Sendable {
 }
 
 public enum TriggerReason: String, Codable, Sendable {
-    case launch, interval, wake, manual, file, topic, clipboard, displays
+    case launch, interval, wake, manual, file, topic, clipboard, displays, apps
 }
 
 /// The value that came with an event: a toggle's new state, a slider's number.
@@ -208,6 +209,21 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// title and order; with `launch`, opens apps that aren't running first.
     /// Answers `ArrangeResult` as JSON. Needs `.windows`. Protocol 13.
     case arrangeWindows([WindowPlacement], launch: Bool)
+    /// The regular apps that are running, in launch order (`[RunningApp]` as
+    /// JSON). Needs `.apps`. Protocol 14.
+    case runningApps
+    /// Brings a running app to the front, unhiding it; with `launch`, opens
+    /// it when it isn't running. Needs `.apps`. Protocol 14.
+    case activateApp(String, launch: Bool)
+    /// Hides a running app. Needs `.apps`. Protocol 14.
+    case hideApp(String)
+    /// Registers the plugin's key layer, replacing the last one; `nil`
+    /// removes it. Answers `KeyLayerStatus` as JSON. Needs `.keyLayer`.
+    /// Protocol 14.
+    case setKeyLayer(KeyLayer?)
+    /// Whether the plugin's key layer is listening (`KeyLayerStatus` as
+    /// JSON). Needs `.keyLayer`. Protocol 14.
+    case keyLayerStatus
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

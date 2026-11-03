@@ -7,7 +7,7 @@ import StackbarProtocol
 public enum SettingsPresentation {
     /// The kinds of access a plugin can have, in the order Settings lists them.
     public enum Access: String, CaseIterable, Sendable {
-        case network, account, secret, files, run, clipboard, context, windows, calendar, power, links, server, storage
+        case network, account, secret, files, run, clipboard, context, windows, keyboard, calendar, power, links, server, storage
 
         /// The heading on the Privacy & Secrets page.
         public var title: String {
@@ -20,6 +20,7 @@ public enum SettingsPresentation {
             case .clipboard: return "Clipboard"
             case .context: return "Selected Text"
             case .windows: return "Windows and Apps"
+            case .keyboard: return "Keyboard"
             case .calendar: return "Calendar"
             case .power: return "Power and Battery"
             case .links: return "Opening Links"
@@ -39,6 +40,7 @@ public enum SettingsPresentation {
             case .clipboard: return "doc.on.clipboard.fill"
             case .context: return "text.cursor"
             case .windows: return "macwindow.on.rectangle"
+            case .keyboard: return "keyboard.fill"
             case .calendar: return "calendar"
             case .power: return "bolt.fill"
             case .links: return "link"
@@ -58,6 +60,7 @@ public enum SettingsPresentation {
             case .clipboard: return .teal
             case .context: return .violet
             case .windows: return .pink
+            case .keyboard: return .orange
             case .calendar: return .red
             case .power: return .green
             }
@@ -71,6 +74,7 @@ public enum SettingsPresentation {
                 ("Runs", .run), ("Reads the secret", .secret), ("Signs in to", .account), ("Reads everything you copy", .clipboard),
                 ("Keeps the Mac awake", .power), ("Reads your calendar", .calendar), ("Reads the text you select", .context),
                 ("Opens", .links), ("Stores up to", .storage), ("Sees which windows", .windows),
+                ("Sees which apps", .windows), ("Listens for a key", .keyboard),
             ]
             guard let match = prefixes.first(where: { summary.hasPrefix($0.0) }) else { return nil }
             self = match.1
@@ -90,7 +94,8 @@ public enum SettingsPresentation {
             case .openURLs: self = .links
             case .storage: self = .storage
             case .userServer: self = .server
-            case .windows: self = .windows
+            case .windows, .apps: self = .windows
+            case .keyLayer: self = .keyboard
             }
         }
     }
@@ -134,6 +139,8 @@ public enum SettingsPresentation {
         case .storage(let megabytes): return "Up to \(megabytes) MB"
         case .userServer(let name): return name
         case .windows: return "Windows and apps"
+        case .apps: return "Switches apps"
+        case .keyLayer: return "Held-key shortcuts"
         }
     }
 

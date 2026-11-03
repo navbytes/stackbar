@@ -92,6 +92,11 @@ final class AppModel {
         )
         secretRouter.model = self
         commands = CommandCenter(model: self, services: services)
+        // A key layer's assign chord (Right ⌘ ⌥ + a letter) runs the
+        // plugin's assign command, as a hotkey would.
+        MacKeyLayer.shared.onAssign = { [weak self] key, arguments in
+            Task { @MainActor in await self?.commands.run(key, arguments: arguments, source: .hotkey) }
+        }
         store = StoreModel(model: self)
     }
 

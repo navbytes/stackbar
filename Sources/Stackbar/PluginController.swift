@@ -253,6 +253,10 @@ final class PluginController: Identifiable {
         Task { await supervisor?.displaysChanged() }
     }
 
+    func appsChanged() {
+        Task { await supervisor?.appsChanged() }
+    }
+
     func restart() {
         Task {
             guard let current = supervisor else { return }

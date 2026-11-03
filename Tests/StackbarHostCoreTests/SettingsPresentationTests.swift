@@ -66,7 +66,7 @@ final class SettingsPresentationTests: XCTestCase {
         let samples: [Capability] = [
             .network(hosts: ["api.github.com"]), .files(paths: ["~/Notes"]), .run(commands: ["docker"]), .secret(name: "T"),
             .oauth(OAuthProvider(name: "github", authorizeURL: "https://github.com/login/oauth/authorize", tokenURL: "https://github.com/login/oauth/access_token", clientID: "x")),
-            .clipboard, .power, .calendar, .context, .openURLs(schemes: ["https"]), .storage(megabytes: 50), .userServer(secret: "LiteLLM"), .windows,
+            .clipboard, .power, .calendar, .context, .openURLs(schemes: ["https"]), .storage(megabytes: 50), .userServer(secret: "LiteLLM"), .windows, .apps, .keyLayer,
         ]
         for capability in samples {
             XCTAssertEqual(SettingsPresentation.Access(summary: capability.summary(resolver: resolver)), SettingsPresentation.Access(capability), capability.summary)

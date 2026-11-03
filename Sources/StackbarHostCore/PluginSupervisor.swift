@@ -164,6 +164,12 @@ public actor PluginSupervisor {
         if manifest.triggers.contains(.displays) { send(.trigger(reason: .displays)) }
     }
 
+    /// A regular app opened or quit. Only plugins that asked for `.apps`
+    /// hear it.
+    public func appsChanged() {
+        if manifest.triggers.contains(.apps) { send(.trigger(reason: .apps)) }
+    }
+
     public func setVisible(_ surface: Surface, _ visible: Bool) {
         send(.visibility(surface: surface, visible: visible))
     }
