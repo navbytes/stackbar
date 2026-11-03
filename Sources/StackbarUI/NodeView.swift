@@ -37,6 +37,10 @@ extension EnvironmentValues {
     /// Drawing for `Snapshot`: AppKit-backed controls (text fields, pickers)
     /// don't render off screen, so they draw as SwiftUI look-alikes.
     @Entry public var stackbarSnapshot: Bool = false
+    /// Draws sections as System Settings–style grouped boxes, with switches
+    /// and pickers trailing each row. Set by the Settings window for a
+    /// plugin's `settings` surface.
+    @Entry public var stackbarGroupedSections: Bool = false
 }
 
 /// Draws one `ViewNode` for the panel and window surfaces. Every case of the
@@ -51,6 +55,7 @@ public struct NodeView: View {
     @Environment(\.stackbarFont) private var font
     @Environment(\.stackbarForeground) private var foreground
     @Environment(\.stackbarSymbol) private var symbolStyle
+    @Environment(\.stackbarGroupedSections) private var grouped
 
     public init(node: ViewNode, send: @escaping SendAction) {
         self.node = node
@@ -71,6 +76,11 @@ public struct NodeView: View {
             ZStack(alignment: alignment.map { Alignment(horizontal: $0.horizontal, vertical: $0.vertical) } ?? .center) { NodeList(children: children, send: send) }
         case .list(let searchable, let children):
             ListNodeView(searchable: searchable, children: children, send: send)
+        case .section(let title, let children) where grouped:
+            SettingsGroup(title) {
+                NodeList(children: children, send: send)
+            }
+            .padding(.bottom, 14)
         case .section(let title, let children):
             // Sections of rows read as list groups; sections of charts,
             // gauges and values sit on a card.
@@ -101,6 +111,10 @@ public struct NodeView: View {
             }
             .tint(role.color)
             .disabled(readOnly)
+        case .toggle(let title, let isOn, let action) where grouped:
+            Toggle(title, isOn: Binding(get: { isOn }, set: { send(action, .bool($0)) }))
+                .toggleStyle(TrailingSwitchStyle())
+                .disabled(readOnly)
         case .toggle(let title, let isOn, let action):
             Toggle(title, isOn: Binding(get: { isOn }, set: { send(action, .bool($0)) }))
                 .disabled(readOnly)
@@ -138,6 +152,12 @@ public struct NodeView: View {
             Group {
                 if style == .segmented {
                     picker.pickerStyle(.segmented).labelsHidden()
+                } else if grouped {
+                    HStack {
+                        Text(title)
+                        Spacer(minLength: 12)
+                        picker.labelsHidden().fixedSize()
+                    }
                 } else {
                     picker
                 }

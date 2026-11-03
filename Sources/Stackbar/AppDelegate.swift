@@ -282,15 +282,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Opens Settings, on a plugin's page when one is given.
     func showSettings(plugin: PluginController? = nil) {
         if let plugin {
-            model.settingsTab = .plugins
-            model.settingsPlugin = plugin.id
+            model.settingsTab = .plugin(plugin.id)
         }
         if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 560), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 640), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
             window.title = "Stackbar Settings"
+            window.toolbarStyle = .unified
             window.isReleasedWhenClosed = false
-            window.contentViewController = NSHostingController(rootView: SettingsView(model: model))
+            // The split view's sidebar, toolbar and page titles come from
+            // SwiftUI, as they do in a Settings scene.
+            let host = NSHostingController(rootView: SettingsView(model: model))
+            host.sceneBridgingOptions = [.toolbars, .title]
+            window.contentViewController = host
+            window.setContentSize(NSSize(width: 900, height: 640))
             window.center()
+            window.setFrameAutosaveName("StackbarSettings")
             window.delegate = windows
             settingsWindow = window
         }

@@ -190,38 +190,20 @@ struct StorePluginPage: View {
     }
 }
 
-/// A plugin's icon: its SF Symbol on its manifest colour, like its website
-/// card. Plugins without either get a puzzle piece on grey.
+/// A store entry's icon: the same tile as an installed plugin's, from the
+/// accent and symbol the index carries.
 struct StorePluginIcon: View {
     let entry: PluginIndex.Entry
     var size: CGFloat = 40
 
     var body: some View {
-        let symbol = entry.symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil ? nil : $0 } ?? "puzzlepiece.extension.fill"
-        RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-            .fill(Self.color(entry.accent).gradient)
-            .frame(width: size, height: size)
-            .overlay(Image(systemName: symbol).font(.system(size: size * 0.48, weight: .semibold)).foregroundStyle(.white))
-            .accessibilityHidden(true)
+        PluginIcon(symbol: entry.symbol, accent: entry.accent.flatMap(Accent.init(rawValue:)), size: size)
     }
 
-    /// The system colour nearest each design-system hue. An app that predates
-    /// a new hue (the index keeps it as a string) shows grey.
+    /// The tile colour for an index's accent name. An app that predates a
+    /// new hue (the index keeps it as a string) shows grey.
     static func color(_ accent: String?) -> Color {
-        guard let accent = accent.flatMap(Accent.init(rawValue:)) else { return .gray }
-        switch accent {
-        case .blue: return .blue
-        case .indigo: return .indigo
-        case .violet: return .purple
-        case .pink: return .pink
-        case .red: return .red
-        case .orange: return .orange
-        case .amber: return .yellow
-        case .green: return .green
-        case .teal: return .teal
-        case .cyan: return .cyan
-        case .graphite: return .gray
-        }
+        PluginIcon.color(accent.flatMap(Accent.init(rawValue:)))
     }
 }
 
