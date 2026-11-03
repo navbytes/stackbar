@@ -191,6 +191,38 @@ final class PluginSupervisorTests: XCTestCase {
         XCTAssertEqual(stopped, .stopped)
     }
 
+    func testTriggersFasterThanRefreshFoldTogetherAndStillSettle() async throws {
+        let supervisor = try PluginSupervisor.make(executable: Self.helper("FixturePlugin"))
+        await supervisor.start()
+        _ = await waitUntil { await supervisor.settledCount >= supervisor.startupMessageCount }
+        func refreshes() async -> Int {
+            let text = await supervisor.views[.panel].map { TreeTextRenderer.render($0) } ?? ""
+            return Int(text.components(separatedBy: "refreshes ").last?.prefix { $0.isNumber } ?? "") ?? -1
+        }
+        let start = await supervisor.settledCount
+        await supervisor.event("button/Slow refreshes")
+        _ = await waitUntil { await supervisor.settledCount > start }
+        let before = await refreshes()
+        let settled = await supervisor.settledCount
+
+        // Forty refreshes asked for while each takes 300 ms: unfolded, they
+        // would take 12 s and hold the click behind them.
+        for _ in 0..<40 {
+            await supervisor.send(.trigger(reason: .manual))
+            await supervisor.send(.visibility(surface: .panel, visible: false))
+            await supervisor.send(.visibility(surface: .panel, visible: true))
+        }
+        await supervisor.event("button/Increment")
+        let caughtUp = await waitUntil(6) { await supervisor.settledCount >= settled + 121 }
+        XCTAssertTrue(caughtUp, "every message sent is settled, folded or not")
+        let ran = await refreshes() - before
+        XCTAssertGreaterThan(ran, 0)
+        XCTAssertLessThan(ran, 10, "queued triggers fold into one")
+        let menu = await supervisor.views[.menuBar]
+        XCTAssertEqual(menu, .text("count 1", style: .body, role: .primary))
+        await supervisor.stop()
+    }
+
     func testListsPreviewsAndLaunchesIntoOne() async throws {
         let fixture = Self.helper("FixturePlugin")
         XCTAssertEqual(try PluginProcess.readPreviews(executable: fixture), [PreviewSpec(name: "hero", title: "Counted to 42")])

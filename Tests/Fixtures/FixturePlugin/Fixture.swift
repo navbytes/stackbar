@@ -20,6 +20,13 @@ final class Fixture: StackbarPlugin {
     var count = 0
     @Stored("saved") var saved = 0
     var status = "idle"
+    var refreshes = 0
+    var slowRefresh = false
+
+    func refresh() async throws {
+        refreshes += 1
+        if slowRefresh { try await Task.sleep(for: .milliseconds(300)) }
+    }
 
     var menuBar: ViewContent {
         Text("count \(count)")
@@ -28,6 +35,7 @@ final class Fixture: StackbarPlugin {
     var panel: ViewContent {
         Text("saved \(saved)")
         Text("status \(status)")
+        Text("refreshes \(refreshes)")
         Button("Increment") { self.count += 1 }
         Button("Save") { self.saved += 1 }
         Button("Print") {
@@ -35,6 +43,7 @@ final class Fixture: StackbarPlugin {
             print("stray output from plugin code")
             self.count += 10
         }
+        Button("Slow refreshes") { self.slowRefresh = true }
         Button("Crash") { exit(3) }
         Button("Spawn") {
             // A grandchild the host must clean up when this plugin dies.

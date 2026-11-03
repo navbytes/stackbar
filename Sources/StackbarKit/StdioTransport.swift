@@ -35,40 +35,41 @@ final class StdioTransport: Sendable {
     }
 
     /// Host messages, read on a dedicated thread so a blocking read never
-    /// holds the main actor. Undecodable lines are skipped; EOF ends the stream.
-    func incoming() -> AsyncStream<HostMessage> {
-        AsyncStream { continuation in
-            // Raw reads, not `readLine`: a thread parked in C stdio's stdin
-            // would hold a lock that the `fflush(nil)` in `send` also takes.
-            let reader = Thread {
-                let input = FileHandle.standardInput
-                var buffer = LineBuffer()
-                while true {
-                    // Each read gets its own autorelease pool: on macOS
-                    // `availableData` and the decoding behind it hand back
-                    // autoreleased objects, and this thread's outer pool
-                    // would only drain when the plugin exits, so memory
-                    // grew with every message.
-                    let more = withAutoreleasePool {
-                        let chunk = input.availableData
-                        if chunk.isEmpty { return false }
-                        Self.dispatch(buffer.append(chunk), to: continuation)
-                        return true
-                    }
-                    if !more { break }
+    /// holds the main actor. Undecodable lines are skipped; EOF finishes the
+    /// mailbox.
+    func incoming() -> Mailbox {
+        let mailbox = Mailbox()
+        // Raw reads, not `readLine`: a thread parked in C stdio's stdin
+        // would hold a lock that the `fflush(nil)` in `send` also takes.
+        let reader = Thread {
+            let input = FileHandle.standardInput
+            var buffer = LineBuffer()
+            while true {
+                // Each read gets its own autorelease pool: on macOS
+                // `availableData` and the decoding behind it hand back
+                // autoreleased objects, and this thread's outer pool
+                // would only drain when the plugin exits, so memory
+                // grew with every message.
+                let more = withAutoreleasePool {
+                    let chunk = input.availableData
+                    if chunk.isEmpty { return false }
+                    Self.dispatch(buffer.append(chunk), to: mailbox)
+                    return true
                 }
-                // The host is gone (it quit or crashed). Fail waiting host
-                // calls so the runtime loop can finish, and don't outlive the
-                // host even if plugin code is stuck.
-                HostClient.shared.failAll("the host went away")
-                continuation.finish()
-                DispatchQueue.global().asyncAfter(deadline: .now() + 2) { exit(0) }
+                if !more { break }
             }
-            reader.start()
+            // The host is gone (it quit or crashed). Fail waiting host
+            // calls so the runtime loop can finish, and don't outlive the
+            // host even if plugin code is stuck.
+            HostClient.shared.failAll("the host went away")
+            mailbox.finish()
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { exit(0) }
         }
+        reader.start()
+        return mailbox
     }
 
-    private static func dispatch(_ lines: [Data], to continuation: AsyncStream<HostMessage>.Continuation) {
+    private static func dispatch(_ lines: [Data], to mailbox: Mailbox) {
         for line in lines {
             guard let message = try? LineCodec.decode(HostMessage.self, from: line) else { continue }
             if case .response(let id, let result) = message {
@@ -80,7 +81,7 @@ final class StdioTransport: Sendable {
             } else if case .runExit = message {
                 HostClient.shared.deliver(run: message)
             } else {
-                continuation.yield(message)
+                mailbox.push(message)
             }
         }
     }

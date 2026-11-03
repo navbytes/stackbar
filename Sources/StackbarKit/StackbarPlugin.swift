@@ -84,8 +84,10 @@ extension StackbarPlugin {
         HostClient.shared.configure(send: transport.send)
         let preview = ProcessInfo.processInfo.environment[stackbarPreviewEnvironmentKey].flatMap { $0.isEmpty ? nil : $0 }
         let runtime = PluginRuntime(plugin: Self(), preview: preview, send: transport.send)
-        for await message in transport.incoming() {
-            if await !runtime.handle(message) { break }
+        let mailbox = transport.incoming()
+        while let entry = await mailbox.next() {
+            if await !runtime.handle(entry.message) { break }
+            for _ in 0..<entry.absorbed { transport.send(.settled) }
         }
     }
 }
