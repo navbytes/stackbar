@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var headless: [String: HeadlessPanelController] = [:]
     private var emptyStateItem: NSStatusItem?
     private var settingsWindow: NSWindow?
+    private var storeWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
@@ -111,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(item(title: "Install Bundled Plugins", action: #selector(installExamples)))
         menu.addItem(item(title: "Open Plugins Folder", action: #selector(openPluginsFolder)))
+        menu.addItem(item(title: "Browse the Plugin Store…", action: #selector(openStore)))
         menu.addItem(item(title: "Settings…", action: #selector(openSettings)))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Stackbar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -147,6 +149,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let settings = key("Settings…", #selector(openSettings), ",")
         settings.target = self
+        let storeItem = key("Plugin Store…", #selector(openStore), "")
+        storeItem.target = self
         let window = menu("Window", [
             key("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
             key("Zoom", #selector(NSWindow.performZoom(_:)), ""),
@@ -160,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 key("About Stackbar", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
                 .separator(),
                 settings,
+                storeItem,
                 .separator(),
                 key("Hide Stackbar", #selector(NSApplication.hide(_:)), "h"),
                 key("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
@@ -203,6 +208,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showSettings()
     }
 
+    @objc private func openStore() {
+        showStore()
+    }
+
     /// Opens a plugin's panel, as clicking its notification does.
     func showPanel(pluginID: String) {
         guard let controller = model.controllers.first(where: { $0.pluginID == pluginID }) else { return }
@@ -229,13 +238,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// `stackbar://commands/<plugin>/<command>?name=value`. A view opens in
     /// the palette, where the user sees it before anything happens. A run
     /// command runs only once the user allowed links to run it.
-    /// `stackbar://store/<plugin>` opens the plugin's page in Settings →
-    /// Store; installing still takes the user's click there.
+    /// `stackbar://store/<plugin>` opens the plugin's page in the Store
+    /// window; installing still takes the user's click there.
     private func openLink(_ url: URL) {
         if let link = StoreLink(url) {
-            model.settingsTab = .store
             model.storeFocus = link.pluginID
-            showSettings()
+            showStore()
             return
         }
         guard let link = CommandLink(url.absoluteString) else {
@@ -277,6 +285,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         Task { await model.commands.run(link.key, arguments: link.arguments, source: .link, context: context) }
+    }
+
+    /// Opens Settings on one of its pages.
+    func showSettings(tab: SettingsTab) {
+        model.settingsTab = tab
+        showSettings()
+    }
+
+    /// Opens the Store window, on Discover or wherever it was left.
+    func showStore() {
+        if storeWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 720), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+            window.title = "Plugin Store"
+            window.toolbarStyle = .unified
+            window.isReleasedWhenClosed = false
+            let host = NSHostingController(rootView: StoreBrowser(model: model, store: model.store))
+            host.sceneBridgingOptions = [.toolbars, .title]
+            window.contentViewController = host
+            window.setContentSize(NSSize(width: 1040, height: 720))
+            window.center()
+            window.setFrameAutosaveName("StackbarStore")
+            window.delegate = windows
+            storeWindow = window
+        }
+        NSApp.activate()
+        storeWindow?.makeKeyAndOrderFront(nil)
+        windows.updatePresence()
     }
 
     /// Opens Settings, on a plugin's page when one is given.

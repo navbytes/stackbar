@@ -63,6 +63,19 @@ public enum SettingsPresentation {
             }
         }
 
+        /// The kind behind a capability as an index lists it: the words
+        /// `Capability.summary` wrote when the index was built.
+        public init?(summary: String) {
+            let prefixes: [(String, Access)] = [
+                ("Connects to the server you enter", .server), ("Connects to", .network), ("Reads and writes", .files),
+                ("Runs", .run), ("Reads the secret", .secret), ("Signs in to", .account), ("Reads everything you copy", .clipboard),
+                ("Keeps the Mac awake", .power), ("Reads your calendar", .calendar), ("Reads the text you select", .context),
+                ("Opens", .links), ("Stores up to", .storage), ("Sees which windows", .windows),
+            ]
+            guard let match = prefixes.first(where: { summary.hasPrefix($0.0) }) else { return nil }
+            self = match.1
+        }
+
         public init(_ capability: Capability) {
             switch capability {
             case .network: self = .network

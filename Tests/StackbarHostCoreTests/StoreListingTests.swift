@@ -55,4 +55,14 @@ final class StoreListingTests: XCTestCase {
         XCTAssertNil(about.notes(for: "1.1.0"), "an empty section has nothing to show")
         XCTAssertNil(about.notes(for: "9.0.0"))
     }
+
+    func testFeaturedIsTheNewestPluginNotInstalled() {
+        XCTAssertEqual(StoreListing.featured([official], running: "1.0.0")?.entry.name, "alpha",
+                       "beta is newer but needs a newer Stackbar")
+        let installed = StoreListing.Installed(versions: ["dev.t.alpha": "1.1.0"])
+        XCTAssertEqual(StoreListing.featured([official], installed: installed, running: "1.0.0")?.entry.name, "zebra")
+        let everything = StoreListing.Installed(versions: ["dev.t.alpha": "1", "dev.t.beta": "1", "dev.t.zebra": "1", "dev.t.misc": "1"])
+        XCTAssertEqual(StoreListing.featured([official], installed: everything, running: "1.0.0")?.entry.name, "beta")
+        XCTAssertNil(StoreListing.featured([], running: "1.0.0"))
+    }
 }

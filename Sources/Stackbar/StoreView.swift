@@ -12,323 +12,525 @@ enum StoreAvailability: Equatable {
     case needsStackbar(String)
 }
 
-/// Which plugin's page is open in the store.
-struct StorePage: Identifiable, Equatable {
+/// A plugin's page in the Store, pushed onto the Store's navigation stack.
+struct StorePage: Hashable, Identifiable {
     var pluginID: String
     var indexURL: URL
     var id: String { indexURL.absoluteString + "#" + pluginID }
+
+    init(pluginID: String, indexURL: URL) {
+        self.pluginID = pluginID
+        self.indexURL = indexURL
+    }
+
+    init(_ item: StoreListing.Item) {
+        self.init(pluginID: item.entry.id, indexURL: item.catalog.source.url)
+    }
 }
 
-/// The plugin store: a grid of cards from the official index and any added
-/// ones, filtered by category and by installed or updatable, with a shelf of
-/// what's new. A card opens the plugin's page; installing and updating verify
-/// the signed bundle.
-struct StoreView: View {
+/// What the Store's sidebar can show.
+enum StoreSection: Hashable {
+    case discover
+    case category(String)
+    case installed
+    case updates
+
+    var title: String {
+        switch self {
+        case .discover: return "Discover"
+        case .category(let name): return name
+        case .installed: return "Installed"
+        case .updates: return "Updates"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .discover: return "sparkles"
+        case .installed: return "square.stack.3d.up.fill"
+        case .updates: return "arrow.down.circle.fill"
+        case .category(let name):
+            switch name {
+            case "Developer": return "chevron.left.forwardslash.chevron.right"
+            case "Monitoring": return "gauge.with.dots.needle.67percent"
+            case "Productivity": return "checkmark.circle.fill"
+            case "System": return "bolt.fill"
+            case "Network": return "network"
+            default: return "square.grid.2x2.fill"
+            }
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .discover: return .blue
+        case .installed: return .gray
+        case .updates: return .teal
+        case .category(let name):
+            switch name {
+            case "Developer": return .indigo
+            case "Monitoring": return .green
+            case "Productivity": return .orange
+            case "System": return .yellow
+            case "Network": return .cyan
+            default: return .gray
+            }
+        }
+    }
+}
+
+/// The Store window: a sidebar of Discover, categories and your library,
+/// and a stack you push plugin pages onto, like the App Store.
+struct StoreBrowser: View {
     @Bindable var model: AppModel
-    @State private var newIndex = ""
-    @State private var catalogs: [PluginStore.Catalog] = []
+    let store: StoreModel
+    @State private var section: StoreSection? = .discover
+    @State private var path: [StorePage] = []
     @State private var query = ""
-    @State private var filter = StoreListing.Filter.all
-    @State private var category: String?
-    @State private var status: String?
-    @State private var loading = false
-    @State private var updatingAll = false
-    @State private var showingSources = false
-    /// The plugin whose page is open.
-    @State private var page: StorePage?
-
-    private var installed: StoreListing.Installed {
-        StoreListing.Installed(
-            versions: Dictionary(model.installedPlugins.map { ($0.id, $0.version) }, uniquingKeysWith: { first, _ in first }),
-            loaded: Set(model.controllers.map(\.pluginID)))
-    }
-
-    private var items: [StoreListing.Item] {
-        StoreListing.items(catalogs, query: query, category: category, filter: filter, installed: installed)
-    }
-
-    private var updates: [StoreListing.Item] {
-        StoreListing.items(catalogs, filter: .updates, installed: installed)
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            toolbar
-            if loading { ProgressView().controlSize(.small) }
-            if let status { Text(status).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    shelf
-                    grid
-                    sources
-                }
-                .padding(.vertical, 4)
+        NavigationSplitView {
+            sidebar
+        } detail: {
+            NavigationStack(path: $path) {
+                root
+                    .navigationDestination(for: StorePage.self) { page in
+                        pluginPage(page)
+                    }
             }
         }
-        .padding()
-        .task { await load() }
+        .searchable(text: $query, placement: .toolbar, prompt: "Search plugins")
+        .toolbar {
+            if !store.updates.isEmpty {
+                ToolbarItem {
+                    Button(store.updatingAll ? "Updating…" : "Update All") { Task { await store.updateAll() } }
+                        .disabled(store.updatingAll)
+                }
+            }
+            ToolbarItem {
+                Button {
+                    Task { await store.load() }
+                } label: {
+                    Label("Reload", systemImage: "arrow.clockwise")
+                }
+                .help("Check the stores again")
+                .disabled(store.loading)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let toast = store.toast {
+                StoreToastView(toast: toast, store: store)
+                    .padding(.bottom, 18)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: store.toast)
+        .task {
+            await store.load()
+            openFocus()
+        }
         .onChange(of: model.storeFocus) { openFocus() }
-        .sheet(item: $page) { page in
-            pageSheet(page)
-        }
+        .onChange(of: section) { path = [] }
+        .onChange(of: query) { if !query.isEmpty { path = [] } }
+        .frame(minWidth: 900, minHeight: 600)
     }
 
-    // MARK: - Parts
+    // MARK: - Sidebar
 
-    private var toolbar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                TextField("Search plugins", text: $query).textFieldStyle(.roundedBorder)
-                Picker("Show", selection: $filter) {
-                    Text("All").tag(StoreListing.Filter.all)
-                    Text("Installed").tag(StoreListing.Filter.installed)
-                    Text(updates.isEmpty ? "Updates" : "Updates (\(updates.count))").tag(StoreListing.Filter.updates)
+    private var sidebar: some View {
+        List(selection: $section) {
+            sidebarLabel(.discover)
+            Section("Categories") {
+                ForEach(StoreListing.categories(store.catalogs), id: \.self) { name in
+                    sidebarLabel(.category(name))
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
             }
-            HStack(spacing: 6) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        StoreChip(title: "All", isSelected: category == nil) { category = nil }
-                        ForEach(StoreListing.categories(catalogs), id: \.self) { name in
-                            StoreChip(title: name, isSelected: category == name) { category = category == name ? nil : name }
-                        }
-                    }
-                }
-                if !updates.isEmpty {
-                    Button(updatingAll ? "Updating…" : "Update All") { Task { await updateAll() } }
-                        .disabled(updatingAll)
-                }
-                Toggle("Update automatically", isOn: $model.autoUpdatePlugins).toggleStyle(.checkbox)
+            Section("Library") {
+                sidebarLabel(.installed)
+                sidebarLabel(.updates).badge(store.updates.count)
             }
         }
-    }
-
-    /// "New and updated": shown on the unfiltered store only.
-    @ViewBuilder private var shelf: some View {
-        let recent = StoreListing.recent(catalogs)
-        if filter == .all, category == nil, query.isEmpty, !recent.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("New and updated").font(.headline)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(recent) { item in
-                            StoreShelfCard(item: item) { open(item) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private var grid: some View {
-        let listed = items
-        if listed.isEmpty, !loading {
-            VStack(spacing: 6) {
-                Text(emptyTitle).font(.headline)
-                if filter != .all || category != nil || !query.isEmpty {
-                    Button("Show All Plugins") {
-                        filter = .all
-                        category = nil
-                        query = ""
-                    }
+        .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
+        .safeAreaInset(edge: .bottom) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(sourcesLine).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Button("Sources and Updates…") { AppDelegate.shared?.showSettings(tab: .store) }
                     .buttonStyle(.link)
+                    .font(.caption)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+        }
+    }
+
+    private func sidebarLabel(_ section: StoreSection) -> some View {
+        Label {
+            Text(section.title)
+        } icon: {
+            SettingsIconTile(symbol: section.symbol, color: section.color)
+        }
+        .tag(section)
+    }
+
+    private var sourcesLine: String {
+        let names = store.catalogs.map { $0.source.isOfficial ? "\($0.index.name) (signed)" : $0.index.name }
+        return names.isEmpty ? "No stores loaded" : "From " + ListFormatter.localizedString(byJoining: names)
+    }
+
+    // MARK: - Pages
+
+    @ViewBuilder private var root: some View {
+        if store.catalogs.isEmpty {
+            if store.loading {
+                ProgressView("Loading the Store…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView {
+                    Label("Can't Reach the Store", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(store.problems.isEmpty ? "No plugin sources are set up." : store.problems.joined(separator: "\n"))
+                } actions: {
+                    Button("Try Again") { Task { await store.load() } }
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
+        } else if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+            StoreListPage(title: "Results", items: StoreListing.items(store.catalogs, query: query, installed: store.installed), store: store,
+                          empty: "No plugins match “\(query)”.") { path.append(StorePage($0)) }
         } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], alignment: .leading, spacing: 12) {
-                ForEach(listed) { item in
-                    let entry = item.entry
-                    let controller = model.controller(for: entry.id)
-                    StoreCard(item: item, state: state(of: entry), isOn: controller?.isEnabled) {
-                        Task { await install(entry, from: item.catalog) }
-                    } uninstall: { deleteData in
-                        Task { await uninstall(entry, deleteData: deleteData) }
-                    } setOn: { on in
-                        controller?.isEnabled = on
-                    } open: {
-                        open(item)
-                    }
-                }
+            switch section ?? .discover {
+            case .discover:
+                DiscoverPage(store: store, open: { path.append(StorePage($0)) }, seeAll: { section = $0 })
+            case .category(let name):
+                StoreListPage(title: name, items: StoreListing.items(store.catalogs, category: name, installed: store.installed), store: store,
+                              empty: "Nothing in \(name) yet.") { path.append(StorePage($0)) }
+            case .installed:
+                StoreListPage(title: "Installed", items: StoreListing.items(store.catalogs, filter: .installed, installed: store.installed), store: store,
+                              empty: "Nothing installed from your stores yet.") { path.append(StorePage($0)) }
+            case .updates:
+                StoreListPage(title: "Updates", items: store.updates, store: store, empty: "Everything is up to date.") { path.append(StorePage($0)) }
             }
         }
     }
 
-    private var emptyTitle: String {
-        if model.storeSources.isEmpty { return "Add a plugin source below to browse plugins." }
-        switch filter {
-        case .updates: return "Everything is up to date."
-        case .installed: return "Nothing installed from your stores yet."
-        case .all: return query.isEmpty ? "No plugins here yet." : "No plugins match “\(query)”."
-        }
-    }
-
-    /// The stores the list comes from: the signed official index and any the
-    /// user added. Anyone can publish one with `stackbarctl index build`.
-    private var sources: some View {
-        DisclosureGroup("Plugin sources", isExpanded: $showingSources) {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(model.storeSources, id: \.url) { source in
-                    HStack {
-                        let name = catalogs.first { $0.source.url == source.url }?.index.name
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(name ?? source.url.absoluteString)
-                            Text(source.isOfficial ? "Signed by navbytes" : source.url.absoluteString)
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if !source.isOfficial {
-                            Button("Remove") {
-                                model.indexURLs.removeAll { $0 == source.url.absoluteString }
-                                Task { await load() }
-                            }
-                            .buttonStyle(.link)
-                        }
-                    }
-                }
-                HStack {
-                    TextField("Add an index URL (https://…/index.json)", text: $newIndex).textFieldStyle(.roundedBorder)
-                    Button("Add") {
-                        let trimmed = newIndex.trimmingCharacters(in: .whitespaces)
-                        guard !trimmed.isEmpty, !model.indexURLs.contains(trimmed), trimmed != OfficialIndex.url.absoluteString else { return }
-                        model.indexURLs.append(trimmed)
-                        newIndex = ""
-                        Task { await load() }
-                    }
-                }
-                Text("Anyone can publish an index with `stackbarctl index build`. Plugins from it run in the same sandbox and ask for the same permissions.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            .padding(.top, 6)
-        }
-    }
-
-    @ViewBuilder private func pageSheet(_ page: StorePage) -> some View {
-        if let catalog = catalogs.first(where: { $0.source.url == page.indexURL }),
+    @ViewBuilder private func pluginPage(_ page: StorePage) -> some View {
+        if let catalog = store.catalogs.first(where: { $0.source.url == page.indexURL }),
            let entry = catalog.index.search("").first(where: { $0.id == page.pluginID }) {
-            let controller = model.controller(for: entry.id)
-            StorePluginPage(entry: entry, catalog: catalog, state: state(of: entry), isOn: controller?.isEnabled) {
-                Task { await install(entry, from: catalog) }
-            } uninstall: { deleteData in
-                Task { await uninstall(entry, deleteData: deleteData) }
-            } setOn: { on in
-                controller?.isEnabled = on
-            } close: {
-                self.page = nil
-            }
+            StorePluginPage(item: StoreListing.Item(catalog: catalog, entry: entry), store: store)
         } else {
-            VStack(spacing: 12) {
-                Text("This plugin is no longer listed.")
-                Button("Done") { self.page = nil }.keyboardShortcut(.defaultAction)
-            }
-            .padding(40)
+            ContentUnavailableView("No Longer Listed", systemImage: "puzzlepiece.extension", description: Text("This plugin was removed from its store."))
         }
-    }
-
-    // MARK: - Actions
-
-    private func open(_ item: StoreListing.Item) {
-        page = StorePage(pluginID: item.entry.id, indexURL: item.catalog.source.url)
     }
 
     /// Opens the page a `stackbar://store/<id>` link asked for, once the
     /// stores have loaded.
     private func openFocus() {
-        guard let id = model.storeFocus, !loading, !catalogs.isEmpty else { return }
+        guard let id = model.storeFocus, !store.loading, !store.catalogs.isEmpty else { return }
         model.storeFocus = nil
-        if let found = PluginStore.find(id, in: catalogs) {
-            page = StorePage(pluginID: found.entry.id, indexURL: found.catalog.source.url)
+        query = ""
+        if let item = store.find(id) {
+            path = [StorePage(item)]
         } else {
-            status = "None of your stores lists \(id)."
+            store.toast = StoreToast(entry: nil, text: "None of your stores lists \(id).", isError: true)
         }
-    }
-
-    private func state(of entry: PluginIndex.Entry) -> StoreAvailability {
-        if let needed = entry.requiredStackbar() { return .needsStackbar(needed) }
-        if let record = model.installedPlugins.first(where: { $0.id == entry.id }) {
-            return entry.isNewer(than: record.version) ? .update(from: record.version) : .installed
-        }
-        return model.controller(for: entry.id) != nil ? .installed : .available
-    }
-
-    private func load() async {
-        loading = true
-        defer { loading = false }
-        model.refreshInstalled()
-        let result = await PluginStore.load(model.storeSources, site: true)
-        catalogs = result.catalogs
-        status = result.problems.isEmpty ? nil : result.problems.joined(separator: "\n")
-        loading = false
-        openFocus()
-    }
-
-    @discardableResult
-    private func install(_ entry: PluginIndex.Entry, from catalog: PluginStore.Catalog) async -> Bool {
-        do {
-            try catalog.index.checkInstallable(entry)
-            let bundle = try await PluginIndex.bundle(for: entry, indexURL: catalog.source.url)
-            let file = try model.installer.install(bundle)
-            if let controller = model.controller(for: entry.id) { controller.reload() } else { model.add(file) }
-            model.refreshInstalled()
-            status = "Installed \(entry.name) \(entry.version). Open it from the menu bar to allow what it asks for."
-            return true
-        } catch {
-            status = "Could not install \(entry.name): \(error)"
-            return false
-        }
-    }
-
-    /// Installs every update, one at a time. New permissions in an update
-    /// still wait for the user's approval when the plugin next asks.
-    private func updateAll() async {
-        updatingAll = true
-        defer { updatingAll = false }
-        var updated: [String] = []
-        var failed: [String] = []
-        for item in updates {
-            if await install(item.entry, from: item.catalog) { updated.append(item.entry.name) } else { failed.append(item.entry.name) }
-        }
-        status = (updated.isEmpty ? "" : "Updated \(ListFormatter.localizedString(byJoining: updated)).")
-            + (failed.isEmpty ? "" : " Could not update \(ListFormatter.localizedString(byJoining: failed)).")
-    }
-
-    private func uninstall(_ entry: PluginIndex.Entry, deleteData: Bool) async {
-        if let controller = model.controller(for: entry.id) {
-            await model.uninstall(controller, deleteData: deleteData)
-        } else if let record = model.installedPlugins.first(where: { $0.id == entry.id }) {
-            try? FileManager.default.trashItem(at: URL(fileURLWithPath: record.file), resultingItemURL: nil)
-            try? model.installer.forget(entry.id)
-            model.switches.set(entry.id, on: true)
-            if deleteData { await model.services.storage.erase(entry.id) }
-            model.refreshInstalled()
-        }
-        status = "Moved \(entry.name) to the Trash" + (deleteData ? " and deleted its data." : ".")
     }
 }
 
-/// A category filter.
-struct StoreChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
+// MARK: - Discover
+
+struct DiscoverPage: View {
+    let store: StoreModel
+    let open: (StoreListing.Item) -> Void
+    let seeAll: (StoreSection) -> Void
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.callout.weight(isSelected ? .semibold : .regular))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(isSelected ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.1)))
-                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                if let featured = StoreListing.featured(store.catalogs, installed: store.installed) {
+                    StoreHero(item: featured, store: store) { open(featured) }
+                }
+                let recent = StoreListing.recent(store.catalogs)
+                if !recent.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        StoreSectionHeader(title: "New and Updated")
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(recent) { item in
+                                    StoreShelfCard(item: item) { open(item) }
+                                }
+                            }
+                        }
+                    }
+                }
+                ForEach(StoreListing.categories(store.catalogs), id: \.self) { name in
+                    let items = StoreListing.items(store.catalogs, category: name, installed: store.installed)
+                    VStack(alignment: .leading, spacing: 4) {
+                        StoreSectionHeader(title: name, action: items.count > 6 ? { seeAll(.category(name)) } : nil)
+                        StoreRowGrid(items: Array(items.prefix(6)), store: store, open: open)
+                    }
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 1000)
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .navigationTitle("Discover")
     }
 }
+
+/// A heading over a shelf or list, with an optional See All.
+struct StoreSectionHeader: View {
+    let title: String
+    var action: (() -> Void)?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.title3.weight(.bold))
+            Spacer()
+            if let action {
+                Button("See All", action: action).buttonStyle(.link)
+            }
+        }
+    }
+}
+
+/// The featured plugin, large, on its own colour.
+struct StoreHero: View {
+    let item: StoreListing.Item
+    let store: StoreModel
+    let open: () -> Void
+
+    private var entry: PluginIndex.Entry { item.entry }
+    private var color: Color { StorePluginIcon.color(entry.accent) }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 24) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(["Featured", entry.category].compactMap { $0 }.joined(separator: " · ").uppercased())
+                    .font(.caption.weight(.bold))
+                    .tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.8))
+                HStack(spacing: 12) {
+                    StorePluginIcon(entry: entry, size: 48)
+                        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+                    Text(entry.name).font(.largeTitle.weight(.bold)).foregroundStyle(.white)
+                }
+                if let summary = entry.summary {
+                    Text(summary)
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 10) {
+                    StoreGetButton(item: item, store: store, onColor: true)
+                    Button("Learn More", action: open)
+                        .buttonStyle(.plain)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.top, 6)
+            }
+            .frame(maxWidth: 380, alignment: .leading)
+            Spacer(minLength: 0)
+            StoreThumbnail(entry: entry, catalog: item.catalog, height: 200, plain: true)
+                .frame(maxWidth: 340)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: .black.opacity(0.3), radius: 16, y: 8)
+                .onTapGesture(perform: open)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity, minHeight: 250)
+        .background {
+            ZStack {
+                LinearGradient(colors: [color, color.mix(with: .black, by: 0.55)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                RadialGradient(colors: [.white.opacity(0.22), .clear], center: .topLeading, startRadius: 0, endRadius: 420)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .contain)
+    }
+}
+
+// MARK: - Lists
+
+/// A page of plugins: a title, then rows in two columns.
+struct StoreListPage: View {
+    let title: String
+    let items: [StoreListing.Item]
+    let store: StoreModel
+    let empty: String
+    let open: (StoreListing.Item) -> Void
+
+    var body: some View {
+        Group {
+            if items.isEmpty {
+                ContentUnavailableView(empty, systemImage: title == "Updates" ? "checkmark.circle" : "puzzlepiece.extension")
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(title).font(.largeTitle.weight(.bold))
+                        StoreRowGrid(items: items, store: store, open: open)
+                    }
+                    .padding(24)
+                    .frame(maxWidth: 1000)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .navigationTitle(title)
+    }
+}
+
+struct StoreRowGrid: View {
+    let items: [StoreListing.Item]
+    let store: StoreModel
+    let open: (StoreListing.Item) -> Void
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 28, alignment: .top)], alignment: .leading, spacing: 0) {
+            ForEach(items) { item in
+                StoreRow(item: item, store: store) { open(item) }
+            }
+        }
+    }
+}
+
+/// One plugin in a list: icon, name and summary open its page; one button
+/// does the obvious thing; the rest is in the right-click menu.
+struct StoreRow: View {
+    let item: StoreListing.Item
+    let store: StoreModel
+    let open: () -> Void
+    @State private var confirmingUninstall = false
+
+    private var entry: PluginIndex.Entry { item.entry }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 12) {
+                Button(action: open) {
+                    HStack(spacing: 12) {
+                        StorePluginIcon(entry: entry, size: 48)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.name).font(.headline).lineLimit(1)
+                            Text(subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                        Spacer(minLength: 8)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Show \(entry.name)'s page")
+                StoreGetButton(item: item, store: store)
+            }
+            .padding(.vertical, 12)
+        }
+        .contextMenu {
+            StoreItemMenu(item: item, store: store, open: open) { confirmingUninstall = true }
+        }
+        .modifier(UninstallDialog(isPresented: $confirmingUninstall, name: entry.name, canTurnOff: store.isOn(entry) == true) { deleteData in
+            Task { await store.uninstall(entry, deleteData: deleteData) }
+        } turnOff: {
+            store.setOn(entry, false)
+        })
+    }
+
+    private var subtitle: String {
+        if case .update = store.state(of: entry), let first = item.catalog.site?.about(entry.id)?.notes(for: entry.version)?.first {
+            return "New in \(entry.version): " + first
+        }
+        return entry.summary ?? entry.category ?? ""
+    }
+}
+
+/// Get, Update or Open, as a capsule; a spinner while it installs.
+struct StoreGetButton: View {
+    let item: StoreListing.Item
+    let store: StoreModel
+    /// Drawn on the hero's colour rather than the window background.
+    var onColor = false
+
+    private var entry: PluginIndex.Entry { item.entry }
+
+    var body: some View {
+        Group {
+            if store.installing.contains(entry.id) {
+                ProgressView().controlSize(.small).frame(width: 72)
+            } else {
+                switch store.state(of: entry) {
+                case .available:
+                    capsule("Get", prominent: true) { Task { await store.install(item) } }
+                        .help("Install \(entry.name) \(entry.version)")
+                case .update(let from):
+                    capsule("Update", prominent: true) { Task { await store.install(item) } }
+                        .help("Update from \(from) to \(entry.version)")
+                case .installed:
+                    capsule("Open", prominent: false) { store.open(entry) }
+                        .help(store.isOn(entry) == false ? "\(entry.name) is turned off: opens its Settings page" : "Open \(entry.name)")
+                case .needsStackbar(let version):
+                    Text("Needs Stackbar \(version)").font(.caption).foregroundStyle(onColor ? .white.opacity(0.8) : .secondary)
+                }
+            }
+        }
+        .animation(.snappy, value: store.installing.contains(entry.id))
+    }
+
+    @ViewBuilder private func capsule(_ title: String, prominent: Bool, action: @escaping () -> Void) -> some View {
+        let label = Text(title).font(.callout.weight(.bold)).frame(minWidth: 52)
+        if onColor {
+            Button(action: action) { label.foregroundStyle(.black.opacity(0.85)) }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .tint(.white)
+        } else if prominent {
+            Button(action: action) { label }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+        } else {
+            Button(action: action) { label }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+        }
+    }
+}
+
+/// The items of a plugin's "…" and right-click menus.
+struct StoreItemMenu: View {
+    let item: StoreListing.Item
+    let store: StoreModel
+    var open: (() -> Void)?
+    let uninstall: () -> Void
+
+    private var entry: PluginIndex.Entry { item.entry }
+
+    private var isInstalled: Bool {
+        switch store.state(of: entry) {
+        case .installed, .update: return true
+        case .available, .needsStackbar: return false
+        }
+    }
+
+    var body: some View {
+        if let open { Button("Show Page", action: open) }
+        if let isOn = store.isOn(entry) {
+            Button(isOn ? "Turn Off" : "Turn On") { store.setOn(entry, !isOn) }
+        }
+        if isInstalled {
+            Button("Uninstall…", role: .destructive, action: uninstall)
+        }
+        Divider()
+        if let page = item.catalog.webPage(for: entry) {
+            Button("Copy Link") { Platform.copy(page.absoluteString) }
+            Button("Open Web Page") { NSWorkspace.shared.open(page) }
+        }
+        if let homepage = entry.homepage, let url = URL(string: homepage) {
+            Button(item.catalog.source.isOfficial ? "View Source" : "Open Homepage") { NSWorkspace.shared.open(url) }
+        }
+    }
+}
+
+// MARK: - Pictures and cards
 
 /// The picture a card shows: this version's most telling render from the
 /// store's site.json, then the index's screenshot, then the plugin's icon.
@@ -336,6 +538,8 @@ struct StoreThumbnail: View {
     let entry: PluginIndex.Entry
     let catalog: PluginStore.Catalog
     var height: CGFloat = 150
+    /// No tinted backdrop: the hero draws its own.
+    var plain = false
     @Environment(\.colorScheme) private var colorScheme
 
     private var url: URL? {
@@ -345,10 +549,12 @@ struct StoreThumbnail: View {
 
     var body: some View {
         ZStack {
-            Rectangle().fill(StorePluginIcon.color(entry.accent).opacity(0.1))
+            if !plain {
+                Rectangle().fill(StorePluginIcon.color(entry.accent).opacity(0.12))
+            }
             if let url {
                 AsyncImage(url: url) { image in
-                    image.resizable().scaledToFit().padding(8)
+                    image.resizable().scaledToFill()
                 } placeholder: {
                     StorePluginIcon(entry: entry, size: 44)
                 }
@@ -362,90 +568,78 @@ struct StoreThumbnail: View {
     }
 }
 
-/// One plugin in the grid.
-struct StoreCard: View {
-    let item: StoreListing.Item
-    let state: StoreAvailability
-    /// Whether the installed plugin is on; nil when it isn't loaded.
-    let isOn: Bool?
-    let install: () -> Void
-    let uninstall: (_ deleteData: Bool) -> Void
-    let setOn: (Bool) -> Void
-    /// Opens the plugin's page.
-    let open: () -> Void
-
-    private var entry: PluginIndex.Entry { item.entry }
-    private var notes: [String]? { item.catalog.site?.about(entry.id)?.notes(for: entry.version) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: open) {
-                VStack(alignment: .leading, spacing: 8) {
-                    StoreThumbnail(entry: entry, catalog: item.catalog)
-                    HStack(spacing: 8) {
-                        StorePluginIcon(entry: entry, size: 28)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(entry.name).font(.headline).lineLimit(1)
-                            Text([entry.version, entry.category].compactMap { $0 }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    if let summary = entry.summary {
-                        Text(summary).font(.callout).lineLimit(2, reservesSpace: true).multilineTextAlignment(.leading)
-                            .padding(.horizontal, 12)
-                    }
-                    if case .update = state, let first = notes?.first {
-                        Text("New: " + first).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                            .padding(.horizontal, 12)
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Show \(entry.name)'s page")
-            Spacer(minLength: 8)
-            HStack(alignment: .bottom) {
-                Text(item.catalog.source.isOfficial ? "by \(entry.publisher)" : "from \(item.catalog.index.name)")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                Spacer()
-                StoreActions(entry: entry, state: state, isOn: isOn, notes: notes, install: install, uninstall: uninstall, setOn: setOn)
-                    .controlSize(.small)
-            }
-            .padding([.horizontal, .bottom], 12)
-        }
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.secondary.opacity(0.2)))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-/// A plugin on the "New and updated" shelf.
+/// A plugin on the "New and Updated" shelf.
 struct StoreShelfCard: View {
     let item: StoreListing.Item
     let open: () -> Void
 
     var body: some View {
         Button(action: open) {
-            VStack(alignment: .leading, spacing: 6) {
-                StoreThumbnail(entry: item.entry, catalog: item.catalog, height: 96)
-                HStack(spacing: 6) {
-                    StorePluginIcon(entry: item.entry, size: 18)
-                    Text(item.entry.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+            VStack(alignment: .leading, spacing: 8) {
+                StoreThumbnail(entry: item.entry, catalog: item.catalog, height: 130)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+                HStack(spacing: 8) {
+                    StorePluginIcon(entry: item.entry, size: 28)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(item.entry.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text(item.entry.updated.map { "\(item.entry.version) · \($0)" } ?? item.entry.version)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                .padding(.horizontal, 8)
-                Text(item.entry.updated.map { "\(item.entry.version) · \($0)" } ?? item.entry.version)
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding([.horizontal, .bottom], 8)
             }
-            .frame(width: 200)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.secondary.opacity(0.2)))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .frame(width: 230)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("Show \(item.entry.name)'s page")
+    }
+}
+
+/// The result of an install, update or uninstall, briefly, at the bottom.
+struct StoreToastView: View {
+    let toast: StoreToast
+    let store: StoreModel
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let entry = toast.entry {
+                StorePluginIcon(entry: entry, size: 24)
+            } else {
+                Image(systemName: toast.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(toast.isError ? .orange : .green)
+            }
+            Group {
+                if let entry = toast.entry {
+                    Text("\(Text(entry.name).fontWeight(.semibold)) \(toast.text)")
+                } else {
+                    Text(toast.text)
+                }
+            }
+            .lineLimit(2)
+            .textSelection(.enabled)
+            if let entry = toast.entry, !toast.isError, store.state(of: entry) == .installed {
+                Button("Open") { store.open(entry) }.buttonStyle(.link)
+            }
+            Button {
+                store.toast = nil
+            } label: {
+                Image(systemName: "xmark").font(.caption.weight(.bold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Dismiss")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: 520)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1)))
+        .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+        .task(id: toast.id) {
+            try? await Task.sleep(for: .seconds(toast.isError ? 8 : 4))
+            if store.toast?.id == toast.id { store.toast = nil }
+        }
     }
 }
 #endif

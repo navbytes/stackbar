@@ -61,4 +61,16 @@ final class SettingsPresentationTests: XCTestCase {
         XCTAssertEqual(secrets.map(\.secret), ["GITHUB_TOKEN", "JIRA_TOKEN"])
         XCTAssertEqual(secrets[0].plugins, ["GitHub", "PR Cockpit"])
     }
+
+    func testIndexSummariesMapBackToTheirKind() {
+        let samples: [Capability] = [
+            .network(hosts: ["api.github.com"]), .files(paths: ["~/Notes"]), .run(commands: ["docker"]), .secret(name: "T"),
+            .oauth(OAuthProvider(name: "github", authorizeURL: "https://github.com/login/oauth/authorize", tokenURL: "https://github.com/login/oauth/access_token", clientID: "x")),
+            .clipboard, .power, .calendar, .context, .openURLs(schemes: ["https"]), .storage(megabytes: 50), .userServer(secret: "LiteLLM"), .windows,
+        ]
+        for capability in samples {
+            XCTAssertEqual(SettingsPresentation.Access(summary: capability.summary(resolver: resolver)), SettingsPresentation.Access(capability), capability.summary)
+        }
+        XCTAssertNil(SettingsPresentation.Access(summary: "Something new"))
+    }
 }

@@ -4,82 +4,106 @@ import SwiftUI
 import StackbarHostCore
 import StackbarProtocol
 
-/// A plugin's page in Settings → Store: what the website's plugin page shows,
-/// natively. The renders and README come from the store's `site.json`; a
-/// store without one still gets the header, permissions and details.
+/// A plugin's page in the Store, pushed like an App Store page: what the
+/// website's plugin page shows, natively. The renders and README come from
+/// the store's `site.json`; a store without one still gets the header, the
+/// info strip, privacy and details.
 struct StorePluginPage: View {
-    let entry: PluginIndex.Entry
-    let catalog: PluginStore.Catalog
-    let state: StoreAvailability
-    let isOn: Bool?
-    let install: () -> Void
-    let uninstall: (_ deleteData: Bool) -> Void
-    let setOn: (Bool) -> Void
-    let close: () -> Void
+    let item: StoreListing.Item
+    let store: StoreModel
+    @State private var confirmingUninstall = false
     @Environment(\.colorScheme) private var colorScheme
 
+    private var entry: PluginIndex.Entry { item.entry }
+    private var catalog: PluginStore.Catalog { item.catalog }
     private var about: StoreSite.About? { catalog.site?.about(entry.id) }
-    /// README facts the page shows elsewhere (Needs under permissions,
-    /// Surfaces and Requires under details), as the website does.
+    /// README facts the page shows elsewhere (Needs under privacy, Surfaces
+    /// and Requires in the strip), as the website does.
     private static let shownElsewhere: Set<String> = ["Needs", "Surfaces", "Requires"]
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    header
-                    whatsNew
-                    gallery
-                    if let about, !about.paragraphs.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(Array(about.paragraphs.enumerated()), id: \.offset) { _, paragraph in
-                                Text(Self.markdown(paragraph)).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                    permissions
-                    features
-                    details
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                header
+                infoStrip
+                gallery
+                notesAndAbout
+                privacy
+                features
+                details
             }
-            Divider()
-            footer.padding(12)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 24)
+            .frame(maxWidth: 960, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .frame(minWidth: 600, idealWidth: 640, minHeight: 520, idealHeight: 620)
+        .navigationTitle(entry.name)
+        .toolbar {
+            ToolbarItem {
+                Menu {
+                    StoreItemMenu(item: item, store: store, open: nil, uninstall: { confirmingUninstall = true })
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                }
+                .help("Turn off, uninstall, share")
+            }
+        }
+        .modifier(UninstallDialog(isPresented: $confirmingUninstall, name: entry.name, canTurnOff: store.isOn(entry) == true) { deleteData in
+            Task { await store.uninstall(entry, deleteData: deleteData) }
+        } turnOff: {
+            store.setOn(entry, false)
+        })
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            StorePluginIcon(entry: entry, size: 64)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.name).font(.title.weight(.semibold))
-                if let summary = entry.summary { Text(summary).font(.title3).foregroundStyle(.secondary) }
-                Text(["by \(entry.publisher)", entry.version, entry.category].compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary)
+        HStack(alignment: .center, spacing: 20) {
+            StorePluginIcon(entry: entry, size: 104)
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(entry.name).font(.largeTitle.weight(.bold))
+                if let summary = entry.summary {
+                    Text(summary).font(.title3).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 12) {
+                    StoreGetButton(item: item, store: store)
+                    if store.isOn(entry) == false { StatusTag(text: "Turned off") }
+                    Text(catalog.source.publicKey != nil ? "Signed by \(entry.publisher)" : "From \(catalog.index.name)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
             }
-            Spacer()
-            StoreActions(entry: entry, state: state, isOn: isOn, notes: about?.notes(for: entry.version), install: install, uninstall: uninstall, setOn: setOn)
         }
     }
 
-    /// The README's notes for this version. An update shows them first, so
-    /// the user sees what they're getting before choosing Update.
-    @ViewBuilder private var whatsNew: some View {
-        if let notes = about?.notes(for: entry.version) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("What's new in \(entry.version)").font(.headline)
-                ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("•").foregroundStyle(.secondary)
-                        Text(Self.markdown(note)).fixedSize(horizontal: false, vertical: true)
+    /// The facts people check before installing, in one row.
+    private var infoStrip: some View {
+        let kinds = entry.capabilities.compactMap(SettingsPresentation.Access.init(summary:))
+        let surfaces = (entry.surfaces ?? []).filter { $0 != "settings" }
+        let cells: [(String, String, String)] = [
+            ("Version", entry.version, entry.updated ?? " "),
+            ("Category", entry.category ?? "Other", " "),
+            ("Asks For", entry.capabilities.isEmpty ? "Nothing" : "\(entry.capabilities.count)",
+             entry.capabilities.isEmpty ? "Fully sandboxed" : ListFormatter.localizedString(byJoining: Array(Set(kinds.map(\.title))).sorted())),
+            ("Shows In", surfaces.isEmpty ? "—" : "\(surfaces.count)", surfaces.map { Self.surfaceNames[$0] ?? $0 }.joined(separator: ", ")),
+            ("Requires", entry.minimumStackbar.map { "\($0)+" } ?? "Any", "Stackbar"),
+        ]
+        return VStack(spacing: 0) {
+            Divider()
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
+                    if index > 0 { Divider().frame(height: 46) }
+                    VStack(spacing: 3) {
+                        Text(cell.0.uppercased()).font(.caption2.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
+                        Text(cell.1).font(.title3.weight(.bold)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(cell.2).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 6)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(StorePluginIcon.color(entry.accent).opacity(0.1)))
+            .padding(.vertical, 10)
+            Divider()
         }
     }
 
@@ -87,55 +111,107 @@ struct StorePluginPage: View {
         let renders = catalog.site?.renders(entry.id, version: entry.version) ?? []
         if !renders.isEmpty {
             ScrollView(.horizontal, showsIndicators: true) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(renders, id: \.surface) { item in
-                        if let path = item.render.path(dark: colorScheme == .dark), let url = URL(string: path, relativeTo: catalog.source.url) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(renders, id: \.surface) { render in
+                        if let path = render.render.path(dark: colorScheme == .dark), let url = URL(string: path, relativeTo: catalog.source.url) {
                             VStack(alignment: .leading, spacing: 6) {
                                 AsyncImage(url: url.absoluteURL) { image in
                                     image.resizable().scaledToFit()
                                 } placeholder: {
-                                    RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.1)).frame(width: 220)
+                                    RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.1)).frame(width: 260)
                                 }
-                                .frame(maxHeight: 260)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.secondary.opacity(0.2)))
-                                Text(Self.surfaceNames[item.surface] ?? item.surface).font(.caption).foregroundStyle(.secondary)
+                                .frame(maxHeight: 340)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
+                                Text(Self.surfaceNames[render.surface] ?? render.surface).font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
                 }
-                .padding(.bottom, 8)
+                .padding(.bottom, 10)
             }
         }
     }
 
-    private var permissions: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("What it asks for").font(.headline)
-            if entry.capabilities.isEmpty {
-                Label("Nothing. No network, files or secrets.", systemImage: "checkmark.shield")
-            } else {
-                ForEach(entry.capabilities, id: \.self) { Label($0, systemImage: "lock") }
-                if let needs = about?.facts.first(where: { $0.label == "Needs" })?.text {
-                    Text(Self.markdown(needs)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    /// What's new beside the description, the way the App Store pairs them.
+    @ViewBuilder private var notesAndAbout: some View {
+        let notes = about?.notes(for: entry.version)
+        let paragraphs = about?.paragraphs ?? []
+        if notes != nil || !paragraphs.isEmpty {
+            HStack(alignment: .top, spacing: 32) {
+                if let notes {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("What's New").font(.title3.weight(.bold))
+                            Spacer()
+                            Text(["Version \(entry.version)", entry.updated].compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text("•").foregroundStyle(.secondary)
+                                Text(Self.markdown(note)).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if !paragraphs.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("About").font(.title3.weight(.bold))
+                        ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, paragraph in
+                            Text(Self.markdown(paragraph)).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            Text("Stackbar asks before the plugin can use any of it.").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// What the plugin may use, as cards, like the App Store's privacy labels.
+    private var privacy: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Privacy").font(.title3.weight(.bold))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
+                if entry.capabilities.isEmpty {
+                    privacyCard(symbol: "checkmark.shield.fill", color: .green, title: "Asks for nothing", text: "No network, files, commands, secrets or clipboard.")
+                }
+                ForEach(entry.capabilities, id: \.self) { capability in
+                    let access = SettingsPresentation.Access(summary: capability)
+                    privacyCard(symbol: access?.symbol ?? "lock.fill", color: access?.color ?? .gray, title: access?.title ?? "Access", text: capability)
+                }
+                privacyCard(symbol: "lock.shield.fill", color: .blue, title: "Sandboxed", text: "Stackbar asks before the plugin can use any of this, and blocks everything else.")
+            }
+            if let needs = about?.facts.first(where: { $0.label == "Needs" })?.text {
+                Text(Self.markdown(needs)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func privacyCard(symbol: String, color: Color, title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SettingsIconTile(symbol: symbol, color: color, size: 26)
+            Text(title).font(.headline)
+            Text(text).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.08)))
+        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
     }
 
     @ViewBuilder private var features: some View {
         let facts = (about?.facts ?? []).filter { !Self.shownElsewhere.contains($0.label) }
         if !facts.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("What it does").font(.headline)
-                ForEach(facts, id: \.label) { fact in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(fact.label).font(.subheadline.weight(.semibold))
-                        Text(Self.markdown(fact.text)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("What It Does").font(.title3.weight(.bold))
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 24, alignment: .top)], alignment: .leading, spacing: 14) {
+                    ForEach(facts, id: \.label) { fact in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(fact.label).font(.subheadline.weight(.semibold))
+                            Text(Self.markdown(fact.text)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
             }
@@ -144,39 +220,35 @@ struct StorePluginPage: View {
 
     private var details: some View {
         let rows: [(String, String)] = [
+            ("Publisher", entry.publisher + (catalog.source.publicKey != nil ? " (signed)" : "")),
+            ("Store", catalog.index.name),
             ("Version", entry.version),
             ("Updated", entry.updated ?? "—"),
             ("Category", entry.category ?? "Other"),
             ("Shows in", (entry.surfaces ?? []).filter { $0 != "settings" }.map { Self.surfaceNames[$0] ?? $0 }.joined(separator: ", ")),
             ("Requires", "Stackbar \(entry.minimumStackbar ?? "any version")" + (entry.minimumStackbar == nil ? "" : " or later")),
-            ("Publisher", entry.publisher + (catalog.source.publicKey != nil ? " (signed)" : "")),
+            ("Id", entry.id),
         ]
-        return Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-            ForEach(rows.filter { !$0.1.isEmpty }, id: \.0) { row in
-                GridRow {
-                    Text(row.0).foregroundStyle(.secondary)
-                    Text(row.1).textSelection(.enabled)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Information").font(.title3.weight(.bold))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 24, alignment: .top)], alignment: .leading, spacing: 12) {
+                ForEach(rows.filter { !$0.1.isEmpty }, id: \.0) { row in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.0).font(.caption).foregroundStyle(.secondary)
+                        Text(row.1).font(.callout).textSelection(.enabled)
+                    }
                 }
             }
-        }
-        .font(.callout)
-    }
-
-    private var footer: some View {
-        HStack {
-            if let page = catalog.webPage(for: entry) {
-                Link("Open Web Page", destination: page)
-                Button("Copy Link") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(page.absoluteString, forType: .string)
+            HStack(spacing: 16) {
+                if let page = catalog.webPage(for: entry) {
+                    Link("Web Page", destination: page)
                 }
-                .help("Copies \(page.absoluteString)")
+                if let homepage = entry.homepage, let url = URL(string: homepage) {
+                    Link(catalog.source.isOfficial ? "Source Code" : "Homepage", destination: url)
+                }
             }
-            if let homepage = entry.homepage, let url = URL(string: homepage) {
-                Link(catalog.source.isOfficial ? "View Source" : "Homepage", destination: url)
-            }
-            Spacer()
-            Button("Done", action: close).keyboardShortcut(.defaultAction)
+            .font(.callout)
+            .padding(.top, 4)
         }
     }
 
@@ -207,64 +279,4 @@ struct StorePluginIcon: View {
     }
 }
 
-/// Install, Update, Turn On/Off and Uninstall for one store entry, shared by
-/// the list row and the plugin page.
-struct StoreActions: View {
-    let entry: PluginIndex.Entry
-    let state: StoreAvailability
-    let isOn: Bool?
-    /// This version's release notes, shown on the Update button.
-    var notes: [String]?
-    let install: () -> Void
-    let uninstall: (_ deleteData: Bool) -> Void
-    let setOn: (Bool) -> Void
-    @State private var confirmingUninstall = false
-
-    var body: some View {
-        Group {
-            switch state {
-            case .available: Button("Install", action: install)
-            case .installed:
-                VStack(alignment: .trailing) {
-                    if isOn == false { OffBadge() }
-                    HStack {
-                        onOffButton
-                        Button("Uninstall…", role: .destructive) { confirmingUninstall = true }
-                    }
-                }
-            case .update(let from):
-                VStack(alignment: .trailing) {
-                    if isOn == false { OffBadge() }
-                    Button("Update to \(entry.version)", action: install)
-                        .help(updateHelp(from: from))
-                    HStack {
-                        onOffButton.buttonStyle(.link)
-                        Button("Uninstall…", role: .destructive) { confirmingUninstall = true }.buttonStyle(.link)
-                    }
-                }
-            case .needsStackbar(let version): Text("Needs Stackbar \(version)").font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .modifier(UninstallDialog(isPresented: $confirmingUninstall, name: entry.name, canTurnOff: isOn == true, uninstall: uninstall) {
-            setOn(false)
-        })
-    }
-
-    private func updateHelp(from installed: String) -> String {
-        var lines = ["Installed: \(installed)"]
-        if let notes {
-            lines.append("")
-            lines.append("What's new:")
-            lines.append(contentsOf: notes.map { "• " + $0 })
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    @ViewBuilder private var onOffButton: some View {
-        if let isOn {
-            Button(isOn ? "Turn Off" : "Turn On") { setOn(!isOn) }
-                .help(isOn ? "Stops it and takes it out of the menu bar, the palette and widgets. Its settings and data stay." : "Runs it again")
-        }
-    }
-}
 #endif
