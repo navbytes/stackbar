@@ -89,4 +89,9 @@ final class StdioTransport: Sendable {
         guard let data = try? LineCodec.encode(manifest) else { return }
         FileHandle.standardOutput.write(data)
     }
+
+    static func printPreviews(_ previews: [PreviewSpec]) {
+        guard let data = try? LineCodec.encode(previews) else { return }
+        FileHandle.standardOutput.write(data)
+    }
 }

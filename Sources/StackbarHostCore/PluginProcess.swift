@@ -113,7 +113,28 @@ public final class PluginProcess: @unchecked Sendable {
 
     /// Runs `executable --manifest` and decodes what it prints.
     public static func readManifest(executable: URL, timeout: Double = 15) throws -> Manifest {
-        let child = try ChildProcess(executable: executable.path, arguments: ["--manifest"], discardStderr: true)
+        let data = try printed(by: executable, flag: "--manifest", timeout: timeout)
+        do {
+            return try LineCodec.decode(Manifest.self, from: data)
+        } catch {
+            throw ManifestError.unreadable(executable.path, String(decoding: data.prefix(500), as: UTF8.self))
+        }
+    }
+
+    /// Runs `executable --previews` and decodes what it prints. A plugin
+    /// built before previews existed prints nothing, which is no previews.
+    public static func readPreviews(executable: URL, timeout: Double = 15) throws -> [PreviewSpec] {
+        let data = try printed(by: executable, flag: "--previews", timeout: timeout)
+        if data.allSatisfy({ $0 == 0x0A || $0 == 0x20 }) { return [] }
+        do {
+            return try LineCodec.decode([PreviewSpec].self, from: data)
+        } catch {
+            throw ManifestError.unreadable(executable.path, String(decoding: data.prefix(500), as: UTF8.self))
+        }
+    }
+
+    private static func printed(by executable: URL, flag: String, timeout: Double) throws -> Data {
+        let child = try ChildProcess(executable: executable.path, arguments: [flag], discardStderr: true)
         try? child.stdin.close()
         let collected = Collected()
         let reader = Thread {
@@ -124,12 +145,7 @@ public final class PluginProcess: @unchecked Sendable {
             child.signalGroup(SIGKILL)
             throw ManifestError.timedOut(executable.path)
         }
-        let data = collected.wait(timeout: 2)
-        do {
-            return try LineCodec.decode(Manifest.self, from: data)
-        } catch {
-            throw ManifestError.unreadable(executable.path, String(decoding: data.prefix(500), as: UTF8.self))
-        }
+        return collected.wait(timeout: 2)
     }
 
     private final class Collected: @unchecked Sendable {
@@ -148,7 +164,7 @@ public final class PluginProcess: @unchecked Sendable {
 
         public var description: String {
             switch self {
-            case .timedOut(let path): return "\(path) did not print its manifest in time"
+            case .timedOut(let path): return "\(path) did not answer in time"
             case .unreadable(let path, let output): return "\(path) printed no valid manifest: \(output)"
             }
         }

@@ -1,3 +1,5 @@
+import Foundation
+
 /// A Stackbar plugin: a class whose properties are its state and whose view
 /// properties describe what each surface shows.
 ///
@@ -47,6 +49,9 @@ public protocol StackbarPlugin: AnyObject {
     /// Another plugin published to a topic this plugin's manifest listens to
     /// with `.topic(name:)`. The plugin re-renders afterwards.
     func receive(topic: String, payload: String, from sender: String) async throws
+    /// Scenes with sample data for screenshots (see `Preview`). The store
+    /// and the website show these instead of the first-run screen.
+    static var previews: [Preview<Self>] { get }
 }
 
 extension StackbarPlugin {
@@ -60,17 +65,25 @@ extension StackbarPlugin {
     public var tools: [AgentTool] { [] }
     public var commands: [Command] { [] }
     public func receive(topic: String, payload: String, from sender: String) async throws {}
+    public static var previews: [Preview<Self>] { [] }
 
     /// The entry point `@main` uses. `--manifest` prints the manifest as JSON
-    /// and exits; anything else starts the protocol loop on stdin/stdout.
+    /// and `--previews` the previews' names and titles, and both exit;
+    /// anything else starts the protocol loop on stdin/stdout, as the
+    /// preview named by `STACKBAR_PREVIEW` when that is set.
     public static func main() async {
         if CommandLine.arguments.contains("--manifest") {
             StdioTransport.printManifest(manifest)
             return
         }
+        if CommandLine.arguments.contains("--previews") {
+            StdioTransport.printPreviews(previewSpecs)
+            return
+        }
         let transport = StdioTransport()
         HostClient.shared.configure(send: transport.send)
-        let runtime = PluginRuntime(plugin: Self(), send: transport.send)
+        let preview = ProcessInfo.processInfo.environment[stackbarPreviewEnvironmentKey].flatMap { $0.isEmpty ? nil : $0 }
+        let runtime = PluginRuntime(plugin: Self(), preview: preview, send: transport.send)
         for await message in transport.incoming() {
             if await !runtime.handle(message) { break }
         }

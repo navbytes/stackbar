@@ -16,12 +16,14 @@ usage:
                                     --json prints {manifest, problems, publishingProblems}
   stackbarctl render <plugin.swift | helper> [--surface menuBar|panel|window|widget]
                   [--event <action-id>[=value]]... [--tool name[:json]] [--copy <text>]...
-                  [--json] [--png <dir> [--dark]] [--verbose]
+                  [--json] [--png <dir> [--dark]] [--verbose] [--preview <name>]
                   [--command <id> [--query <text>] [--arg name=value]...]
                   --command opens a view command; --event then presses things inside it
+                  --preview shows one of the plugin's previews (sample data, no refreshes)
                   --copy pretends you copied text in another app (clipboard plugins);
                   the clipboard, battery, calendar, windows and apps are simulated (STACKBAR_CALENDAR=<events.json>, STACKBAR_WINDOWS=<snapshot.json>, STACKBAR_APPS=<apps.json>)
   stackbarctl commands <plugin.swift | helper>        lists the plugin's commands
+  stackbarctl previews <plugin.swift | helper> [--json]  lists the plugin's previews
   stackbarctl run <plugin.swift | helper> <command> [--arg name=value]...
                                     runs a command and prints its result
                   render and run take --selected-text <text> and --frontmost-app <bundle id>
@@ -146,6 +148,26 @@ func value(after flag: String, in options: [String], at index: inout Int) -> Str
     return options[index]
 }
 
+/// Puts the plugin's next launch in preview mode. The plugin inherits
+/// stackbarctl's environment, so setting it here reaches the helper.
+func usePreview(_ name: String, of path: String) {
+    let known = previews(of: path)
+    guard known.contains(where: { $0.name == name }) else {
+        fail(known.isEmpty
+            ? "\(path) has no previews; add `static let previews` (see stackbarctl docs)"
+            : "\(path) has no preview named \(name); it has \(known.map(\.name).joined(separator: ", "))")
+    }
+    setenv(stackbarPreviewEnvironmentKey, name, 1)
+}
+
+func previews(of path: String) -> [PreviewSpec] {
+    do {
+        return try PluginProcess.readPreviews(executable: helper(for: path))
+    } catch {
+        fail("\(error)")
+    }
+}
+
 func render(_ path: String, options: [String]) async {
     var surfaces: [Surface] = [.menuBar, .panel]
     var steps: [(kind: String, name: String, value: String?)] = []
@@ -178,6 +200,7 @@ func render(_ path: String, options: [String]) async {
         case "--dark": dark = true
         case "--verbose": verbose = true
         case "--command": command = value(after: "--command", in: options, at: &index)
+        case "--preview": usePreview(value(after: "--preview", in: options, at: &index), of: path)
         case "--query": query = value(after: "--query", in: options, at: &index)
         case "--selected-text", "--frontmost-app":
             simulateContext(options[index], value(after: options[index], in: options, at: &index))
@@ -484,6 +507,16 @@ case "manifest":
         }
     } catch {
         fail("\(error)")
+    }
+case "previews":
+    guard let path = rest.first else { fail(usage) }
+    let list = previews(of: path)
+    if rest.contains("--json") {
+        print(String(decoding: (try? LineCodec.encode(list)) ?? Data("[]".utf8), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
+    } else if list.isEmpty {
+        print("no previews")
+    } else {
+        for preview in list { print("\(preview.name)\t\(preview.title)") }
     }
 case "commands", "run":
     guard let path = rest.first else { fail(usage) }
