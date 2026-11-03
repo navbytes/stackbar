@@ -33,17 +33,37 @@ public struct StoreSite: Codable, Equatable, Sendable {
         }
     }
 
+    /// A README's `## What's new in <version>` section.
+    public struct Change: Codable, Equatable, Sendable {
+        public var version: String
+        public var notes: [String]
+
+        public init(version: String, notes: [String]) {
+            self.version = version
+            self.notes = notes
+        }
+    }
+
     public struct About: Codable, Equatable, Sendable {
         /// The version the README was published with.
         public var version: String?
         /// Markdown; see `paragraphs`.
         public var description: String
         public var facts: [Fact]
+        /// Release notes, newest first. Absent before READMEs carried them.
+        public var changes: [Change]?
 
-        public init(version: String? = nil, description: String, facts: [Fact] = []) {
+        public init(version: String? = nil, description: String, facts: [Fact] = [], changes: [Change]? = nil) {
             self.version = version
             self.description = description
             self.facts = facts
+            self.changes = changes
+        }
+
+        /// The notes for `version`, or nil when the README has none for it.
+        public func notes(for version: String) -> [String]? {
+            guard let notes = changes?.first(where: { $0.version == version })?.notes, !notes.isEmpty else { return nil }
+            return notes
         }
 
         /// The description's paragraphs with the README's hard line breaks

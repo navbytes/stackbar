@@ -10,7 +10,7 @@ import StackbarProtocol
 struct StorePluginPage: View {
     let entry: PluginIndex.Entry
     let catalog: PluginStore.Catalog
-    let state: StoreRow.Availability
+    let state: StoreAvailability
     let isOn: Bool?
     let install: () -> Void
     let uninstall: (_ deleteData: Bool) -> Void
@@ -28,6 +28,7 @@ struct StorePluginPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header
+                    whatsNew
                     gallery
                     if let about, !about.paragraphs.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -59,7 +60,26 @@ struct StorePluginPage: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            StoreActions(entry: entry, state: state, isOn: isOn, install: install, uninstall: uninstall, setOn: setOn)
+            StoreActions(entry: entry, state: state, isOn: isOn, notes: about?.notes(for: entry.version), install: install, uninstall: uninstall, setOn: setOn)
+        }
+    }
+
+    /// The README's notes for this version. An update shows them first, so
+    /// the user sees what they're getting before choosing Update.
+    @ViewBuilder private var whatsNew: some View {
+        if let notes = about?.notes(for: entry.version) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("What's new in \(entry.version)").font(.headline)
+                ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("•").foregroundStyle(.secondary)
+                        Text(Self.markdown(note)).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(StorePluginIcon.color(entry.accent).opacity(0.1)))
         }
     }
 
@@ -209,8 +229,10 @@ struct StorePluginIcon: View {
 /// the list row and the plugin page.
 struct StoreActions: View {
     let entry: PluginIndex.Entry
-    let state: StoreRow.Availability
+    let state: StoreAvailability
     let isOn: Bool?
+    /// This version's release notes, shown on the Update button.
+    var notes: [String]?
     let install: () -> Void
     let uninstall: (_ deleteData: Bool) -> Void
     let setOn: (Bool) -> Void
@@ -231,7 +253,8 @@ struct StoreActions: View {
             case .update(let from):
                 VStack(alignment: .trailing) {
                     if isOn == false { OffBadge() }
-                    Button("Update", action: install).help("Installed: \(from)")
+                    Button("Update to \(entry.version)", action: install)
+                        .help(updateHelp(from: from))
                     HStack {
                         onOffButton.buttonStyle(.link)
                         Button("Uninstall…", role: .destructive) { confirmingUninstall = true }.buttonStyle(.link)
@@ -243,6 +266,16 @@ struct StoreActions: View {
         .modifier(UninstallDialog(isPresented: $confirmingUninstall, name: entry.name, canTurnOff: isOn == true, uninstall: uninstall) {
             setOn(false)
         })
+    }
+
+    private func updateHelp(from installed: String) -> String {
+        var lines = ["Installed: \(installed)"]
+        if let notes {
+            lines.append("")
+            lines.append("What's new:")
+            lines.append(contentsOf: notes.map { "• " + $0 })
+        }
+        return lines.joined(separator: "\n")
     }
 
     @ViewBuilder private var onOffButton: some View {
