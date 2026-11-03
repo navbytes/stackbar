@@ -387,9 +387,10 @@ static let previews: [Preview<Clipboard>] = [
 ]
 ```
 
-The closure runs on a fresh plugin after its stored values load; the plugin
-then never refreshes (triggers only re-render), so set every property the
-scene shows. Events still run, so `--event` can press things in a scene.
+The closure runs on a fresh plugin whose `@Stored` values start at their
+defaults and are never saved, so a scene can't show or overwrite real data.
+The plugin then never refreshes (triggers only re-render), so set every
+property the scene shows. Events still run, so `--event` can press things in a scene.
 Name the first one `hero`: the site's header uses it. Names are lowercase
 with dashes; titles are short captions. Use made-up but believable data, never
 real people's names or emails. Previews never run in the app.

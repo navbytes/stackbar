@@ -65,3 +65,24 @@ final class PreviewTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class Remembering: StackbarPlugin {
+    static let manifest = Manifest(id: "test.remembering", name: "Remembering", surfaces: [.menuBar])
+    static let previews: [Preview<Remembering>] = [Preview("hero", "Seven") { $0.saved = 7 }]
+    @Stored("saved") var saved = 0
+    var menuBar: ViewContent { Text("\(saved)") }
+}
+
+extension PreviewTests {
+    func testAPreviewIgnoresAndNeverWritesRealStoredValues() async {
+        let outbox = Outbox()
+        let runtime = PluginRuntime(plugin: Remembering(), preview: "hero", send: outbox.send)
+        await runtime.handle(.hello(protocolVersion: 1, surfaces: [.menuBar], storage: ["saved": "99", "other": "1"]))
+        XCTAssertEqual(Stackbar.storage.keys, ["saved"], "the real snapshot is not loaded")
+        XCTAssertEqual(Stackbar.storage.value("saved", as: Int.self), 7)
+        XCTAssertFalse(outbox.take().contains { if case .request = $0 { return true } else { return false } }, "nothing is saved to the host")
+        Stackbar.storage.isScratch = false
+        Stackbar.storage.load([:])
+    }
+}

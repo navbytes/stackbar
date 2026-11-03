@@ -16,8 +16,10 @@ import Foundation
 /// ]
 /// ```
 ///
-/// A preview runs on a fresh plugin after its stored values load, and the
-/// plugin then never refreshes: triggers re-render what the preview set up,
+/// A preview runs on a fresh plugin with no stored values (`@Stored`
+/// properties start at their defaults, and what the scene sets is never
+/// saved, so it can't show or overwrite real data), and the plugin then
+/// never refreshes: triggers re-render what the preview set up,
 /// so a scene doesn't turn back into "Connect Jira" when the launch trigger
 /// can't reach Jira. Events still work, so `--event` can press things inside
 /// a scene. Previews never run in the app.

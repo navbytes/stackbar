@@ -9,6 +9,9 @@ import Foundation
 @MainActor
 public final class PluginStorage {
     private var values: [String: String] = [:]
+    /// In a preview, values start empty and writes stay here, so a scene
+    /// neither shows nor overwrites what the plugin saved for real.
+    var isScratch = false
 
     init() {}
 
@@ -32,12 +35,12 @@ public final class PluginStorage {
         let json = String(decoding: data, as: UTF8.self)
         guard values[key] != json else { return }
         values[key] = json
-        HostClient.shared.fire(.storageSet(key: key, value: json))
+        if !isScratch { HostClient.shared.fire(.storageSet(key: key, value: json)) }
     }
 
     public func remove(_ key: String) {
         guard values.removeValue(forKey: key) != nil else { return }
-        HostClient.shared.fire(.storageSet(key: key, value: nil))
+        if !isScratch { HostClient.shared.fire(.storageSet(key: key, value: nil)) }
     }
 
     public var keys: [String] { values.keys.sorted() }

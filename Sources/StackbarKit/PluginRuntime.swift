@@ -43,7 +43,8 @@ public final class PluginRuntime {
     public func handle(_ message: HostMessage) async -> Bool {
         switch message {
         case .hello(_, let offered, let storage):
-            Stackbar.storage.load(storage)
+            Stackbar.storage.isScratch = preview != nil
+            Stackbar.storage.load(preview == nil ? storage : [:])
             let declared = type(of: plugin).manifest.surfaces
             surfaces = declared.filter(offered.contains)
             send(.ready(protocolVersion: StackbarProtocolVersion.current))
