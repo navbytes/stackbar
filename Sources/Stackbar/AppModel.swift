@@ -12,9 +12,8 @@ final class AppModel {
     private(set) var controllers: [PluginController] = []
     private(set) var palette = PaletteIndex()
     private(set) var agentGatewayError: String?
-    /// Which Settings tab is showing, and which plugin's page.
+    /// Which Settings page is showing: an app section or a plugin's page.
     var settingsTab = SettingsTab.general
-    var settingsPlugin: PluginController.ID?
     /// The command Settings → Commands shows.
     var settingsCommand: CommandKey?
     /// The plugin a `stackbar://store/<id>` link asked Settings → Store to show.
