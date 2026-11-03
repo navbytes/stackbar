@@ -32,11 +32,14 @@ public struct Preview<Plugin: StackbarPlugin> {
     public var name: String
     /// A short caption, like "Search everything you copied".
     public var title: String
+    /// The surface the scene is about: the store and the site show this one.
+    public var surface: Surface
     public var setUp: @MainActor (Plugin) async throws -> Void
 
-    public init(_ name: String, _ title: String, setUp: @escaping @MainActor (Plugin) async throws -> Void) {
+    public init(_ name: String, _ title: String, surface: Surface = .panel, setUp: @escaping @MainActor (Plugin) async throws -> Void) {
         self.name = name
         self.title = title
+        self.surface = surface
         self.setUp = setUp
     }
 }
@@ -57,7 +60,7 @@ public enum PreviewError: Error, CustomStringConvertible {
 extension StackbarPlugin {
     /// The previews' names and titles, in order.
     public static var previewSpecs: [PreviewSpec] {
-        previews.map { PreviewSpec(name: $0.name, title: $0.title) }
+        previews.map { PreviewSpec(name: $0.name, title: $0.title, surface: $0.surface) }
     }
 
     /// Sets this plugin up as the named preview.

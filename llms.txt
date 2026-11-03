@@ -380,12 +380,17 @@ static let previews: [Preview<Clipboard>] = [
     Preview("hero", "Everything you copied") { plugin in
         plugin.items = Clipboard.samples
     },
-    Preview("search", "Search everything you copied") { plugin in
+    Preview("pinned", "Pin what you paste every day") { plugin in
+        plugin.items = Clipboard.samples.map { $0.pinned(true) }
+    },
+    Preview("insights", "What you copy, and from where", surface: .window) { plugin in
         plugin.items = Clipboard.samples
-        plugin.query = "invoice"
     },
 ]
 ```
+
+A scene is about the panel unless `surface:` says otherwise; the store shows
+that surface.
 
 The closure runs on a fresh plugin whose `@Stored` values start at their
 defaults and are never saved, so a scene can't show or overwrite real data.

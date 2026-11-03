@@ -3,10 +3,13 @@
 public struct PreviewSpec: Codable, Equatable, Sendable {
     public var name: String
     public var title: String
+    /// The surface the scene is about (the panel unless it says otherwise).
+    public var surface: Surface
 
-    public init(name: String, title: String) {
+    public init(name: String, title: String, surface: Surface = .panel) {
         self.name = name
         self.title = title
+        self.surface = surface
     }
 }
 

@@ -516,7 +516,7 @@ case "previews":
     } else if list.isEmpty {
         print("no previews")
     } else {
-        for preview in list { print("\(preview.name)\t\(preview.title)") }
+        for preview in list { print("\(preview.name)\t\(preview.surface.rawValue)\t\(preview.title)") }
     }
 case "commands", "run":
     guard let path = rest.first else { fail(usage) }

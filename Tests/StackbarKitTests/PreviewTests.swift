@@ -6,7 +6,7 @@ final class Previewed: StackbarPlugin {
     static let manifest = Manifest(id: "test.previewed", name: "Previewed", surfaces: [.menuBar], triggers: [.launch])
     static let previews: [Preview<Previewed>] = [
         Preview("hero", "Three things") { $0.items = ["a", "b", "c"] },
-        Preview("broken", "Fails") { _ in throw Boom() },
+        Preview("broken", "Fails", surface: .window) { _ in throw Boom() },
     ]
 
     var items: [String] = []
@@ -23,7 +23,7 @@ final class Previewed: StackbarPlugin {
 @MainActor
 final class PreviewTests: XCTestCase {
     func testSpecsListNamesAndTitlesInOrder() {
-        XCTAssertEqual(Previewed.previewSpecs, [PreviewSpec(name: "hero", title: "Three things"), PreviewSpec(name: "broken", title: "Fails")])
+        XCTAssertEqual(Previewed.previewSpecs, [PreviewSpec(name: "hero", title: "Three things"), PreviewSpec(name: "broken", title: "Fails", surface: .window)])
         XCTAssertEqual(Counter.previewSpecs, [], "a plugin without previews has none")
     }
 
