@@ -65,4 +65,10 @@ final class StoreListingTests: XCTestCase {
         XCTAssertEqual(StoreListing.featured([official], installed: everything, running: "1.0.0")?.entry.name, "beta")
         XCTAssertNil(StoreListing.featured([], running: "1.0.0"))
     }
+
+    func testCategoriesHaveTheirOwnLook() {
+        XCTAssertEqual(StoreListing.look(ofCategory: "Developer").accent, .indigo)
+        XCTAssertEqual(StoreListing.look(ofCategory: nil).symbol, "puzzlepiece.extension.fill")
+        XCTAssertNotEqual(StoreListing.look(ofCategory: "System").accent, StoreListing.look(ofCategory: "Monitoring").accent)
+    }
 }
