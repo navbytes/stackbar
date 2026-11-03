@@ -278,6 +278,26 @@ final class PluginController: Identifiable {
         }
     }
 
+    /// Whether a value is saved for `secret`. The Keychain is the only store
+    /// the app reads (environment variables are for the CLI), so this is what
+    /// plugins get.
+    func hasSecret(_ secret: String) -> Bool {
+        guard let model else { return false }
+        return ((try? model.services.secrets.secret(secret)) ?? nil)?.isEmpty == false
+    }
+
+    /// Forgets a saved secret. Secrets are shared by name, so every plugin that
+    /// declares it loses it; the next time one asks, its panel prompts again.
+    func clearSecret(_ secret: String) {
+        guard let model else { return }
+        do {
+            try model.services.secrets.setSecret(nil, for: secret)
+            refresh()
+        } catch {
+            problem = "could not clear \(secret): \(error)"
+        }
+    }
+
     func networkReport() -> [String] {
         guard let manifest, let model else { return [] }
         return model.services.audit.report(for: manifest).lines

@@ -177,7 +177,7 @@ stackbarctl render MyPlugin.swift --surface panel --event button/Lap
 stackbarctl soak MyPlugin.swift --minutes 60 --press # fails if memory grows
 stackbarctl doctor                                   # toolchain, StackbarKit and data directories
 stackbarctl logs -n 200                              # the host log
-stackbarctl secret set GITHUB_TOKEN <value>
+stackbarctl secret set GITHUB_TOKEN <value>          # or Settings → the plugin → Secrets
 stackbarctl manifest MyPlugin.swift --json          # the declared manifest and its problems, for scripts
 stackbarctl sign MyPlugin.swift --publisher me       # a .stackbarplugin bundle (macOS)
 stackbarctl install https://example.com/index.json   # or a bundle path

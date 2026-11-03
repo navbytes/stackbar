@@ -202,6 +202,21 @@ struct PluginDetail: View {
                     Button("Allow") { controller.approve() }
                 }
             }
+            if let names = controller.manifest?.secretNames, !names.isEmpty {
+                Section {
+                    ForEach(names, id: \.self) { name in
+                        SecretRow(controller: controller, name: name, sharedWith: model.controllers
+                            .filter { $0 !== controller && $0.manifest?.secretNames.contains(name) == true }
+                            .map(\.name))
+                    }
+                } header: {
+                    Text("Secrets")
+                } footer: {
+                    Text("Kept in your Keychain. Secrets are shared by name, so changing or clearing one does it for every plugin that uses it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("Network") {
                 ForEach(controller.networkReport(), id: \.self) { Text($0).font(.caption) }
             }
@@ -249,6 +264,68 @@ struct PluginDetail: View {
         let how = run.timedOut ? "timed out" : (run.cancelled ? "stopped" : "exit \(run.status)")
         let bytes = ByteCountFormatter.string(fromByteCount: Int64(run.stdoutBytes + run.stderrBytes), countStyle: .file)
         return [run.at.formatted(date: .omitted, time: .shortened) + " " + run.path, how, String(format: "%.1fs", run.duration), bytes].joined(separator: " · ")
+    }
+}
+
+/// One declared secret on a plugin's page: whether it is saved, and Change
+/// or Clear. The value itself is never shown.
+struct SecretRow: View {
+    let controller: PluginController
+    let name: String
+    let sharedWith: [String]
+
+    @State private var isSaved = false
+    @State private var editing = false
+    @State private var value = ""
+    @State private var confirmingClear = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name).font(.body.monospaced())
+                    Text(isSaved ? "Saved" : "Not set").font(.caption).foregroundStyle(isSaved ? Color.secondary : Color.orange)
+                    if !sharedWith.isEmpty {
+                        Text("Also used by " + ListFormatter.localizedString(byJoining: sharedWith)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if !editing {
+                    Button(isSaved ? "Change…" : "Set…") { editing = true }
+                    if isSaved {
+                        Button("Clear…", role: .destructive) { confirmingClear = true }
+                    }
+                }
+            }
+            if editing {
+                HStack {
+                    SecureField(isSaved ? "New value" : "Value", text: $value)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(save)
+                    Button("Cancel") { value = ""; editing = false }
+                    Button("Save", action: save).keyboardShortcut(.defaultAction).disabled(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .onAppear { isSaved = controller.hasSecret(name) }
+        .confirmationDialog("Clear \(name)?", isPresented: $confirmingClear) {
+            Button("Clear", role: .destructive) {
+                controller.clearSecret(name)
+                isSaved = controller.hasSecret(name)
+            }
+        } message: {
+            Text(sharedWith.isEmpty
+                ? "\(controller.name) will ask for it again the next time it needs it."
+                : "\(controller.name) and the other plugins that use it will ask for it again the next time they need it.")
+        }
+    }
+
+    private func save() {
+        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        controller.saveSecret(name, value: value)
+        value = ""
+        editing = false
+        isSaved = controller.hasSecret(name)
     }
 }
 

@@ -291,7 +291,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | Call | Needs |
 | --- | --- |
 | `try await Stackbar.getJSON(url, as: T.self, headers:, auth:)`, `Stackbar.postJSON(url, body: encodable, as: T.self, auth:)` (POST unless `method:`), `Stackbar.get(url, auth:)`, `Stackbar.http(HTTPRequest, auth:)` | `.network("host")`, `*.example.com` for subdomains |
-| `try await Stackbar.secret("NAME")` returns `String?` (nil: the user hasn't entered it; Stackbar asks them) | `.secret(name: "NAME")`; names are letters, digits, `_`, `-`, `.` |
+| `try await Stackbar.secret("NAME")` returns `String?` (nil: the user hasn't entered it; Stackbar asks them. They change or clear it on the plugin's Settings page) | `.secret(name: "NAME")`; names are letters, digits, `_`, `-`, `.` |
 | A server the user picks (a self-hosted proxy, GitHub Enterprise): read its URL with `Stackbar.secret("NAME")`, then `Stackbar.getJSON` to it | `.userServer(secret: "NAME")`: the plugin may reach that URL's host only (minimumStackbar 0.11.0) |
 | `try await Stackbar.oauthToken("github")` | `.oauth(OAuthProvider(name:, authorizeURL:, tokenURL:, clientID:, scopes:))` |
 | `Stackbar.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
