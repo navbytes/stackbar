@@ -42,10 +42,11 @@ final class PaletteSession {
 
     let model: AppModel
     var query = "" {
-        didSet { if query != oldValue { selection = 0 } }
+        didSet { if query != oldValue { selection.reset() } }
     }
-    /// The selected root entry, or the selected row of a list view.
-    var selection = 0
+    /// The selected root entry, or the selected row of a list view, by id:
+    /// it stays on its line while the list reorders under it.
+    private(set) var selection = ListSelection()
     private(set) var stack: [Stage] = []
     /// The argument fields' values while a run command waits for them.
     var argumentValues: [String: String] = [:]
@@ -79,7 +80,8 @@ final class PaletteSession {
         }
         stack = []
         query = ""
-        selection = 0
+        selection.reset()
+        cache = nil
         argumentValues = [:]
         showingActions = false
         problem = nil
@@ -95,7 +97,7 @@ final class PaletteSession {
         }
         guard let last = stack.popLast() else { return false }
         if case .view(let view) = last { view.close() }
-        selection = 0
+        selection.reset()
         problem = nil
         argumentValues = [:]
         return true
@@ -107,13 +109,32 @@ final class PaletteSession {
 
     // MARK: - The root
 
+    /// The root's search, kept until the query or the index changes: the
+    /// view, the footer, ⌘K and every arrow press ask for it.
+    @ObservationIgnored private var cache: (query: String, revision: Int, results: [PaletteIndex.Entry])?
+
     var results: [PaletteIndex.Entry] {
-        var found = model.palette.search(query, limit: 30, usage: model.commands.usage)
-        if let match = model.palette.aliasMatch(query) {
+        let palette = model.palette
+        if let cache, cache.query == query, cache.revision == palette.revision { return cache.results }
+        var found = palette.search(query, limit: 30, usage: model.commands.usage)
+        if let match = palette.aliasMatch(query) {
             found.removeAll { $0.id == match.entry.id }
             found.insert(match.entry, at: 0)
         }
+        cache = (query, palette.revision, found)
         return found
+    }
+
+    /// The root entry Return runs: the one the arrows chose, or the first.
+    var selectedEntry: PaletteIndex.Entry? {
+        let results = results
+        return selection.index(in: results.map(\.id), query: query).map { results[$0] }
+    }
+
+    /// The row of a list view Return acts on, by the same rule.
+    func selectedRow(of view: CommandViewModel) -> RowNode? {
+        let rows = rows(of: view)
+        return selection.index(in: rows.map(\.key), query: view.query).map { rows[$0] }
     }
 
     func activate(_ entry: PaletteIndex.Entry) {
@@ -183,7 +204,7 @@ final class PaletteSession {
                 case .success(let view):
                     view.onFinished = { [weak self] in self?.finish() }
                     stack.append(.view(view))
-                    selection = 0
+                    selection.reset()
                 case .failure(let outcome):
                     problem = outcome.message
                 }
@@ -246,9 +267,7 @@ final class PaletteSession {
     var actions: [Action] {
         switch top {
         case .none:
-            let results = results
-            guard results.indices.contains(selection) else { return [] }
-            let entry = results[selection]
+            guard let entry = selectedEntry else { return [] }
             var actions = [Action(title: entry.commandKey == nil ? "Run" : "Open") { [weak self] in self?.activate(entry) }]
             if let key = entry.commandKey, let command = model.commands.registry.entry(key) {
                 if command.spec.exposure == .everywhere {
@@ -274,9 +293,8 @@ final class PaletteSession {
         case .arguments:
             return [Action(title: "Run") { [weak self] in self?.submitArguments() }]
         case .view(let view):
-            let rows = rows(of: view)
-            guard rows.indices.contains(selection) else { return [] }
-            return rows[selection].actions.map { ref in
+            guard let row = selectedRow(of: view) else { return [] }
+            return row.actions.map { ref in
                 Action(title: ref.title, shortcut: ref.shortcut, role: ref.role) { [weak self] in self?.perform(ref, in: view) }
             }
         }
@@ -293,9 +311,8 @@ final class PaletteSession {
     var primaryTitle: String? {
         switch top {
         case .none:
-            let results = results
-            guard results.indices.contains(selection) else { return nil }
-            switch results[selection].kind {
+            guard let entry = selectedEntry else { return nil }
+            switch entry.kind {
             case .command(let spec): return spec.kind == .view || !spec.arguments.isEmpty ? "Open" : "Run"
             case .navigate, .showPanel: return "Open"
             case .action, .open: return "Run"
@@ -303,8 +320,7 @@ final class PaletteSession {
         case .arguments:
             return "Run"
         case .view(let view):
-            let rows = rows(of: view)
-            return rows.indices.contains(selection) ? rows[selection].actions.first?.title : nil
+            return selectedRow(of: view)?.actions.first?.title
         }
     }
 
@@ -316,13 +332,11 @@ final class PaletteSession {
         }
         switch top {
         case .none:
-            let results = results
-            if results.indices.contains(selection) { activate(results[selection]) }
+            if let entry = selectedEntry { activate(entry) }
         case .arguments:
             submitArguments()
         case .view(let view):
-            let rows = rows(of: view)
-            if rows.indices.contains(selection), let primary = rows[selection].actions.first { perform(primary, in: view) }
+            if let primary = selectedRow(of: view)?.actions.first { perform(primary, in: view) }
         }
     }
 
@@ -331,14 +345,11 @@ final class PaletteSession {
             actionSelection = min(max(actionSelection + delta, 0), max(actions.count - 1, 0))
             return
         }
-        let count: Int
         switch top {
-        case .none: count = results.count
-        case .arguments: count = 0
-        case .view(let view): count = rows(of: view).count
+        case .none: selection.move(delta, in: results.map(\.id), query: query)
+        case .arguments: break
+        case .view(let view): selection.move(delta, in: rows(of: view).map(\.key), query: view.query)
         }
-        guard count > 0 else { return }
-        selection = min(max(selection + delta, 0), count - 1)
     }
 
     func toggleActions() {
@@ -350,8 +361,7 @@ final class PaletteSession {
     /// A row action's own shortcut on the selected row of a list view.
     func shortcut(matching matches: (String) -> Bool) -> Bool {
         guard case .view(let view) = top else { return false }
-        let rows = rows(of: view)
-        guard rows.indices.contains(selection), let action = rows[selection].actions.first(where: { $0.shortcut.map(matches) ?? false }) else { return false }
+        guard let action = selectedRow(of: view)?.actions.first(where: { $0.shortcut.map(matches) ?? false }) else { return false }
         perform(action, in: view)
         return true
     }

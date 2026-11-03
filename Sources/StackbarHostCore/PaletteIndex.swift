@@ -53,25 +53,39 @@ public struct PaletteIndex: Sendable {
     public private(set) var commands: [Entry] = []
     /// "Open <Plugin>" for plugins without a menu-bar item.
     public private(set) var panels: [Entry] = []
+    /// Goes up each time the entries change, so a search can be kept until
+    /// then.
+    public private(set) var revision = 0
 
     public init() {}
 
-    /// Replaces one plugin's entries with those found in its panel tree.
-    public mutating func update(pluginID: String, pluginName: String, panel: ViewNode?) {
+    /// Replaces one plugin's entries with those found in its panel tree,
+    /// where its old ones were, so a plugin that re-renders doesn't move its
+    /// entries behind everyone else's. False when nothing changed: a panel
+    /// that re-renders the same affordances (a clock ticking) leaves the
+    /// index, and an open palette, alone.
+    @discardableResult
+    public mutating func update(pluginID: String, pluginName: String, panel: ViewNode?) -> Bool {
+        let found = panel.map { Self.entries(in: $0, pluginID: pluginID, pluginName: pluginName) } ?? []
+        let start = entries.firstIndex { $0.pluginID == pluginID }
+        guard entries.filter({ $0.pluginID == pluginID }) != found else { return false }
         entries.removeAll { $0.pluginID == pluginID }
-        guard let panel else { return }
-        entries += Self.entries(in: panel, pluginID: pluginID, pluginName: pluginName)
+        entries.insert(contentsOf: found, at: start ?? entries.endIndex)
+        revision += 1
+        return true
     }
 
     public mutating func remove(pluginID: String) {
         entries.removeAll { $0.pluginID == pluginID }
         commands.removeAll { $0.pluginID == pluginID }
         panels.removeAll { $0.pluginID == pluginID }
+        revision += 1
     }
 
     /// The plugins whose panel opens from the palette, not the menu bar.
     public mutating func setHeadlessPanels(_ plugins: [(pluginID: String, name: String)]) {
         panels = plugins.map { Entry(pluginID: $0.pluginID, pluginName: $0.name, title: "Open \($0.name)", symbol: "macwindow", kind: .showPanel) }
+        revision += 1
     }
 
     /// Replaces the command entries with the registry's enabled commands.
@@ -84,10 +98,16 @@ public struct PaletteIndex: Sendable {
             entry.alias = preference.alias
             return entry
         }
+        revision += 1
     }
 
-    /// Commands first, then panels to open, then panel entries.
-    public var all: [Entry] { commands + panels + entries }
+    /// Commands first, then panels to open, then panel entries. Each id once:
+    /// a list keyed by id (the palette's) can't draw or select a duplicate,
+    /// and two links to one URL are one thing to do.
+    public var all: [Entry] {
+        var seen = Set<String>()
+        return (commands + panels + entries).filter { seen.insert($0.id).inserted }
+    }
 
     /// Entries matching `query`, best first: an exact alias, then the fuzzy
     /// match plus a bonus for what was used often and lately. An empty query
