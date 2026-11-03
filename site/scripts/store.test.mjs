@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { verifyIndex, parseReadme, readmeURL, slugOf, fetchStore, galleryOf } from './store.mjs';
+import { verifyIndex, parseReadme, readmeURL, slugOf, fetchStore, galleryOf, listed } from './store.mjs';
 import { readStore } from './kit.mjs';
 
 // A copy of the published index, signed by the navbytes key.
@@ -26,6 +26,15 @@ test('slugs and README URLs come from the manifest', () => {
   assert.equal(readmeURL('https://example.com'), null);
 });
 
+test('the site lists each plugin once, newest first, and none that are withdrawn', () => {
+  const entry = (id, version) => ({ id, version });
+  const listing = listed({
+    plugins: [entry('a', '1.2.0'), entry('a', '1.10.0'), entry('a', '1.9.0'), entry('gone', '1.0.0'), entry('b', '2.0.0'), entry('b', '2.1.0')],
+    revoked: [{ id: 'gone', reason: 'Merged into a' }, { id: 'b', versions: ['2.1.0'], reason: 'Broken' }],
+  });
+  assert.deepEqual(listing, [entry('a', '1.10.0'), entry('b', '2.0.0')]);
+});
+
 test('a README splits into its description and facts', () => {
   const { description, facts } = parseReadme('# Pomodoro\n\nA focus timer.\n\n- **Needs:** nothing.\n- **In the panel:** the tag chip\n  cycles tags.\n');
   assert.equal(description, 'A focus timer.');
@@ -45,7 +54,7 @@ test('fetchStore resolves URLs, reads READMEs and refuses a forged index', async
   };
   const warnings = [];
   const store = await fetchStore({ indexURL: 'https://navbytes.github.io/stackbar-plugins/index.json', publicKey, fetch: fake, log: (m) => warnings.push(m) });
-  assert.equal(store.plugins.length, index.plugins.length);
+  assert.equal(store.plugins.length, new Set(index.plugins.map((p) => p.id)).size);
   const first = store.plugins[0];
   assert.match(first.bundle, /^https:\/\/navbytes\.github\.io\/stackbar-plugins\/.+\.stackbarplugin$/);
   assert.equal(first.readme.description, 'Long text.');
