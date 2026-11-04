@@ -16,9 +16,9 @@ final class SystemItems {
     private var scanning = false
     private var icons: [String: NSImage] = [:]
 
-    static let appPluginID = "system.apps"
-    static let settingsPluginID = "system.settings"
-    private static let settingsApp = "/System/Applications/System Settings.app"
+    nonisolated static let appPluginID = "system.apps"
+    nonisolated static let settingsPluginID = "system.settings"
+    nonisolated private static let settingsApp = "/System/Applications/System Settings.app"
 
     /// Rescans when the last scan is older than five minutes.
     func refresh(then changed: @escaping @MainActor @Sendable () -> Void) {
