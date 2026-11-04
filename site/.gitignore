@@ -4,3 +4,4 @@ dist/
 src/generated/
 public/icon.svg
 public/install.sh
+public/llms.txt

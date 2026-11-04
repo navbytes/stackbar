@@ -11,6 +11,7 @@ import Screenshot from '../../components/Screenshot.astro';
 import ThemedShot from '../../components/ThemedShot.astro';
 import { byName, categorySlug, heroShot, hueOf, surfaceNames } from '../../lib/plugins';
 import { href, store, version as stackbarVersion } from '../../lib/site';
+import { breadcrumbs, faq, pluginApp } from '../../lib/seo';
 
 export async function getStaticPaths() {
   const plugins = await getCollection('plugins');
@@ -48,6 +49,13 @@ const inline = (text: string) => text
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 const hasHero = !!heroShot(plugin, 'dark');
 const surfaces = plugin.surfaces.filter((s) => s !== 'settings');
+// Link previews and search: the light hero render, which reads on any background.
+const shareImage = heroShot(plugin, 'light') ?? plugin.screenshot;
+const jsonLd: object[] = [
+  pluginApp(Astro.site, plugin, shareImage),
+  breadcrumbs(Astro.site, [['Stackbar', '/'], ['Plugins', '/plugins/'], [plugin.category, `/plugins/category/${categorySlug(plugin.category)}/`], [plugin.name, `/plugins/${plugin.slug}/`]]),
+  ...(plugin.readme.faq.length > 0 ? [faq(plugin.readme.faq)] : []),
+];
 const installCommand = `stackbarctl install --index ${store.indexURL} ${plugin.id}`;
 // Opens this plugin's page in Stackbar → Settings → Store (Stackbar 0.15.0);
 // the script below falls back to the install steps when nothing opens it.
@@ -61,7 +69,7 @@ const details: [string, string][] = [
   ['Publisher', plugin.publisher],
 ];
 ---
-<Base title={plugin.name} description={`${plugin.name} for Stackbar: ${plugin.summary}`} hue={hue} image={plugin.screenshot}>
+<Base title={`${plugin.name} for the Mac menu bar`} description={`${plugin.name}, a free ${plugin.category.toLowerCase()} plugin for Stackbar on macOS. ${plugin.summary}`} hue={hue} image={shareImage} imageAlt={`${plugin.name} in Stackbar`} jsonLd={jsonLd}>
   <section class="hero stage" style={`--h: var(--kit-${hue}-dark); --h-deep: var(--kit-${hue}-light)`}>
     <div class="glow" aria-hidden="true"></div>
     <div class="wrap hero-grid">

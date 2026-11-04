@@ -8,9 +8,11 @@ import HeroRotator from '../components/HeroRotator.astro';
 import PluginCard from '../components/PluginCard.astro';
 import { href, repo, version } from '../lib/site';
 import { hueOf, byName } from '../lib/plugins';
+import { organization, stackbarApp, website } from '../lib/seo';
 // The example the repository builds and tests, shown as it is.
 import clock from '../../../Examples/ClockPlugin/Clock.swift?raw';
 
+const description = 'Live apps for your Mac menu bar, written by you or your AI in one Swift file. Menu bar, panels, widgets, a command palette and MCP tools. Free and open source.';
 const plugins = (await getCollection('plugins')).sort(byName);
 // The hero's menu bar: six plugins that show the range, in the order they
 // take turns. One not published (or without a render) is left out.
@@ -35,7 +37,7 @@ const safety = [
   { glyph: 'bolt', title: 'Pulled if bad', text: 'A withdrawn version is removed from every Mac that installed it, automatically.' },
 ];
 ---
-<Base title="Stackbar" description="Stackbar is a native macOS menu-bar host for live apps you or your AI write in one Swift file. Menu bar, panels, widgets, a command palette and MCP tools. Free and open source.">
+<Base title="Stackbar" description={description} jsonLd={[organization(Astro.site), website(Astro.site), stackbarApp(Astro.site, description)]}>
   <section class="hero stage">
     <div class="glow" aria-hidden="true"></div>
     <div class="wrap hero-grid">
