@@ -41,6 +41,11 @@ public struct PluginBuilder: Sendable {
     public var keepTargets = 64
     /// How long one build may take.
     public var timeout: Double = 600
+    /// Whether a prebuilt helper may stand in for a build. Off when building
+    /// helpers to publish, which must come from the source.
+    public var usesPrebuilt = true
+    /// Whether this machine can compile; nil asks `hasToolchain`. Tests set it.
+    public var toolchain: Bool?
 
     private static let lock = NSLock()
 
@@ -52,11 +57,32 @@ public struct PluginBuilder: Sendable {
 
     var workspace: URL { cacheRoot.appendingPathComponent("workspace", isDirectory: true) }
 
+    /// Where downloaded prebuilt helpers go (`PrebuiltHelpers`).
+    public var downloadedHelpers: URL { cacheRoot.appendingPathComponent("Prebuilt", isDirectory: true) }
+
+    /// Where prebuilt helpers are looked for: the ones built with the app,
+    /// then the downloaded ones.
+    public var prebuiltDirectories: [URL] {
+        [stackbarPackage.appendingPathComponent("Prebuilt", isDirectory: true), downloadedHelpers]
+    }
+
+    /// The digest of the StackbarKit plugins build against here; prebuilt
+    /// helpers are matched to it.
+    public var stackbarKit: String { Self.frameworkDigest(stackbarPackage) }
+
+    /// Whether this Mac has a prebuilt helper for exactly this source, or
+    /// (with `compatible`) one for this host's protocol.
+    public func hasPrebuilt(sourceDigest: String, compatible: Bool) -> Bool {
+        if PrebuiltHelpers.find(PrebuiltHelpers.exactName(sourceDigest: sourceDigest, stackbarKit: stackbarKit), in: prebuiltDirectories) != nil { return true }
+        return compatible && PrebuiltHelpers.find(PrebuiltHelpers.compatibleName(sourceDigest: sourceDigest, protocolVersion: StackbarProtocolVersion.current), in: prebuiltDirectories) != nil
+    }
+
     public func build(source: URL) throws -> Output {
         let code = try Data(contentsOf: source)
         // The key covers StackbarKit too: after an update of Stackbar, a plugin
         // built against the old StackbarKit must be rebuilt, not reused.
-        let key = Self.cacheKey(code + Data("\(configuration)|\(stackbarPackage.path)|\(Self.frameworkDigest(stackbarPackage))|\(Self.layoutVersion)".utf8))
+        let kit = Self.frameworkDigest(stackbarPackage)
+        let key = Self.cacheKey(code + Data("\(configuration)|\(stackbarPackage.path)|\(kit)|\(Self.layoutVersion)".utf8))
         let target = Self.targetName(source.deletingPathExtension().lastPathComponent, key: key)
         let binary = workspace.appendingPathComponent(".build/\(configuration)/\(target)")
         let sourcesDir = workspace.appendingPathComponent("Sources/\(target)", isDirectory: true)
@@ -64,6 +90,23 @@ public struct PluginBuilder: Sendable {
         if FileManager.default.isExecutableFile(atPath: binary.path) {
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: sourcesDir.path)
             return Output(binary: binary, cached: true)
+        }
+
+        // A helper the store or the app built from exactly this source and
+        // StackbarKit: the same program, without a slow first build.
+        let sourceDigest = SHA256.hex(code)
+        if usesPrebuilt, let prebuilt = PrebuiltHelpers.find(PrebuiltHelpers.exactName(sourceDigest: sourceDigest, stackbarKit: kit), in: prebuiltDirectories) {
+            return Output(binary: prebuilt, cached: true)
+        }
+        // No compiler: never run the swift shim, which on a Mac without the
+        // Command Line Tools pops up the system's install dialog. A helper
+        // built for another StackbarKit that speaks this host's protocol is
+        // the next best thing.
+        guard toolchain ?? Self.hasToolchain else {
+            if usesPrebuilt, let compatible = PrebuiltHelpers.find(PrebuiltHelpers.compatibleName(sourceDigest: sourceDigest, protocolVersion: StackbarProtocolVersion.current), in: prebuiltDirectories) {
+                return Output(binary: compatible, cached: true)
+            }
+            throw Failure(diagnostics: [], log: Self.noToolchainMessage)
         }
 
         Self.lock.lock()
@@ -209,8 +252,29 @@ public struct PluginBuilder: Sendable {
         return ["swift"]
     }
 
+    /// Whether this machine can build plugins. On macOS, `STACKBAR_SWIFT` or
+    /// an active developer directory (Xcode or the Command Line Tools), asked
+    /// of `xcode-select`, which unlike the swift shim never shows a dialog.
+    public static var hasToolchain: Bool {
+        if let custom = ProcessInfo.processInfo.environment["STACKBAR_SWIFT"], !custom.isEmpty { return true }
+        #if os(macOS)
+        guard let (status, output) = try? run(["/usr/bin/xcode-select", "-p"], timeout: 10), status == 0 else { return false }
+        let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !path.isEmpty && FileManager.default.fileExists(atPath: path)
+        #else
+        return true
+        #endif
+    }
+
+    static let noToolchainMessage = "Stackbar can't build this plugin: this Mac has no Swift, and there is no prebuilt copy of this source. Plugins from the store come prebuilt; to build your own or a changed one, install the Command Line Tools with: xcode-select --install"
+
     /// Whether a Swift toolchain is installed, in words when it isn't.
     public static func toolchainProblem() -> String? {
+        #if os(macOS)
+        guard hasToolchain else {
+            return "not installed. Store plugins run prebuilt; to write your own, install Xcode or the Command Line Tools with: xcode-select --install"
+        }
+        #endif
         guard let (status, output) = try? run(swift + ["--version"], timeout: 30), status == 0 else {
             #if os(macOS)
             return "Stackbar builds plugins with Swift. Install Xcode, or the Command Line Tools with: xcode-select --install"

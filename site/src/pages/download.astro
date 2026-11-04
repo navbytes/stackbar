@@ -43,7 +43,7 @@ const installers = [
               </div>
             ))}
           </div>
-          <p class="fine">Both install Stackbar.app into /Applications and put <code>stackbarctl</code> on your PATH. Plugins build with Swift, so you also need Xcode or the Command Line Tools (<code>xcode-select --install</code>).</p>
+          <p class="fine">Both install Stackbar.app into /Applications and put <code>stackbarctl</code> on your PATH. Store plugins come prebuilt, so you don't need Xcode. To write your own plugins, install Xcode or the Command Line Tools (<code>xcode-select --install</code>).</p>
           <Button href={download.browser_download_url} variant="ghost" size="l"><Glyph name="download" /> Download the app ({Math.round(download.size / 1e6)} MB)</Button>
           <a class="notes" href={release!.html_url}>Release notes</a>
         </>

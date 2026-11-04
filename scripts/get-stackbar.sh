@@ -176,11 +176,11 @@ case ":${PATH}:" in
 esac
 
 # ── Toolchain ────────────────────────────────────────────────────────────────
-# Stackbar compiles plugins on this Mac, so it needs Swift from Xcode or the
-# Command Line Tools. Say so now rather than at the first plugin build.
+# Store plugins come prebuilt. Writing your own needs Swift from Xcode or the
+# Command Line Tools, so mention it, without making it sound required.
 
 if ! xcode-select -p >/dev/null 2>&1; then
-  warn "Stackbar builds plugins with Swift. Install the Command Line Tools:"
+  info "Store plugins run as they are. To write your own, install the Command Line Tools:"
   printf '\n  xcode-select --install\n\n'
 fi
 

@@ -314,14 +314,14 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, accent: manifest.accent?.rawValue, symbol: manifest.symbol, updated: day)
     }
 
-    public static func download(_ url: URL) async throws -> Data {
+    public static func download(_ url: URL, limit: Int = 8 * 1024 * 1024) async throws -> Data {
         if url.isFileURL { return try Data(contentsOf: url) }
         guard url.scheme == "https" || (url.scheme == "http" && url.host == "127.0.0.1") else { throw IndexError.insecure(url.absoluteString) }
         let (data, response) = try await URLSession(configuration: .ephemeral).data(from: url)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw IndexError.status(url.absoluteString, (response as? HTTPURLResponse)?.statusCode ?? 0)
         }
-        guard data.count <= 8 * 1024 * 1024 else { throw IndexError.tooLarge(url.absoluteString) }
+        guard data.count <= limit else { throw IndexError.tooLarge(url.absoluteString) }
         return data
     }
 

@@ -28,8 +28,9 @@ curl -fsSL https://stackbar.navbytes.io/install.sh | bash
 ```
 
 Both install the notarized app into /Applications and put `stackbarctl` on your
-PATH. Plugins are compiled on your Mac, so you also need Xcode or the Command
-Line Tools (`xcode-select --install`). The installer is
+PATH. Plugins from the store, and the ones Stackbar ships with, come prebuilt,
+so you don't need Xcode. To write or change a plugin you need Xcode or the
+Command Line Tools (`xcode-select --install`). The installer is
 [`scripts/get-stackbar.sh`](scripts/get-stackbar.sh) (`--help` for options), or
 download the zip from [Releases](https://github.com/navbytes/stackbar/releases).
 

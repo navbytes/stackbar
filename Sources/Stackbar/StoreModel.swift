@@ -76,7 +76,11 @@ final class StoreModel {
         do {
             try item.catalog.index.checkInstallable(entry)
             let bundle = try await PluginIndex.bundle(for: entry, indexURL: item.catalog.source.url)
+            // Fetched first: on a Mac that can't build plugins, a plugin with
+            // no prebuilt helper yet is not installed (or updated) at all.
+            let helper = try await model.prebuiltHelper(for: bundle, indexURL: item.catalog.source.url)
             let file = try model.installer.install(bundle)
+            model.save(helper)
             if let controller = model.controller(for: entry.id) { controller.reload() } else { model.add(file) }
             model.refreshInstalled()
             if !quietly {
