@@ -64,29 +64,58 @@ final class PaletteController {
         }
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        if let frame = NSScreen.main?.visibleFrame {
-            panel.setFrameOrigin(NSPoint(x: frame.midX - panel.frame.width / 2, y: frame.maxY - frame.height * 0.24 - panel.frame.height))
+        // Place the whole frame, size included, on the screen the user is
+        // working on. Only setting the origin left the first open off center:
+        // the window still had its pre-layout size then and was resized after
+        // it was placed.
+        if let screen = Self.activeScreen() {
+            panel.setFrame(Self.frame(on: screen.visibleFrame), display: false)
         }
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         session.shown()
     }
 
+    /// The screen under the pointer, as Spotlight does; the main one otherwise.
+    private static func activeScreen() -> NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
+    /// Centered across, its top a quarter of the way down, in whole points.
+    static func frame(on visible: NSRect) -> NSRect {
+        let size = PaletteView.size
+        return NSRect(
+            x: (visible.midX - size.width / 2).rounded(),
+            y: (visible.maxY - visible.height * 0.24 - size.height).rounded(),
+            width: size.width,
+            height: size.height
+        )
+    }
+
     private func makePanel() -> KeyablePanel {
+        // Borderless and clear, so the SwiftUI view's Liquid Glass is the
+        // whole window, like Spotlight on macOS 26.
         let panel = KeyablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
-            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+            contentRect: NSRect(origin: .zero, size: PaletteView.size),
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = true
         panel.isMovableByWindowBackground = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentViewController = NSHostingController(rootView: PaletteView(session: session))
+        // A fixed size: SwiftUI must not resize the window after it is placed.
+        let hosting = NSHostingView(rootView: PaletteView(session: session))
+        hosting.sizingOptions = []
+        hosting.frame = NSRect(origin: .zero, size: PaletteView.size)
+        hosting.autoresizingMask = [.width, .height]
+        panel.contentView = hosting
         panel.onCancel = { [weak self] in self?.session.back() ?? false }
         panel.onClose = { [weak self] in self?.hide() }
         return panel
@@ -111,6 +140,9 @@ struct PaletteView: View {
     @Bindable var session: PaletteSession
     @FocusState private var focus: Field?
 
+    static let size = CGSize(width: 680, height: 440)
+    static let cornerRadius: CGFloat = 26
+
     enum Field: Hashable {
         case search
         case argument(String)
@@ -119,17 +151,17 @@ struct PaletteView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 20)
+                .frame(height: 58)
             if let problem = session.problem {
                 Text(problem)
                     .font(.callout)
                     .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 8)
             }
-            Divider()
+            Divider().padding(.horizontal, 12)
             ZStack(alignment: .bottomTrailing) {
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -138,12 +170,13 @@ struct PaletteView: View {
                         .padding(10)
                 }
             }
-            Divider()
             footer
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
         }
-        .frame(width: 640, height: 420)
+        .frame(width: Self.size.width, height: Self.size.height)
+        .clipShape(.rect(cornerRadius: Self.cornerRadius))
+        .glassEffect(.regular, in: .rect(cornerRadius: Self.cornerRadius))
         .onKeyPress(phases: [.down, .repeat]) { press in handle(press) }
         .onAppear { focusFirst() }
         .onChange(of: session.shownCount) { _, _ in focusFirst() }
@@ -153,9 +186,9 @@ struct PaletteView: View {
     // MARK: Header
 
     @ViewBuilder private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             if session.stack.isEmpty {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").font(.title2.weight(.medium)).foregroundStyle(.secondary)
                 searchField(text: $session.query, prompt: "Search commands and plugin actions")
             } else {
                 Button {
@@ -163,7 +196,8 @@ struct PaletteView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
                 .help("Back (Esc)")
                 ForEach(Array(session.stack.enumerated()), id: \.element.id) { index, stage in
                     Text(stage.title)
@@ -171,7 +205,7 @@ struct PaletteView: View {
                         .lineLimit(1)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Color.accentColor.opacity(index == session.stack.count - 1 ? 0.2 : 0.08), in: Capsule())
+                        .glassEffect(index == session.stack.count - 1 ? .regular.tint(.accentColor.opacity(0.35)) : .regular, in: .capsule)
                 }
                 switch session.top {
                 case .view(let view):
@@ -187,7 +221,7 @@ struct PaletteView: View {
                 ProgressView().controlSize(.small)
             }
         }
-        .font(.title3)
+        .font(.title2)
     }
 
     private func searchField(text: Binding<String>, prompt: String) -> some View {
@@ -301,8 +335,9 @@ struct RootResults: View {
                             .onTapGesture { session.activate(entry) }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
             }
+            .scrollIndicators(.never)
             .onChange(of: selected) { _, newValue in
                 if let newValue { proxy.scrollTo(newValue) }
             }
@@ -321,10 +356,14 @@ struct PaletteRow: View {
     let selected: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: entry.symbol ?? symbol).frame(width: 20).foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            Image(systemName: entry.symbol ?? symbol)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(selected ? Color.white : Color.secondary)
+                .frame(width: 30, height: 30)
+                .background(selected ? Color.accentColor : Color.primary.opacity(0.07), in: .rect(cornerRadius: 8))
             VStack(alignment: .leading, spacing: 1) {
-                Text(entry.title).lineLimit(1)
+                Text(entry.title).font(.body.weight(.medium)).lineLimit(1)
                 if let subtitle = entry.subtitle {
                     Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
@@ -335,16 +374,17 @@ struct PaletteRow: View {
                     .font(.caption.monospaced())
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
-                    .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                    .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 5))
             }
             Text(entry.pluginName).font(.caption).foregroundStyle(.secondary)
             if case .command = entry.kind {
                 Text("Command").font(.caption2).foregroundStyle(.tertiary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .background(selected ? Color.accentColor.opacity(0.2) : .clear)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(selected ? Color.accentColor.opacity(0.18) : .clear, in: .rect(cornerRadius: 12))
+        .padding(.horizontal, 8)
     }
 
     private var symbol: String {
@@ -443,7 +483,7 @@ struct CommandViewBody: View {
                             Text(title.uppercased())
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                                .padding(.horizontal, 14)
+                                .padding(.horizontal, 20)
                                 .padding(.top, 8)
                                 .padding(.bottom, 2)
                         case .row(let row):
@@ -485,15 +525,14 @@ struct ActionsPanel: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(index == session.actionSelection ? Color.accentColor.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .background(index == session.actionSelection ? Color.accentColor.opacity(0.25) : .clear, in: .rect(cornerRadius: 8))
                 .contentShape(Rectangle())
                 .onTapGesture { session.runAction(index) }
             }
         }
         .padding(6)
         .frame(width: 280)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .shadow(radius: 8)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 
     /// `cmd+shift+c` as ⌘⇧C.
@@ -521,9 +560,9 @@ struct KeyHint: View {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(key)
                 .font(.caption2.weight(.medium))
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 5)
                 .padding(.vertical, 1)
-                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 3))
+                .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 4))
         }
     }
 }
