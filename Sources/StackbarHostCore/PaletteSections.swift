@@ -19,13 +19,23 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// a group. `favorites` lead an empty query, in their own order, and are
     /// not repeated below; `store` follows a typed one. Empty groups are left
     /// out.
+    ///
+    /// A typed query also gets the calculator's answer first, then the
+    /// matching apps and System Settings panes: before the plugin results
+    /// when the best one's name starts with what was typed (`saf` → Safari),
+    /// after them otherwise.
     public static func group(_ results: [PaletteIndex.Entry], query: String, favorites: [PaletteIndex.Entry] = [], store: [PaletteIndex.Entry] = [],
+                             calculator: [PaletteIndex.Entry] = [], apps: [PaletteIndex.Entry] = [],
                              recentLimit: Int = 5, isRecent: (PaletteIndex.Entry) -> Bool) -> [PaletteSection] {
-        guard query.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return [
-                PaletteSection(title: "Results", entries: results),
-                PaletteSection(title: "From the Store", entries: store),
-            ].filter { !$0.entries.isEmpty }
+        let typed = query.trimmingCharacters(in: .whitespaces)
+        guard typed.isEmpty else {
+            let appsLead = apps.first.map { $0.title.lowercased().hasPrefix(typed.lowercased()) } ?? false
+            let appSection = PaletteSection(title: "Applications", entries: apps)
+            let result = PaletteSection(title: "Results", entries: results)
+            return ([PaletteSection(title: "Calculator", entries: calculator)]
+                + (appsLead ? [appSection, result] : [result, appSection])
+                + [PaletteSection(title: "From the Store", entries: store)])
+                .filter { !$0.entries.isEmpty }
         }
         let pinned = Set(favorites.map(\.id))
         var recent: [PaletteIndex.Entry] = []
@@ -38,7 +48,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
             }
             switch entry.kind {
             case .command, .showPanel: commands.append(entry)
-            case .action, .open, .navigate: actions.append(entry)
+            case .action, .open, .navigate, .copy: actions.append(entry)
             }
         }
         return [
@@ -95,6 +105,25 @@ public final class PaletteFavorites: @unchecked Sendable {
             try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
             try? data.write(to: file, options: .atomic)
         }
+    }
+}
+
+public extension PaletteIndex.Entry {
+    /// Entries (apps, Settings panes) that match `query` by title or
+    /// keyword, best first, with a bonus for what was used often and lately.
+    static func matching(_ entries: [PaletteIndex.Entry], query: String, limit: Int = 5, usage: PaletteUsage? = nil) -> [PaletteIndex.Entry] {
+        let typed = query.lowercased().filter { !$0.isWhitespace }
+        guard !typed.isEmpty else { return [] }
+        return entries
+            .compactMap { entry -> (PaletteIndex.Entry, Int)? in
+                let best = ([entry.title] + entry.keywords).compactMap { TextMatch.score(typed, in: $0) }.max()
+                guard let best else { return nil }
+                let used = usage.map { $0.score(entry.id) } ?? 0
+                return (entry, best + (used > 0 ? min(300, Int(60 * log2(1 + used))) : 0))
+            }
+            .sorted { $0.1 > $1.1 }
+            .prefix(limit)
+            .map(\.0)
     }
 }
 

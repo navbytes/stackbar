@@ -18,6 +18,8 @@ public struct PaletteIndex: Sendable {
             case command(CommandSpec)
             /// Opens the panel of a plugin that has no menu-bar item.
             case showPanel
+            /// Copies the text: a calculator answer.
+            case copy(String)
         }
 
         public var pluginID: String
@@ -31,6 +33,18 @@ public struct PaletteIndex: Sendable {
         /// The alias the user gave the command, shown on its row.
         public var alias: String?
 
+        public init(pluginID: String, pluginName: String, title: String, subtitle: String? = nil, symbol: String? = nil, kind: Kind,
+                    keywords: [String] = [], alias: String? = nil) {
+            self.pluginID = pluginID
+            self.pluginName = pluginName
+            self.title = title
+            self.subtitle = subtitle
+            self.symbol = symbol
+            self.kind = kind
+            self.keywords = keywords
+            self.alias = alias
+        }
+
         public var commandKey: CommandKey? {
             if case .command(let spec) = kind { return CommandKey(pluginID: pluginID, commandID: spec.id) }
             return nil
@@ -43,6 +57,7 @@ public struct PaletteIndex: Sendable {
             case .navigate(let target): return "\(pluginID)|navigate|\(target.command)|\(target.arguments.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&"))"
             case .command(let spec): return "\(pluginID)/\(spec.id)"
             case .showPanel: return "\(pluginID)|panel"
+            case .copy(let text): return "\(pluginID)|copy|\(text)"
             }
         }
     }
