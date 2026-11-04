@@ -2,7 +2,7 @@
   "name": "stackbar-site",
   "private": true,
   "type": "module",
-  "description": "stackbar.navbytes.io: the Stackbar site and plugin store pages",
+  "description": "stackbar.app: the Stackbar site and plugin store pages",
   "scripts": {
     "sync": "node scripts/sync-kit.mjs",
     "predev": "npm run sync",

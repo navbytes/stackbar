@@ -2,7 +2,7 @@
 #
 # One-line installer for Stackbar: the app and the `stackbarctl` CLI.
 #
-#   curl -fsSL https://stackbar.navbytes.io/install.sh | bash
+#   curl -fsSL https://stackbar.app/install.sh | bash
 #
 # The site serves this file as /install.sh (site/scripts/sync-kit.mjs copies
 # it). It installs the newest signed, notarized release into /Applications and
@@ -14,7 +14,7 @@
 # Options go after `bash -s --`, the form that survives a pipe
 # (`VAR=x curl … | bash` sets VAR for curl, not for the bash reading this):
 #
-#   curl -fsSL https://stackbar.navbytes.io/install.sh | bash -s -- --app-dir ~/Applications
+#   curl -fsSL https://stackbar.app/install.sh | bash -s -- --app-dir ~/Applications
 #
 #   --app-dir DIR   where Stackbar.app goes (default: /Applications)
 #   --bin-dir DIR   where the stackbarctl link goes (default: the first existing
@@ -35,8 +35,8 @@ usage() {
   cat <<'USAGE'
 Install Stackbar: the menu-bar app and the `stackbarctl` CLI.
 
-  curl -fsSL https://stackbar.navbytes.io/install.sh | bash
-  curl -fsSL https://stackbar.navbytes.io/install.sh | bash -s -- --app-dir ~/Applications
+  curl -fsSL https://stackbar.app/install.sh | bash
+  curl -fsSL https://stackbar.app/install.sh | bash -s -- --app-dir ~/Applications
 
 Options:
   --app-dir DIR   where Stackbar.app goes (default: /Applications)
