@@ -21,4 +21,6 @@
 - [x] 4.3 Highlights, commands and hotkeys, agent tools, version history, FAQ
 
 ## 5. Demo loops
-- [ ] 5.1 Frame capture from `render --preview --event` and loops in flagship heroes
+- [x] 5.1 `render --frames` records a scripted preview as an animated PNG (`--hold`, `--wait`; copies reach previews)
+- [ ] 5.2 Store: `demos.json` scripts, publish renders them into `site.json` `demos`
+- [ ] 5.3 Site: the hero and plugin pages play a demo where there is one

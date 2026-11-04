@@ -397,12 +397,16 @@ that surface.
 The closure runs on a fresh plugin whose `@Stored` values start at their
 defaults and are never saved, so a scene can't show or overwrite real data.
 The plugin then never refreshes (triggers only re-render), so set every
-property the scene shows. Events still run, so `--event` can press things in a scene.
+property the scene shows. Events and copies still run, so `--event` and
+`--copy` can act in a scene.
 Name the first one `hero`: the site's header uses it. Names are lowercase
 with dashes; titles are short captions. Use made-up but believable data, never
 real people's names or emails. Previews never run in the app.
 `stackbarctl previews <file>` lists them, and
 `stackbarctl render <file> --preview <name> [--png <dir> [--dark]]` renders one.
+`--frames <out.png>` records a short loop instead: a frame after the scene and
+after each `--event` or `--copy`, `--hold <seconds>` for how long the last one
+shows, `--wait <seconds>` for a clock to move. The store plays it as a demo.
 
 ## Loop
 

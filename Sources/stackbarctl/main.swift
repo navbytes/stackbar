@@ -18,6 +18,11 @@ usage:
                   [--event <action-id>[=value]]... [--tool name[:json]] [--copy <text>]...
                   [--json] [--png <dir> [--dark]] [--verbose] [--preview <name>]
                   [--command <id> [--query <text>] [--arg name=value]...]
+                  [--frames <out.png> [--hold <s>] [--wait <s>]...]
+                  --frames writes an animated PNG of one surface (panel unless --surface):
+                  a frame after the first render and after every step; --hold sets how long
+                  the last frame shows (1 s by default), --wait pauses and adds a frame.
+                  Without macOS it prints each frame as text.
                   --command opens a view command; --event then presses things inside it
                   --preview shows one of the plugin's previews (sample data, no refreshes)
                   --copy pretends you copied text in another app (clipboard plugins);
@@ -173,6 +178,7 @@ func render(_ path: String, options: [String]) async {
     var steps: [(kind: String, name: String, value: String?)] = []
     var asJSON = false
     var pngDirectory: String?
+    var framesPath: String?
     var dark = false
     var verbose = false
     var command: String?
@@ -197,6 +203,12 @@ func render(_ path: String, options: [String]) async {
             steps.append(("copy", value(after: "--copy", in: options, at: &index), nil))
         case "--json": asJSON = true
         case "--png": pngDirectory = value(after: "--png", in: options, at: &index)
+        case "--frames": framesPath = value(after: "--frames", in: options, at: &index)
+        case "--hold", "--wait":
+            let name = options[index]
+            let text = value(after: name, in: options, at: &index)
+            guard let seconds = Double(text), seconds >= 0, seconds <= 30 else { fail("\(name) takes seconds (0 to 30), not \(text)") }
+            steps.append((String(name.dropFirst(2)), text, nil))
         case "--dark": dark = true
         case "--verbose": verbose = true
         case "--command": command = value(after: "--command", in: options, at: &index)
@@ -210,6 +222,11 @@ func render(_ path: String, options: [String]) async {
         default: fail(usage)
         }
         index += 1
+    }
+
+    if framesPath != nil {
+        if command != nil { fail("--frames records the plugin's own surfaces, not a --command view") }
+        if surfaces.count != 1 { surfaces = [.panel] }
     }
 
     let tools = AuthoringTools(loader: loader, services: makeServices(), png: pngRenderer(dark: dark))
@@ -226,6 +243,20 @@ func render(_ path: String, options: [String]) async {
     }
 
     _ = await run("stackbar_render", ["format": "json"])
+
+    // --frames: what the surface looks like after the first render and
+    // after each step, as PNG on macOS and as text elsewhere.
+    let framesAsPNG = pngRenderer(dark: dark) != nil
+    var frames: [(data: Data, seconds: Double)] = []
+    func captureFrame() async {
+        guard framesPath != nil else { return }
+        let result = await run("stackbar_render", ["format": .string(framesAsPNG ? "png" : "text"), "surface": .string(surfaces[0].rawValue)])
+        for item in result.content {
+            if case .image(let data, _) = item { frames.append((data, 1)) }
+            if !framesAsPNG, case .text(let text) = item { frames.append((Data(text.utf8), 1)) }
+        }
+    }
+    await captureFrame()
     // The command view opens after the copies, tools and panel events
     // before its first event, so it shows what they did.
     var viewText: String?
@@ -237,6 +268,15 @@ func render(_ path: String, options: [String]) async {
         if case .text(let text) = opened.content.first { viewText = text }
     }
     for step in steps {
+        if step.kind == "hold" {
+            if !frames.isEmpty { frames[frames.count - 1].seconds = Double(step.name) ?? 1 }
+            continue
+        }
+        if step.kind == "wait" {
+            try? await Task.sleep(for: .seconds(Double(step.name) ?? 1))
+            await captureFrame()
+            continue
+        }
         if step.kind == "event", step.name.hasPrefix("view/") { await openView() }
         if step.kind == "event" {
             let value: JSONValue = step.value.map { text in
@@ -251,9 +291,12 @@ func render(_ path: String, options: [String]) async {
             let result = await run("stackbar_call_tool", ["name": .string(step.name), "arguments": arguments])
             if case .text(let text) = result.content.first { print("== tool \(step.name) ==\n\(text)") }
         }
+        await captureFrame()
     }
     await openView()
-    if let viewText {
+    if let framesPath {
+        writeFrames(frames, to: framesPath, asPNG: framesAsPNG)
+    } else if let viewText {
         print(viewText)
     } else if let pngDirectory {
         let result = await run("stackbar_render", ["format": "png", "surface": surfaces.count == 1 ? .string(surfaces[0].rawValue) : .null])
@@ -274,6 +317,22 @@ func render(_ path: String, options: [String]) async {
     }
     if verbose, case .text(let logs) = await tools.call("stackbar_logs", arguments: ["path": .string(path)]).content.first { note(logs) }
     await tools.stopAll()
+}
+
+func writeFrames(_ frames: [(data: Data, seconds: Double)], to path: String, asPNG: Bool) {
+    guard asPNG else {
+        for (index, frame) in frames.enumerated() {
+            print("== frame \(index + 1) (\(frame.seconds) s) ==\n\(String(decoding: frame.data, as: UTF8.self))")
+        }
+        return
+    }
+    #if canImport(StackbarUI) && os(macOS)
+    guard let data = AnimatedPNG.make(frames.map { ($0.data, $0.seconds) }) else { fail("couldn't join \(frames.count) frames into \(path)") }
+    let url = URL(fileURLWithPath: path)
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    do { try data.write(to: url) } catch { fail("couldn't write \(path): \(error)") }
+    print("\(path) (\(frames.count) frames)")
+    #endif
 }
 
 func flag(_ name: String, in options: [String]) -> String? {

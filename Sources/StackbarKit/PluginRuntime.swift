@@ -52,7 +52,10 @@ public final class PluginRuntime {
                 await run("preview \(preview)") { try await self.plugin.applyPreview(named: preview) }
             }
             render()
-        case .trigger where preview != nil:
+        // A preview's scene stays put: timers, wakes and the like only
+        // re-render. A copy is something the user did, like an event, so
+        // it still reaches the plugin (`stackbarctl render --copy`).
+        case .trigger(let reason) where preview != nil && reason != .clipboard:
             render()
         case .trigger(let reason):
             Stackbar.refreshReason = reason
