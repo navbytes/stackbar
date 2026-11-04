@@ -1,6 +1,6 @@
 name: Site
 
-# Builds stackbar.navbytes.io (site/) and deploys it to GitHub Pages from main.
+# Builds stackbar.app (site/) and deploys it to GitHub Pages from main.
 # Plugin pages come from the published store, so the site also rebuilds every
 # hour, which picks up a newly published plugin without a cross-repository
 # token, and on a store-published dispatch if one is ever set up.
@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Repository variables, set once stackbar.navbytes.io points here.
+  # Repository variables, set once stackbar.app points here.
   SITE_URL: ${{ vars.SITE_URL || 'https://navbytes.github.io' }}
   SITE_BASE: ${{ vars.SITE_BASE || '/stackbar' }}
 

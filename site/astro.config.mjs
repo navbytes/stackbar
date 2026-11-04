@@ -2,7 +2,7 @@
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 
-// Until stackbar.navbytes.io points here the site lives at
+// Until stackbar.app points here the site lives at
 // navbytes.github.io/stackbar/. Switching is these two values (see README).
 const site = process.env.SITE_URL ?? 'https://navbytes.github.io';
 const base = process.env.SITE_BASE ?? '/stackbar';

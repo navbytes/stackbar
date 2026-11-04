@@ -24,7 +24,7 @@ brew install --cask navbytes/tap/stackbar
 Or without Homebrew:
 
 ```sh
-curl -fsSL https://stackbar.navbytes.io/install.sh | bash
+curl -fsSL https://stackbar.app/install.sh | bash
 ```
 
 Both install the notarized app into /Applications and put `stackbarctl` on your

@@ -104,7 +104,7 @@ jobs:
 
           ```sh
           brew install --cask navbytes/tap/stackbar
-          curl -fsSL https://stackbar.navbytes.io/install.sh | bash
+          curl -fsSL https://stackbar.app/install.sh | bash
           ```
 
           Or unzip, drag **Stackbar.app** into /Applications and open it.

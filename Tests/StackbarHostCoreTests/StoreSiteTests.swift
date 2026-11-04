@@ -69,11 +69,11 @@ final class StoreSiteTests: XCTestCase {
     }
 
     func testWebPageMatchesTheSitesSlug() {
-        XCTAssertEqual(OfficialIndex.webPage(for: "io.navbytes.stackbar.plugins.world-clock").absoluteString, "https://stackbar.navbytes.io/plugins/world-clock/")
+        XCTAssertEqual(OfficialIndex.webPage(for: "io.navbytes.stackbar.plugins.world-clock").absoluteString, "https://stackbar.app/plugins/world-clock/")
         let entry = PluginIndex.Entry(id: "io.navbytes.stackbar.clipboard", name: "C", version: "1", publisher: "navbytes", bundle: "b", sha256: "0", capabilities: [])
         let official = PluginStore.Catalog(source: .init(url: OfficialIndex.url, isOfficial: true), index: PluginIndex(name: "O", plugins: [entry]))
         let other = PluginStore.Catalog(source: .init(url: URL(string: "https://example.com/index.json")!), index: PluginIndex(name: "X", plugins: [entry]))
-        XCTAssertEqual(official.webPage(for: entry)?.absoluteString, "https://stackbar.navbytes.io/plugins/clipboard/")
+        XCTAssertEqual(official.webPage(for: entry)?.absoluteString, "https://stackbar.app/plugins/clipboard/")
         XCTAssertNil(other.webPage(for: entry), "only the official index has pages on the website")
     }
 

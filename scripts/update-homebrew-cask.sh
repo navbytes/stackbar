@@ -42,7 +42,7 @@ cask "stackbar" do
       verified: "github.com/navbytes/stackbar/"
   name "Stackbar"
   desc "Menu-bar host for live plugins written in Swift"
-  homepage "https://stackbar.navbytes.io/"
+  homepage "https://stackbar.app/"
 
   livecheck do
     url :url
