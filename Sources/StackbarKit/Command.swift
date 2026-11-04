@@ -64,6 +64,24 @@ public struct Command: Sendable {
         return copy
     }
 
+    /// Shows the view's top rows in the palette's own results while the user
+    /// types, under the command's title, as Raycast's root search does. The
+    /// view's `search` runs with what was typed; keep it quick. Protocol 16.
+    public func rootSearch() -> Command {
+        var copy = self
+        copy.spec.rootSearch = true
+        return copy
+    }
+
+    /// Offers the command under the palette's results for any text, such as
+    /// "Search the web for …". The text fills the first argument, or a
+    /// view's search. Protocol 16.
+    public func fallback() -> Command {
+        var copy = self
+        copy.spec.fallback = true
+        return copy
+    }
+
     /// Keeps the command out of Spotlight, Shortcuts and links.
     public func stackbarOnly() -> Command {
         var copy = self

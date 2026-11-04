@@ -28,8 +28,15 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
     public var kind: Kind
     public var arguments: [ArgumentSpec]
     public var exposure: Exposure
+    /// A view command whose top rows also show in the palette's results
+    /// while the user types, as its own section. Protocol 16.
+    public var rootSearch: Bool
+    /// Offered under the palette's results for whatever was typed: the text
+    /// fills the first argument, or a view's search. Protocol 16.
+    public var fallback: Bool
 
-    public init(id: String, title: String, subtitle: String? = nil, symbol: String? = nil, keywords: [String] = [], kind: Kind = .run, arguments: [ArgumentSpec] = [], exposure: Exposure = .everywhere) {
+    public init(id: String, title: String, subtitle: String? = nil, symbol: String? = nil, keywords: [String] = [], kind: Kind = .run, arguments: [ArgumentSpec] = [], exposure: Exposure = .everywhere,
+                rootSearch: Bool = false, fallback: Bool = false) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -38,6 +45,24 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         self.kind = kind
         self.arguments = arguments
         self.exposure = exposure
+        self.rootSearch = rootSearch
+        self.fallback = fallback
+    }
+
+    // Written by hand so specs from plugins built before protocol 16, which
+    // have no `rootSearch` or `fallback`, still decode.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        symbol = try container.decodeIfPresent(String.self, forKey: .symbol)
+        keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
+        kind = try container.decode(Kind.self, forKey: .kind)
+        arguments = try container.decodeIfPresent([ArgumentSpec].self, forKey: .arguments) ?? []
+        exposure = try container.decodeIfPresent(Exposure.self, forKey: .exposure) ?? .everywhere
+        rootSearch = try container.decodeIfPresent(Bool.self, forKey: .rootSearch) ?? false
+        fallback = try container.decodeIfPresent(Bool.self, forKey: .fallback) ?? false
     }
 
     /// At most this many arguments, so their fields fit on one line.
@@ -55,6 +80,7 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         if !Self.isValidID(id) { result.append("command id \"\(id)\" must be 1 to 64 lowercase letters, digits or -") }
         if title.trimmingCharacters(in: .whitespaces).isEmpty { result.append("command \(id) has no title") }
         if title.count > 100 { result.append("command \(id): the title is longer than 100 characters") }
+        if rootSearch, kind != .view { result.append("command \(id): only a view command can search from the palette's root") }
         if arguments.count > Self.maxArguments { result.append("command \(id) has \(arguments.count) arguments; at most \(Self.maxArguments)") }
         var names = Set<String>()
         for argument in arguments {

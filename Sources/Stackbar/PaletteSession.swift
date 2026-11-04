@@ -48,6 +48,7 @@ final class PaletteSession {
             guard query != oldValue else { return }
             selection.reset()
             FileSearch.shared.search(query)
+            feedRootSearch()
         }
     }
     /// The selected root entry, or the selected row of a list view, by id:
@@ -75,6 +76,16 @@ final class PaletteSession {
     var commandHeld = false
     /// Nothing to come back to: no open command and nothing typed.
     var isIdle: Bool { stack.isEmpty && query.isEmpty }
+
+    /// The Settings key for compact mode: only the search field shows until
+    /// the user types, like Spotlight.
+    nonisolated static let compactKey = "paletteCompact"
+    /// Set from Settings; the palette reads it each time it is shown.
+    var compact = UserDefaults.standard.bool(forKey: PaletteSession.compactKey)
+    /// Compact and nothing to show yet: just the search field.
+    var collapsed: Bool { compact && isIdle && !showingActions }
+    /// Told when `collapsed` flips, so the window can grow or shrink.
+    @ObservationIgnored var onCollapsedChange: (Bool) -> Void = { _ in }
     @ObservationIgnored var dismiss: () -> Void = {}
 
     init(model: AppModel) {
@@ -108,6 +119,7 @@ final class PaletteSession {
         }
         stack = []
         query = ""
+        closeRootSearch()
         selection.reset()
         cache = nil
         argumentValues = [:]
@@ -141,7 +153,7 @@ final class PaletteSession {
 
     /// The root's search, kept until the query or the index changes: the
     /// view, the footer, ⌘K and every arrow press ask for it.
-    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, sections: [PaletteSection], results: [PaletteIndex.Entry])?
+    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, plugins: [String], sections: [PaletteSection], results: [PaletteIndex.Entry])?
     /// The Store's indexes were asked for once, for its suggestions.
     @ObservationIgnored private var storeRequested = false
 
@@ -160,7 +172,13 @@ final class PaletteSession {
         let palette = model.palette
         // Read every time, so the list redraws once the Store's indexes arrive.
         let storeCount = model.store?.catalogs.count ?? 0
-        if let cache, cache.query == query, cache.revision == palette.revision, cache.store == storeCount { return (cache.sections, cache.results) }
+        // Plugins' rows arrive after the query does, so they are read every
+        // time and are part of the cache's key.
+        let plugins = rootSearchSections()
+        let pluginKey = plugins.flatMap(\.entries).map(\.id)
+        if let cache, cache.query == query, cache.revision == palette.revision, cache.store == storeCount, cache.plugins == pluginKey {
+            return (cache.sections, cache.results)
+        }
         let usage = model.commands.usage
         var found = palette.search(query, limit: 30, usage: usage)
         if let match = palette.aliasMatch(query) {
@@ -176,9 +194,10 @@ final class PaletteSession {
         let calculator = PaletteCalculator.answer(query).map {
             [PaletteIndex.Entry(pluginID: Self.calculatorID, pluginName: "Calculator", title: $0.display, subtitle: $0.expression, symbol: "equal", kind: .copy($0.result))]
         } ?? []
-        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store, calculator: calculator, apps: apps, files: files) { usage.score($0.id) > 0 }
+        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store, calculator: calculator, apps: apps, files: files,
+                                            plugins: plugins, fallbacks: fallbackEntries()) { usage.score($0.id) > 0 }
         let ordered = sections.flatMap(\.entries)
-        cache = (query, palette.revision, storeCount, sections, ordered)
+        cache = (query, palette.revision, storeCount, pluginKey, sections, ordered)
         return (sections, ordered)
     }
 
@@ -194,6 +213,96 @@ final class PaletteSession {
     func accent(of pluginID: String) -> Accent? {
         if let manifest = manifest(of: pluginID) { return manifest.accent }
         return model.store?.find(pluginID)?.entry.accent.flatMap(Accent.init(rawValue:))
+    }
+
+    // MARK: - Plugins in the root
+
+    /// Views of `.rootSearch()` commands, open while the user types at the
+    /// root and fed the same text. Their top rows are a section each.
+    @ObservationIgnored private var rootViews: [CommandKey: CommandViewModel] = [:]
+    @ObservationIgnored private var rootOpening: Set<CommandKey> = []
+    /// What a root row does when chosen: its view and its primary action.
+    @ObservationIgnored private var rootRows: [String: (view: CommandViewModel, action: ActionRef)] = [:]
+    /// Bumped when a root view opens, so the list reads it.
+    private(set) var rootViewsRevision = 0
+    /// Rows from each plugin, at most.
+    static let rootRowLimit = 3
+
+    private var rootText: String? {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        return stack.isEmpty && text.count >= 2 ? text : nil
+    }
+
+    /// Opens or updates the root views. Only running plugins are asked: the
+    /// palette never starts one to search it.
+    private func feedRootSearch() {
+        guard let text = rootText else {
+            closeRootSearch()
+            return
+        }
+        for entry in model.commands.registry.entries where entry.spec.rootSearch && entry.spec.kind == .view {
+            if let view = rootViews[entry.key] {
+                view.query = text
+                continue
+            }
+            guard !rootOpening.contains(entry.key), model.controller(for: entry.pluginID)?.supervisor != nil else { continue }
+            rootOpening.insert(entry.key)
+            let key = entry.key
+            Task {
+                let opened = await model.commands.openView(key, query: CommandQuery(text: text), context: context, recordUse: false)
+                rootOpening.remove(key)
+                guard case .success(let view) = opened else { return }
+                guard let now = rootText, rootViews[key] == nil else {
+                    view.close()
+                    return
+                }
+                view.query = now
+                rootViews[key] = view
+                rootViewsRevision += 1
+            }
+        }
+    }
+
+    private func closeRootSearch() {
+        for view in rootViews.values { view.close() }
+        rootViews = [:]
+        rootRows = [:]
+        if rootViewsRevision != 0 { rootViewsRevision += 1 }
+    }
+
+    /// One section per root view with rows, in command-title order.
+    private func rootSearchSections() -> [PaletteSection] {
+        _ = rootViewsRevision
+        guard rootText != nil else { return [] }
+        var table: [String: (view: CommandViewModel, action: ActionRef)] = [:]
+        let sections = rootViews.values.sorted { $0.entry.spec.title < $1.entry.spec.title }.compactMap { view -> PaletteSection? in
+            let entries = self.rows(of: view).prefix(Self.rootRowLimit).compactMap { row -> PaletteIndex.Entry? in
+                guard let primary = row.actions.first else { return nil }
+                let kind: PaletteIndex.Entry.Kind = primary.navigate.map { .navigate($0) } ?? .action(primary.id, value: nil)
+                let entry = PaletteIndex.Entry(pluginID: view.entry.pluginID, pluginName: view.entry.pluginName, title: row.title,
+                                               subtitle: row.subtitle, symbol: row.symbol ?? view.entry.spec.symbol, kind: kind)
+                table[entry.id] = (view, primary)
+                return entry
+            }
+            return entries.isEmpty ? nil : PaletteSection(title: view.entry.spec.title, entries: entries)
+        }
+        rootRows = table
+        return sections
+    }
+
+    /// `.fallback()` commands, offered for whatever was typed.
+    private func fallbackEntries() -> [PaletteIndex.Entry] {
+        guard stack.isEmpty, !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        return model.commands.registry.entries.filter(\.spec.fallback).map { entry in
+            PaletteIndex.Entry(pluginID: entry.pluginID, pluginName: entry.pluginName, title: entry.spec.title,
+                               subtitle: entry.pluginName, symbol: entry.spec.symbol, kind: .command(entry.spec))
+        }
+    }
+
+    /// Chosen from the fallback section, so the whole query is its input.
+    func isFallback(_ entry: PaletteIndex.Entry) -> Bool {
+        let title = PaletteSection.fallbackTitle(query.trimmingCharacters(in: .whitespaces))
+        return sections.first { $0.title == title }?.entries.contains { $0.id == entry.id } ?? false
     }
 
     // MARK: - Favourites
@@ -223,6 +332,7 @@ final class PaletteSession {
     /// so they can't be pinned.
     func canPin(_ entry: PaletteIndex.Entry) -> Bool {
         if case .copy = entry.kind { return false }
+        if rootRows[entry.id] != nil || isFallback(entry) { return false }
         if entry.pluginID == PaletteFiles.pluginID { return false }
         return !isStoreSuggestion(entry)
     }
@@ -283,6 +393,10 @@ final class PaletteSession {
 
     func activate(_ entry: PaletteIndex.Entry) {
         problem = nil
+        if let row = rootRows[entry.id] {
+            perform(row.action, in: row.view)
+            return
+        }
         switch entry.kind {
         case .action(let action, let value):
             model.commands.usage.record(entry.id)
@@ -321,7 +435,10 @@ final class PaletteSession {
             guard let key = entry.commandKey, let command = model.commands.registry.entry(key) else { return }
             // `gh react`: the rest of the line fills the first argument, or a
             // view's search.
-            let rest = model.palette.aliasMatch(query).flatMap { $0.entry.id == entry.id ? $0.rest : nil } ?? ""
+            // A fallback: all of it.
+            let rest = isFallback(entry)
+                ? query.trimmingCharacters(in: .whitespaces)
+                : model.palette.aliasMatch(query).flatMap { $0.entry.id == entry.id ? $0.rest : nil } ?? ""
             var arguments: [String: String] = [:]
             var text = ""
             if !rest.isEmpty {
@@ -389,6 +506,17 @@ final class PaletteSession {
     }
 
     // MARK: - A command view
+
+    /// The columns of the open view's grid list, when it is one.
+    var gridColumns: Int? {
+        guard case .view(let view) = top, let root = view.root else { return nil }
+        return RowFilter.columns(in: root)
+    }
+
+    /// Kept clipboard images, for a row preview's image.
+    func imageData(for pluginID: String) -> (@Sendable (String) -> Data?)? {
+        model.controller(for: pluginID).flatMap(AppModel.previewImages(for:))
+    }
 
     func rows(of view: CommandViewModel) -> [RowNode] {
         guard let root = view.root, let items = RowFilter.items(in: root, query: view.query) else { return [] }

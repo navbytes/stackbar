@@ -115,6 +115,15 @@ var commands: [Command] {
 }
 ```
 
+Two modifiers bring a command into the palette's own results. `.rootSearch()`
+on a view command runs its `search` with whatever the user types at the root
+and shows the view's top three rows as a section under the command's title
+(Clipboard History and Snippets do this); keep that search quick. `.fallback()`
+offers the command under the results for any text ("Search the web for …"):
+the text fills its first argument, or a view's search. A view whose list is a
+`Grid` of rows shows them as tiles the arrow keys move through (an emoji
+picker), and a selected row's `preview` shows beside the list.
+
 Results: `.done`, `.message(text)`, `.open(url:app:)`, `.copy(text)`,
 `.paste(text, cursorFromEnd:)` (needs `.clipboard`; puts the user's clipboard
 back afterwards and keeps the paste out of clipboard history), `.failure(text)`.

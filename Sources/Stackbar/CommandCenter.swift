@@ -204,7 +204,9 @@ final class CommandCenter {
     }
 
     /// Opens a view command: waits for its plugin, then starts the session.
-    func openView(_ key: CommandKey, query: CommandQuery = CommandQuery(), context: InvocationContext? = nil) async -> Result<CommandViewModel, CommandRunner.Outcome> {
+    /// `recordUse` is false for the palette's root search, which opens views
+    /// the user didn't choose.
+    func openView(_ key: CommandKey, query: CommandQuery = CommandQuery(), context: InvocationContext? = nil, recordUse: Bool = true) async -> Result<CommandViewModel, CommandRunner.Outcome> {
         guard let entry = registry.entry(key) else { return .failure(.failure("\(key) is not a command")) }
         guard entry.spec.kind == .view else { return .failure(.failure("\(entry.spec.title) is not a view")) }
         let supervisor: PluginSupervisor
@@ -212,7 +214,7 @@ final class CommandCenter {
         case .success(let found): supervisor = found
         case .failure(let outcome): return .failure(outcome)
         }
-        usage.record(key.description)
+        if recordUse { usage.record(key.description) }
         let session = nextSession
         nextSession += 1
         let view = CommandViewModel(session: session, entry: entry, supervisor: supervisor, query: query, context: context) { [weak self] in

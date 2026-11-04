@@ -126,4 +126,20 @@ final class PaletteSectionsTests: XCTestCase {
         XCTAssertNotNil(PaletteFiles.entry(path: "/Users/n/Library", home: home), "the Library folder itself is fine")
         XCTAssertEqual(PaletteFiles.abbreviate("/Volumes/Data/plan", home: home), "/Volumes/Data/plan")
     }
+
+    func testPluginRowsFollowResultsAndFallbacksComeLast() {
+        let clipboard = PaletteSection(title: "Clipboard History", entries: [action("clip")])
+        let sections = PaletteSection.group([command("c1"), command("web")], query: "hello", files: [action("f")],
+                                            plugins: [clipboard], fallbacks: [command("web"), command("ddg")]) { _ in false }
+        XCTAssertEqual(sections.map(\.title), ["Results", "Clipboard History", "Files", PaletteSection.fallbackTitle("hello")])
+        // A fallback the search found stays in Results only.
+        XCTAssertEqual(sections.last?.entries.map(\.title), ["ddg"])
+        XCTAssertEqual(PaletteSection.fallbackTitle("hello"), "Use \u{201C}hello\u{201D} with")
+    }
+
+    func testFallbacksAndPluginRowsWaitForAQuery() {
+        let sections = PaletteSection.group([command("c1")], query: "", plugins: [PaletteSection(title: "X", entries: [action("x")])],
+                                            fallbacks: [command("web")]) { _ in false }
+        XCTAssertEqual(sections.map(\.title), ["Commands"])
+    }
 }

@@ -26,15 +26,21 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// after them otherwise.
     public static func group(_ results: [PaletteIndex.Entry], query: String, favorites: [PaletteIndex.Entry] = [], store: [PaletteIndex.Entry] = [],
                              calculator: [PaletteIndex.Entry] = [], apps: [PaletteIndex.Entry] = [], files: [PaletteIndex.Entry] = [],
+                             plugins: [PaletteSection] = [], fallbacks: [PaletteIndex.Entry] = [],
                              recentLimit: Int = 5, isRecent: (PaletteIndex.Entry) -> Bool) -> [PaletteSection] {
         let typed = query.trimmingCharacters(in: .whitespaces)
         guard typed.isEmpty else {
             let appsLead = apps.first.map { $0.title.lowercased().hasPrefix(typed.lowercased()) } ?? false
             let appSection = PaletteSection(title: "Applications", entries: apps)
             let result = PaletteSection(title: "Results", entries: results)
+            // A fallback the search found already shows in Results.
+            let shown = Set(results.map(\.id))
+            let rest = fallbacks.filter { !shown.contains($0.id) }
             return ([PaletteSection(title: "Calculator", entries: calculator)]
                 + (appsLead ? [appSection, result] : [result, appSection])
-                + [PaletteSection(title: "Files", entries: files), PaletteSection(title: "From the Store", entries: store)])
+                + plugins
+                + [PaletteSection(title: "Files", entries: files), PaletteSection(title: "From the Store", entries: store),
+                   PaletteSection(title: fallbackTitle(typed), entries: rest)])
                 .filter { !$0.entries.isEmpty }
         }
         let pinned = Set(favorites.map(\.id))
@@ -57,6 +63,14 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
             PaletteSection(title: "Commands", entries: commands),
             PaletteSection(title: "Panel Actions", entries: actions),
         ].filter { !$0.entries.isEmpty }
+    }
+}
+
+extension PaletteSection {
+    /// The heading over the fallback commands.
+    public static func fallbackTitle(_ typed: String) -> String {
+        let short = typed.count > 40 ? String(typed.prefix(39)) + "…" : typed
+        return "Use \u{201C}\(short)\u{201D} with"
     }
 }
 
