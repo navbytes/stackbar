@@ -31,9 +31,12 @@ CTL=${STACKBARCTL:-$RELEASE_CTL}
 export STACKBAR_PACKAGE="$APP/Contents/Resources/StackbarKit"
 export STACKBAR_HOME="$WORK/home"
 export DEVELOPER_DIR="$WORK/no-developer-tools"
-if xcode-select -p > /dev/null 2>&1; then echo "the developer tools are still visible" >&2; exit 1; fi
+# xcode-select -p echoes DEVELOPER_DIR even when it doesn't exist; what
+# matters (and what Stackbar checks) is that no developer directory is there.
+developer=$(xcode-select -p 2>/dev/null || true)
+if [ -n "$developer" ] && [ -d "$developer" ]; then echo "the developer tools are still visible at $developer" >&2; exit 1; fi
 if swift --version > /dev/null 2>&1; then echo "swift still runs" >&2; exit 1; fi
-echo "== no developer tools: xcode-select and swift both fail"
+echo "== no developer tools: no developer directory, and swift fails"
 "$RELEASE_CTL" doctor || true
 
 failures=0
