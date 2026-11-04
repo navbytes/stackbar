@@ -32,6 +32,11 @@ usage:
   stackbarctl agent [<plugin>...]      runtime MCP gateway on stdio: bridges to the running
                                     app, or runs the given plugins itself when it isn't
   stackbarctl secret set|get|delete <NAME> [value]
+  stackbarctl helper kit               the StackbarKit digest and protocol plugins build against here
+  stackbarctl helper build <plugin.swift> --key <file> -o <binary> [--url <url>] [--cache <dir>]
+                                    builds a helper to publish and prints its signed record (macOS)
+  stackbarctl helper prebuild <dir> <plugin.swift | bundle.stackbarplugin>... [--cache <dir>]
+                                    builds helpers into <dir> under the names the app looks for
   stackbarctl keygen [--key <file>]                   an Ed25519 publisher key (macOS)
   stackbarctl sign <plugin.swift> --publisher <name> [--key <file>] [-o <out.stackbarplugin>]
   stackbarctl verify <bundle.stackbarplugin>
@@ -325,7 +330,13 @@ case "doctor":
             print("✓ \(name)")
         }
     }
-    check("Swift toolchain", PluginBuilder.toolchainProblem())
+    if PluginBuilder.hasToolchain {
+        check("Swift toolchain", PluginBuilder.toolchainProblem())
+    } else {
+        // Not a failure: store plugins run prebuilt. Only writing or changing
+        // a plugin needs a compiler.
+        print("! Swift toolchain: \(PluginBuilder.toolchainProblem() ?? "not installed")")
+    }
     let package = StackbarPaths.stackbarPackage()
     check("StackbarKit at \(package.path)", FileManager.default.fileExists(atPath: package.appendingPathComponent("Package.swift").path) ? nil : "no Package.swift there; set STACKBAR_PACKAGE")
     for directory in [StackbarPaths.dataDirectory, StackbarPaths.cacheDirectory] {
@@ -358,6 +369,63 @@ case "agent":
         let server = MCPServer(name: "stackbar", version: StackbarVersion.current, instructions: "Tools from running Stackbar plugins. Call stackbar_plugins to see them.", provider: RuntimeTools { running })
         await server.serveStdio()
         for supervisor in supervisors { await supervisor.stop() }
+    }
+case "helper":
+    // Prebuilt helpers (PrebuiltHelpers): what the store and the app ship so
+    // a Mac without Xcode or the Command Line Tools can run plugins.
+    let package = StackbarPaths.stackbarPackage()
+    let builder = PluginBuilder(stackbarPackage: package, cacheRoot: flag("--cache", in: rest).map { URL(fileURLWithPath: $0) } ?? StackbarPaths.buildCache)
+    switch rest.first {
+    case "kit":
+        guard let protocolVersion = PluginBuilder.protocolVersion(of: package) else { fail("no StackbarKit at \(package.path); set STACKBAR_PACKAGE") }
+        print("\(builder.stackbarKit) \(protocolVersion)")
+    case "build":
+        guard rest.count >= 2, let out = flag("-o", in: rest), let keyFile = flag("--key", in: rest) else { fail(usage) }
+        do {
+            guard let key = Data(base64Encoded: try String(contentsOfFile: keyFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) else { fail("\(keyFile) is not a key") }
+            var (binary, record) = try builder.buildHelper(source: URL(fileURLWithPath: rest[1]))
+            let destination = URL(fileURLWithPath: out)
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.copyItem(at: binary, to: destination)
+            record.url = flag("--url", in: rest) ?? destination.lastPathComponent
+            try record.sign(privateKey: key)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            print(String(decoding: try encoder.encode(record), as: UTF8.self))
+        } catch let failure as PluginBuilder.Failure {
+            fail(failure.description)
+        } catch {
+            fail("\(error)")
+        }
+    case "prebuild":
+        guard rest.count >= 3 else { fail(usage) }
+        let directory = URL(fileURLWithPath: rest[1])
+        let inputs = rest.dropFirst(2).prefix { !$0.hasPrefix("--") }
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("stackbar-prebuild-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+            for input in inputs {
+                var source = URL(fileURLWithPath: input)
+                if source.pathExtension == PluginBundle.fileExtension {
+                    let bundle = try PluginBundle.decode(Data(contentsOf: source))
+                    source = scratch.appendingPathComponent(PluginBuilder.sanitizedName(bundle.manifest.id) + ".swift")
+                    try Data(bundle.source.utf8).write(to: source)
+                }
+                let (binary, record) = try builder.buildHelper(source: source)
+                let file = directory.appendingPathComponent(PrebuiltHelpers.exactName(sourceDigest: record.sourceDigest, stackbarKit: record.stackbarKit))
+                try? FileManager.default.removeItem(at: file)
+                try FileManager.default.copyItem(at: binary, to: file)
+                print("\(file.lastPathComponent)  \(record.id) \(record.version)")
+            }
+        } catch let failure as PluginBuilder.Failure {
+            fail(failure.description)
+        } catch {
+            fail("\(error)")
+        }
+    default:
+        fail(usage)
     }
 case "keygen":
     let keyFile = URL(fileURLWithPath: flag("--key", in: rest) ?? StackbarPaths.dataDirectory.appendingPathComponent("publisher.key").path)

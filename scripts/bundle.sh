@@ -30,6 +30,22 @@ scripts/embed-stackbarkit.sh "$APP" "$BIN"
 mkdir -p "$APP/Contents/Resources"
 cp Packaging/AppIcon.icns "$APP/Contents/Resources/"
 
+# Prebuilt helpers for the plugins the app carries (the first-party bundles and
+# the examples), against the StackbarKit just embedded, so a Mac without Xcode
+# or the Command Line Tools runs them. Named <source digest>-<StackbarKit digest>,
+# which is what the app looks for; a source the user changes builds as usual.
+KIT="$APP/Contents/Resources/StackbarKit"
+set --
+for plugin in "$KIT"/Bundles/*.stackbarplugin "$KIT"/Examples/*.swift; do
+    [ -f "$plugin" ] && set -- "$@" "$plugin"
+done
+if [ $# -gt 0 ]; then
+    STACKBAR_PACKAGE="$KIT" "$BIN/stackbarctl" helper prebuild "$KIT/Prebuilt" "$@" --cache "$BUILD/prebuild-cache"
+    for helper in "$KIT"/Prebuilt/*; do
+        codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$helper"
+    done
+fi
+
 codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/stackbarctl"
 codesign --force --options runtime "$TIMESTAMP" --entitlements Packaging/Stackbar.entitlements --sign "$IDENTITY" "$APP"
 codesign --verify --strict "$APP"

@@ -135,6 +135,7 @@ final class AppModel {
         let installed = installer.installed
         guard !installed.isEmpty else { return }
         let (catalogs, _) = await PluginStore.load(storeSources)
+        await refreshHelpers(installed: installed, catalogs: catalogs)
         let review = PluginStore.review(catalogs, installed: installed)
         for withdrawn in review.withdrawn {
             if let controller = controller(for: withdrawn.installed.id) { await remove(controller) }
@@ -158,10 +159,42 @@ final class AppModel {
     func installUpdate(_ update: PluginStore.Update) async throws {
         let bundle = try await PluginIndex.bundle(for: update.entry, indexURL: update.indexURL)
         guard bundle.manifest.id == update.entry.id else { throw PluginBundle.BundleError.manifestMismatch }
+        let helper = try await prebuiltHelper(for: bundle, indexURL: update.indexURL)
         let file = try installer.install(bundle)
+        save(helper)
         if let controller = controller(for: update.entry.id) { controller.reload() } else { add(file) }
         pendingUpdates.removeAll { $0.entry.id == update.entry.id }
         refreshInstalled()
+    }
+
+    // MARK: - Prebuilt helpers
+
+    /// The prebuilt helper to install with a store bundle. Throws when this
+    /// Mac can't build the plugin and the store has no helper for it yet, so
+    /// an update waits rather than breaking a plugin that runs.
+    func prebuiltHelper(for bundle: PluginBundle, indexURL: URL) async throws -> PrebuiltHelpers.Download? {
+        let builder = builder
+        let toolchain = await Task.detached { PluginBuilder.hasToolchain }.value
+        return try await PrebuiltHelpers.prepare(bundle, indexURL: indexURL, builder: builder, toolchain: toolchain)
+    }
+
+    /// Saves a helper once its source is installed.
+    func save(_ helper: PrebuiltHelpers.Download?) {
+        guard let helper else { return }
+        try? PrebuiltHelpers.save(helper, in: builder.downloadedHelpers, stackbarKit: builder.stackbarKit)
+    }
+
+    /// Fetches helpers that installed store plugins are missing (after a
+    /// Stackbar update, or one installed before helpers existed) and restarts
+    /// a plugin that failed for want of one.
+    private func refreshHelpers(installed: [PluginInstaller.Installed], catalogs: [PluginStore.Catalog]) async {
+        let builder = builder
+        let publishers = installer.publishers
+        let toolchain = await Task.detached { PluginBuilder.hasToolchain }.value
+        let refreshed = await PrebuiltHelpers.refresh(installed: installed, catalogs: catalogs, publishers: publishers, builder: builder, toolchain: toolchain)
+        for id in refreshed {
+            if let controller = controller(for: id), case .failed = controller.state { controller.reload() }
+        }
     }
 
     func stop() async {

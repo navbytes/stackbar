@@ -66,8 +66,8 @@ cask "stackbar" do
   ]
 
   caveats <<~CAVEATS
-    Stackbar compiles plugins on your Mac with Swift. If you have neither
-    Xcode nor the Command Line Tools, install them:
+    Store plugins come prebuilt. To write your own plugins, install Xcode
+    or the Command Line Tools:
       xcode-select --install
   CAVEATS
 end
