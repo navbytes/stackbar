@@ -31,4 +31,53 @@ final class PaletteSectionsTests: XCTestCase {
         XCTAssertEqual(sections, [PaletteSection(title: "Results", entries: results)])
         XCTAssertEqual(PaletteSection.group([], query: "x") { _ in true }, [])
     }
+
+    func testFavoritesLeadAnEmptyQueryAndAreNotRepeated() {
+        let results = [command("c1"), command("c2"), action("a1")]
+        let sections = PaletteSection.group(results, query: "", favorites: [action("a1")]) { _ in false }
+        XCTAssertEqual(sections.map(\.title), ["Favorites", "Commands"])
+        XCTAssertEqual(sections.map { $0.entries.map(\.title) }, [["a1"], ["c1", "c2"]])
+    }
+
+    func testStoreSuggestionsFollowATypedQuery() {
+        let store = [PaletteIndex.Entry(pluginID: "s", pluginName: "Store", title: "Docker", kind: .open("stackbar://store/s"))]
+        let sections = PaletteSection.group([command("c1")], query: "do", store: store) { _ in false }
+        XCTAssertEqual(sections.map(\.title), ["Results", "From the Store"])
+        XCTAssertEqual(PaletteSection.group([], query: "do", store: store) { _ in false }.map(\.title), ["From the Store"])
+        XCTAssertEqual(PaletteSection.group([], query: "", store: store) { _ in false }, [], "no store rows before typing")
+    }
+
+    func testFavoritesTogglePersistAndSkipEntriesThatAreGone() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("favorites-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let favorites = PaletteFavorites(file: file)
+        XCTAssertTrue(favorites.toggle("p/c2"))
+        XCTAssertTrue(favorites.toggle("p/gone"))
+        XCTAssertTrue(favorites.toggle("p/c1"))
+        XCTAssertFalse(favorites.toggle("p/gone"))
+        let reloaded = PaletteFavorites(file: file)
+        XCTAssertEqual(reloaded.ids, ["p/c2", "p/c1"])
+        XCTAssertEqual(reloaded.entries(in: [command("c1"), command("c2"), command("c3")]).map(\.title), ["c2", "c1"])
+    }
+
+    func testStoreSuggestionsSkipInstalledPluginsAndShortQueries() {
+        func listing(_ id: String, _ name: String, summary: String) -> PluginIndex.Entry {
+            var entry = PluginIndex.Entry(id: id, name: name, version: "1.0.0", publisher: "n", bundle: "b", sha256: "0", capabilities: [])
+            entry.summary = summary
+            entry.symbol = "shippingbox"
+            return entry
+        }
+        let catalog = PluginStore.Catalog(source: .init(url: URL(string: "https://example.com/index.json")!), index: PluginIndex(name: "X", plugins: [
+            listing("dev.t.docker", "Docker", summary: "Containers at a glance"),
+            listing("dev.t.ports", "Ports", summary: "Who is listening"),
+            listing("dev.t.dock", "Dock Tools", summary: "Tweak the Dock"),
+        ]))
+        let installed = StoreListing.Installed(versions: ["dev.t.dock": "1.0.0"])
+        let found = StoreListing.paletteSuggestions([catalog], query: "dock", installed: installed)
+        XCTAssertEqual(found.map(\.title), ["Docker"], "installed plugins are not suggested")
+        XCTAssertEqual(found.first?.kind, .open("stackbar://store/dev.t.docker"))
+        XCTAssertEqual(found.first?.symbol, "shippingbox")
+        XCTAssertEqual(StoreListing.paletteSuggestions([catalog], query: "contain", installed: installed).map(\.title), ["Docker"], "a summary word matches")
+        XCTAssertEqual(StoreListing.paletteSuggestions([catalog], query: "d", installed: installed), [])
+    }
 }
