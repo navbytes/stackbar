@@ -36,6 +36,8 @@ final class PaletteSession {
         var title: String
         var shortcut: String?
         var role: Role = .primary
+        /// The group ⌘K lists it under; nil for the first, untitled one.
+        var section: String?
         var perform: @MainActor () -> Void
         var id: String { title }
     }
@@ -52,7 +54,11 @@ final class PaletteSession {
     var argumentValues: [String: String] = [:]
     var showingActions = false
     var actionSelection = 0
-    /// Why the last thing didn't work, shown under the search field.
+    /// What is typed in ⌘K's own search field.
+    var actionQuery = "" {
+        didSet { if actionQuery != oldValue { actionSelection = 0 } }
+    }
+    /// Why the last thing didn't work, shown in the action bar.
     private(set) var problem: String?
     /// A view command is waiting for its plugin.
     private(set) var opening = false
@@ -84,6 +90,7 @@ final class PaletteSession {
         cache = nil
         argumentValues = [:]
         showingActions = false
+        actionQuery = ""
         problem = nil
         opening = false
         context = nil
@@ -93,6 +100,7 @@ final class PaletteSession {
     func back() -> Bool {
         if showingActions {
             showingActions = false
+            actionQuery = ""
             return true
         }
         guard let last = stack.popLast() else { return false }
@@ -111,18 +119,53 @@ final class PaletteSession {
 
     /// The root's search, kept until the query or the index changes: the
     /// view, the footer, ⌘K and every arrow press ask for it.
-    @ObservationIgnored private var cache: (query: String, revision: Int, results: [PaletteIndex.Entry])?
+    @ObservationIgnored private var cache: (query: String, revision: Int, sections: [PaletteSection], results: [PaletteIndex.Entry])?
 
+    /// The root's results in titled groups, as drawn.
+    var sections: [PaletteSection] {
+        load().sections
+    }
+
+    /// The same results in the order drawn, which the arrows walk.
     var results: [PaletteIndex.Entry] {
+        load().results
+    }
+
+    private func load() -> (sections: [PaletteSection], results: [PaletteIndex.Entry]) {
         let palette = model.palette
-        if let cache, cache.query == query, cache.revision == palette.revision { return cache.results }
-        var found = palette.search(query, limit: 30, usage: model.commands.usage)
+        if let cache, cache.query == query, cache.revision == palette.revision { return (cache.sections, cache.results) }
+        let usage = model.commands.usage
+        var found = palette.search(query, limit: 30, usage: usage)
         if let match = palette.aliasMatch(query) {
             found.removeAll { $0.id == match.entry.id }
             found.insert(match.entry, at: 0)
         }
-        cache = (query, palette.revision, found)
-        return found
+        let sections = PaletteSection.group(found, query: query) { usage.score($0.id) > 0 }
+        let ordered = sections.flatMap(\.entries)
+        cache = (query, palette.revision, sections, ordered)
+        return (sections, ordered)
+    }
+
+    /// A plugin's manifest, for its icon and colour.
+    func manifest(of pluginID: String) -> Manifest? {
+        model.controller(for: pluginID)?.manifest
+    }
+
+    /// The plugin the palette is about now: the open command's, or the
+    /// selected entry's.
+    var currentPluginID: String? {
+        switch top {
+        case .view(let view): return view.entry.pluginID
+        case .arguments(let entry, _): return entry.pluginID
+        case .none: return selectedEntry?.pluginID
+        }
+    }
+
+    /// A plugin is working: a view opening, or a view searching.
+    var isLoading: Bool {
+        if opening { return true }
+        if case .view(let view) = top { return view.isSearching }
+        return false
     }
 
     /// The root entry Return runs: the one the arrows chose, or the first.
@@ -271,17 +314,17 @@ final class PaletteSession {
             var actions = [Action(title: entry.commandKey == nil ? "Run" : "Open") { [weak self] in self?.activate(entry) }]
             if let key = entry.commandKey, let command = model.commands.registry.entry(key) {
                 if command.spec.exposure == .everywhere {
-                    actions.append(Action(title: "Copy Link", shortcut: "cmd+shift+c") { [weak self] in
+                    actions.append(Action(title: "Copy Link", shortcut: "cmd+shift+c", section: "Command") { [weak self] in
                         Platform.copy(CommandLink(key: key).url)
                         HUD.shared.show("Copied the link")
                         self?.finish()
                     })
                 }
-                actions.append(Action(title: "Set Alias and Hotkey…") { [weak self] in
+                actions.append(Action(title: "Set Alias and Hotkey…", section: "Command") { [weak self] in
                     self?.finish()
                     AppDelegate.shared?.showCommandSettings(key)
                 })
-                actions.append(Action(title: "Disable Command", role: .critical) { [weak self] in
+                actions.append(Action(title: "Disable Command", role: .critical, section: "Command") { [weak self] in
                     guard let self else { return }
                     var preference = model.commands.preferences[key]
                     preference.enabled = false
@@ -300,10 +343,21 @@ final class PaletteSession {
         }
     }
 
+    /// ⌘K's list after its search field: the arrows and Return walk this.
+    var filteredActions: [Action] {
+        let typed = actionQuery.lowercased().filter { !$0.isWhitespace }
+        guard !typed.isEmpty else { return actions }
+        return actions
+            .compactMap { action in TextMatch.score(typed, in: action.title.lowercased()).map { (action, $0) } }
+            .sorted { $0.1 > $1.1 }
+            .map(\.0)
+    }
+
     func runAction(_ index: Int) {
-        let actions = actions
+        let actions = filteredActions
         guard actions.indices.contains(index) else { return }
         showingActions = false
+        actionQuery = ""
         actions[index].perform()
     }
 
@@ -342,7 +396,7 @@ final class PaletteSession {
 
     func move(_ delta: Int) {
         if showingActions {
-            actionSelection = min(max(actionSelection + delta, 0), max(actions.count - 1, 0))
+            actionSelection = min(max(actionSelection + delta, 0), max(filteredActions.count - 1, 0))
             return
         }
         switch top {
@@ -355,6 +409,7 @@ final class PaletteSession {
     func toggleActions() {
         guard showingActions || !actions.isEmpty else { return }
         showingActions.toggle()
+        actionQuery = ""
         actionSelection = 0
     }
 

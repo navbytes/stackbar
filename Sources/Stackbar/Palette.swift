@@ -146,6 +146,7 @@ struct PaletteView: View {
     enum Field: Hashable {
         case search
         case argument(String)
+        case actionSearch
     }
 
     var body: some View {
@@ -153,26 +154,23 @@ struct PaletteView: View {
             header
                 .padding(.horizontal, 20)
                 .frame(height: 58)
-            if let problem = session.problem {
-                Text(problem)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-            }
-            Divider().padding(.horizontal, 12)
+            LoadingBar(active: session.isLoading)
             ZStack(alignment: .bottomTrailing) {
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 if session.showingActions {
-                    ActionsPanel(session: session)
-                        .padding(10)
+                    ActionsPanel(session: session, focus: $focus)
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 4)
+                        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .bottomTrailing)))
                 }
             }
-            footer
-                .padding(.horizontal, 18)
-                .padding(.vertical, 9)
+            .animation(.snappy(duration: 0.18), value: session.showingActions)
+            Divider().opacity(0.6)
+            ActionBar(session: session)
+                .padding(.leading, 16)
+                .padding(.trailing, 8)
+                .frame(height: 44)
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .clipShape(.rect(cornerRadius: Self.cornerRadius))
@@ -181,6 +179,13 @@ struct PaletteView: View {
         .onAppear { focusFirst() }
         .onChange(of: session.shownCount) { _, _ in focusFirst() }
         .onChange(of: session.stack.map(\.id)) { _, _ in focusFirst() }
+        .onChange(of: session.showingActions) { _, showing in
+            if showing {
+                DispatchQueue.main.async { focus = .actionSearch }
+            } else {
+                focusFirst()
+            }
+        }
     }
 
     // MARK: Header
@@ -217,9 +222,6 @@ struct PaletteView: View {
                     EmptyView()
                 }
             }
-            if session.opening {
-                ProgressView().controlSize(.small)
-            }
         }
         .font(.title2)
     }
@@ -246,31 +248,6 @@ struct PaletteView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .view(let view):
             CommandViewBody(session: session, view: view)
-        }
-    }
-
-    // MARK: Footer
-
-    private var footer: some View {
-        HStack(spacing: 14) {
-            Text(footerName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            Spacer()
-            if let primary = session.primaryTitle {
-                KeyHint(key: "↩", title: primary)
-            }
-            if !session.actions.isEmpty {
-                KeyHint(key: "⌘K", title: "Actions")
-            }
-            KeyHint(key: "esc", title: session.stack.isEmpty ? "Close" : "Back")
-        }
-    }
-
-    private var footerName: String {
-        switch session.top {
-        case .view(let view): return view.entry.pluginName
-        case .arguments(let entry, _): return entry.pluginName
-        case .none:
-            return session.selectedEntry?.pluginName ?? "Stackbar"
         }
     }
 
@@ -322,17 +299,20 @@ struct RootResults: View {
     @Bindable var session: PaletteSession
 
     var body: some View {
-        let results = session.results
+        let sections = session.sections
         let selected = session.selectedEntry?.id
         ScrollViewReader { proxy in
             ScrollView {
                 // One identity per row, the entry's: the highlight and the
                 // scroll follow the entry, not its position in the list.
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(results) { entry in
-                        PaletteRow(entry: entry, selected: entry.id == selected)
-                            .contentShape(Rectangle())
-                            .onTapGesture { session.activate(entry) }
+                    ForEach(sections) { section in
+                        SectionHeader(title: section.title)
+                        ForEach(section.entries) { entry in
+                            PaletteRow(entry: entry, manifest: session.manifest(of: entry.pluginID), selected: entry.id == selected)
+                                .contentShape(Rectangle())
+                                .onTapGesture { session.activate(entry) }
+                        }
                     }
                 }
                 .padding(.vertical, 6)
@@ -343,7 +323,7 @@ struct RootResults: View {
             }
         }
         .overlay {
-            if results.isEmpty {
+            if sections.isEmpty {
                 Text(session.model.palette.all.isEmpty ? "No plugin has any commands or actions yet." : "No matches")
                     .foregroundStyle(.secondary)
             }
@@ -351,24 +331,35 @@ struct RootResults: View {
     }
 }
 
+/// A group's title over its rows, as in Raycast's root list.
+struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+    }
+}
+
 struct PaletteRow: View {
     let entry: PaletteIndex.Entry
+    let manifest: Manifest?
     let selected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: entry.symbol ?? symbol)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(selected ? Color.white : Color.secondary)
-                .frame(width: 30, height: 30)
-                .background(selected ? Color.accentColor : Color.primary.opacity(0.07), in: .rect(cornerRadius: 8))
-            VStack(alignment: .leading, spacing: 1) {
-                Text(entry.title).font(.body.weight(.medium)).lineLimit(1)
-                if let subtitle = entry.subtitle {
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
+        HStack(spacing: 10) {
+            // The entry's symbol on a tile in its plugin's colour, so each
+            // plugin is told apart at a glance.
+            SettingsIconTile(symbol: iconName, color: PluginIcon.color(manifest?.accent), size: 24)
+            Text(entry.title).font(.body.weight(.medium)).lineLimit(1)
+            if let subtitle {
+                Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
             }
-            Spacer()
+            Spacer(minLength: 8)
             if let alias = entry.alias {
                 Text(alias)
                     .font(.caption.monospaced())
@@ -376,15 +367,37 @@ struct PaletteRow: View {
                     .padding(.vertical, 1)
                     .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 5))
             }
-            Text(entry.pluginName).font(.caption).foregroundStyle(.secondary)
-            if case .command = entry.kind {
-                Text("Command").font(.caption2).foregroundStyle(.tertiary)
-            }
+            Text(kindLabel).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(selected ? Color.accentColor.opacity(0.18) : .clear, in: .rect(cornerRadius: 12))
+        .padding(.vertical, 7)
+        .background(selected ? Color.primary.opacity(0.1) : .clear, in: .rect(cornerRadius: 10))
         .padding(.horizontal, 8)
+    }
+
+    /// The entry's own symbol, the plugin's, or one for its kind.
+    private var iconName: String {
+        for name in [entry.symbol, manifest?.symbol].compactMap({ $0 }) where NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
+            return name
+        }
+        return symbol
+    }
+
+    /// A command without its own subtitle names its plugin, as Raycast does.
+    private var subtitle: String? {
+        switch entry.kind {
+        case .command, .showPanel: return entry.subtitle ?? entry.pluginName
+        case .navigate, .action, .open: return entry.subtitle
+        }
+    }
+
+    /// Raycast's right-hand label: what the entry is, and whose.
+    private var kindLabel: String {
+        switch entry.kind {
+        case .command: return "Command"
+        case .showPanel: return "Panel"
+        case .navigate, .action, .open: return entry.pluginName
+        }
     }
 
     private var symbol: String {
@@ -409,9 +422,6 @@ struct ViewHeader: View {
             .focused(focus, equals: .search)
             .onSubmit(onSubmit)
         ArgumentFields(arguments: view.entry.spec.arguments, values: $view.arguments, focus: focus, onSubmit: onSubmit)
-        if view.isSearching {
-            ProgressView().controlSize(.small).help("Searching…")
-        }
     }
 }
 
@@ -509,30 +519,63 @@ struct CommandViewBody: View {
     }
 }
 
-/// ⌘K: what can be done with the selection.
+/// ⌘K: what can be done with the selection, in groups, with its own search
+/// field at the bottom as in Raycast.
 struct ActionsPanel: View {
     @Bindable var session: PaletteSession
+    var focus: FocusState<PaletteView.Field?>.Binding
 
     var body: some View {
+        let actions = session.filteredActions
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(session.actions.enumerated()), id: \.element.id) { index, action in
-                HStack {
-                    Text(action.title).foregroundStyle(action.role == .critical ? Color.red : Color.primary)
-                    Spacer(minLength: 16)
-                    if let shortcut = action.shortcut {
-                        Text(Self.glyphs(shortcut)).font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                        // A new group: a line, then its title.
+                        if action.section != (index > 0 ? actions[index - 1].section : nil) {
+                            if index > 0 { Divider().padding(.vertical, 4).padding(.horizontal, 6) }
+                            if let section = action.section {
+                                Text(section)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.bottom, 2)
+                            }
+                        }
+                        row(action, selected: index == session.actionSelection)
+                            .onTapGesture { session.runAction(index) }
+                    }
+                    if actions.isEmpty {
+                        Text("No matching actions")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(index == session.actionSelection ? Color.accentColor.opacity(0.25) : .clear, in: .rect(cornerRadius: 8))
-                .contentShape(Rectangle())
-                .onTapGesture { session.runAction(index) }
+                .padding(6)
+            Divider()
+            TextField("Search for actions…", text: $session.actionQuery)
+                .textFieldStyle(.plain)
+                .focused(focus, equals: .actionSearch)
+                .onSubmit { session.submit() }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+        }
+        .frame(width: 300)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+    }
+
+    private func row(_ action: PaletteSession.Action, selected: Bool) -> some View {
+        HStack {
+            Text(action.title).foregroundStyle(action.role == .critical ? Color.red : Color.primary)
+            Spacer(minLength: 16)
+            if let shortcut = action.shortcut {
+                Keycap(Self.glyphs(shortcut))
             }
         }
-        .padding(6)
-        .frame(width: 280)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(selected ? Color.primary.opacity(0.1) : .clear, in: .rect(cornerRadius: 8))
+        .contentShape(Rectangle())
     }
 
     /// `cmd+shift+c` as ⌘⇧C.
@@ -551,19 +594,109 @@ struct ActionsPanel: View {
     }
 }
 
-struct KeyHint: View {
+/// A key in the action bar and ⌘K, drawn as a small keycap.
+struct Keycap: View {
     let key: String
-    let title: String
+
+    init(_ key: String) {
+        self.key = key
+    }
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(key)
-                .font(.caption2.weight(.medium))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 4))
+        Text(key)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 20, minHeight: 18)
+            .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 5))
+    }
+}
+
+/// Raycast's bottom bar: the plugin in charge (or what went wrong) on the
+/// left; Return's action and ⌘K as buttons on the right.
+struct ActionBar: View {
+    @Bindable var session: PaletteSession
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let problem = session.problem {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                Text(problem).font(.callout).lineLimit(1).help(problem)
+            } else if let pluginID = session.currentPluginID, let name = pluginName {
+                PluginIcon(manifest: session.manifest(of: pluginID), size: 18)
+                Text(name).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+            } else {
+                Text("Stackbar").font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            if let primary = session.primaryTitle {
+                BarButton(title: primary, key: "↩", emphasized: true) { session.submit() }
+            }
+            if !session.actions.isEmpty {
+                Divider().frame(height: 16)
+                BarButton(title: "Actions", key: "⌘K", emphasized: false) { session.toggleActions() }
+            }
         }
+    }
+
+    private var pluginName: String? {
+        switch session.top {
+        case .view(let view): return view.entry.pluginName
+        case .arguments(let entry, _): return entry.pluginName
+        case .none: return session.selectedEntry?.pluginName
+        }
+    }
+}
+
+/// A clickable action-bar item: its title and its key.
+struct BarButton: View {
+    let title: String
+    let key: String
+    let emphasized: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.callout.weight(emphasized ? .semibold : .regular))
+                    .foregroundStyle(emphasized ? Color.primary : Color.secondary)
+                Keycap(key)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(hovering ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// A hairline under the search field that sweeps while a plugin works, in
+/// place of a spinner.
+struct LoadingBar: View {
+    let active: Bool
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Color.primary.opacity(0.08))
+                if active {
+                    TimelineView(.animation) { timeline in
+                        let width = geometry.size.width
+                        let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) / 1.2
+                        Rectangle()
+                            .fill(LinearGradient(colors: [.clear, .accentColor, .clear], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: width * 0.35)
+                            .offset(x: -width * 0.35 + (width * 1.35) * phase)
+                    }
+                }
+            }
+        }
+        .frame(height: active ? 2 : 1)
+        .clipped()
     }
 }
 
