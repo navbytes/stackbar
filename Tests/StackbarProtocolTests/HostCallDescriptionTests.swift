@@ -12,6 +12,8 @@ final class HostCallDescriptionTests: XCTestCase {
         .clipboardRead, .clipboardWrite(.text("x")), .paste(.text("x")), .keepAwake(KeepAwakeRequest()), .keepAwake(nil),
         .systemStatus, .calendarEvents(from: Date(), to: Date()), .run(RunRequest(command: "brew")), .cancelRun(id: 1),
         .context, .finderSelection, .chooseFile(types: []), .saveFile(name: "x.json", data: Data()), .resolveApplication("Safari"),
+        .reminderAccess(ask: true), .reminderLists, .createReminderList(title: "Home", color: nil), .reminders(ReminderQuery()),
+        .saveReminder(Reminder(title: "x"), fields: nil), .deleteReminder(id: "r"),
     ]
 
     func testEveryCallHasALabel() {

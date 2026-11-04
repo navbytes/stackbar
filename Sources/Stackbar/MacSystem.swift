@@ -9,8 +9,8 @@ import StackbarProtocol
 import StackbarUI
 import UniformTypeIdentifiers
 
-/// The clipboard, power assertions, battery, running apps and calendar for
-/// plugins, read from AppKit, IOKit and EventKit. `HostServices` checks each
+/// The clipboard, power assertions, battery, running apps, calendar and
+/// reminders for plugins, read from AppKit, IOKit and EventKit. `HostServices` checks each
 /// plugin's capabilities before anything here runs.
 final class MacSystem: SystemServices, @unchecked Sendable {
     private let lock = NSLock()
@@ -349,6 +349,234 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         guard let rgb = NSColor(cgColor: color)?.usingColorSpace(.sRGB) else { return nil }
         let value = { (component: CGFloat) in Int((component * 255).rounded()) }
         return String(format: "#%02X%02X%02X", value(rgb.redComponent), value(rgb.greenComponent), value(rgb.blueComponent))
+    }
+
+    // MARK: Reminders
+
+    func reminderAccess(ask: Bool) async -> ReminderAccess {
+        guard Bundle.main.object(forInfoDictionaryKey: "NSRemindersFullAccessUsageDescription") != nil else { return .unavailable }
+        switch EKEventStore.authorizationStatus(for: .reminder) {
+        case .fullAccess:
+            return .granted
+        case .notDetermined:
+            guard ask else { return .notDetermined }
+            let granted = (try? await store.requestFullAccessToReminders()) ?? false
+            return granted ? .granted : .denied
+        default:
+            return .denied
+        }
+    }
+
+    private func requireReminders() async throws {
+        switch await reminderAccess(ask: true) {
+        case .granted:
+            return
+        case .unavailable:
+            throw SystemServiceError("Reminders needs Stackbar.app (scripts/bundle.sh); an unbundled build has no Info.plist to ask with")
+        case .denied, .notDetermined:
+            throw SystemServiceError("Stackbar has no access to your reminders; allow it in System Settings > Privacy & Security > Reminders")
+        }
+    }
+
+    func reminderLists() async throws -> [ReminderList] {
+        try await requireReminders()
+        let defaultID = store.defaultCalendarForNewReminders()?.calendarIdentifier
+        return store.calendars(for: .reminder)
+            .map { Self.list($0, defaultID: defaultID) }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    func createReminderList(title: String, color: String?) async throws -> ReminderList {
+        try await requireReminders()
+        let calendar = EKCalendar(for: .reminder, eventStore: store)
+        calendar.title = title
+        guard let source = store.defaultCalendarForNewReminders()?.source ?? store.sources.first(where: { $0.sourceType == .local }) else {
+            throw SystemServiceError("there is no Reminders account to add a list to")
+        }
+        calendar.source = source
+        if let color, let paint = Self.cgColor(hex: color) { calendar.cgColor = paint }
+        try store.saveCalendar(calendar, commit: true)
+        return Self.list(calendar, defaultID: nil)
+    }
+
+    func reminders(_ query: ReminderQuery) async throws -> [Reminder] {
+        try await requireReminders()
+        var calendars: [EKCalendar]?
+        if let ids = query.lists {
+            if ids.isEmpty { return [] }
+            calendars = try ids.map { id in
+                guard let calendar = store.calendar(withIdentifier: id) else { throw SystemServiceError("no Reminders list \(id)") }
+                return calendar
+            }
+        }
+        var predicates = [store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: calendars)]
+        if let since = query.completedSince {
+            predicates.append(store.predicateForCompletedReminders(withCompletionDateStarting: since, ending: nil, calendars: calendars))
+        }
+        var result: [Reminder] = []
+        for predicate in predicates { result += await fetchReminders(predicate) }
+        return Array(result.prefix(ReminderQuery.limit))
+    }
+
+    private func fetchReminders(_ predicate: NSPredicate) async -> [Reminder] {
+        await withCheckedContinuation { continuation in
+            _ = store.fetchReminders(matching: predicate) { found in
+                continuation.resume(returning: (found ?? []).map(Self.reminder))
+            }
+        }
+    }
+
+    func saveReminder(_ reminder: Reminder, fields: [Reminder.Field]?) async throws -> Reminder {
+        try await requireReminders()
+        let item: EKReminder
+        var write = fields ?? Reminder.Field.allCases
+        if reminder.id.isEmpty {
+            item = EKReminder(eventStore: store)
+            write = Reminder.Field.allCases
+            if reminder.list.isEmpty {
+                guard let calendar = store.defaultCalendarForNewReminders() else { throw SystemServiceError("there is no default Reminders list") }
+                item.calendar = calendar
+            }
+        } else {
+            guard let existing = store.calendarItem(withIdentifier: reminder.id) as? EKReminder else {
+                throw SystemServiceError("no reminder \(reminder.id); it may have been deleted")
+            }
+            // Read what's there now, so only the fields asked for change.
+            _ = existing.refresh()
+            item = existing
+        }
+        for field in write {
+            switch field {
+            case .list:
+                guard !reminder.list.isEmpty else { continue }
+                guard let calendar = store.calendar(withIdentifier: reminder.list) else { throw SystemServiceError("no Reminders list \(reminder.list)") }
+                item.calendar = calendar
+            case .title:
+                item.title = reminder.title
+            case .notes:
+                item.notes = reminder.notes
+            case .due:
+                if let due = reminder.due {
+                    let units: Set<Calendar.Component> = reminder.dueHasTime ? [.year, .month, .day, .hour, .minute] : [.year, .month, .day]
+                    item.dueDateComponents = Calendar.current.dateComponents(units, from: due)
+                } else {
+                    item.dueDateComponents = nil
+                }
+            case .priority:
+                item.priority = Self.priority(reminder.priority)
+            case .completed:
+                item.isCompleted = reminder.completed != nil
+                item.completionDate = reminder.completed
+            case .recurrence:
+                for rule in item.recurrenceRules ?? [] { item.removeRecurrenceRule(rule) }
+                if let recurrence = reminder.recurrence { item.addRecurrenceRule(Self.rule(recurrence)) }
+            case .alarm:
+                for alarm in item.alarms ?? [] { item.removeAlarm(alarm) }
+                if let date = reminder.alarm { item.addAlarm(EKAlarm(absoluteDate: date)) }
+            case .url:
+                item.url = reminder.url.flatMap { URL(string: $0) }
+            }
+        }
+        try store.save(item, commit: true)
+        return Self.reminder(item)
+    }
+
+    func deleteReminder(id: String) async throws {
+        try await requireReminders()
+        guard let item = store.calendarItem(withIdentifier: id) as? EKReminder else { return }
+        try store.remove(item, commit: true)
+    }
+
+    private static func list(_ calendar: EKCalendar, defaultID: String?) -> ReminderList {
+        let paint: CGColor? = calendar.cgColor
+        return ReminderList(
+            id: calendar.calendarIdentifier,
+            title: calendar.title,
+            color: paint.flatMap(hex),
+            account: calendar.source?.title,
+            allowsChanges: calendar.allowsContentModifications,
+            isDefault: calendar.calendarIdentifier == defaultID
+        )
+    }
+
+    private static func reminder(_ item: EKReminder) -> Reminder {
+        let components = item.dueDateComponents
+        let due = components.flatMap { Calendar.current.date(from: $0) }
+        var alarm: Date?
+        if let first = item.alarms?.first {
+            alarm = first.absoluteDate ?? due.map { $0.addingTimeInterval(first.relativeOffset) }
+        }
+        let title: String? = item.title
+        return Reminder(
+            id: item.calendarItemIdentifier,
+            externalID: item.calendarItemExternalIdentifier,
+            list: item.calendar?.calendarIdentifier ?? "",
+            title: title ?? "",
+            notes: item.notes.map { String($0.prefix(4000)) },
+            due: due,
+            dueHasTime: components?.hour != nil,
+            priority: priority(item.priority),
+            completed: item.isCompleted ? (item.completionDate ?? Date()) : nil,
+            recurrence: item.recurrenceRules?.first.flatMap(recurrence),
+            alarm: alarm,
+            url: item.url?.absoluteString,
+            modified: item.lastModifiedDate
+        )
+    }
+
+    /// EventKit: 0 none, 1-4 high, 5 medium, 6-9 low.
+    private static func priority(_ value: Int) -> Reminder.Priority {
+        switch value {
+        case 1...4: return .high
+        case 5: return .medium
+        case 6...9: return .low
+        default: return .none
+        }
+    }
+
+    private static func priority(_ value: Reminder.Priority) -> Int {
+        switch value {
+        case .none: return 0
+        case .high: return 1
+        case .medium: return 5
+        case .low: return 9
+        }
+    }
+
+    private static func recurrence(_ rule: EKRecurrenceRule) -> ReminderRecurrence? {
+        let frequency: ReminderRecurrence.Frequency
+        switch rule.frequency {
+        case .daily: frequency = .daily
+        case .weekly: frequency = .weekly
+        case .monthly: frequency = .monthly
+        case .yearly: frequency = .yearly
+        @unknown default: return nil
+        }
+        let weekdays = (rule.daysOfTheWeek ?? []).map { $0.dayOfTheWeek.rawValue }
+        return ReminderRecurrence(frequency, interval: rule.interval, weekdays: frequency == .weekly ? weekdays : [])
+    }
+
+    private static func rule(_ recurrence: ReminderRecurrence) -> EKRecurrenceRule {
+        let frequency: EKRecurrenceFrequency
+        switch recurrence.frequency {
+        case .daily: frequency = .daily
+        case .weekly: frequency = .weekly
+        case .monthly: frequency = .monthly
+        case .yearly: frequency = .yearly
+        }
+        let days = recurrence.frequency == .weekly ? recurrence.weekdays.compactMap { EKWeekday(rawValue: $0).map { EKRecurrenceDayOfWeek($0) } } : []
+        return EKRecurrenceRule(
+            recurrenceWith: frequency, interval: recurrence.interval,
+            daysOfTheWeek: days.isEmpty ? nil : days, daysOfTheMonth: nil, monthsOfTheYear: nil,
+            weeksOfTheYear: nil, daysOfTheYear: nil, setPositions: nil, end: nil
+        )
+    }
+
+    private static func cgColor(hex: String) -> CGColor? {
+        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard digits.count == 6, let value = Int(digits, radix: 16) else { return nil }
+        let channel = { (shift: Int) in CGFloat((value >> shift) & 0xFF) / 255 }
+        return CGColor(srgbRed: channel(16), green: channel(8), blue: channel(0), alpha: 1)
     }
 
     // MARK: Context

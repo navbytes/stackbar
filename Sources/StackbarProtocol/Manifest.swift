@@ -214,6 +214,9 @@ public enum Trigger: Codable, Hashable, Sendable {
     case displays
     /// When a regular app opens or quits. Stackbar 0.16.0 and later.
     case apps
+    /// When reminders change, in any app or on any device. Needs the
+    /// `.reminders` capability. Stackbar 0.18.0 and later.
+    case reminders
 
     public static func every(_ duration: Duration) -> Trigger {
         let (seconds, attoseconds) = duration.components
@@ -275,6 +278,10 @@ public enum Capability: Codable, Hashable, Sendable {
     /// The host listens to the keyboard for the plugin and needs
     /// Accessibility access. Stackbar 0.16.0 and later.
     case keyLayer
+    /// Reads and changes the user's Apple Reminders (`Stackbar.reminders`,
+    /// `Stackbar.saveReminder`, the `.reminders` trigger). The host asks
+    /// macOS for access. Stackbar 0.18.0 and later.
+    case reminders
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

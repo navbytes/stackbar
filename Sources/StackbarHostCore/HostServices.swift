@@ -280,6 +280,42 @@ public final class HostServices: Sendable {
                 return .failure("\(error)")
             }
 
+        case .reminderAccess(let ask):
+            return .value(SystemCodec.encode(await platform.system.reminderAccess(ask: ask)))
+
+        case .reminderLists:
+            return await answer { try await self.platform.system.reminderLists() }
+
+        case .createReminderList(let title, let color):
+            let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { return .failure("a Reminders list needs a title") }
+            return await answer { try await self.platform.system.createReminderList(title: String(title.prefix(200)), color: color) }
+
+        case .reminders(let query):
+            return await answer {
+                try await self.platform.system.reminders(query).prefix(ReminderQuery.limit).map { reminder -> Reminder in
+                    var reminder = reminder
+                    reminder.notes = reminder.notes.map { String($0.prefix(4000)) }
+                    return reminder
+                }
+            }
+
+        case .saveReminder(let reminder, let fields):
+            guard !reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (fields.map { !$0.contains(.title) } ?? false) else {
+                return .failure("a reminder needs a title")
+            }
+            var reminder = reminder
+            reminder.notes = reminder.notes.map { String($0.prefix(4000)) }
+            return await answer { try await self.platform.system.saveReminder(reminder, fields: fields) }
+
+        case .deleteReminder(let reminderID):
+            do {
+                try await platform.system.deleteReminder(id: reminderID)
+                return .ok
+            } catch {
+                return .failure("\(error)")
+            }
+
         case .run(let request):
             return await run(request, id: id, granted: granted, declared: declared, emit: emit)
 
@@ -370,6 +406,15 @@ public final class HostServices: Sendable {
             } catch {
                 return .failure("\(error)")
             }
+        }
+    }
+
+    /// A system value as JSON, or the error in words.
+    private func answer(_ body: () async throws -> some Encodable) async -> HostResult {
+        do {
+            return .value(SystemCodec.encode(try await body()))
+        } catch {
+            return .failure("\(error)")
         }
     }
 

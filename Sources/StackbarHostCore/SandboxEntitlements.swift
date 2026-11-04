@@ -14,7 +14,7 @@ public enum SandboxEntitlements {
             switch capability {
             case .network, .oauth, .userServer:
                 result["com.apple.security.network.client"] = true
-            case .files, .run, .secret, .clipboard, .power, .calendar, .context, .openURLs, .storage, .windows, .apps, .keyLayer:
+            case .files, .run, .secret, .clipboard, .power, .calendar, .reminders, .context, .openURLs, .storage, .windows, .apps, .keyLayer:
                 // Files are opened up path by path (`fileExceptions`).
                 // Children inherit the sandbox; secrets, the clipboard, power
                 // assertions and calendar events all go through the host.
@@ -99,6 +99,7 @@ extension Capability {
         case .windows: return "Sees which windows you have open and where, moves them, and opens apps"
         case .apps: return "Sees which apps are running, and switches to, opens or hides them"
         case .keyLayer: return "Listens for a key you hold (like Right ⌘) and the letter you press with it"
+        case .reminders: return "Reads and changes your reminders"
         }
     }
 
@@ -120,6 +121,7 @@ extension Capability {
         case .windows: return "windows"
         case .apps: return "apps"
         case .keyLayer: return "keyLayer"
+        case .reminders: return "reminders"
         }
     }
 }

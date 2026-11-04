@@ -17,7 +17,8 @@ public enum StackbarProtocolVersion {
     /// effects, numeric transitions, hover and grids.
     /// 13 added listing and arranging windows, and the displays trigger.
     /// 14 added the app calls, the key layer and the apps trigger.
-    public static let current = 14
+    /// 15 added Reminders: the reminder calls and the reminders trigger.
+    public static let current = 15
 }
 
 /// Host → plugin.
@@ -57,7 +58,7 @@ public enum HostMessage: Codable, Equatable, Sendable {
 }
 
 public enum TriggerReason: String, Codable, Sendable {
-    case launch, interval, wake, manual, file, topic, clipboard, displays, apps
+    case launch, interval, wake, manual, file, topic, clipboard, displays, apps, reminders
 }
 
 /// The value that came with an event: a toggle's new state, a slider's number.
@@ -224,6 +225,24 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// Whether the plugin's key layer is listening (`KeyLayerStatus` as
     /// JSON). Needs `.keyLayer`. Protocol 14.
     case keyLayerStatus
+    /// Whether Stackbar may use Reminders (`ReminderAccess` as JSON); with
+    /// `ask`, macOS asks the user when they haven't been asked yet. Needs
+    /// `.reminders`. Protocol 15.
+    case reminderAccess(ask: Bool)
+    /// The Reminders lists (`[ReminderList]` as JSON). Needs `.reminders`.
+    case reminderLists
+    /// Makes a Reminders list in the default account (`ReminderList` as
+    /// JSON). Needs `.reminders`.
+    case createReminderList(title: String, color: String?)
+    /// The reminders the query asks for (`[Reminder]` as JSON, at most
+    /// `ReminderQuery.limit`). Needs `.reminders`.
+    case reminders(ReminderQuery)
+    /// Creates the reminder (empty id) or writes `fields` of it (nil for
+    /// all) onto the current one; answers the saved `Reminder` as JSON.
+    /// Needs `.reminders`.
+    case saveReminder(Reminder, fields: [Reminder.Field]?)
+    /// Deletes a reminder. Needs `.reminders`.
+    case deleteReminder(id: String)
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

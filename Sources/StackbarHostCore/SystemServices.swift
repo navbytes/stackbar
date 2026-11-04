@@ -45,6 +45,16 @@ public protocol SystemServices: Sendable {
     /// Registers (or with `nil` removes) a plugin's key layer.
     func setKeyLayer(_ layer: KeyLayer?, pluginID: String, pluginName: String) throws -> KeyLayerStatus
     func keyLayerStatus(pluginID: String) -> KeyLayerStatus
+    /// Whether Stackbar may use Reminders; with `ask`, asks when macOS
+    /// hasn't asked yet.
+    func reminderAccess(ask: Bool) async -> ReminderAccess
+    func reminderLists() async throws -> [ReminderList]
+    func createReminderList(title: String, color: String?) async throws -> ReminderList
+    func reminders(_ query: ReminderQuery) async throws -> [Reminder]
+    /// Creates (empty id) or writes `fields` (nil for all) onto the current
+    /// reminder, and answers with what was saved.
+    func saveReminder(_ reminder: Reminder, fields: [Reminder.Field]?) async throws -> Reminder
+    func deleteReminder(id: String) async throws
 }
 
 extension SystemServices {
@@ -63,6 +73,12 @@ extension SystemServices {
         throw SystemServiceError("key layers are not available on this platform")
     }
     public func keyLayerStatus(pluginID: String) -> KeyLayerStatus { .off }
+    public func reminderAccess(ask: Bool) async -> ReminderAccess { .unavailable }
+    public func reminderLists() async throws -> [ReminderList] { throw SystemServiceError("Reminders is not available on this platform") }
+    public func createReminderList(title: String, color: String?) async throws -> ReminderList { throw SystemServiceError("Reminders is not available on this platform") }
+    public func reminders(_ query: ReminderQuery) async throws -> [Reminder] { throw SystemServiceError("Reminders is not available on this platform") }
+    public func saveReminder(_ reminder: Reminder, fields: [Reminder.Field]?) async throws -> Reminder { throw SystemServiceError("Reminders is not available on this platform") }
+    public func deleteReminder(id: String) async throws { throw SystemServiceError("Reminders is not available on this platform") }
 }
 
 public struct SystemServiceError: Error, CustomStringConvertible, Sendable {
@@ -111,7 +127,9 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     /// Reads `STACKBAR_CALENDAR` (a JSON file of `[CalendarEvent]`) and
     /// `STACKBAR_CONTEXT` (`InvocationContext` as JSON, inline or a file) and
     /// `STACKBAR_WINDOWS` (`WindowSnapshot` as JSON, inline or a file) and
-    /// `STACKBAR_APPS` (`[RunningApp]` as JSON, inline or a file) when set.
+    /// `STACKBAR_APPS` (`[RunningApp]` as JSON, inline or a file) and
+    /// `STACKBAR_REMINDERS` (`SimulatedReminders` as JSON, inline or a file)
+    /// when set.
     public static func fromEnvironment() -> SimulatedSystem {
         let environment = ProcessInfo.processInfo.environment
         var events: [CalendarEvent]?
@@ -126,6 +144,10 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
         if let value = environment["STACKBAR_APPS"] {
             let text = value.hasPrefix("[") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
             if let apps = try? SystemCodec.decode([RunningApp].self, from: text) { system.simulate(apps: apps) }
+        }
+        if let value = environment["STACKBAR_REMINDERS"] {
+            let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
+            if let state = try? SystemCodec.decode(SimulatedReminders.self, from: text) { system.simulate(reminders: state) }
         }
         if let value = environment["STACKBAR_CONTEXT"] {
             let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
@@ -341,6 +363,92 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     public func simulate(status: SystemStatus) { lock.withLock { self.status = status } }
     public func simulate(events: [CalendarEvent]) { lock.withLock { self.events = events } }
 
+    // MARK: Reminders
+
+    private var reminderState = SimulatedReminders.sample()
+    private var nextReminderID = 1
+
+    /// Replaces the simulated lists, reminders and access.
+    public func simulate(reminders state: SimulatedReminders) { lock.withLock { reminderState = state } }
+    /// The simulated lists, reminders and access, as they are now.
+    public var simulatedReminders: SimulatedReminders { lock.withLock { reminderState } }
+
+    public func reminderAccess(ask: Bool) async -> ReminderAccess {
+        lock.withLock {
+            if ask, reminderState.access == .notDetermined { reminderState.access = reminderState.grantWhenAsked ? .granted : .denied }
+            return reminderState.access
+        }
+    }
+
+    private func requireReminders() throws {
+        switch lock.withLock({ reminderState.access }) {
+        case .granted: return
+        case .notDetermined:
+            let granted = lock.withLock {
+                reminderState.access = reminderState.grantWhenAsked ? .granted : .denied
+                return reminderState.access == .granted
+            }
+            if !granted { throw SystemServiceError("Reminders access was declined; allow Stackbar in System Settings > Privacy & Security > Reminders") }
+        case .denied: throw SystemServiceError("Stackbar has no access to your reminders; allow it in System Settings > Privacy & Security > Reminders")
+        case .unavailable: throw SystemServiceError("Reminders is not available on this platform")
+        }
+    }
+
+    public func reminderLists() async throws -> [ReminderList] {
+        try requireReminders()
+        return lock.withLock { reminderState.lists }
+    }
+
+    public func createReminderList(title: String, color: String?) async throws -> ReminderList {
+        try requireReminders()
+        return lock.withLock {
+            let list = ReminderList(id: "list-\(reminderState.lists.count + 1)", title: title, color: color, account: "iCloud")
+            reminderState.lists.append(list)
+            return list
+        }
+    }
+
+    public func reminders(_ query: ReminderQuery) async throws -> [Reminder] {
+        try requireReminders()
+        return lock.withLock {
+            reminderState.reminders.filter { reminder in
+                guard query.lists?.contains(reminder.list) ?? true else { return false }
+                guard let completed = reminder.completed else { return true }
+                return query.completedSince.map { completed >= $0 } ?? false
+            }
+        }
+    }
+
+    public func saveReminder(_ reminder: Reminder, fields: [Reminder.Field]?) async throws -> Reminder {
+        try requireReminders()
+        return try lock.withLock {
+            if reminder.id.isEmpty {
+                var saved = reminder
+                saved.id = "reminder-\(nextReminderID)"
+                saved.externalID = saved.id
+                nextReminderID += 1
+                if saved.list.isEmpty { saved.list = reminderState.lists.first(where: \.isDefault)?.id ?? reminderState.lists.first?.id ?? "" }
+                guard reminderState.lists.contains(where: { $0.id == saved.list }) else { throw SystemServiceError("no Reminders list \(saved.list)") }
+                saved.modified = Date()
+                reminderState.reminders.append(saved)
+                return saved
+            }
+            guard let index = reminderState.reminders.firstIndex(where: { $0.id == reminder.id }) else {
+                throw SystemServiceError("no reminder \(reminder.id); it may have been deleted")
+            }
+            var saved = reminderState.reminders[index].applying(reminder, fields: fields)
+            guard reminderState.lists.contains(where: { $0.id == saved.list }) else { throw SystemServiceError("no Reminders list \(saved.list)") }
+            saved.modified = Date()
+            reminderState.reminders[index] = saved
+            return saved
+        }
+    }
+
+    public func deleteReminder(id: String) async throws {
+        try requireReminders()
+        lock.withLock { reminderState.reminders.removeAll { $0.id == id } }
+    }
+
     /// Plugins holding an assertion, with what they asked for.
     public var keptAwake: [String: KeepAwakeRequest] { lock.withLock { assertions } }
 
@@ -466,5 +574,30 @@ public final class ClipboardImageStore: @unchecked Sendable {
             bytes += entry.2
             if index >= limit || bytes > maxBytes { try? FileManager.default.removeItem(at: entry.0) }
         }
+    }
+}
+
+/// What `SimulatedSystem` keeps for Reminders: lists, reminders and the
+/// access the user gave (or gives when asked).
+public struct SimulatedReminders: Codable, Equatable, Sendable {
+    public var access: ReminderAccess
+    /// What the simulated prompt answers when access is `notDetermined`.
+    public var grantWhenAsked: Bool
+    public var lists: [ReminderList]
+    public var reminders: [Reminder]
+
+    public init(access: ReminderAccess = .granted, grantWhenAsked: Bool = true, lists: [ReminderList] = [], reminders: [Reminder] = []) {
+        self.access = access
+        self.grantWhenAsked = grantWhenAsked
+        self.lists = lists
+        self.reminders = reminders
+    }
+
+    /// Two lists, Reminders (the default) and Groceries, with nothing in them.
+    public static func sample() -> SimulatedReminders {
+        SimulatedReminders(lists: [
+            ReminderList(id: "list-1", title: "Reminders", color: "#FF9500", account: "iCloud", isDefault: true),
+            ReminderList(id: "list-2", title: "Groceries", color: "#34C759", account: "iCloud"),
+        ])
     }
 }

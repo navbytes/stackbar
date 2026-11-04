@@ -7,7 +7,7 @@ import StackbarProtocol
 public enum SettingsPresentation {
     /// The kinds of access a plugin can have, in the order Settings lists them.
     public enum Access: String, CaseIterable, Sendable {
-        case network, account, secret, files, run, clipboard, context, windows, keyboard, calendar, power, links, server, storage
+        case network, account, secret, files, run, clipboard, context, windows, keyboard, calendar, reminders, power, links, server, storage
 
         /// The heading on the Privacy & Secrets page.
         public var title: String {
@@ -22,6 +22,7 @@ public enum SettingsPresentation {
             case .windows: return "Windows and Apps"
             case .keyboard: return "Keyboard"
             case .calendar: return "Calendar"
+            case .reminders: return "Reminders"
             case .power: return "Power and Battery"
             case .links: return "Opening Links"
             case .server: return "Your Servers"
@@ -42,6 +43,7 @@ public enum SettingsPresentation {
             case .windows: return "macwindow.on.rectangle"
             case .keyboard: return "keyboard.fill"
             case .calendar: return "calendar"
+            case .reminders: return "checklist"
             case .power: return "bolt.fill"
             case .links: return "link"
             case .server: return "server.rack"
@@ -62,6 +64,7 @@ public enum SettingsPresentation {
             case .windows: return .pink
             case .keyboard: return .orange
             case .calendar: return .red
+            case .reminders: return .orange
             case .power: return .green
             }
         }
@@ -72,7 +75,7 @@ public enum SettingsPresentation {
             let prefixes: [(String, Access)] = [
                 ("Connects to the server you enter", .server), ("Connects to", .network), ("Reads and writes", .files),
                 ("Runs", .run), ("Reads the secret", .secret), ("Signs in to", .account), ("Reads everything you copy", .clipboard),
-                ("Keeps the Mac awake", .power), ("Reads your calendar", .calendar), ("Reads the text you select", .context),
+                ("Keeps the Mac awake", .power), ("Reads your calendar", .calendar), ("Reads and changes your reminders", .reminders), ("Reads the text you select", .context),
                 ("Opens", .links), ("Stores up to", .storage), ("Sees which windows", .windows),
                 ("Sees which apps", .windows), ("Listens for a key", .keyboard),
             ]
@@ -90,6 +93,7 @@ public enum SettingsPresentation {
             case .clipboard: self = .clipboard
             case .power: self = .power
             case .calendar: self = .calendar
+            case .reminders: self = .reminders
             case .context: self = .context
             case .openURLs: self = .links
             case .storage: self = .storage
@@ -134,6 +138,7 @@ public enum SettingsPresentation {
         case .clipboard: return "Clipboard"
         case .power: return "Keeps the Mac awake"
         case .calendar: return "Calendar"
+        case .reminders: return "Reminders"
         case .context: return "Selected text and app"
         case .openURLs(let schemes): return schemes.contains("*") ? "Opens any link" : "Opens " + schemes.map { "\($0):" }.joined(separator: ", ") + " links"
         case .storage(let megabytes): return "Up to \(megabytes) MB"

@@ -28,6 +28,10 @@
     <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
     <key>NSCalendarsUsageDescription</key>
     <string>Plugins you approve for calendar access show your upcoming events and meeting links.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Plugins you approve for Reminders keep your to-dos there, so they reach your iPhone, iPad and Watch.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Plugins you approve for Reminders keep your to-dos there, so they reach your iPhone, iPad and Watch.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Plugins you approve can see the files you select in Finder, or control the apps they name, like Music.</string>
     <key>CFBundleURLTypes</key>
