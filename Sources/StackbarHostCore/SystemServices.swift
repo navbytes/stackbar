@@ -507,11 +507,30 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
 
     /// A believable day: a stand-up that started, a call with a Meet link
     /// soon, an all-day event, a declined one and a Zoom call this afternoon.
+    /// Late in the evening the later meetings would run past midnight, so
+    /// those move to tomorrow morning instead (09:30, 11:00, 14:00, keeping
+    /// their order), and no meeting ever spans two days.
     public static func sampleDay(now: Date = Date()) -> [CalendarEvent] {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: now)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86400)
+        let slots = [9.5, 11, 14].map { tomorrow.addingTimeInterval($0 * 3600) }
+        var moved = 0
+        return sampleEvents(now: now, start: start, tomorrow: tomorrow).map { event in
+            guard !event.isAllDay, event.start >= now, event.end > tomorrow, moved < slots.count else { return event }
+            var event = event
+            let length = event.end.timeIntervalSince(event.start)
+            event.start = slots[moved]
+            event.end = slots[moved].addingTimeInterval(length)
+            moved += 1
+            return event
+        }
+    }
+
+    private static func sampleEvents(now: Date, start: Date, tomorrow: Date) -> [CalendarEvent] {
         let minute = 60.0
-        let start = Calendar.current.startOfDay(for: now)
         return [
-            CalendarEvent(id: "sample-allday", title: "Release week", start: start, end: start.addingTimeInterval(86400), isAllDay: true, calendar: "Team", calendarColor: "#8E8E93"),
+            CalendarEvent(id: "sample-allday", title: "Release week", start: start, end: tomorrow, isAllDay: true, calendar: "Team", calendarColor: "#8E8E93"),
             CalendarEvent(id: "sample-standup", title: "Stand-up", start: now.addingTimeInterval(-10 * minute), end: now.addingTimeInterval(5 * minute), location: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc", calendar: "Work", calendarColor: "#0A84FF", participation: .accepted, attendees: 6, organizer: "Ana"),
             CalendarEvent(id: "sample-design", title: "Design review: onboarding", start: now.addingTimeInterval(25 * minute), end: now.addingTimeInterval(55 * minute), notes: "Join with Google Meet: https://meet.google.com/abc-defg-hij", calendar: "Work", calendarColor: "#0A84FF", participation: .accepted, attendees: 4, organizer: "Sam"),
             CalendarEvent(id: "sample-declined", title: "Budget sync", start: now.addingTimeInterval(90 * minute), end: now.addingTimeInterval(120 * minute), location: "Room 4", calendar: "Work", participation: .declined, attendees: 9),
