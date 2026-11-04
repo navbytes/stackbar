@@ -527,12 +527,14 @@ case "install":
     let installer = PluginInstaller(pluginsDirectory: StackbarPaths.pluginsDirectory, publishers: PublisherStore(file: StackbarPaths.publishersFile), recordFile: StackbarPaths.dataDirectory.appendingPathComponent("installed.json"))
     do {
         let bundle: PluginBundle
+        var indexURL: URL?
         if let index = flag("--index", in: rest) {
             guard let id = rest.last, id != index, let url = URL(string: index) else { fail(usage) }
             let catalog = try await PluginIndex.fetch(url)
             guard let entry = catalog.plugins.filter({ $0.id == id }).max(by: { $1.isNewer(than: $0.version) }) else { fail("\(id) is not in \(catalog.name)") }
             try catalog.checkInstallable(entry)
             bundle = try await PluginIndex.bundle(for: entry, indexURL: url)
+            indexURL = url
         } else if let target = rest.first, target.hasPrefix("https://"), let url = URL(string: target) {
             bundle = try PluginBundle.decode(try await PluginIndex.download(url))
         } else if let target = rest.first {
@@ -540,7 +542,18 @@ case "install":
         } else {
             fail(usage)
         }
+        // As the app does: a store's prebuilt helper, so a Mac without a
+        // compiler can run the plugin (PrebuiltHelpers).
+        let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
+        var prebuilt: PrebuiltHelpers.Download?
+        if let indexURL {
+            prebuilt = try await PrebuiltHelpers.prepare(bundle, indexURL: indexURL, builder: builder, toolchain: PluginBuilder.hasToolchain)
+        }
         let file = try installer.install(bundle)
+        if let prebuilt {
+            try PrebuiltHelpers.save(prebuilt, in: builder.downloadedHelpers, stackbarKit: builder.stackbarKit)
+            note(prebuilt.exact ? "using the store's prebuilt helper" : "using the store's prebuilt helper for another StackbarKit with the same protocol")
+        }
         let built = try PluginProcess.readManifest(executable: helper(for: file.path))
         try installer.confirm(built, matches: bundle, file: file)
         print("installed \(bundle.manifest.name) \(bundle.manifest.version) to \(file.path)")
