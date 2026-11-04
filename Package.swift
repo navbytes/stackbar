@@ -48,6 +48,6 @@ let package = Package(
         .executableTarget(name: "CommandFixturePlugin", dependencies: ["StackbarKit"], path: "Tests/Fixtures/CommandFixturePlugin"),
         .testTarget(name: "StackbarProtocolTests", dependencies: ["StackbarProtocol"]),
         .testTarget(name: "StackbarKitTests", dependencies: ["StackbarKit"]),
-        .testTarget(name: "StackbarHostCoreTests", dependencies: ["StackbarHostCore", "ClockPlugin", "FixturePlugin", "PomodoroPlugin", "TodoPlugin", "SystemFixturePlugin", "CommandFixturePlugin"]),
+        .testTarget(name: "StackbarHostCoreTests", dependencies: ["StackbarHostCore", "StackbarUI", "ClockPlugin", "FixturePlugin", "PomodoroPlugin", "TodoPlugin", "SystemFixturePlugin", "CommandFixturePlugin"]),
     ]
 )
