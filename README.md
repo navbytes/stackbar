@@ -229,7 +229,8 @@ scripts/generate-docs.sh         # rewrite llms.txt and the docs/surface-parity.
 
 Everything except the app, `StackbarUI` and the widget builds and is tested on
 Linux. GitHub Actions runs the Linux job in a Swift container. The macOS job runs on GitHub's `macos-26` runner, which is free for public
-repositories.
+repositories. `.github/scripts/changes.sh` picks the jobs from the changed files, so a site, docs or openspec change skips the Swift jobs and
+only app or widget changes run the Xcode build. The `CI ok` check sums them up and is the one to require.
 
 ## Status
 
