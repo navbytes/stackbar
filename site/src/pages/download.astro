@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import Button from '../components/Button.astro';
 import Glyph from '../components/Glyph.astro';
 import { href, repo, version } from '../lib/site';
+import { breadcrumbs, stackbarApp } from '../lib/seo';
 
 // The newest release on GitHub at build time; the site rebuilds hourly.
 // /releases/latest skips pre-releases, so fall back to the newest release of
@@ -27,7 +28,7 @@ const installers = [
   { label: 'Without Homebrew', command: `curl -fsSL ${new URL(href('/install.sh'), Astro.site).href} | bash` },
 ];
 ---
-<Base title="Download" description="Download Stackbar for macOS. Free and open source under the MIT license.">
+<Base title="Download Stackbar for Mac" description="Download Stackbar, the menu-bar app host for macOS: with Homebrew, a one-line installer or a notarized download. Free and open source under the MIT license." jsonLd={[stackbarApp(Astro.site, 'A native macOS menu-bar host for live apps written in one Swift file.'), breadcrumbs(Astro.site, [['Stackbar', '/'], ['Download', '/download/']])]}>
   <section class="hero stage">
     <div class="wrap inner">
       <img src={href('/icon.svg')} alt="" width="160" height="160" />

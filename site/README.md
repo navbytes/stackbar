@@ -25,6 +25,13 @@ Nothing about Stackbar or a plugin is typed twice:
   once it is published; change the README in navbytes/stackbar-plugins, not here.
 - **Screenshots** are the renders the store publishes with each version.
 - **The code on the home page** is `Examples/ClockPlugin/Clock.swift`.
+- **`/llms.txt`** is the repository's `llms.txt`, the authoring guide.
+
+Search and link previews: every page sets a canonical URL, Open Graph and
+Twitter tags, and schema.org JSON-LD (`src/lib/seo.ts`: the app, each plugin
+as a SoftwareApplication, breadcrumbs, FAQs). `robots.txt` and the sitemap are
+generated. `public/og.png` (1200×630) and `public/apple-touch-icon.png` are
+committed images; redraw them if the brand or headline changes.
 
 The site rebuilds on a push that touches it and every hour, so a newly
 published plugin shows up within the hour. Until `stackbar.app` points at GitHub Pages it is served at

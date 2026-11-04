@@ -4,11 +4,12 @@ import Base from '../../layouts/Base.astro';
 import PluginCard from '../../components/PluginCard.astro';
 import { byName, categories, categorySlug } from '../../lib/plugins';
 import { href, store } from '../../lib/site';
+import { breadcrumbs, itemList } from '../../lib/seo';
 
 const plugins = (await getCollection('plugins')).sort(byName);
 const present = categories.filter((c) => plugins.some((p) => p.data.category === c));
 ---
-<Base title="Plugins" description={`${plugins.length} reviewed, signed plugins for Stackbar: menu-bar apps for developers, focus, monitoring and your Mac.`} hue="pink">
+<Base title="Mac menu bar plugins" description={`${plugins.length} free, reviewed and signed menu-bar apps for Stackbar on macOS: clipboard history, meetings, PR reviews, system monitor, world clock and more.`} hue="pink" jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Plugins', '/plugins/']]), itemList(Astro.site, plugins.map((p) => p.data))]}>
   <section class="hero stage">
     <div class="wrap head">
       <p class="eyebrow">The Stackbar store</p>
