@@ -4,7 +4,8 @@
 # nowhere, so xcode-select and the swift shim both fail), then:
 #   1. renders every plugin the app carries (examples and first-party bundles)
 #      from the helpers prebuilt into the app;
-#   2. installs plugins from the official store (all of them by default) and
+#   2. installs plugins from the official store (all but withdrawn ones by
+#      default) and
 #      renders each, from the store's signed prebuilt helpers.
 # macOS only. The No toolchain workflow runs it on a GitHub macOS runner.
 #
@@ -31,9 +32,12 @@ CTL=${STACKBARCTL:-$RELEASE_CTL}
 export STACKBAR_PACKAGE="$APP/Contents/Resources/StackbarKit"
 export STACKBAR_HOME="$WORK/home"
 export DEVELOPER_DIR="$WORK/no-developer-tools"
-if xcode-select -p > /dev/null 2>&1; then echo "the developer tools are still visible" >&2; exit 1; fi
+# xcode-select -p echoes DEVELOPER_DIR even when it doesn't exist; what
+# matters (and what Stackbar checks) is that no developer directory is there.
+developer=$(xcode-select -p 2>/dev/null || true)
+if [ -n "$developer" ] && [ -d "$developer" ]; then echo "the developer tools are still visible at $developer" >&2; exit 1; fi
 if swift --version > /dev/null 2>&1; then echo "swift still runs" >&2; exit 1; fi
-echo "== no developer tools: xcode-select and swift both fail"
+echo "== no developer tools: no developer directory, and swift fails"
 "$RELEASE_CTL" doctor || true
 
 failures=0
@@ -57,7 +61,7 @@ for plugin in "$WORK"/carried/*.swift; do
 done
 
 if [ $# -eq 0 ]; then
-    set -- $(curl -fsSL "$INDEX" | python3 -c 'import json,sys; print(" ".join(sorted({p["id"] for p in json.load(sys.stdin)["plugins"]})))')
+    set -- $(curl -fsSL "$INDEX" | python3 -c 'import json,sys; i=json.load(sys.stdin); gone={r["id"] for r in i.get("revoked") or [] if not r.get("versions")}; print(" ".join(sorted({p["id"] for p in i["plugins"]} - gone)))')
 fi
 echo "== store plugins ($#)"
 for id in "$@"; do
