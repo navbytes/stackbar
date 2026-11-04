@@ -15,11 +15,40 @@ permissions:
   contents: read
 
 jobs:
+  # Which jobs this change needs (.github/scripts/changes.sh). A change that
+  # only touches the site, docs or openspec skips the Swift jobs; a Linux-only
+  # file like llms.txt skips the Macs. Manual runs, and pushes we can't diff,
+  # run everything.
+  changes:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      linux: ${{ steps.decide.outputs.linux }}
+      macos: ${{ steps.decide.outputs.macos }}
+      xcode: ${{ steps.decide.outputs.xcode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            .github/scripts/changes.sh --all
+          else
+            git diff --name-only "$BASE...$HEAD" | tee /dev/stderr | .github/scripts/changes.sh
+          fi | tee -a "$GITHUB_OUTPUT"
+
   # The plugin contract, the runtime and the supervisor are Foundation-only,
   # so the cheap Linux runner exercises all of them, including a real plugin
   # build through PluginBuilder.
   linux:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: needs.changes.outputs.linux == 'true'
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 30
@@ -34,7 +63,8 @@ jobs:
   # repository is public, so GitHub's macOS runners are free; nothing runs on
   # a developer's machine.
   macos:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -44,9 +74,26 @@ jobs:
   # The Xcode build is the one that extracts App Intents metadata (Spotlight
   # and Shortcuts) and builds the widget; this checks both, unsigned.
   xcode:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: needs.changes.outputs.xcode == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: scripts/check-xcode.sh
+
+  # One check that is green when every job that ran passed and the rest were
+  # skipped on purpose. Make this the required status check, not the jobs
+  # above, since a skipped job never reports.
+  ok:
+    name: CI ok
+    if: always()
+    needs: [changes, linux, macos, xcode]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1 ;; esac
