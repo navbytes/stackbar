@@ -246,7 +246,7 @@ struct PaletteView: View {
         HStack(spacing: 10) {
             if session.stack.isEmpty {
                 Image(systemName: "magnifyingglass").font(.title2.weight(.medium)).foregroundStyle(.secondary)
-                searchField(text: $session.query, prompt: "Search commands and plugin actions")
+                searchField(text: $session.query, prompt: "Search apps, commands and actions, or calculate")
             } else {
                 Button {
                     _ = session.back()
@@ -424,7 +424,12 @@ struct PaletteRow: View {
         HStack(spacing: 10) {
             // The entry's symbol on a tile in its plugin's colour, so each
             // plugin is told apart at a glance.
-            SettingsIconTile(symbol: iconName, color: PluginIcon.color(accent), size: 24)
+            if let icon = SystemItems.shared.icon(for: entry) {
+                // An app's own icon, as Spotlight and Raycast show it.
+                Image(nsImage: icon).resizable().interpolation(.high).frame(width: 26, height: 26).padding(-1)
+            } else {
+                SettingsIconTile(symbol: iconName, color: PluginIcon.color(accent), size: 24)
+            }
             Text(entry.title).font(.body.weight(.medium)).lineLimit(1)
             if let subtitle {
                 Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
@@ -461,7 +466,7 @@ struct PaletteRow: View {
     private var subtitle: String? {
         switch entry.kind {
         case .command, .showPanel: return entry.subtitle ?? entry.pluginName
-        case .navigate, .action, .open: return entry.subtitle
+        case .navigate, .action, .open, .copy: return entry.subtitle
         }
     }
 
@@ -470,7 +475,7 @@ struct PaletteRow: View {
         switch entry.kind {
         case .command: return "Command"
         case .showPanel: return "Panel"
-        case .navigate, .action, .open: return entry.pluginName
+        case .navigate, .action, .open, .copy: return entry.pluginName
         }
     }
 
@@ -480,6 +485,7 @@ struct PaletteRow: View {
         case .navigate: return "arrow.right.circle"
         case .showPanel: return "macwindow"
         case .action, .open: return "bolt"
+        case .copy: return "equal"
         }
     }
 }

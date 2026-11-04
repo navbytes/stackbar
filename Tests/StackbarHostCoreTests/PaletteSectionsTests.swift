@@ -80,4 +80,27 @@ final class PaletteSectionsTests: XCTestCase {
         XCTAssertEqual(StoreListing.paletteSuggestions([catalog], query: "contain", installed: installed).map(\.title), ["Docker"], "a summary word matches")
         XCTAssertEqual(StoreListing.paletteSuggestions([catalog], query: "d", installed: installed), [])
     }
+
+    private func app(_ name: String) -> PaletteIndex.Entry {
+        PaletteIndex.Entry(pluginID: "app", pluginName: "Application", title: name, kind: .open("file:///Applications/\(name).app"))
+    }
+
+    func testCalculatorLeadsAndAppsLeadOnlyOnAPrefixMatch() {
+        let answer = PaletteIndex.Entry(pluginID: "calculator", pluginName: "Calculator", title: "4", kind: .copy("4"))
+        let lead = PaletteSection.group([command("safe mode")], query: "saf", calculator: [answer], apps: [app("Safari")]) { _ in false }
+        XCTAssertEqual(lead.map(\.title), ["Calculator", "Applications", "Results"])
+        let follow = PaletteSection.group([command("notes")], query: "nts", apps: [app("Notes")]) { _ in false }
+        XCTAssertEqual(follow.map(\.title), ["Results", "Applications"], "a fuzzy app match goes after the plugin results")
+        XCTAssertEqual(PaletteSection.group([command("c")], query: "", apps: [app("Safari")]) { _ in false }.map(\.title), ["Commands"], "no apps before typing")
+    }
+
+    func testMatchingRanksByNameThenUse() {
+        let apps = [app("Safari"), app("Stocks"), app("Notes")]
+        XCTAssertEqual(PaletteIndex.Entry.matching(apps, query: "saf").map(\.title), ["Safari"])
+        XCTAssertEqual(PaletteIndex.Entry.matching(apps, query: "nts").map(\.title), ["Notes"])
+        XCTAssertEqual(PaletteIndex.Entry.matching(apps, query: " "), [])
+        var withKeyword = app("Visual Studio Code")
+        withKeyword.keywords = ["vscode"]
+        XCTAssertEqual(PaletteIndex.Entry.matching([withKeyword], query: "vscode").map(\.title), ["Visual Studio Code"])
+    }
 }

@@ -81,6 +81,10 @@ final class PaletteSession {
 
     func shown() {
         shownCount += 1
+        SystemItems.shared.refresh { [weak self] in
+            self?.cache = nil
+            self?.revision += 1
+        }
         // The Store window loads its indexes when it opens; the suggestions
         // need them before that. Once per launch, in the background.
         if !storeRequested, let store = model.store, store.catalogs.isEmpty {
@@ -155,13 +159,20 @@ final class PaletteSession {
             found.removeAll { $0.id == match.entry.id }
             found.insert(match.entry, at: 0)
         }
-        let favorites = model.commands.favorites.entries(in: palette.all)
+        let system = SystemItems.shared.entries
+        let favorites = model.commands.favorites.entries(in: palette.all + system)
         let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
-        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store) { usage.score($0.id) > 0 }
+        let apps = PaletteIndex.Entry.matching(system, query: query, limit: 5, usage: usage)
+        let calculator = PaletteCalculator.answer(query).map {
+            [PaletteIndex.Entry(pluginID: Self.calculatorID, pluginName: "Calculator", title: $0.display, subtitle: $0.expression, symbol: "equal", kind: .copy($0.result))]
+        } ?? []
+        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store, calculator: calculator, apps: apps) { usage.score($0.id) > 0 }
         let ordered = sections.flatMap(\.entries)
         cache = (query, palette.revision, storeCount, sections, ordered)
         return (sections, ordered)
     }
+
+    static let calculatorID = "system.calculator"
 
     /// A plugin's manifest, for its icon and colour.
     func manifest(of pluginID: String) -> Manifest? {
@@ -193,9 +204,16 @@ final class PaletteSession {
     private(set) var revision = 0
 
     func toggleFavoriteOfSelection() -> Bool {
-        guard top == nil, let entry = selectedEntry, !isStoreSuggestion(entry) else { return false }
+        guard top == nil, let entry = selectedEntry, canPin(entry) else { return false }
         toggleFavorite(entry)
         return true
+    }
+
+    /// Store suggestions and calculator answers come and go with the query,
+    /// so they can't be pinned.
+    func canPin(_ entry: PaletteIndex.Entry) -> Bool {
+        if case .copy = entry.kind { return false }
+        return !isStoreSuggestion(entry)
     }
 
     func isStoreSuggestion(_ entry: PaletteIndex.Entry) -> Bool {
@@ -277,6 +295,10 @@ final class PaletteSession {
             model.commands.usage.record(entry.id)
             finish()
             AppDelegate.shared?.showPanel(pluginID: entry.pluginID)
+        case .copy(let text):
+            Platform.copy(text)
+            HUD.shared.show("Copied \(text)")
+            finish()
         case .navigate(let target):
             model.commands.usage.record(entry.id)
             guard let command = model.commands.registry.entry(CommandKey(pluginID: entry.pluginID, commandID: target.command)) else {
@@ -393,8 +415,14 @@ final class PaletteSession {
         switch top {
         case .none:
             guard let entry = selectedEntry else { return [] }
-            var actions = [Action(title: entry.commandKey == nil ? "Run" : "Open") { [weak self] in self?.activate(entry) }]
-            if !isStoreSuggestion(entry) {
+            var actions = [Action(title: primaryTitle ?? "Run") { [weak self] in self?.activate(entry) }]
+            if case .open(let link) = entry.kind, entry.pluginID == SystemItems.appPluginID, let url = URL(string: link) {
+                actions.append(Action(title: "Show in Finder", shortcut: "cmd+return") { [weak self] in
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                    self?.finish()
+                })
+            }
+            if canPin(entry) {
                 let pinned = isFavorite(entry)
                 actions.append(Action(title: pinned ? "Remove from Favorites" : "Add to Favorites", shortcut: "cmd+shift+f") { [weak self] in
                     self?.toggleFavorite(entry)
@@ -457,7 +485,9 @@ final class PaletteSession {
             switch entry.kind {
             case .command(let spec): return spec.kind == .view || !spec.arguments.isEmpty ? "Open" : "Run"
             case .navigate, .showPanel: return "Open"
-            case .action, .open: return "Run"
+            case .open: return isStoreSuggestion(entry) ? "Show in Store" : "Open"
+            case .action: return "Run"
+            case .copy: return "Copy Answer"
             }
         case .arguments:
             return "Run"
