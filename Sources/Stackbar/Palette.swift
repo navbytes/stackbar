@@ -15,7 +15,14 @@ final class PaletteController {
     private let model: AppModel
     private var panel: KeyablePanel?
     private var hotKey: HotKey?
+    private var flagsMonitor: Any?
     let session: PaletteSession
+
+    /// How long a palette closed mid-way (the hot key again, or a click
+    /// elsewhere) comes back where it was, as Raycast's "pop to root" does.
+    static let resumeWindow: Duration = .seconds(60)
+    private var resumable = false
+    private var expiry: Task<Void, Never>?
 
     init(model: AppModel) {
         self.model = model
@@ -24,15 +31,47 @@ final class PaletteController {
         hotKey = HotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(controlKey | optionKey)) { [weak self] in
             self?.toggle()
         }
+        // ⌘ held shows the ⌘1…⌘9 hints on the first rows.
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            // ⌘ alone; Caps Lock and fn don't count.
+            let held = event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let showing = held && self.panel?.isKeyWindow == true
+                if self.session.commandHeld != showing { self.session.commandHeld = showing }
+            }
+            return event
+        }
     }
 
     var isVisible: Bool { panel?.isVisible == true }
 
     func toggle() {
         if isVisible {
-            hide()
+            suspend()
         } else {
-            show()
+            show(resume: true)
+        }
+    }
+
+    /// Hides, keeping the open command and what was typed for
+    /// `resumeWindow`; after that it is back at an empty root.
+    func suspend() {
+        panel?.orderOut(nil)
+        noteLeft()
+    }
+
+    /// The palette lost focus or was hidden part-way through something.
+    private func noteLeft() {
+        session.commandHeld = false
+        guard !session.isIdle else { return }
+        resumable = true
+        expiry?.cancel()
+        expiry = Task { [weak self] in
+            try? await Task.sleep(for: Self.resumeWindow)
+            guard !Task.isCancelled, let self, !self.isVisible else { return }
+            self.resumable = false
+            self.session.reset()
         }
     }
 
@@ -53,12 +92,17 @@ final class PaletteController {
 
     func hide() {
         panel?.orderOut(nil)
+        expiry?.cancel()
+        resumable = false
+        session.commandHeld = false
         session.reset()
     }
 
-    private func show(context: InvocationContext? = nil) {
+    private func show(context: InvocationContext? = nil, resume: Bool = false) {
         if !isVisible {
-            session.reset()
+            expiry?.cancel()
+            if !(resume && resumable) { session.reset() }
+            resumable = false
             // Read before Stackbar activates, while the user's app is in front.
             session.context = context ?? model.commands.captureContext()
         }
@@ -118,6 +162,7 @@ final class PaletteController {
         panel.contentView = hosting
         panel.onCancel = { [weak self] in self?.session.back() ?? false }
         panel.onClose = { [weak self] in self?.hide() }
+        panel.onResign = { [weak self] in self?.noteLeft() }
         return panel
     }
 }
@@ -127,8 +172,15 @@ final class PaletteController {
 final class KeyablePanel: NSPanel {
     var onCancel: (() -> Bool)?
     var onClose: (() -> Void)?
+    /// Lost key status: clicked away, or hidden.
+    var onResign: (() -> Void)?
 
     override var canBecomeKey: Bool { true }
+
+    override func resignKey() {
+        super.resignKey()
+        onResign?()
+    }
 
     override func cancelOperation(_ sender: Any?) {
         if onCancel?() == true { return }
@@ -272,6 +324,16 @@ struct PaletteView: View {
         if session.shortcut(matching: { KeyShortcut($0)?.matches(press) ?? false }) {
             return .handled
         }
+        let modifiers = press.modifiers.intersection([.command, .shift, .option, .control])
+        if modifiers == .command, press.key == .return, session.submitSecondary() {
+            return .handled
+        }
+        if modifiers == .command, let digit = Int(String(press.characters)), (1...9).contains(digit), session.activate(line: digit) {
+            return .handled
+        }
+        if modifiers == [.command, .shift], String(press.key.character).lowercased() == "f", session.toggleFavoriteOfSelection() {
+            return .handled
+        }
         if session.top == nil, press.modifiers.intersection([.command, .shift, .option, .control]) == [.command, .shift], String(press.key.character).lowercased() == "c" {
             let actions = session.actions
             if let index = actions.firstIndex(where: { $0.shortcut == "cmd+shift+c" }) { session.runAction(index) }
@@ -301,6 +363,10 @@ struct RootResults: View {
     var body: some View {
         let sections = session.sections
         let selected = session.selectedEntry?.id
+        // ⌘1…⌘9 count the lines as drawn.
+        let numbers = session.commandHeld
+            ? Dictionary(session.results.prefix(9).enumerated().map { ($1.id, $0 + 1) }, uniquingKeysWith: { first, _ in first })
+            : [:]
         ScrollViewReader { proxy in
             ScrollView {
                 // One identity per row, the entry's: the highlight and the
@@ -309,7 +375,8 @@ struct RootResults: View {
                     ForEach(sections) { section in
                         SectionHeader(title: section.title)
                         ForEach(section.entries) { entry in
-                            PaletteRow(entry: entry, manifest: session.manifest(of: entry.pluginID), selected: entry.id == selected)
+                            PaletteRow(entry: entry, accent: session.accent(of: entry.pluginID), pluginSymbol: session.manifest(of: entry.pluginID)?.symbol,
+                                       selected: entry.id == selected, number: numbers[entry.id])
                                 .contentShape(Rectangle())
                                 .onTapGesture { session.activate(entry) }
                         }
@@ -347,14 +414,17 @@ struct SectionHeader: View {
 
 struct PaletteRow: View {
     let entry: PaletteIndex.Entry
-    let manifest: Manifest?
+    let accent: Accent?
+    let pluginSymbol: String?
     let selected: Bool
+    /// Its ⌘ number while ⌘ is held.
+    var number: Int?
 
     var body: some View {
         HStack(spacing: 10) {
             // The entry's symbol on a tile in its plugin's colour, so each
             // plugin is told apart at a glance.
-            SettingsIconTile(symbol: iconName, color: PluginIcon.color(manifest?.accent), size: 24)
+            SettingsIconTile(symbol: iconName, color: PluginIcon.color(accent), size: 24)
             Text(entry.title).font(.body.weight(.medium)).lineLimit(1)
             if let subtitle {
                 Text(subtitle).foregroundStyle(.secondary).lineLimit(1)
@@ -367,7 +437,11 @@ struct PaletteRow: View {
                     .padding(.vertical, 1)
                     .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 5))
             }
-            Text(kindLabel).foregroundStyle(.tertiary)
+            if let number {
+                Keycap("⌘\(number)")
+            } else {
+                Text(kindLabel).foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -377,7 +451,7 @@ struct PaletteRow: View {
 
     /// The entry's own symbol, the plugin's, or one for its kind.
     private var iconName: String {
-        for name in [entry.symbol, manifest?.symbol].compactMap({ $0 }) where NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
+        for name in [entry.symbol, pluginSymbol].compactMap({ $0 }) where NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
             return name
         }
         return symbol
@@ -623,7 +697,7 @@ struct ActionBar: View {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
                 Text(problem).font(.callout).lineLimit(1).help(problem)
             } else if let pluginID = session.currentPluginID, let name = pluginName {
-                PluginIcon(manifest: session.manifest(of: pluginID), size: 18)
+                PluginIcon(symbol: session.manifest(of: pluginID)?.symbol, accent: session.accent(of: pluginID), size: 18)
                 Text(name).font(.callout).foregroundStyle(.secondary).lineLimit(1)
             } else {
                 Text("Stackbar").font(.callout).foregroundStyle(.secondary)
@@ -631,6 +705,9 @@ struct ActionBar: View {
             Spacer(minLength: 12)
             if let primary = session.primaryTitle {
                 BarButton(title: primary, key: "↩", emphasized: true) { session.submit() }
+            }
+            if let secondary = session.secondaryTitle {
+                BarButton(title: secondary, key: "⌘↩", emphasized: false) { _ = session.submitSecondary() }
             }
             if !session.actions.isEmpty {
                 Divider().frame(height: 16)

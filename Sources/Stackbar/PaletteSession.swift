@@ -67,6 +67,10 @@ final class PaletteSession {
     var context: InvocationContext?
     /// Changes each time the palette opens, to take focus again.
     private(set) var shownCount = 0
+    /// ⌘ is held: the first rows show their ⌘1…⌘9.
+    var commandHeld = false
+    /// Nothing to come back to: no open command and nothing typed.
+    var isIdle: Bool { stack.isEmpty && query.isEmpty }
     @ObservationIgnored var dismiss: () -> Void = {}
 
     init(model: AppModel) {
@@ -77,6 +81,12 @@ final class PaletteSession {
 
     func shown() {
         shownCount += 1
+        // The Store window loads its indexes when it opens; the suggestions
+        // need them before that. Once per launch, in the background.
+        if !storeRequested, let store = model.store, store.catalogs.isEmpty {
+            storeRequested = true
+            Task { await store.load() }
+        }
     }
 
     /// Back to an empty root, closing every open view.
@@ -119,11 +129,14 @@ final class PaletteSession {
 
     /// The root's search, kept until the query or the index changes: the
     /// view, the footer, ⌘K and every arrow press ask for it.
-    @ObservationIgnored private var cache: (query: String, revision: Int, sections: [PaletteSection], results: [PaletteIndex.Entry])?
+    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, sections: [PaletteSection], results: [PaletteIndex.Entry])?
+    /// The Store's indexes were asked for once, for its suggestions.
+    @ObservationIgnored private var storeRequested = false
 
     /// The root's results in titled groups, as drawn.
     var sections: [PaletteSection] {
-        load().sections
+        _ = revision
+        return load().sections
     }
 
     /// The same results in the order drawn, which the arrows walk.
@@ -133,22 +146,81 @@ final class PaletteSession {
 
     private func load() -> (sections: [PaletteSection], results: [PaletteIndex.Entry]) {
         let palette = model.palette
-        if let cache, cache.query == query, cache.revision == palette.revision { return (cache.sections, cache.results) }
+        // Read every time, so the list redraws once the Store's indexes arrive.
+        let storeCount = model.store?.catalogs.count ?? 0
+        if let cache, cache.query == query, cache.revision == palette.revision, cache.store == storeCount { return (cache.sections, cache.results) }
         let usage = model.commands.usage
         var found = palette.search(query, limit: 30, usage: usage)
         if let match = palette.aliasMatch(query) {
             found.removeAll { $0.id == match.entry.id }
             found.insert(match.entry, at: 0)
         }
-        let sections = PaletteSection.group(found, query: query) { usage.score($0.id) > 0 }
+        let favorites = model.commands.favorites.entries(in: palette.all)
+        let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
+        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store) { usage.score($0.id) > 0 }
         let ordered = sections.flatMap(\.entries)
-        cache = (query, palette.revision, sections, ordered)
+        cache = (query, palette.revision, storeCount, sections, ordered)
         return (sections, ordered)
     }
 
     /// A plugin's manifest, for its icon and colour.
     func manifest(of pluginID: String) -> Manifest? {
         model.controller(for: pluginID)?.manifest
+    }
+
+    /// A plugin's colour: its manifest's, or its Store listing's when it
+    /// isn't installed (a Store suggestion).
+    func accent(of pluginID: String) -> Accent? {
+        if let manifest = manifest(of: pluginID) { return manifest.accent }
+        return model.store?.find(pluginID)?.entry.accent.flatMap(Accent.init(rawValue:))
+    }
+
+    // MARK: - Favourites
+
+    func isFavorite(_ entry: PaletteIndex.Entry) -> Bool {
+        model.commands.favorites.contains(entry.id)
+    }
+
+    /// ⌘⇧F: pins the selected root entry to the top, or unpins it.
+    func toggleFavorite(_ entry: PaletteIndex.Entry) {
+        model.commands.favorites.toggle(entry.id)
+        cache = nil
+        revision += 1
+    }
+
+    /// Bumped when something the cache can't see changes (a favourite), so
+    /// the list redraws.
+    private(set) var revision = 0
+
+    func toggleFavoriteOfSelection() -> Bool {
+        guard top == nil, let entry = selectedEntry, !isStoreSuggestion(entry) else { return false }
+        toggleFavorite(entry)
+        return true
+    }
+
+    func isStoreSuggestion(_ entry: PaletteIndex.Entry) -> Bool {
+        if case .open(let url) = entry.kind { return url.hasPrefix("stackbar://store/") }
+        return false
+    }
+
+    // MARK: - ⌘1…⌘9
+
+    /// ⌘ and a digit: runs that line of the list showing, counted from 1.
+    func activate(line: Int) -> Bool {
+        switch top {
+        case .none:
+            let results = results
+            guard results.indices.contains(line - 1) else { return false }
+            activate(results[line - 1])
+            return true
+        case .view(let view):
+            let rows = rows(of: view)
+            guard rows.indices.contains(line - 1), let primary = rows[line - 1].actions.first else { return false }
+            perform(primary, in: view)
+            return true
+        case .arguments:
+            return false
+        }
     }
 
     /// The plugin the palette is about now: the open command's, or the
@@ -188,8 +260,18 @@ final class PaletteSession {
             model.controller(for: entry.pluginID)?.send(action, value)
             finish()
         case .open(let url):
+            guard let url = URL(string: url) else { return }
+            // A Store suggestion goes to this app's own Store window: through
+            // Launch Services it could open another Stackbar copy (a dev
+            // build). Not counted as a use: it isn't a palette entry.
+            if let link = StoreLink(url) {
+                finish()
+                model.storeFocus = link.pluginID
+                AppDelegate.shared?.showStore()
+                return
+            }
             model.commands.usage.record(entry.id)
-            if let url = URL(string: url) { NSWorkspace.shared.open(url) }
+            NSWorkspace.shared.open(url)
             finish()
         case .showPanel:
             model.commands.usage.record(entry.id)
@@ -312,6 +394,12 @@ final class PaletteSession {
         case .none:
             guard let entry = selectedEntry else { return [] }
             var actions = [Action(title: entry.commandKey == nil ? "Run" : "Open") { [weak self] in self?.activate(entry) }]
+            if !isStoreSuggestion(entry) {
+                let pinned = isFavorite(entry)
+                actions.append(Action(title: pinned ? "Remove from Favorites" : "Add to Favorites", shortcut: "cmd+shift+f") { [weak self] in
+                    self?.toggleFavorite(entry)
+                })
+            }
             if let key = entry.commandKey, let command = model.commands.registry.entry(key) {
                 if command.spec.exposure == .everywhere {
                     actions.append(Action(title: "Copy Link", shortcut: "cmd+shift+c", section: "Command") { [weak self] in
@@ -376,6 +464,19 @@ final class PaletteSession {
         case .view(let view):
             return selectedRow(of: view)?.actions.first?.title
         }
+    }
+
+    /// What ⌘Return does: the second thing ⌘K offers.
+    var secondaryTitle: String? {
+        let actions = actions
+        return actions.count > 1 ? actions[1].title : nil
+    }
+
+    /// ⌘Return.
+    func submitSecondary() -> Bool {
+        guard !showingActions, actions.count > 1 else { return false }
+        runAction(1)
+        return true
     }
 
     /// Return.
