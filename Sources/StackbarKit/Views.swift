@@ -144,6 +144,7 @@ public struct Row: StackbarView {
     var subtitle: String?
     var symbol: String?
     var appIcon: String?
+    var fileIcon: String?
     var accessories: [ViewNode] = []
     var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler?, navigate: CommandTarget?)] = []
     var preview: RowPreview?
@@ -162,6 +163,14 @@ public struct Row: StackbarView {
     public func appIcon(_ bundleID: String?) -> Row {
         var copy = self
         copy.appIcon = bundleID
+        return copy
+    }
+
+    /// Shows a file or folder's Finder icon instead of the symbol: a path
+    /// from `Stackbar.findFiles`. Protocol 16.
+    public func fileIcon(_ path: String?) -> Row {
+        var copy = self
+        copy.fileIcon = path
         return copy
     }
 
@@ -208,7 +217,7 @@ public struct Row: StackbarView {
             let id = action.handler.map { context.register(base, $0) } ?? ActionID(context.prefix + base)
             return ActionRef(id: id, title: action.title, shortcut: action.shortcut, role: action.role, navigate: action.navigate)
         }
-        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, accessories: accessories, actions: refs, preview: preview))]
+        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, fileIcon: fileIcon, accessories: accessories, actions: refs, preview: preview))]
     }
 }
 

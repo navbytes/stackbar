@@ -363,6 +363,22 @@ public final class HostServices: Sendable {
                 return .failure("\(error)")
             }
 
+        case .installedApps:
+            do {
+                return .value(SystemCodec.encode(try await platform.system.installedApps()))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .findFiles(let query):
+            let query = FileQuery(text: query.text, limit: query.limit)
+            guard !query.text.trimmingCharacters(in: .whitespaces).isEmpty else { return .value(SystemCodec.encode([FoundFile]())) }
+            do {
+                return .value(SystemCodec.encode(try await platform.system.findFiles(query)))
+            } catch {
+                return .failure("\(error)")
+            }
+
         case .runningApps:
             do {
                 return .value(SystemCodec.encode(try await platform.system.runningApps()))

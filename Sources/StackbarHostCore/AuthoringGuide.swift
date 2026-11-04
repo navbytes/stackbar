@@ -123,8 +123,10 @@ var commands: [Command] {
 
 Two modifiers bring a command into the palette's own results. `.rootSearch()`
 on a view command runs its `search` with whatever the user types at the root
-and shows the view's top three rows as a section under the command's title
-(Clipboard History and Snippets do this); keep that search quick. `.fallback()`
+and shows the view's top three rows as a section under the command's title,
+or `.rootSearch(section: "Applications")`; a section whose first row starts
+with the typed text comes before the other results. Applications, Calculator,
+File Search and Clipboard History do this; keep that search quick. `.fallback()`
 offers the command under the results for any text ("Search the web for …"):
 the text fills its first argument, or a view's search. A view whose list is a
 `Grid` of rows shows them as tiles the arrow keys move through (an emoji
@@ -193,6 +195,7 @@ for a form to flag. Errors name the placeholder that failed.
   `.preview(text:imageID:caption:)` shows the full text or a kept clipboard
   image under the list while the row is selected; search looks through it.
 - `Row(...).appIcon("com.apple.Safari")` draws that app's icon instead of the symbol (the symbol stays as the fallback).
+- `Row(...).fileIcon(path)` draws a file or folder's Finder icon (a path from `Stackbar.findFiles`).
 - `Badge(text, role:)`, `ProgressBar(label, value:, total:, style: .ring(lineWidth: 6))`, `LabeledContent(label, value:)`
 - `Chart(label, values: [Double], kind: .line|.bar|.area|.donut|.heatmap, role:, labels: ["Mon", …], unit: "h", goal: 4, highlight: 6)`
   `labels` name the points (or a donut's slices), `unit` follows values, `goal`
@@ -320,6 +323,8 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.reminders(in: [listID], completedSince: date)` returns `[Reminder]` (id, list, title, notes, due, dueHasTime, priority, completed, recurrence, alarm, url); `Stackbar.reminderLists()` returns `[ReminderList]` (id, title, color, account, isDefault): use lists for categories, EventKit has no sections, tags or subtasks; `Stackbar.saveReminder(reminder, fields: [.title])` adds (empty id) or writes only the named fields, so a change from another device survives; `Stackbar.deleteReminder(id:)`, `Stackbar.createReminderList("Home")`; `Stackbar.reminderAccess(ask: true)` returns granted, denied, notDetermined or unavailable, so a plugin can fall back to `@Stored`; the `.reminders` trigger fires when reminders change on any device; 0.18.0 | `.reminders` |
 | `try await Stackbar.windows()` returns `WindowSnapshot` (displays, windows front to back with app, title, frame, displayID, isMinimized; `setupID` names the monitor setup); `try await Stackbar.arrangeWindows(WindowPlacement.capture(snapshot), launch: true)` puts them back and returns `ArrangeResult` (moved, opened, missing, failed); 0.15.0, needs Accessibility for Stackbar | `.windows` |
 | `try await Stackbar.runningApps()` returns `[RunningApp]` (id, name, path, isActive, isHidden); `try await Stackbar.activateApp("com.apple.Safari", launch: true)`, `Stackbar.hideApp(id)`; 0.16.0 | `.apps` |
+| `try await Stackbar.installedApps()` returns `[InstalledApp]` (id, name, path, kind `.app` or `.settingsPane`, keywords, url): open an app with `activateApp(id, launch: true)`, a pane with `Stackbar.open(url)`; 0.20.0 | `.apps` |
+| `try await Stackbar.findFiles("q3 plan", limit: 8)` returns `[FoundFile]` (path, name, folder from `~`, isFolder, lastUsed) from Spotlight, every word in the name, most recently used first; opening one needs `.openURLs(["*"])`; 0.20.0 | `.fileSearch` |
 | `try await Stackbar.setKeyLayer(KeyLayer(trigger: .rightCommand, bindings: [KeyBinding(key: "s", apps: ["com.apple.Safari"], launch: true)], secondPress: .hide, assignCommand: "assign"))`: while Right ⌘ is held, S switches to Safari (the host decides each press itself; set the whole map again when it changes); Right ⌘ ⌥ + a key runs command `assign` with `key` and `app`; returns `KeyLayerStatus` (listening, needsAccessibility, secureInputApp, conflict), also `Stackbar.keyLayerStatus()`; 0.16.0 | `.keyLayer` |
 
 `auth:` reads a declared secret and adds the header: `.bearer(secret: "GITHUB_TOKEN")`

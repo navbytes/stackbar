@@ -55,6 +55,12 @@ public protocol SystemServices: Sendable {
     /// reminder, and answers with what was saved.
     func saveReminder(_ reminder: Reminder, fields: [Reminder.Field]?) async throws -> Reminder
     func deleteReminder(id: String) async throws
+    /// The installed apps and System Settings panes, by name.
+    func installedApps() async throws -> [InstalledApp]
+    /// Files in the user's home whose names hold every word, most recently
+    /// used first, without app bundles, their insides, hidden files or
+    /// Library internals.
+    func findFiles(_ query: FileQuery) async throws -> [FoundFile]
 }
 
 extension SystemServices {
@@ -73,6 +79,8 @@ extension SystemServices {
         throw SystemServiceError("key layers are not available on this platform")
     }
     public func keyLayerStatus(pluginID: String) -> KeyLayerStatus { .off }
+    public func installedApps() async throws -> [InstalledApp] { throw SystemServiceError("apps are not available on this platform") }
+    public func findFiles(_ query: FileQuery) async throws -> [FoundFile] { throw SystemServiceError("finding files is not available on this platform") }
     public func reminderAccess(ask: Bool) async -> ReminderAccess { .unavailable }
     public func reminderLists() async throws -> [ReminderList] { throw SystemServiceError("Reminders is not available on this platform") }
     public func createReminderList(title: String, color: String?) async throws -> ReminderList { throw SystemServiceError("Reminders is not available on this platform") }
@@ -304,6 +312,44 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
         case .passThrough, .swallow, .assign: break
         }
         return decision
+    }
+
+    // MARK: Installed apps and files
+
+    /// `applications` as installed apps, with two Settings panes.
+    public func installedApps() async throws -> [InstalledApp] {
+        let apps = lock.withLock { applications }
+        let installed = apps.map { InstalledApp(id: $0.value, name: $0.key, path: "/Applications/\($0.key).app") }
+        let panes = [
+            InstalledApp(id: "com.apple.Wi-Fi-Settings.extension", name: "Wi-Fi", path: "/System/Applications/System Settings.app", kind: .settingsPane,
+                         url: "x-apple.systempreferences:com.apple.Wi-Fi-Settings.extension"),
+            InstalledApp(id: "com.apple.Displays-Settings.extension", name: "Displays", path: "/System/Applications/System Settings.app", kind: .settingsPane,
+                         url: "x-apple.systempreferences:com.apple.Displays-Settings.extension"),
+        ]
+        return (installed + panes).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// The files `findFiles` searches.
+    public var simulatedFiles: [FoundFile] = SimulatedSystem.sampleFiles()
+
+    public func findFiles(_ query: FileQuery) async throws -> [FoundFile] {
+        let words = query.text.lowercased().split(separator: " ").map(String.init)
+        guard !words.isEmpty else { return [] }
+        let files = lock.withLock { simulatedFiles }
+        return Array(files.filter { file in words.allSatisfy { file.name.lowercased().contains($0) } }
+            .sorted { ($0.lastUsed ?? .distantPast) > ($1.lastUsed ?? .distantPast) }
+            .prefix(query.limit))
+    }
+
+    public static func sampleFiles() -> [FoundFile] {
+        let now = Date()
+        return [
+            FoundFile(path: "/Users/you/Documents/Q3 plan.pdf", name: "Q3 plan.pdf", folder: "~/Documents", lastUsed: now.addingTimeInterval(-3600)),
+            FoundFile(path: "/Users/you/Documents/Plans", name: "Plans", folder: "~/Documents", isFolder: true, lastUsed: now.addingTimeInterval(-7200)),
+            FoundFile(path: "/Users/you/Desktop/plan sketch.png", name: "plan sketch.png", folder: "~/Desktop", lastUsed: now.addingTimeInterval(-86400)),
+            FoundFile(path: "/Users/you/Downloads/invoice-2026-10.pdf", name: "invoice-2026-10.pdf", folder: "~/Downloads", lastUsed: now.addingTimeInterval(-172_800)),
+            FoundFile(path: "/Users/you/code/stackbar/README.md", name: "README.md", folder: "~/code/stackbar", lastUsed: now.addingTimeInterval(-600)),
+        ]
     }
 
     /// Safari in front, with Xcode, Slack and Spotify behind it.

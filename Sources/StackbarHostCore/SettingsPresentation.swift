@@ -77,7 +77,7 @@ public enum SettingsPresentation {
                 ("Runs", .run), ("Reads the secret", .secret), ("Signs in to", .account), ("Reads everything you copy", .clipboard),
                 ("Keeps the Mac awake", .power), ("Reads your calendar", .calendar), ("Reads and changes your reminders", .reminders), ("Reads the text you select", .context),
                 ("Opens", .links), ("Stores up to", .storage), ("Sees which windows", .windows),
-                ("Sees which apps", .windows), ("Listens for a key", .keyboard),
+                ("Sees which apps", .windows), ("Listens for a key", .keyboard), ("Finds files", .files),
             ]
             guard let match = prefixes.first(where: { summary.hasPrefix($0.0) }) else { return nil }
             self = match.1
@@ -99,6 +99,7 @@ public enum SettingsPresentation {
             case .storage: self = .storage
             case .userServer: self = .server
             case .windows, .apps: self = .windows
+            case .fileSearch: self = .files
             case .keyLayer: self = .keyboard
             }
         }
@@ -146,6 +147,7 @@ public enum SettingsPresentation {
         case .windows: return "Windows and apps"
         case .apps: return "Switches apps"
         case .keyLayer: return "Held-key shortcuts"
+        case .fileSearch: return "Finds files by name"
         }
     }
 

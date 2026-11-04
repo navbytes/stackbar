@@ -18,7 +18,8 @@ public enum StackbarProtocolVersion {
     /// 13 added listing and arranging windows, and the displays trigger.
     /// 14 added the app calls, the key layer and the apps trigger.
     /// 15 added Reminders: the reminder calls and the reminders trigger.
-    /// 16 added root-search and fallback commands.
+    /// 16 added root-search and fallback commands, installed apps, finding
+    /// files and file icons on rows.
     public static let current = 16
 }
 
@@ -244,6 +245,13 @@ public enum HostCall: Codable, Equatable, Sendable {
     case saveReminder(Reminder, fields: [Reminder.Field]?)
     /// Deletes a reminder. Needs `.reminders`.
     case deleteReminder(id: String)
+    /// The installed apps and System Settings panes, by name
+    /// (`[InstalledApp]` as JSON). Needs `.apps`. Protocol 16.
+    case installedApps
+    /// Files and folders in the user's home whose names hold every word,
+    /// from Spotlight's index, most recently used first (`[FoundFile]` as
+    /// JSON). Needs `.fileSearch`. Protocol 16.
+    case findFiles(FileQuery)
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

@@ -485,7 +485,7 @@ public struct RowView: View {
 
     public var body: some View {
         HStack(spacing: 8) {
-            if let icon = row.appIcon.flatMap(AppIcons.icon) {
+            if let icon = row.appIcon.flatMap(AppIcons.icon) ?? row.fileIcon.map(AppIcons.fileIcon) {
                 Image(nsImage: icon).resizable().frame(width: 18, height: 18)
             } else if let symbol = row.symbol {
                 Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 18)
@@ -933,10 +933,20 @@ struct BarView: View {
 #if canImport(AppKit)
 /// Apps' icons by bundle id, for rows that name an app. Looked up once.
 @MainActor
-enum AppIcons {
+public enum AppIcons {
     private static var cache: [String: NSImage?] = [:]
+    private static var files: [String: NSImage] = [:]
 
-    static func icon(_ bundleID: String) -> NSImage? {
+    /// A file or folder's Finder icon, kept for the next draw.
+    public static func fileIcon(_ path: String) -> NSImage {
+        if let cached = files[path] { return cached }
+        if files.count > 500 { files = [:] }
+        let image = flattened(NSWorkspace.shared.icon(forFile: path))
+        files[path] = image
+        return image
+    }
+
+    public static func icon(_ bundleID: String) -> NSImage? {
         if let cached = cache[bundleID] { return cached }
         let image = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { url in
             flattened(NSWorkspace.shared.icon(forFile: url.path))

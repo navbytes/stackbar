@@ -85,13 +85,14 @@ final class PaletteSectionsTests: XCTestCase {
         PaletteIndex.Entry(pluginID: "app", pluginName: "Application", title: name, kind: .open("file:///Applications/\(name).app"))
     }
 
-    func testCalculatorLeadsAndAppsLeadOnlyOnAPrefixMatch() {
-        let answer = PaletteIndex.Entry(pluginID: "calculator", pluginName: "Calculator", title: "4", kind: .copy("4"))
-        let lead = PaletteSection.group([command("safe mode")], query: "saf", calculator: [answer], apps: [app("Safari")]) { _ in false }
-        XCTAssertEqual(lead.map(\.title), ["Calculator", "Applications", "Results"])
-        let follow = PaletteSection.group([command("notes")], query: "nts", apps: [app("Notes")]) { _ in false }
-        XCTAssertEqual(follow.map(\.title), ["Results", "Applications"], "a fuzzy app match goes after the plugin results")
-        XCTAssertEqual(PaletteSection.group([command("c")], query: "", apps: [app("Safari")]) { _ in false }.map(\.title), ["Commands"], "no apps before typing")
+    func testPluginSectionsLeadOnlyOnAPrefixMatch() {
+        let apps = PaletteSection(title: "Applications", entries: [app("Safari")])
+        let sum = PaletteSection(title: "Calculator", entries: [action("2+2 = 4")])
+        let lead = PaletteSection.group([command("safe mode")], query: "saf", plugins: [apps]) { _ in false }
+        XCTAssertEqual(lead.map(\.title), ["Applications", "Results"])
+        XCTAssertEqual(PaletteSection.group([], query: "2+2", plugins: [apps, sum]) { _ in false }.map(\.title), ["Calculator", "Applications"])
+        let follow = PaletteSection.group([command("notes")], query: "nts", plugins: [PaletteSection(title: "Applications", entries: [app("Notes")])]) { _ in false }
+        XCTAssertEqual(follow.map(\.title), ["Results", "Applications"], "a fuzzy match goes after the command results")
     }
 
     func testMatchingRanksByNameThenUse() {
@@ -104,34 +105,27 @@ final class PaletteSectionsTests: XCTestCase {
         XCTAssertEqual(PaletteIndex.Entry.matching([withKeyword], query: "vscode").map(\.title), ["Visual Studio Code"])
     }
 
-    func testFilesFollowResultsAndAppsBeforeTheStore() {
-        let file = PaletteFiles.entry(path: "/Users/n/Documents/plan.pdf", home: "/Users/n")!
-        let store = [PaletteIndex.Entry(pluginID: "s", pluginName: "Store", title: "Plan", kind: .open("stackbar://store/s"))]
-        let sections = PaletteSection.group([command("plan")], query: "plan", store: store, files: [file]) { _ in false }
-        XCTAssertEqual(sections.map(\.title), ["Results", "Files", "From the Store"])
-    }
-
-    func testFileEntriesSkipBundlesHiddenAndLibraryAndShortenHome() {
+    func testFoundFilesSkipBundlesHiddenAndLibraryAndShortenHome() {
         let home = "/Users/n"
-        let file = PaletteFiles.entry(path: "/Users/n/Documents/Q3 plan.pdf", home: home)
-        XCTAssertEqual(file?.title, "Q3 plan.pdf")
-        XCTAssertEqual(file?.subtitle, "~/Documents")
-        XCTAssertEqual(file?.kind, .open("file:///Users/n/Documents/Q3%20plan.pdf"))
-        XCTAssertEqual(PaletteFiles.entry(path: "/Users/n/plan.txt", home: home)?.subtitle, "~")
-        XCTAssertNil(PaletteFiles.entry(path: "/Applications/Plan.app", home: home))
-        XCTAssertNil(PaletteFiles.entry(path: "/Applications/Plan.app/Contents/Info.plist", home: home))
-        XCTAssertNil(PaletteFiles.entry(path: "/Users/n/.config/plan.toml", home: home))
-        XCTAssertNil(PaletteFiles.entry(path: "/Users/n/Library/Caches/plan.db", home: home))
-        XCTAssertNil(PaletteFiles.entry(path: "/Users/n/code/x/node_modules/plan/index.js", home: home))
-        XCTAssertNotNil(PaletteFiles.entry(path: "/Users/n/Library", home: home), "the Library folder itself is fine")
-        XCTAssertEqual(PaletteFiles.abbreviate("/Volumes/Data/plan", home: home), "/Volumes/Data/plan")
+        let file = FileSearchFilter.found(path: "/Users/n/Documents/Q3 plan.pdf", home: home)
+        XCTAssertEqual(file?.name, "Q3 plan.pdf")
+        XCTAssertEqual(file?.folder, "~/Documents")
+        XCTAssertEqual(FileSearchFilter.found(path: "/Users/n/plan.txt", home: home)?.folder, "~")
+        XCTAssertNil(FileSearchFilter.found(path: "/Applications/Plan.app", home: home))
+        XCTAssertNil(FileSearchFilter.found(path: "/Applications/Plan.app/Contents/Info.plist", home: home))
+        XCTAssertNil(FileSearchFilter.found(path: "/Users/n/.config/plan.toml", home: home))
+        XCTAssertNil(FileSearchFilter.found(path: "/Users/n/Library/Caches/plan.db", home: home))
+        XCTAssertNil(FileSearchFilter.found(path: "/Users/n/code/x/node_modules/plan/index.js", home: home))
+        XCTAssertNotNil(FileSearchFilter.found(path: "/Users/n/Library", home: home), "the Library folder itself is fine")
+        XCTAssertEqual(FileSearchFilter.abbreviate("/Volumes/Data/plan", home: home), "/Volumes/Data/plan")
     }
 
     func testPluginRowsFollowResultsAndFallbacksComeLast() {
         let clipboard = PaletteSection(title: "Clipboard History", entries: [action("clip")])
-        let sections = PaletteSection.group([command("c1"), command("web")], query: "hello", files: [action("f")],
+        let store = [PaletteIndex.Entry(pluginID: "s", pluginName: "Store", title: "Hello", kind: .open("stackbar://store/s"))]
+        let sections = PaletteSection.group([command("c1"), command("web")], query: "hello", store: store,
                                             plugins: [clipboard], fallbacks: [command("web"), command("ddg")]) { _ in false }
-        XCTAssertEqual(sections.map(\.title), ["Results", "Clipboard History", "Files", PaletteSection.fallbackTitle("hello")])
+        XCTAssertEqual(sections.map(\.title), ["Results", "Clipboard History", "From the Store", PaletteSection.fallbackTitle("hello")])
         // A fallback the search found stays in Results only.
         XCTAssertEqual(sections.last?.entries.map(\.title), ["ddg"])
         XCTAssertEqual(PaletteSection.fallbackTitle("hello"), "Use \u{201C}hello\u{201D} with")

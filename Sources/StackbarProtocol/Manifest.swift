@@ -282,6 +282,10 @@ public enum Capability: Codable, Hashable, Sendable {
     /// `Stackbar.saveReminder`, the `.reminders` trigger). The host asks
     /// macOS for access. Stackbar 0.18.0 and later.
     case reminders
+    /// Finds files and folders in the user's home by name, from Spotlight's
+    /// index (`Stackbar.findFiles`). Names and paths only; opening one needs
+    /// `.openURLs`. Stackbar 0.20.0 and later.
+    case fileSearch
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

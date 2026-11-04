@@ -108,6 +108,10 @@ final class AppModel {
         // the user's choice (the welcome prompt or the menu item).
         refreshInstalled()
         bundledStore.syncExamples()
+        // Apps, sums and files in the palette come from plugins.
+        if !bundledStore.installCore(offered: StackbarPaths.dataDirectory.appendingPathComponent("core-plugins.json")).isEmpty {
+            refreshInstalled()
+        }
         commands.start()
         for source in Self.discover() { add(source) }
         let watcher = DirectoryWatcher(directory: StackbarPaths.pluginsDirectory)
