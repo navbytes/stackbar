@@ -20,27 +20,24 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// not repeated below; `store` follows a typed one. Empty groups are left
     /// out.
     ///
-    /// A typed query also gets the calculator's answer first, then the
-    /// matching apps and System Settings panes: before the plugin results
-    /// when the best one's name starts with what was typed (`saf` → Safari),
-    /// after them otherwise.
+    /// A typed query also gets the plugins' root-search sections: before the
+    /// command results when their first row starts with what was typed
+    /// (`saf` → Safari, `2+2` → its sum), after them otherwise; then the
+    /// Store's suggestions and the fallback commands.
     public static func group(_ results: [PaletteIndex.Entry], query: String, favorites: [PaletteIndex.Entry] = [], store: [PaletteIndex.Entry] = [],
-                             calculator: [PaletteIndex.Entry] = [], apps: [PaletteIndex.Entry] = [], files: [PaletteIndex.Entry] = [],
                              plugins: [PaletteSection] = [], fallbacks: [PaletteIndex.Entry] = [],
                              recentLimit: Int = 5, isRecent: (PaletteIndex.Entry) -> Bool) -> [PaletteSection] {
         let typed = query.trimmingCharacters(in: .whitespaces)
         guard typed.isEmpty else {
-            let appsLead = apps.first.map { $0.title.lowercased().hasPrefix(typed.lowercased()) } ?? false
-            let appSection = PaletteSection(title: "Applications", entries: apps)
+            let lowered = typed.lowercased()
+            let leads = plugins.filter { $0.entries.first?.title.lowercased().hasPrefix(lowered) ?? false }
+            let follows = plugins.filter { !($0.entries.first?.title.lowercased().hasPrefix(lowered) ?? false) }
             let result = PaletteSection(title: "Results", entries: results)
             // A fallback the search found already shows in Results.
             let shown = Set(results.map(\.id))
             let rest = fallbacks.filter { !shown.contains($0.id) }
-            return ([PaletteSection(title: "Calculator", entries: calculator)]
-                + (appsLead ? [appSection, result] : [result, appSection])
-                + plugins
-                + [PaletteSection(title: "Files", entries: files), PaletteSection(title: "From the Store", entries: store),
-                   PaletteSection(title: fallbackTitle(typed), entries: rest)])
+            return (leads + [result] + follows
+                + [PaletteSection(title: "From the Store", entries: store), PaletteSection(title: fallbackTitle(typed), entries: rest)])
                 .filter { !$0.entries.isEmpty }
         }
         let pinned = Set(favorites.map(\.id))
@@ -170,28 +167,31 @@ public extension StoreListing {
     }
 }
 
-/// Files from Spotlight's index as palette entries: what is worth showing,
-/// and how its folder reads.
-public enum PaletteFiles {
-    public static let pluginID = "system.files"
-
-    /// An entry for the file at `path`, or nil for what nobody means to
-    /// open from a launcher: apps (listed already), anything inside a
-    /// bundle, hidden files and folders, and Library internals.
-    public static func entry(path: String, home: String) -> PaletteIndex.Entry? {
+/// What `findFiles` keeps of Spotlight's hits, and how a folder reads.
+public enum FileSearchFilter {
+    /// Nothing anyone means to open from a launcher: apps (Applications
+    /// lists them), anything inside a bundle, hidden files and folders,
+    /// Library internals and node_modules.
+    public static func keeps(_ path: String) -> Bool {
         let url = URL(fileURLWithPath: path)
         let components = url.pathComponents
-        guard !components.isEmpty, url.pathExtension != "app" else { return nil }
+        guard !components.isEmpty, url.pathExtension != "app" else { return false }
         let bundles: Set<String> = ["app", "framework", "bundle", "photoslibrary", "musiclibrary", "xcarchive", "appex", "plugin"]
         for (index, component) in components.enumerated() {
-            if component.hasPrefix("."), index > 0 { return nil }
-            if index < components.count - 1, bundles.contains((component as NSString).pathExtension.lowercased()) { return nil }
-            if component == "Library", index < components.count - 1 { return nil }
-            if component == "node_modules" { return nil }
+            if component.hasPrefix("."), index > 0 { return false }
+            if index < components.count - 1, bundles.contains((component as NSString).pathExtension.lowercased()) { return false }
+            if component == "Library", index < components.count - 1 { return false }
+            if component == "node_modules" { return false }
         }
-        let folder = url.deletingLastPathComponent().path
-        return PaletteIndex.Entry(pluginID: pluginID, pluginName: "File", title: url.lastPathComponent, subtitle: abbreviate(folder, home: home),
-                                  kind: .open(url.absoluteString))
+        return true
+    }
+
+    /// The file found at `path`, its folder written from `~`.
+    public static func found(path: String, home: String, isFolder: Bool = false, lastUsed: Date? = nil) -> FoundFile? {
+        guard keeps(path) else { return nil }
+        let url = URL(fileURLWithPath: path)
+        return FoundFile(path: path, name: url.lastPathComponent, folder: abbreviate(url.deletingLastPathComponent().path, home: home),
+                         isFolder: isFolder, lastUsed: lastUsed)
     }
 
     /// `/Users/n/Documents/x` → `~/Documents/x`.

@@ -32,6 +32,10 @@ public struct PaletteIndex: Sendable {
         public var keywords: [String] = []
         /// The alias the user gave the command, shown on its row.
         public var alias: String?
+        /// An app's bundle id or a file's path, whose icon the row shows: a
+        /// root-search row's `appIcon` and `fileIcon`.
+        public var appIcon: String?
+        public var fileIcon: String?
 
         public init(pluginID: String, pluginName: String, title: String, subtitle: String? = nil, symbol: String? = nil, kind: Kind,
                     keywords: [String] = [], alias: String? = nil) {

@@ -417,6 +417,24 @@ public enum Stackbar {
         try await ok(.hideApp(id))
     }
 
+    /// The installed apps (in /Applications, ~/Applications and the system's
+    /// own) and System Settings panes, by name. Open an app with
+    /// `activateApp(id, launch: true)` and a pane with `open(pane.url)`.
+    /// Needs `.apps`. Stackbar 0.20.0.
+    public static func installedApps() async throws -> [InstalledApp] {
+        guard let json = try await value(.installedApps) else { throw HostError("no apps") }
+        return try SystemCodec.decode([InstalledApp].self, from: json)
+    }
+
+    /// Files and folders in the user's home whose names hold every word of
+    /// `text`, from Spotlight's index, most recently used first. App bundles,
+    /// hidden files and Library internals are left out. Needs `.fileSearch`.
+    /// Stackbar 0.20.0.
+    public static func findFiles(_ text: String, limit: Int = 8) async throws -> [FoundFile] {
+        guard let json = try await value(.findFiles(FileQuery(text: text, limit: limit))) else { return [] }
+        return try SystemCodec.decode([FoundFile].self, from: json)
+    }
+
     /// Registers this plugin's key layer, replacing the last one, or removes
     /// it with `nil`. While the layer's trigger (Right ⌘) is held, its keys
     /// switch apps: the host decides each press itself, so set the whole map

@@ -16,13 +16,22 @@ import StackbarProtocol
 public struct BundledStore {
     /// The first-party plugins the app carries, fetched by
     /// `stackbarctl index fetch` when the app is built.
-    public static let pluginIDs: Set<String> = [
+    public static let pluginIDs: Set<String> = Set([
         "io.navbytes.stackbar.clipboard",
         "io.navbytes.stackbar.pr-cockpit",
         "io.navbytes.stackbar.quicklinks",
         "io.navbytes.stackbar.snippets",
         "io.navbytes.stackbar.stay-awake",
         "io.navbytes.stackbar.up-next",
+    ]).union(corePluginIDs)
+
+    /// The palette's own results (apps, sums, files) come from these
+    /// plugins, so every Mac gets them once, new or upgraded. One the user
+    /// removes stays removed.
+    public static let corePluginIDs: Set<String> = [
+        "io.navbytes.stackbar.plugins.applications",
+        "io.navbytes.stackbar.plugins.calculator",
+        "io.navbytes.stackbar.plugins.file-search",
     ]
 
     public let bundlesDirectory: URL
@@ -70,6 +79,28 @@ public struct BundledStore {
             if let file = try? installer.install(bundle) { result.append(file) }
         }
         return result + syncExamples(installMissing: true).installed
+    }
+
+    /// Installs each carried core plugin that was never offered here, and
+    /// notes it in `offered` so a removed one is not put back. Returns the
+    /// new files.
+    @discardableResult
+    public func installCore(offered: URL) -> [URL] {
+        var done = Set((try? JSONDecoder().decode([String].self, from: Data(contentsOf: offered))) ?? [])
+        let installed = Set(installer.installed.map(\.id))
+        var result: [URL] = []
+        for bundle in bundles() where Self.corePluginIDs.contains(bundle.manifest.id) && !done.contains(bundle.manifest.id) {
+            if installed.contains(bundle.manifest.id) {
+                done.insert(bundle.manifest.id)
+            } else if let file = try? installer.install(bundle) {
+                done.insert(bundle.manifest.id)
+                result.append(file)
+            }
+        }
+        if let data = try? JSONEncoder().encode(done.sorted()) {
+            try? data.write(to: offered, options: .atomic)
+        }
+        return result
     }
 
     /// What `syncExamples` did, by file.

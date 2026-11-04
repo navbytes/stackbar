@@ -47,7 +47,6 @@ final class PaletteSession {
         didSet {
             guard query != oldValue else { return }
             selection.reset()
-            FileSearch.shared.search(query)
             feedRootSearch()
         }
     }
@@ -90,20 +89,12 @@ final class PaletteSession {
 
     init(model: AppModel) {
         self.model = model
-        FileSearch.shared.onChange = { [weak self] in
-            self?.cache = nil
-            self?.revision += 1
-        }
     }
 
     var top: Stage? { stack.last }
 
     func shown() {
         shownCount += 1
-        SystemItems.shared.refresh { [weak self] in
-            self?.cache = nil
-            self?.revision += 1
-        }
         // The Store window loads its indexes when it opens; the suggestions
         // need them before that. Once per launch, in the background.
         if !storeRequested, let store = model.store, store.catalogs.isEmpty {
@@ -185,23 +176,15 @@ final class PaletteSession {
             found.removeAll { $0.id == match.entry.id }
             found.insert(match.entry, at: 0)
         }
-        let system = SystemItems.shared.entries
-        let favorites = model.commands.favorites.entries(in: palette.all + system)
+        let favorites = model.commands.favorites.entries(in: palette.all)
         let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
-        let apps = PaletteIndex.Entry.matching(system, query: query, limit: 5, usage: usage)
-        let fileSearch = FileSearch.shared
-        let files = fileSearch.text == query.trimmingCharacters(in: .whitespaces) ? fileSearch.results : []
-        let calculator = PaletteCalculator.answer(query).map {
-            [PaletteIndex.Entry(pluginID: Self.calculatorID, pluginName: "Calculator", title: $0.display, subtitle: $0.expression, symbol: "equal", kind: .copy($0.result))]
-        } ?? []
-        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store, calculator: calculator, apps: apps, files: files,
+        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store,
                                             plugins: plugins, fallbacks: fallbackEntries()) { usage.score($0.id) > 0 }
         let ordered = sections.flatMap(\.entries)
         cache = (query, palette.revision, storeCount, pluginKey, sections, ordered)
         return (sections, ordered)
     }
 
-    static let calculatorID = "system.calculator"
 
     /// A plugin's manifest, for its icon and colour.
     func manifest(of pluginID: String) -> Manifest? {
@@ -222,7 +205,7 @@ final class PaletteSession {
     @ObservationIgnored private var rootViews: [CommandKey: CommandViewModel] = [:]
     @ObservationIgnored private var rootOpening: Set<CommandKey> = []
     /// What a root row does when chosen: its view and its primary action.
-    @ObservationIgnored private var rootRows: [String: (view: CommandViewModel, action: ActionRef)] = [:]
+    @ObservationIgnored private var rootRows: [String: (view: CommandViewModel, action: ActionRef, actions: [ActionRef])] = [:]
     /// Bumped when a root view opens, so the list reads it.
     private(set) var rootViewsRevision = 0
     /// Rows from each plugin, at most.
@@ -274,17 +257,19 @@ final class PaletteSession {
     private func rootSearchSections() -> [PaletteSection] {
         _ = rootViewsRevision
         guard rootText != nil else { return [] }
-        var table: [String: (view: CommandViewModel, action: ActionRef)] = [:]
+        var table: [String: (view: CommandViewModel, action: ActionRef, actions: [ActionRef])] = [:]
         let sections = rootViews.values.sorted { $0.entry.spec.title < $1.entry.spec.title }.compactMap { view -> PaletteSection? in
             let entries = self.rows(of: view).prefix(Self.rootRowLimit).compactMap { row -> PaletteIndex.Entry? in
                 guard let primary = row.actions.first else { return nil }
                 let kind: PaletteIndex.Entry.Kind = primary.navigate.map { .navigate($0) } ?? .action(primary.id, value: nil)
-                let entry = PaletteIndex.Entry(pluginID: view.entry.pluginID, pluginName: view.entry.pluginName, title: row.title,
+                var entry = PaletteIndex.Entry(pluginID: view.entry.pluginID, pluginName: view.entry.pluginName, title: row.title,
                                                subtitle: row.subtitle, symbol: row.symbol ?? view.entry.spec.symbol, kind: kind)
-                table[entry.id] = (view, primary)
+                entry.appIcon = row.appIcon
+                entry.fileIcon = row.fileIcon
+                table[entry.id] = (view, primary, row.actions)
                 return entry
             }
-            return entries.isEmpty ? nil : PaletteSection(title: view.entry.spec.title, entries: entries)
+            return entries.isEmpty ? nil : PaletteSection(title: view.entry.spec.rootSection ?? view.entry.spec.title, entries: entries)
         }
         rootRows = table
         return sections
@@ -333,7 +318,6 @@ final class PaletteSession {
     func canPin(_ entry: PaletteIndex.Entry) -> Bool {
         if case .copy = entry.kind { return false }
         if rootRows[entry.id] != nil || isFallback(entry) { return false }
-        if entry.pluginID == PaletteFiles.pluginID { return false }
         return !isStoreSuggestion(entry)
     }
 
@@ -554,18 +538,13 @@ final class PaletteSession {
         switch top {
         case .none:
             guard let entry = selectedEntry else { return [] }
-            var actions = [Action(title: primaryTitle ?? "Run") { [weak self] in self?.activate(entry) }]
-            if case .open(let link) = entry.kind, [SystemItems.appPluginID, PaletteFiles.pluginID].contains(entry.pluginID), let url = URL(string: link) {
-                actions.append(Action(title: "Show in Finder", shortcut: "cmd+return") { [weak self] in
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                    self?.finish()
-                })
-                actions.append(Action(title: "Copy Path", shortcut: "cmd+shift+c") { [weak self] in
-                    Platform.copy(url.path)
-                    HUD.shared.show("Copied the path")
-                    self?.finish()
-                })
+            // A plugin's row in the root: its own actions, as in its view.
+            if let row = rootRows[entry.id] {
+                return row.actions.map { ref in
+                    Action(title: ref.title, shortcut: ref.shortcut, role: ref.role) { [weak self] in self?.perform(ref, in: row.view) }
+                }
             }
+            var actions = [Action(title: primaryTitle ?? "Run") { [weak self] in self?.activate(entry) }]
             if canPin(entry) {
                 let pinned = isFavorite(entry)
                 actions.append(Action(title: pinned ? "Remove from Favorites" : "Add to Favorites", shortcut: "cmd+shift+f") { [weak self] in
@@ -626,6 +605,7 @@ final class PaletteSession {
         switch top {
         case .none:
             guard let entry = selectedEntry else { return nil }
+            if let row = rootRows[entry.id] { return row.action.title }
             switch entry.kind {
             case .command(let spec): return spec.kind == .view || !spec.arguments.isEmpty ? "Open" : "Run"
             case .navigate, .showPanel: return "Open"

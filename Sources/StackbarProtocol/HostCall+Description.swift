@@ -43,6 +43,8 @@ extension HostCall {
         case .reminders: return "reading reminders"
         case .saveReminder(let reminder, _): return reminder.id.isEmpty ? "adding a reminder" : "saving a reminder"
         case .deleteReminder: return "deleting a reminder"
+        case .installedApps: return "listing installed apps"
+        case .findFiles: return "finding files"
         }
     }
 
@@ -65,6 +67,8 @@ extension HostCall {
         case .arrangeWindows: return (.windows, "move and resize windows")
         case .runningApps: return (.apps, "read running apps")
         case .activateApp, .hideApp: return (.apps, "switch, open or hide apps")
+        case .installedApps: return (.apps, "list installed apps")
+        case .findFiles: return (.fileSearch, "find files by name")
         // Removing never needs the capability, so a revoked plugin can let go.
         case .setKeyLayer(let layer): return layer == nil ? nil : (.keyLayer, "switch apps from a held key")
         case .keyLayerStatus: return (.keyLayer, "read the key layer's status")

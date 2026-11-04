@@ -31,12 +31,15 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
     /// A view command whose top rows also show in the palette's results
     /// while the user types, as its own section. Protocol 16.
     public var rootSearch: Bool
+    /// The heading over a root-search command's rows ("Applications");
+    /// the command's title when nil. Protocol 16.
+    public var rootSection: String?
     /// Offered under the palette's results for whatever was typed: the text
     /// fills the first argument, or a view's search. Protocol 16.
     public var fallback: Bool
 
     public init(id: String, title: String, subtitle: String? = nil, symbol: String? = nil, keywords: [String] = [], kind: Kind = .run, arguments: [ArgumentSpec] = [], exposure: Exposure = .everywhere,
-                rootSearch: Bool = false, fallback: Bool = false) {
+                rootSearch: Bool = false, rootSection: String? = nil, fallback: Bool = false) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -46,6 +49,7 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         self.arguments = arguments
         self.exposure = exposure
         self.rootSearch = rootSearch
+        self.rootSection = rootSection
         self.fallback = fallback
     }
 
@@ -62,6 +66,7 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         arguments = try container.decodeIfPresent([ArgumentSpec].self, forKey: .arguments) ?? []
         exposure = try container.decodeIfPresent(Exposure.self, forKey: .exposure) ?? .everywhere
         rootSearch = try container.decodeIfPresent(Bool.self, forKey: .rootSearch) ?? false
+        rootSection = try container.decodeIfPresent(String.self, forKey: .rootSection)
         fallback = try container.decodeIfPresent(Bool.self, forKey: .fallback) ?? false
     }
 

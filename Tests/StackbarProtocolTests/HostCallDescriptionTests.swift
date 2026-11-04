@@ -14,6 +14,7 @@ final class HostCallDescriptionTests: XCTestCase {
         .context, .finderSelection, .chooseFile(types: []), .saveFile(name: "x.json", data: Data()), .resolveApplication("Safari"),
         .reminderAccess(ask: true), .reminderLists, .createReminderList(title: "Home", color: nil), .reminders(ReminderQuery()),
         .saveReminder(Reminder(title: "x"), fields: nil), .deleteReminder(id: "r"),
+        .installedApps, .findFiles(FileQuery(text: "plan")),
     ]
 
     func testEveryCallHasALabel() {
@@ -32,5 +33,8 @@ final class HostCallDescriptionTests: XCTestCase {
         // What these need depends on the manifest's details; the host checks them.
         XCTAssertNil(HostCall.secret(name: "TOKEN").requirement)
         XCTAssertNil(HostCall.run(RunRequest(command: "brew")).requirement)
+        XCTAssertEqual(HostCall.installedApps.requirement?.capability, .apps)
+        XCTAssertEqual(HostCall.findFiles(FileQuery(text: "plan")).requirement?.capability, .fileSearch)
+        XCTAssertEqual(FileQuery(text: "x", limit: 500).limit, FileQuery.maxLimit)
     }
 }

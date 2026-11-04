@@ -463,8 +463,8 @@ struct PaletteRow: View {
         HStack(spacing: 10) {
             // The entry's symbol on a tile in its plugin's colour, so each
             // plugin is told apart at a glance.
-            if let icon = SystemItems.shared.icon(for: entry) {
-                // An app's own icon, as Spotlight and Raycast show it.
+            if let icon = entry.appIcon.flatMap(AppIcons.icon) ?? entry.fileIcon.map(AppIcons.fileIcon) {
+                // An app's or file's own icon, as Spotlight and Raycast show it.
                 Image(nsImage: icon).resizable().interpolation(.high).frame(width: 26, height: 26).padding(-1)
             } else {
                 SettingsIconTile(symbol: iconName, color: PluginIcon.color(accent), size: 24)

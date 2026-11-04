@@ -65,11 +65,14 @@ public struct Command: Sendable {
     }
 
     /// Shows the view's top rows in the palette's own results while the user
-    /// types, under the command's title, as Raycast's root search does. The
-    /// view's `search` runs with what was typed; keep it quick. Protocol 16.
-    public func rootSearch() -> Command {
+    /// types, under `section` (the command's title when nil), as Raycast's
+    /// root search does. The view's `search` runs with what was typed; keep
+    /// it quick. A section whose first row starts with the typed text comes
+    /// before the other results (an app by name, a sum). Protocol 16.
+    public func rootSearch(section: String? = nil) -> Command {
         var copy = self
         copy.spec.rootSearch = true
+        copy.spec.rootSection = section
         return copy
     }
 

@@ -15,7 +15,7 @@ host surface any plugin can use, or a plugin.
 
 ## What changes
 
-Host (Stackbar 0.19.0, protocol 16):
+Host (Stackbar 0.20.0, protocol 16):
 
 - **File search** (stackbar #93): a Files section from Spotlight's index for
   typed queries of three or more characters. Host-side, like Applications,
@@ -36,7 +36,7 @@ Host (Stackbar 0.19.0, protocol 16):
 - **Compact mode** (Settings › Command Palette): only the search field shows
   until the user types, like Spotlight; the window grows downward.
 
-Plugins (stackbar-plugins, `minimumStackbar` 0.19.0):
+Plugins (stackbar-plugins, `minimumStackbar` 0.20.0):
 
 - Clipboard History and Snippets opt into root search.
 - **Web Search**: fallback commands for Google, DuckDuckGo, Wikipedia and
@@ -46,9 +46,25 @@ Plugins (stackbar-plugins, `minimumStackbar` 0.19.0):
   host code).
 - **Emoji**: a searchable emoji grid that pastes or copies the pick.
 
+## Moving apps, the calculator and files into plugins (Naveen, 2026-11-04)
+
+The apps, Settings panes, calculator (#92) and file search (#93) were first
+built into the palette, against the ethos above. Naveen agreed to move them.
+The host keeps only what a sandboxed plugin can't do, as services:
+
+- `Stackbar.installedApps()` (needs `.apps`): apps and Settings panes.
+- `Stackbar.findFiles(_:limit:)` (new `.fileSearch` capability): Spotlight's
+  index by name, filtered and with the folder written from `~`.
+- `Row.fileIcon(path)`: a Finder icon on a row, next to `appIcon`.
+- `rootSearch(section:)` names the section; a plugin section whose first
+  row starts with the typed text leads the results (apps by name, sums).
+- Root rows' own actions show in ⌘K.
+
+Three store plugins replace the built-ins: Applications, Calculator and
+File Search. The app carries them and installs each once on every Mac
+(new or upgraded); one the user removes stays removed (`core-plugins.json`).
+Favourites of apps (pinning an app) are dropped for now.
+
 ## Not changing
 
-- Apps, Settings panes and the calculator stay in the host for now (#92). They
-  could become plugins once a plugin can read app icons and Spotlight; that is
-  a follow-up for Naveen to decide.
 - No keyword expansion (still held from `snippets`).
