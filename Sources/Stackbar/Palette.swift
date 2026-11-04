@@ -246,7 +246,7 @@ struct PaletteView: View {
         HStack(spacing: 10) {
             if session.stack.isEmpty {
                 Image(systemName: "magnifyingglass").font(.title2.weight(.medium)).foregroundStyle(.secondary)
-                searchField(text: $session.query, prompt: "Search apps, commands and actions, or calculate")
+                searchField(text: $session.query, prompt: "Search apps, files and commands, or calculate")
             } else {
                 Button {
                     _ = session.back()

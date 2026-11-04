@@ -44,7 +44,11 @@ final class PaletteSession {
 
     let model: AppModel
     var query = "" {
-        didSet { if query != oldValue { selection.reset() } }
+        didSet {
+            guard query != oldValue else { return }
+            selection.reset()
+            FileSearch.shared.search(query)
+        }
     }
     /// The selected root entry, or the selected row of a list view, by id:
     /// it stays on its line while the list reorders under it.
@@ -75,6 +79,10 @@ final class PaletteSession {
 
     init(model: AppModel) {
         self.model = model
+        FileSearch.shared.onChange = { [weak self] in
+            self?.cache = nil
+            self?.revision += 1
+        }
     }
 
     var top: Stage? { stack.last }
@@ -163,10 +171,12 @@ final class PaletteSession {
         let favorites = model.commands.favorites.entries(in: palette.all + system)
         let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
         let apps = PaletteIndex.Entry.matching(system, query: query, limit: 5, usage: usage)
+        let fileSearch = FileSearch.shared
+        let files = fileSearch.text == query.trimmingCharacters(in: .whitespaces) ? fileSearch.results : []
         let calculator = PaletteCalculator.answer(query).map {
             [PaletteIndex.Entry(pluginID: Self.calculatorID, pluginName: "Calculator", title: $0.display, subtitle: $0.expression, symbol: "equal", kind: .copy($0.result))]
         } ?? []
-        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store, calculator: calculator, apps: apps) { usage.score($0.id) > 0 }
+        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store, calculator: calculator, apps: apps, files: files) { usage.score($0.id) > 0 }
         let ordered = sections.flatMap(\.entries)
         cache = (query, palette.revision, storeCount, sections, ordered)
         return (sections, ordered)
@@ -213,6 +223,7 @@ final class PaletteSession {
     /// so they can't be pinned.
     func canPin(_ entry: PaletteIndex.Entry) -> Bool {
         if case .copy = entry.kind { return false }
+        if entry.pluginID == PaletteFiles.pluginID { return false }
         return !isStoreSuggestion(entry)
     }
 
@@ -416,9 +427,14 @@ final class PaletteSession {
         case .none:
             guard let entry = selectedEntry else { return [] }
             var actions = [Action(title: primaryTitle ?? "Run") { [weak self] in self?.activate(entry) }]
-            if case .open(let link) = entry.kind, entry.pluginID == SystemItems.appPluginID, let url = URL(string: link) {
+            if case .open(let link) = entry.kind, [SystemItems.appPluginID, PaletteFiles.pluginID].contains(entry.pluginID), let url = URL(string: link) {
                 actions.append(Action(title: "Show in Finder", shortcut: "cmd+return") { [weak self] in
                     NSWorkspace.shared.activateFileViewerSelecting([url])
+                    self?.finish()
+                })
+                actions.append(Action(title: "Copy Path", shortcut: "cmd+shift+c") { [weak self] in
+                    Platform.copy(url.path)
+                    HUD.shared.show("Copied the path")
                     self?.finish()
                 })
             }

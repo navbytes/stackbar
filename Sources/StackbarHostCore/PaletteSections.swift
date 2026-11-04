@@ -25,7 +25,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// when the best one's name starts with what was typed (`saf` → Safari),
     /// after them otherwise.
     public static func group(_ results: [PaletteIndex.Entry], query: String, favorites: [PaletteIndex.Entry] = [], store: [PaletteIndex.Entry] = [],
-                             calculator: [PaletteIndex.Entry] = [], apps: [PaletteIndex.Entry] = [],
+                             calculator: [PaletteIndex.Entry] = [], apps: [PaletteIndex.Entry] = [], files: [PaletteIndex.Entry] = [],
                              recentLimit: Int = 5, isRecent: (PaletteIndex.Entry) -> Bool) -> [PaletteSection] {
         let typed = query.trimmingCharacters(in: .whitespaces)
         guard typed.isEmpty else {
@@ -34,7 +34,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
             let result = PaletteSection(title: "Results", entries: results)
             return ([PaletteSection(title: "Calculator", entries: calculator)]
                 + (appsLead ? [appSection, result] : [result, appSection])
-                + [PaletteSection(title: "From the Store", entries: store)])
+                + [PaletteSection(title: "Files", entries: files), PaletteSection(title: "From the Store", entries: store)])
                 .filter { !$0.entries.isEmpty }
         }
         let pinned = Set(favorites.map(\.id))
@@ -153,5 +153,38 @@ public extension StoreListing {
                 PaletteIndex.Entry(pluginID: entry.id, pluginName: "Store", title: entry.name, subtitle: entry.summary,
                                    symbol: entry.symbol, kind: .open(StoreLink(pluginID: entry.id).url.absoluteString))
             }
+    }
+}
+
+/// Files from Spotlight's index as palette entries: what is worth showing,
+/// and how its folder reads.
+public enum PaletteFiles {
+    public static let pluginID = "system.files"
+
+    /// An entry for the file at `path`, or nil for what nobody means to
+    /// open from a launcher: apps (listed already), anything inside a
+    /// bundle, hidden files and folders, and Library internals.
+    public static func entry(path: String, home: String) -> PaletteIndex.Entry? {
+        let url = URL(fileURLWithPath: path)
+        let components = url.pathComponents
+        guard !components.isEmpty, url.pathExtension != "app" else { return nil }
+        let bundles: Set<String> = ["app", "framework", "bundle", "photoslibrary", "musiclibrary", "xcarchive", "appex", "plugin"]
+        for (index, component) in components.enumerated() {
+            if component.hasPrefix("."), index > 0 { return nil }
+            if index < components.count - 1, bundles.contains((component as NSString).pathExtension.lowercased()) { return nil }
+            if component == "Library", index < components.count - 1 { return nil }
+            if component == "node_modules" { return nil }
+        }
+        let folder = url.deletingLastPathComponent().path
+        return PaletteIndex.Entry(pluginID: pluginID, pluginName: "File", title: url.lastPathComponent, subtitle: abbreviate(folder, home: home),
+                                  kind: .open(url.absoluteString))
+    }
+
+    /// `/Users/n/Documents/x` → `~/Documents/x`.
+    public static func abbreviate(_ path: String, home: String) -> String {
+        guard !home.isEmpty else { return path }
+        if path == home { return "~" }
+        let prefix = home.hasSuffix("/") ? home : home + "/"
+        return path.hasPrefix(prefix) ? "~/" + path.dropFirst(prefix.count) : path
     }
 }
