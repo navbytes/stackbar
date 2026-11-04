@@ -19,8 +19,8 @@
 - [x] 4.1 README, download page, installer, cask caveats, AuthoringGuide/llms.txt where they mention the toolchain
 
 ## 5. stackbar-plugins
-- [ ] 5.1 `scripts/helpers.sh` and the Helpers workflow
-- [ ] 5.2 Raise the Stackbar pin to the release with `stackbarctl helper`
+- [x] 5.1 `scripts/helpers.sh` and the Helpers workflow
+- [x] 5.2 Raise the Stackbar pin to the release with `stackbarctl helper`
 
 ## 6. On a Mac
 - [ ] 6.1 A Mac without the Command Line Tools installs and runs a store plugin
