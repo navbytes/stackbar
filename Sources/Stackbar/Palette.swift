@@ -33,7 +33,8 @@ final class PaletteController {
         }
         // ⌘ held shows the ⌘1…⌘9 hints on the first rows.
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            let held = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+            // ⌘ alone; Caps Lock and fn don't count.
+            let held = event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command
             MainActor.assumeIsolated {
                 guard let self else { return }
                 let showing = held && self.panel?.isKeyWindow == true

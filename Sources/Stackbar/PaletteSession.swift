@@ -81,6 +81,12 @@ final class PaletteSession {
 
     func shown() {
         shownCount += 1
+        // The Store window loads its indexes when it opens; the suggestions
+        // need them before that. Once per launch, in the background.
+        if !storeRequested, let store = model.store, store.catalogs.isEmpty {
+            storeRequested = true
+            Task { await store.load() }
+        }
     }
 
     /// Back to an empty root, closing every open view.
@@ -123,7 +129,9 @@ final class PaletteSession {
 
     /// The root's search, kept until the query or the index changes: the
     /// view, the footer, ⌘K and every arrow press ask for it.
-    @ObservationIgnored private var cache: (query: String, revision: Int, sections: [PaletteSection], results: [PaletteIndex.Entry])?
+    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, sections: [PaletteSection], results: [PaletteIndex.Entry])?
+    /// The Store's indexes were asked for once, for its suggestions.
+    @ObservationIgnored private var storeRequested = false
 
     /// The root's results in titled groups, as drawn.
     var sections: [PaletteSection] {
@@ -138,7 +146,9 @@ final class PaletteSession {
 
     private func load() -> (sections: [PaletteSection], results: [PaletteIndex.Entry]) {
         let palette = model.palette
-        if let cache, cache.query == query, cache.revision == palette.revision { return (cache.sections, cache.results) }
+        // Read every time, so the list redraws once the Store's indexes arrive.
+        let storeCount = model.store?.catalogs.count ?? 0
+        if let cache, cache.query == query, cache.revision == palette.revision, cache.store == storeCount { return (cache.sections, cache.results) }
         let usage = model.commands.usage
         var found = palette.search(query, limit: 30, usage: usage)
         if let match = palette.aliasMatch(query) {
@@ -149,7 +159,7 @@ final class PaletteSession {
         let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
         let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store) { usage.score($0.id) > 0 }
         let ordered = sections.flatMap(\.entries)
-        cache = (query, palette.revision, sections, ordered)
+        cache = (query, palette.revision, storeCount, sections, ordered)
         return (sections, ordered)
     }
 
@@ -250,8 +260,18 @@ final class PaletteSession {
             model.controller(for: entry.pluginID)?.send(action, value)
             finish()
         case .open(let url):
+            guard let url = URL(string: url) else { return }
+            // A Store suggestion goes to this app's own Store window: through
+            // Launch Services it could open another Stackbar copy (a dev
+            // build). Not counted as a use: it isn't a palette entry.
+            if let link = StoreLink(url) {
+                finish()
+                model.storeFocus = link.pluginID
+                AppDelegate.shared?.showStore()
+                return
+            }
             model.commands.usage.record(entry.id)
-            if let url = URL(string: url) { NSWorkspace.shared.open(url) }
+            NSWorkspace.shared.open(url)
             finish()
         case .showPanel:
             model.commands.usage.record(entry.id)
