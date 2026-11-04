@@ -44,6 +44,17 @@ final class PreviewTests: XCTestCase {
         XCTAssertEqual(outbox.take(), [.settled, .settled], "the scene stays as the preview set it up")
     }
 
+    /// A copy is what the user did, like an event: `stackbarctl render
+    /// --preview hero --copy …` (the store's Clipboard demo) relies on it.
+    func testACopyStillReachesAPreview() async {
+        let plugin = Previewed()
+        let runtime = PluginRuntime(plugin: plugin, preview: "hero", send: Outbox().send)
+        await runtime.handle(.hello(protocolVersion: 1, surfaces: [.menuBar]))
+        await runtime.handle(.trigger(reason: .clipboard))
+        XCTAssertEqual(plugin.refreshes, 1)
+        XCTAssertEqual(Stackbar.refreshReason, nil)
+    }
+
     func testWithoutAPreviewTriggersRefreshAsBefore() async {
         let plugin = Previewed()
         let runtime = PluginRuntime(plugin: plugin, send: Outbox().send)
