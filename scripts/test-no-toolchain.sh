@@ -4,7 +4,8 @@
 # nowhere, so xcode-select and the swift shim both fail), then:
 #   1. renders every plugin the app carries (examples and first-party bundles)
 #      from the helpers prebuilt into the app;
-#   2. installs plugins from the official store (all of them by default) and
+#   2. installs plugins from the official store (all but withdrawn ones by
+#      default) and
 #      renders each, from the store's signed prebuilt helpers.
 # macOS only. The No toolchain workflow runs it on a GitHub macOS runner.
 #
@@ -60,7 +61,7 @@ for plugin in "$WORK"/carried/*.swift; do
 done
 
 if [ $# -eq 0 ]; then
-    set -- $(curl -fsSL "$INDEX" | python3 -c 'import json,sys; print(" ".join(sorted({p["id"] for p in json.load(sys.stdin)["plugins"]})))')
+    set -- $(curl -fsSL "$INDEX" | python3 -c 'import json,sys; i=json.load(sys.stdin); gone={r["id"] for r in i.get("revoked") or [] if not r.get("versions")}; print(" ".join(sorted({p["id"] for p in i["plugins"]} - gone)))')
 fi
 echo "== store plugins ($#)"
 for id in "$@"; do
