@@ -40,6 +40,8 @@ const plugins = defineCollection({
     /** Renders of this version's surfaces, from the store's site.json. */
     gallery: z.array(z.object({ surface: z.string(), light: z.url().optional(), dark: z.url().optional() })),
     /** Scenes with sample data (Stackbar 0.17.0), in the plugin's order; `hero` first by convention. */
+    /** A demo loop (animated PNG) of one surface, and how long a pass lasts. */
+    demo: z.object({ surface: z.string(), seconds: z.number(), light: z.url().optional(), dark: z.url().optional() }).optional(),
     previews: z.array(z.object({ name: z.string(), title: z.string(), surface: z.string(), light: z.url().optional(), dark: z.url().optional() })).default([]),
     capabilities: z.array(z.string()),
     readme: z.object({

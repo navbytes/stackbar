@@ -166,12 +166,14 @@ export async function fetchStore({ indexURL, publicKey, fetch = globalThis.fetch
     }
     const gallery = await galleryOf(fetch, renders.plugins[entry.id]?.[entry.version], base, log);
     const previews = await previewsOf(fetch, renders.previews[entry.id]?.[entry.version], base, log);
+    const demo = await demoOf(fetch, renders.demos[entry.id]?.[entry.version], base, log);
     plugins.push({
       ...entry,
       slug,
       screenshot,
       gallery,
       previews,
+      ...(demo ? { demo } : {}),
       bundle: new URL(entry.bundle, base).href,
       readme,
     });
@@ -187,12 +189,12 @@ export const surfaceOrder = ['menuBar', 'panel', 'window', 'widget', 'palette', 
  * scenes, Stackbar 0.17.0) per plugin version, or none yet.
  */
 async function fetchRenders(fetch, url, log) {
-  const none = { plugins: {}, previews: {} };
+  const none = { plugins: {}, previews: {}, demos: {} };
   const response = await fetchWithRetry(fetch, url).catch(() => undefined);
   if (!response?.ok) { log(`store: no renders yet (${url} answered ${response?.status ?? 'nothing'})`); return none; }
   const site = await response.json();
   if (site.format !== 1) return none;
-  return { plugins: site.plugins ?? {}, previews: site.previews ?? {} };
+  return { plugins: site.plugins ?? {}, previews: site.previews ?? {}, demos: site.demos ?? {} };
 }
 
 /** One version's previews, in the plugin's order, each with the renders that answer. */
@@ -209,6 +211,22 @@ export async function previewsOf(fetch, scenes = [], base, log = console.warn) {
     if (item.light || item.dark) previews.push(item);
   }
   return previews;
+}
+
+/**
+ * One version's demo loop (an animated PNG recorded from a scripted preview),
+ * with the renders that answer and how long one pass lasts, or none.
+ */
+export async function demoOf(fetch, demo, base, log = console.warn) {
+  if (!demo) return undefined;
+  const item = { surface: demo.surface ?? 'panel', seconds: Number(demo.seconds) || 5 };
+  for (const appearance of ['light', 'dark']) {
+    if (!demo[appearance]) continue;
+    const url = new URL(demo[appearance], base).href;
+    const head = await fetchWithRetry(fetch, url, { method: 'HEAD' }).catch(() => undefined);
+    if (head?.ok) item[appearance] = url; else log(`store: missing demo ${url}`);
+  }
+  return item.light || item.dark ? item : undefined;
 }
 
 /** One version's renders, each surface's light and dark image that answers. */

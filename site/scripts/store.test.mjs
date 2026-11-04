@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { verifyIndex, parseReadme, readmeURL, slugOf, fetchStore, galleryOf, previewsOf, listed } from './store.mjs';
+import { verifyIndex, parseReadme, readmeURL, slugOf, fetchStore, galleryOf, previewsOf, demoOf, listed } from './store.mjs';
 import { readStore } from './kit.mjs';
 
 // A copy of the published index, signed by the navbytes key.
@@ -122,4 +122,16 @@ test('previews keep their order and drop renders that are missing', async () => 
     dark: 'https://navbytes.github.io/stackbar-plugins/S/shots/a/1/dark/previews/hero/panel.png' }]);
   assert.match(warnings.join(), /missing preview .*gone/);
   assert.deepEqual(await previewsOf(fake, undefined, base), []);
+});
+
+test('a demo keeps the renders that answer and how long it lasts', async () => {
+  const base = new URL('https://navbytes.github.io/stackbar-plugins/');
+  const demo = { surface: 'panel', seconds: 6.75, light: 'S/shots/a/1/light/demo/abc/panel.png', dark: 'S/shots/a/1/dark/demo/abc/gone.png' };
+  const fake = async (url) => (url.includes('gone') ? { ok: false, status: 404 } : { ok: true, status: 200 });
+  const warnings = [];
+  assert.deepEqual(await demoOf(fake, demo, base, (m) => warnings.push(m)), {
+    surface: 'panel', seconds: 6.75, light: 'https://navbytes.github.io/stackbar-plugins/S/shots/a/1/light/demo/abc/panel.png' });
+  assert.match(warnings.join(), /missing demo .*gone/);
+  assert.equal(await demoOf(fake, undefined, base), undefined);
+  assert.equal(await demoOf(async () => ({ ok: false, status: 404 }), demo, base, () => {}), undefined);
 });

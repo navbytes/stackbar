@@ -38,6 +38,16 @@ export function heroShot(plugin: Plugin, appearance: Appearance = 'dark'): strin
   return pick(hero, appearance) ?? pick(plugin.gallery.find((g) => g.surface === 'panel'), appearance) ?? plugin.screenshot;
 }
 
+/**
+ * The plugin's demo loop of its panel, when it has one: an animated PNG to
+ * play in place of the hero picture, and how long one pass lasts.
+ */
+export function heroDemo(plugin: Plugin, appearance: Appearance = 'dark'): { src: string; seconds: number } | undefined {
+  const demo = plugin.demo;
+  const src = demo && demo.surface === 'panel' ? pick(demo, appearance) : undefined;
+  return src ? { src, seconds: demo!.seconds } : undefined;
+}
+
 /** The plugin's own menu-bar item, as rendered for the store. */
 export function menuBarShot(plugin: Plugin, appearance: Appearance = 'dark'): string | undefined {
   return pick(plugin.gallery.find((g) => g.surface === 'menuBar'), appearance);

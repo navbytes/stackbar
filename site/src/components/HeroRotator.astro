@@ -1,18 +1,20 @@
 ---
 // The home hero's Mac: a menu bar whose status items are real plugins (their
 // own menu-bar renders), and each one's panel (its `hero` preview, or the
-// panel render) dropping from it in turn, as if clicked. Five seconds each;
-// hovering or focusing pauses it, clicking an item shows it, and with reduced
-// motion it stays on the first. The caption under it links to the plugin.
+// panel render) dropping from it in turn, as if clicked. Five seconds each, or
+// a whole pass of the plugin's demo loop (an animated PNG, played instead of
+// the still unless the visitor asked for reduced motion); hovering or focusing
+// pauses it, clicking an item shows it, and with reduced motion it stays on
+// the first. The caption under it links to the plugin.
 import { Image } from 'astro:assets';
 import Glyph from './Glyph.astro';
 import { href } from '../lib/site';
-import { hueOf, heroShot, menuBarShot, type Plugin } from '../lib/plugins';
+import { hueOf, heroShot, heroDemo, menuBarShot, type Plugin } from '../lib/plugins';
 
 interface Props { plugins: Plugin[]; label: string; captions?: boolean; }
 const { plugins, label, captions = true } = Astro.props;
 const slides = plugins
-  .map((plugin) => ({ plugin, panel: heroShot(plugin, 'dark'), menuBar: menuBarShot(plugin, 'dark'), hue: hueOf(plugin) }))
+  .map((plugin) => ({ plugin, panel: heroShot(plugin, 'dark'), demo: heroDemo(plugin, 'dark'), menuBar: menuBarShot(plugin, 'dark'), hue: hueOf(plugin) }))
   .filter((slide) => slide.panel);
 const caption = (plugin: Plugin) => plugin.previews.find((p) => p.name === 'hero')?.title ?? plugin.summary;
 ---
@@ -35,8 +37,12 @@ const caption = (plugin: Plugin) => plugin.previews.find((p) => p.name === 'hero
   </div>
   <div class="panels">
     {slides.map((slide, i) => (
-      <div class:list={['panel', { on: i === 0 }]} id={`panel-${slide.plugin.slug}`} role="tabpanel" aria-hidden={i === 0 ? 'false' : 'true'} data-index={i}>
-        <Image src={slide.panel!} alt={`${slide.plugin.name}: ${caption(slide.plugin)}`} inferSize widths={[360, 720]} sizes="360px" loading={i === 0 ? 'eager' : 'lazy'} class="shot" />
+      <div class:list={['panel', { on: i === 0 }]} id={`panel-${slide.plugin.slug}`} role="tabpanel" aria-hidden={i === 0 ? 'false' : 'true'} data-index={i}
+        data-dwell={slide.demo ? Math.max(5, Math.ceil(slide.demo.seconds)) : 5}>
+        <picture>
+          {slide.demo && <source media="(prefers-reduced-motion: no-preference)" srcset={slide.demo.src} data-demo={slide.demo.src} />}
+          <Image src={slide.panel!} alt={`${slide.plugin.name}: ${caption(slide.plugin)}`} inferSize widths={[360, 720]} sizes="360px" loading={i === 0 ? 'eager' : 'lazy'} class="shot" />
+        </picture>
       </div>
     ))}
   </div>
@@ -46,16 +52,17 @@ const caption = (plugin: Plugin) => plugin.previews.find((p) => p.name === 'hero
         <b>{slide.plugin.name}</b> <span>{caption(slide.plugin)}</span> <i aria-hidden="true">→</i>
       </a>
     ))}
-    <span class="dots" aria-hidden="true">{slides.map((_, i) => <span class:list={{ on: i === 0 }}></span>)}</span>
+    <span class="dots" aria-hidden="true">{slides.map((slide, i) => <span class:list={{ on: i === 0 }} style={`--dwell: ${slide.demo ? Math.max(5, Math.ceil(slide.demo.seconds)) : 5}s`}></span>)}</span>
   </figcaption>}
 </figure>
 
 <script>
-  const DWELL = 5000;
   function setUp(root: HTMLElement) {
     const tabs = [...root.querySelectorAll<HTMLButtonElement>('.item')];
     const groups = ['.wallpaper > span', '.panel', '.caption', '.dots > span'].map((selector) => [...root.querySelectorAll<HTMLElement>(selector)]);
     const panels = root.querySelector<HTMLElement>('.panels')!;
+    const panelList = [...root.querySelectorAll<HTMLElement>('.panel')];
+    const dwell = (index: number) => Number(panelList[index]?.dataset.dwell ?? 5) * 1000;
     let at = 0;
     let timer: number | undefined;
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -66,6 +73,9 @@ const caption = (plugin: Plugin) => plugin.previews.find((p) => p.name === 'hero
       for (const group of groups) group.forEach((el, i) => el.classList.toggle('on', i === at));
       root.querySelectorAll<HTMLElement>('.panel').forEach((el, i) => el.setAttribute('aria-hidden', String(i !== at)));
       root.querySelectorAll<HTMLAnchorElement>('.caption').forEach((el, i) => (i === at ? el.removeAttribute('tabindex') : el.setAttribute('tabindex', '-1')));
+      // A demo starts from its first frame each time its slide comes round.
+      const demo = panelList[at]?.querySelector<HTMLSourceElement>('source[data-demo]');
+      if (demo && tabs.length > 1) demo.srcset = `${demo.dataset.demo}#${Date.now()}`;
       // Hang the panel under its item, as macOS does.
       const item = tabs[at].getBoundingClientRect(), box = root.getBoundingClientRect();
       const panel = root.querySelectorAll<HTMLElement>('.panel')[at];
@@ -77,9 +87,13 @@ const caption = (plugin: Plugin) => plugin.previews.find((p) => p.name === 'hero
       }
     }
     function play() {
-      clearInterval(timer);
+      clearTimeout(timer);
       if (still || tabs.length < 2) return;
-      timer = window.setInterval(() => { if (!root.matches(':hover, :focus-within')) show(at + 1); }, DWELL);
+      timer = window.setTimeout(function next() {
+        if (root.matches(':hover, :focus-within')) { timer = window.setTimeout(next, 1000); return; }
+        show(at + 1);
+        play();
+      }, dwell(at));
     }
     tabs.forEach((tab, i) => {
       tab.onclick = () => { show(i); play(); };
@@ -131,6 +145,7 @@ const caption = (plugin: Plugin) => plugin.previews.find((p) => p.name === 'hero
   .panels:not([style*='--x']) .panel { --x-shift: -50%; }
   .panel.on { opacity: 1; visibility: visible; transform: none; transition: opacity 0.35s ease, transform 0.45s var(--ease-out), left 0.4s var(--ease-out); }
   /* A tall panel is cut at the scene's foot, the way a long panel scrolls. */
+  .panel picture { display: block; }
   .panel :global(.shot) { width: 100%; height: auto; max-height: 470px; object-fit: cover; object-position: top; display: block; border-radius: 14px;
     box-shadow: 0 0 0 0.5px #00000040, 0 30px 60px -18px #00000080, 0 8px 18px -8px #00000040; }
 
@@ -143,7 +158,7 @@ const caption = (plugin: Plugin) => plugin.previews.find((p) => p.name === 'hero
   .caption:hover i { translate: 4px 0; }
   .dots { display: flex; gap: 6px; }
   .dots span { width: 22px; height: 3px; border-radius: 2px; background: #FFFFFF33; overflow: hidden; }
-  .dots span.on::after { content: ''; display: block; height: 100%; background: #FFFFFF; animation: fill 5s linear forwards; }
+  .dots span.on::after { content: ''; display: block; height: 100%; background: #FFFFFF; animation: fill var(--dwell, 5s) linear forwards; }
   .rotator:hover .dots span.on::after, .rotator:focus-within .dots span.on::after { animation-play-state: paused; }
   .still .dots span.on::after { animation: none; width: 100%; }
   @keyframes fill { from { width: 0; } to { width: 100%; } }
