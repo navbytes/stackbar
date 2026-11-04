@@ -35,8 +35,10 @@ targets:
       properties:
         NSCalendarsFullAccessUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
         NSCalendarsUsageDescription: Plugins you approve for calendar access show your upcoming events and meeting links.
+        NSRemindersFullAccessUsageDescription: Plugins you approve for Reminders keep your to-dos there, so they reach your iPhone, iPad and Watch.
+        NSRemindersUsageDescription: Plugins you approve for Reminders keep your to-dos there, so they reach your iPhone, iPad and Watch.
         NSAppleEventsUsageDescription: Plugins you approve can see the files you select in Finder, or control the apps they name, like Music.
-        CFBundleShortVersionString: "0.17.0"
+        CFBundleShortVersionString: "0.18.0"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
         # stackbar://commands/<plugin>/<command>?argument=value
@@ -49,8 +51,9 @@ targets:
       properties:
         com.apple.security.app-sandbox: false
         com.apple.security.application-groups: [group.io.navbytes.stackbar]
-        # The hardened runtime denies calendar access, without a prompt,
-        # unless the app carries this entitlement (Up Next needs it).
+        # The hardened runtime denies calendar and reminders access,
+        # without a prompt, unless the app carries this entitlement (Up Next
+        # and Todo need it; there is no separate one for reminders).
         com.apple.security.personal-information.calendars: true
         # Finder's selection, for plugins granted .context; macOS asks once.
         com.apple.security.automation.apple-events: true
@@ -71,7 +74,7 @@ targets:
     info:
       path: Packaging/Widget-Info.generated.plist
       properties:
-        CFBundleShortVersionString: "0.17.0"
+        CFBundleShortVersionString: "0.18.0"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

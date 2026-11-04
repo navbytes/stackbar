@@ -170,6 +170,12 @@ public actor PluginSupervisor {
         if manifest.triggers.contains(.apps) { send(.trigger(reason: .apps)) }
     }
 
+    /// Reminders changed, here or on another device. Only plugins that
+    /// asked for `.reminders` hear it.
+    public func remindersChanged() {
+        if manifest.triggers.contains(.reminders) { send(.trigger(reason: .reminders)) }
+    }
+
     public func setVisible(_ surface: Surface, _ visible: Bool) {
         send(.visibility(surface: surface, visible: visible))
     }

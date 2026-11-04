@@ -21,7 +21,7 @@ usage:
                   --command opens a view command; --event then presses things inside it
                   --preview shows one of the plugin's previews (sample data, no refreshes)
                   --copy pretends you copied text in another app (clipboard plugins);
-                  the clipboard, battery, calendar, windows and apps are simulated (STACKBAR_CALENDAR=<events.json>, STACKBAR_WINDOWS=<snapshot.json>, STACKBAR_APPS=<apps.json>)
+                  the clipboard, battery, calendar, windows and apps are simulated (STACKBAR_CALENDAR=<events.json>, STACKBAR_REMINDERS=<reminders.json>, STACKBAR_WINDOWS=<snapshot.json>, STACKBAR_APPS=<apps.json>)
   stackbarctl commands <plugin.swift | helper>        lists the plugin's commands
   stackbarctl previews <plugin.swift | helper> [--json]  lists the plugin's previews
   stackbarctl run <plugin.swift | helper> <command> [--arg name=value]...

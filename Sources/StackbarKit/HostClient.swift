@@ -352,6 +352,50 @@ public enum Stackbar {
         return try SystemCodec.decode([CalendarEvent].self, from: json)
     }
 
+    // MARK: Reminders
+
+    /// Whether Stackbar may use the user's reminders. With `ask`, macOS asks
+    /// the user if it hasn't yet. Needs `.reminders`. Stackbar 0.18.0.
+    public static func reminderAccess(ask: Bool = false) async throws -> ReminderAccess {
+        guard let json = try await value(.reminderAccess(ask: ask)) else { return .unavailable }
+        return try SystemCodec.decode(ReminderAccess.self, from: json)
+    }
+
+    /// The user's Reminders lists. Needs `.reminders`; the first call asks
+    /// for access.
+    public static func reminderLists() async throws -> [ReminderList] {
+        guard let json = try await value(.reminderLists) else { return [] }
+        return try SystemCodec.decode([ReminderList].self, from: json)
+    }
+
+    /// Makes a Reminders list (`color` as `#RRGGBB`). Needs `.reminders`.
+    public static func createReminderList(_ title: String, color: String? = nil) async throws -> ReminderList {
+        guard let json = try await value(.createReminderList(title: title, color: color)) else { throw HostError("no list") }
+        return try SystemCodec.decode(ReminderList.self, from: json)
+    }
+
+    /// Open reminders in `lists` (nil for all), plus those completed since
+    /// `completedSince`. Needs `.reminders`.
+    public static func reminders(in lists: [String]? = nil, completedSince: Date? = nil) async throws -> [Reminder] {
+        guard let json = try await value(.reminders(ReminderQuery(lists: lists, completedSince: completedSince))) else { return [] }
+        return try SystemCodec.decode([Reminder].self, from: json)
+    }
+
+    /// Adds a reminder (empty `id`) or saves one. Pass the `fields` you
+    /// changed, and only those are written over what is there now, so an
+    /// edit made on another device a moment ago survives. Returns the saved
+    /// reminder with its id. Needs `.reminders`.
+    @discardableResult
+    public static func saveReminder(_ reminder: Reminder, fields: [Reminder.Field]? = nil) async throws -> Reminder {
+        guard let json = try await value(.saveReminder(reminder, fields: fields)) else { throw HostError("no reminder") }
+        return try SystemCodec.decode(Reminder.self, from: json)
+    }
+
+    /// Deletes a reminder. Needs `.reminders`.
+    public static func deleteReminder(id: String) async throws {
+        try await ok(.deleteReminder(id: id))
+    }
+
     // MARK: Apps and the key layer
 
     /// The regular apps that are running, in launch order, with the one in

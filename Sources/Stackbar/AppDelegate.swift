@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import EventKit
 import SwiftUI
 import UserNotifications
 import StackbarHostCore
@@ -43,6 +44,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.displaysChangedSoon()
             }
         }
+        // Reminders (or calendars) changed, here or synced from another
+        // device. Saves come in bursts; plugins hear once, a second after
+        // the last.
+        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.remindersChangedSoon()
+            }
+        }
         // Apps opening and quitting come in bursts at login; plugins hear
         // once, half a second after the last.
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
@@ -51,6 +60,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self?.appsChangedSoon()
                 }
             }
+        }
+    }
+
+    private var remindersDebounce: Task<Void, Never>?
+
+    private func remindersChangedSoon() {
+        remindersDebounce?.cancel()
+        remindersDebounce = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            self?.model.controllers.forEach { $0.remindersChanged() }
         }
     }
 
