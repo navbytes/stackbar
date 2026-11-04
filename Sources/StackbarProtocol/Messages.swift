@@ -18,7 +18,8 @@ public enum StackbarProtocolVersion {
     /// 13 added listing and arranging windows, and the displays trigger.
     /// 14 added the app calls, the key layer and the apps trigger.
     /// 15 added Reminders: the reminder calls and the reminders trigger.
-    public static let current = 15
+    /// 16 added root-search and fallback commands.
+    public static let current = 16
 }
 
 /// Host → plugin.

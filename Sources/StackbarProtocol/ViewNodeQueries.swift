@@ -158,6 +158,13 @@ public enum RowFilter {
                 guard let best = kept.map(\.score).max() else { return nil }
                 return (.section(title: title, children: kept.map(\.node)), best)
             }
+            // A grid of rows (an emoji picker) is filtered inside, like a
+            // section, best match first.
+            if case .grid(let columns, let spacing, let inner) = child, inner.allSatisfy({ if case .row = $0 { return true } else { return false } }) {
+                let kept = scored(inner, query: query)
+                guard let best = kept.map(\.score).max() else { return nil }
+                return (.grid(columns: columns, spacing: spacing, children: kept.map(\.node)), best)
+            }
             let best = child.rows.compactMap(score(query)).max()
             return best.map { (child, $0) }
         }
@@ -204,13 +211,48 @@ public enum RowFilter {
             case .section(let title, let inner):
                 if let title { items.append(.header(title)) }
                 for node in inner {
-                    guard case .row(let row) = node else { return nil }
-                    items.append(.row(row))
+                    if case .row(let row) = node {
+                        items.append(.row(row))
+                    } else if let rows = gridRows(node) {
+                        items += rows.map(Item.row)
+                    } else {
+                        return nil
+                    }
                 }
-            case .text, .label, .stack, .list, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .styled, .shape, .image, .timer, .spacer, .tappable, .grid:
+            case .grid:
+                guard let rows = gridRows(child) else { return nil }
+                items += rows.map(Item.row)
+            case .text, .label, .stack, .list, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .styled, .shape, .image, .timer, .spacer, .tappable:
                 return nil
             }
         }
         return items
+    }
+
+    /// How many columns the palette tiles a list's rows in: the first grid
+    /// of rows in the list (or in one of its sections); `nil` for a plain
+    /// list, drawn a row per line.
+    public static func columns(in root: ViewNode) -> Int? {
+        guard case .list(_, let children) = root else { return nil }
+        for child in children {
+            if gridRows(child) != nil, case .grid(let columns, _, _) = child { return max(1, columns) }
+            if case .section(_, let inner) = child {
+                for node in inner where gridRows(node) != nil {
+                    if case .grid(let columns, _, _) = node { return max(1, columns) }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// The rows of a grid made only of rows.
+    static func gridRows(_ node: ViewNode) -> [RowNode]? {
+        guard case .grid(_, _, let children) = node else { return nil }
+        var rows: [RowNode] = []
+        for child in children {
+            guard case .row(let row) = child else { return nil }
+            rows.append(row)
+        }
+        return rows
     }
 }

@@ -46,6 +46,20 @@ final class ViewNodeQueriesTests: XCTestCase {
         XCTAssertNil(RowFilter.items(in: .list(children: [.section(title: "S", children: [.divider])]), query: ""))
     }
 
+    func testGridsOfRowsAreFilteredInsideAndTiledInThePalette() {
+        let grid = ViewNode.grid(columns: 8, children: [row("grin", "Grinning face"), row("cat", "Cat face"), row("heart", "Red heart")])
+        let list = ViewNode.list(searchable: true, children: [grid])
+        XCTAssertEqual(RowFilter.items(in: list, query: "")?.map(\.id), ["grin", "cat", "heart"])
+        XCTAssertEqual(RowFilter.items(in: list, query: "face")?.map(\.id), ["cat", "grin"], "filtered inside the grid, best first")
+        XCTAssertEqual(RowFilter.items(in: list, query: "zzz")?.map(\.id), [])
+        XCTAssertEqual(RowFilter.columns(in: list), 8)
+        let sectioned = ViewNode.list(searchable: true, children: [.section(title: "Smileys", children: [grid])])
+        XCTAssertEqual(RowFilter.items(in: sectioned, query: "heart")?.map(\.id), ["header|Smileys", "heart"])
+        XCTAssertEqual(RowFilter.columns(in: sectioned), 8)
+        XCTAssertNil(RowFilter.columns(in: .list(children: [row("a", "A")])), "a plain list is a row per line")
+        XCTAssertNil(RowFilter.items(in: .list(children: [.grid(columns: 2, children: [.text("x")])]), query: ""), "a grid of anything else is drawn as a panel")
+    }
+
     func testMapChildrenRebuildsEachContainerOnce() {
         let style = Style(opacity: 0.5)
         let upper: (ViewNode) -> ViewNode = { node in

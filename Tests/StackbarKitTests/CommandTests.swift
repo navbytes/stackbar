@@ -194,3 +194,24 @@ final class CommandTests: XCTestCase {
         XCTAssertFalse(CommandSpec(id: "x", title: "X", arguments: [ArgumentSpec("a"), ArgumentSpec("a")]).problems.isEmpty)
     }
 }
+
+final class CommandSpecRootSearchTests: XCTestCase {
+    func testModifiersSetTheSpecAndOldSpecsStillDecode() throws {
+        let search = Command("search", title: "Search").rootSearch()
+        XCTAssertTrue(search.spec.rootSearch)
+        XCTAssertTrue(search.spec.problems.isEmpty)
+        let web = Command("web", title: "Search the Web") { _ in .done }.argument("query").fallback()
+        XCTAssertTrue(web.spec.fallback)
+        XCTAssertFalse(web.spec.rootSearch)
+
+        let old = Data(#"{"id":"go","title":"Go","keywords":[],"kind":"run","arguments":[],"exposure":"everywhere"}"#.utf8)
+        let decoded = try JSONDecoder().decode(CommandSpec.self, from: old)
+        XCTAssertFalse(decoded.rootSearch)
+        XCTAssertFalse(decoded.fallback)
+        XCTAssertEqual(try JSONDecoder().decode(CommandSpec.self, from: JSONEncoder().encode(web.spec)), web.spec)
+
+        var wrong = web.spec
+        wrong.rootSearch = true
+        XCTAssertFalse(wrong.problems.isEmpty)
+    }
+}

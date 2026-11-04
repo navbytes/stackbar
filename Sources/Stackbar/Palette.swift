@@ -112,8 +112,9 @@ final class PaletteController {
         // working on. Only setting the origin left the first open off center:
         // the window still had its pre-layout size then and was resized after
         // it was placed.
+        session.compact = UserDefaults.standard.bool(forKey: PaletteSession.compactKey)
         if let screen = Self.activeScreen() {
-            panel.setFrame(Self.frame(on: screen.visibleFrame), display: false)
+            panel.setFrame(Self.frame(on: screen.visibleFrame, height: PaletteView.height(collapsed: session.collapsed)), display: false)
         }
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
@@ -127,14 +128,28 @@ final class PaletteController {
     }
 
     /// Centered across, its top a quarter of the way down, in whole points.
-    static func frame(on visible: NSRect) -> NSRect {
+    /// The top stays put whatever the height, so compact mode grows down.
+    static func frame(on visible: NSRect, height: CGFloat = PaletteView.size.height) -> NSRect {
         let size = PaletteView.size
+        let top = (visible.maxY - visible.height * 0.24).rounded()
         return NSRect(
             x: (visible.midX - size.width / 2).rounded(),
-            y: (visible.maxY - visible.height * 0.24 - size.height).rounded(),
+            y: top - height,
             width: size.width,
-            height: size.height
+            height: height
         )
+    }
+
+    /// Compact mode: grows to the full palette once there is something to
+    /// show, and shrinks back to the search field, keeping the top edge.
+    private func resize(collapsed: Bool) {
+        guard let panel else { return }
+        let height = PaletteView.height(collapsed: collapsed)
+        var frame = panel.frame
+        guard frame.height != height else { return }
+        frame.origin.y = frame.maxY - height
+        frame.size.height = height
+        panel.setFrame(frame, display: true)
     }
 
     private func makePanel() -> KeyablePanel {
@@ -163,6 +178,7 @@ final class PaletteController {
         panel.onCancel = { [weak self] in self?.session.back() ?? false }
         panel.onClose = { [weak self] in self?.hide() }
         panel.onResign = { [weak self] in self?.noteLeft() }
+        session.onCollapsedChange = { [weak self] collapsed in self?.resize(collapsed: collapsed) }
         return panel
     }
 }
@@ -194,6 +210,12 @@ struct PaletteView: View {
 
     static let size = CGSize(width: 680, height: 440)
     static let cornerRadius: CGFloat = 26
+    /// The search field alone, in compact mode.
+    static let headerHeight: CGFloat = 58
+
+    static func height(collapsed: Bool) -> CGFloat {
+        collapsed ? headerHeight : size.height
+    }
 
     enum Field: Hashable {
         case search
@@ -205,30 +227,17 @@ struct PaletteView: View {
         VStack(spacing: 0) {
             header
                 .padding(.horizontal, 20)
-                .frame(height: 58)
-            LoadingBar(active: session.isLoading)
-            ZStack(alignment: .bottomTrailing) {
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                if session.showingActions {
-                    ActionsPanel(session: session, focus: $focus)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 4)
-                        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .bottomTrailing)))
-                }
+                .frame(height: Self.headerHeight)
+            if !session.collapsed {
+                panelBody
             }
-            .animation(.snappy(duration: 0.18), value: session.showingActions)
-            Divider().opacity(0.6)
-            ActionBar(session: session)
-                .padding(.leading, 16)
-                .padding(.trailing, 8)
-                .frame(height: 44)
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: Self.size.width, height: Self.height(collapsed: session.collapsed), alignment: .top)
         .clipShape(.rect(cornerRadius: Self.cornerRadius))
         .glassEffect(.regular, in: .rect(cornerRadius: Self.cornerRadius))
         .onKeyPress(phases: [.down, .repeat]) { press in handle(press) }
         .onAppear { focusFirst() }
+        .onChange(of: session.collapsed) { _, collapsed in session.onCollapsedChange(collapsed) }
         .onChange(of: session.shownCount) { _, _ in focusFirst() }
         .onChange(of: session.stack.map(\.id)) { _, _ in focusFirst() }
         .onChange(of: session.showingActions) { _, showing in
@@ -240,13 +249,34 @@ struct PaletteView: View {
         }
     }
 
+    /// Everything under the search field.
+    @ViewBuilder private var panelBody: some View {
+        LoadingBar(active: session.isLoading)
+        ZStack(alignment: .bottomTrailing) {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            if session.showingActions {
+                ActionsPanel(session: session, focus: $focus)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 4)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .bottomTrailing)))
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: session.showingActions)
+        Divider().opacity(0.6)
+        ActionBar(session: session)
+            .padding(.leading, 16)
+            .padding(.trailing, 8)
+            .frame(height: 44)
+    }
+
     // MARK: Header
 
     @ViewBuilder private var header: some View {
         HStack(spacing: 10) {
             if session.stack.isEmpty {
                 Image(systemName: "magnifyingglass").font(.title2.weight(.medium)).foregroundStyle(.secondary)
-                searchField(text: $session.query, prompt: "Search apps, commands and actions, or calculate")
+                searchField(text: $session.query, prompt: "Search apps, files and commands, or calculate")
             } else {
                 Button {
                     _ = session.back()
@@ -307,11 +337,20 @@ struct PaletteView: View {
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
         let plain = press.modifiers.isDisjoint(with: [.command, .option, .control])
+        // In a grid list the arrows move by a whole line up and down, and
+        // left and right move one tile.
+        let columns = session.showingActions ? nil : session.gridColumns
         switch press.key {
         case .downArrow where plain:
-            session.move(1)
+            session.move(columns ?? 1)
             return .handled
         case .upArrow where plain:
+            session.move(-(columns ?? 1))
+            return .handled
+        case .rightArrow where plain && columns != nil:
+            session.move(1)
+            return .handled
+        case .leftArrow where plain && columns != nil:
             session.move(-1)
             return .handled
         default:
@@ -548,7 +587,20 @@ struct CommandViewBody: View {
             ContentUnavailableView(problem, systemImage: "exclamationmark.triangle")
         } else if let root = view.root {
             if let items = RowFilter.items(in: root, query: view.query) {
-                list(items)
+                if let columns = RowFilter.columns(in: root) {
+                    tiles(items, columns: columns)
+                } else if let preview = session.selectedRow(of: view)?.preview {
+                    // Raycast's list with a detail: the list on the left, the
+                    // selected row's full text or image on the right.
+                    HStack(spacing: 0) {
+                        list(items).frame(width: PaletteView.size.width * 0.46)
+                        Divider().opacity(0.6)
+                        PalettePreview(preview: preview)
+                            .environment(\.stackbarImageData, session.imageData(for: view.entry.pluginID))
+                    }
+                } else {
+                    list(items)
+                }
             } else {
                 ScrollView {
                     NodeView(node: root) { action, value in session.send(action, value, in: view) }
@@ -558,6 +610,36 @@ struct CommandViewBody: View {
             }
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// A grid of rows (an emoji picker), walked with all four arrows.
+    private func tiles(_ items: [RowFilter.Item], columns: Int) -> some View {
+        let rows = items.compactMap { if case .row(let row) = $0 { return row } else { return nil } }
+        let selectedKey = session.selectedRow(of: view)?.key
+        let grid = Array(repeating: GridItem(.flexible(), spacing: 6), count: columns)
+        return ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: grid, alignment: .leading, spacing: 6) {
+                    ForEach(rows, id: \.key) { row in
+                        PaletteTile(row: row, selected: row.key == selectedKey)
+                            .id(row.key)
+                            .onTapGesture {
+                                if let primary = row.actions.first { session.perform(primary, in: view) }
+                            }
+                    }
+                }
+                .padding(12)
+            }
+            .scrollIndicators(.never)
+            .onChange(of: selectedKey) { _, newValue in
+                if let newValue { proxy.scrollTo(newValue) }
+            }
+            .overlay {
+                if rows.isEmpty {
+                    Text(view.isSearching ? "Searching…" : "No results").foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
@@ -596,6 +678,69 @@ struct CommandViewBody: View {
                 }
             }
         }
+    }
+}
+
+/// One cell of a grid list. A short title (an emoji) is drawn large with the
+/// subtitle under it; anything longer gets its symbol over the title.
+struct PaletteTile: View {
+    let row: RowNode
+    let selected: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            if row.title.count <= 2 {
+                Text(row.title).font(.system(size: 30))
+            } else {
+                Image(systemName: row.symbol ?? "square.grid.2x2").font(.title2).foregroundStyle(.secondary)
+            }
+            Text(row.title.count <= 2 ? (row.subtitle ?? "") : row.title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity, minHeight: 64)
+        .padding(.horizontal, 2)
+        .background(selected ? Color.primary.opacity(0.12) : Color.primary.opacity(0.03), in: .rect(cornerRadius: 12))
+        .overlay {
+            if selected { RoundedRectangle(cornerRadius: 12).strokeBorder(Color.accentColor.opacity(0.7), lineWidth: 1.5) }
+        }
+        .contentShape(Rectangle())
+        .help(row.subtitle ?? row.title)
+    }
+}
+
+/// The selected row's full text or image, beside a list.
+struct PalettePreview: View {
+    let preview: RowPreview
+    @Environment(\.stackbarImageData) private var imageData
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let id = preview.imageID, let data = imageData?(id), let image = NSImage(data: data) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 220)
+                    .clipShape(.rect(cornerRadius: 8))
+            }
+            if let text = preview.text, !text.isEmpty {
+                ScrollView {
+                    Text(text)
+                        .font(.system(.callout, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
+            Spacer(minLength: 0)
+            if let caption = preview.caption {
+                Divider()
+                Text(caption).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

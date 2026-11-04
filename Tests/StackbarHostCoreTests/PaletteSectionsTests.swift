@@ -103,4 +103,43 @@ final class PaletteSectionsTests: XCTestCase {
         withKeyword.keywords = ["vscode"]
         XCTAssertEqual(PaletteIndex.Entry.matching([withKeyword], query: "vscode").map(\.title), ["Visual Studio Code"])
     }
+
+    func testFilesFollowResultsAndAppsBeforeTheStore() {
+        let file = PaletteFiles.entry(path: "/Users/n/Documents/plan.pdf", home: "/Users/n")!
+        let store = [PaletteIndex.Entry(pluginID: "s", pluginName: "Store", title: "Plan", kind: .open("stackbar://store/s"))]
+        let sections = PaletteSection.group([command("plan")], query: "plan", store: store, files: [file]) { _ in false }
+        XCTAssertEqual(sections.map(\.title), ["Results", "Files", "From the Store"])
+    }
+
+    func testFileEntriesSkipBundlesHiddenAndLibraryAndShortenHome() {
+        let home = "/Users/n"
+        let file = PaletteFiles.entry(path: "/Users/n/Documents/Q3 plan.pdf", home: home)
+        XCTAssertEqual(file?.title, "Q3 plan.pdf")
+        XCTAssertEqual(file?.subtitle, "~/Documents")
+        XCTAssertEqual(file?.kind, .open("file:///Users/n/Documents/Q3%20plan.pdf"))
+        XCTAssertEqual(PaletteFiles.entry(path: "/Users/n/plan.txt", home: home)?.subtitle, "~")
+        XCTAssertNil(PaletteFiles.entry(path: "/Applications/Plan.app", home: home))
+        XCTAssertNil(PaletteFiles.entry(path: "/Applications/Plan.app/Contents/Info.plist", home: home))
+        XCTAssertNil(PaletteFiles.entry(path: "/Users/n/.config/plan.toml", home: home))
+        XCTAssertNil(PaletteFiles.entry(path: "/Users/n/Library/Caches/plan.db", home: home))
+        XCTAssertNil(PaletteFiles.entry(path: "/Users/n/code/x/node_modules/plan/index.js", home: home))
+        XCTAssertNotNil(PaletteFiles.entry(path: "/Users/n/Library", home: home), "the Library folder itself is fine")
+        XCTAssertEqual(PaletteFiles.abbreviate("/Volumes/Data/plan", home: home), "/Volumes/Data/plan")
+    }
+
+    func testPluginRowsFollowResultsAndFallbacksComeLast() {
+        let clipboard = PaletteSection(title: "Clipboard History", entries: [action("clip")])
+        let sections = PaletteSection.group([command("c1"), command("web")], query: "hello", files: [action("f")],
+                                            plugins: [clipboard], fallbacks: [command("web"), command("ddg")]) { _ in false }
+        XCTAssertEqual(sections.map(\.title), ["Results", "Clipboard History", "Files", PaletteSection.fallbackTitle("hello")])
+        // A fallback the search found stays in Results only.
+        XCTAssertEqual(sections.last?.entries.map(\.title), ["ddg"])
+        XCTAssertEqual(PaletteSection.fallbackTitle("hello"), "Use \u{201C}hello\u{201D} with")
+    }
+
+    func testFallbacksAndPluginRowsWaitForAQuery() {
+        let sections = PaletteSection.group([command("c1")], query: "", plugins: [PaletteSection(title: "X", entries: [action("x")])],
+                                            fallbacks: [command("web")]) { _ in false }
+        XCTAssertEqual(sections.map(\.title), ["Commands"])
+    }
 }

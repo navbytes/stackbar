@@ -159,6 +159,7 @@ struct GeneralSettings: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
     @AppStorage(PluginWindows.dockIconKey) private var dockIcon = true
+    @AppStorage(PaletteSession.compactKey) private var paletteCompact = false
 
     var body: some View {
         SettingsPage {
@@ -188,6 +189,8 @@ struct GeneralSettings: View {
                 SettingsRow(title: "Aliases and hotkeys", caption: "Give any command a short alias or its own shortcut.") {
                     Button("Edit…") { model.settingsTab = .commands }
                 }
+                Toggle("Compact: show only the search field until you type", isOn: $paletteCompact)
+                    .toggleStyle(TrailingSwitchStyle())
             }
             SettingsGroup("Plugins") {
                 SettingsRow(title: "Plugins folder", caption: "Drop a .swift plugin here and Stackbar builds and runs it.") {

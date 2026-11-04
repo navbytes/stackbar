@@ -43,7 +43,7 @@ final class SystemItems {
         guard case .open(let url) = entry.kind else { return nil }
         let path: String
         switch entry.pluginID {
-        case Self.appPluginID: path = URL(string: url)?.path ?? ""
+        case Self.appPluginID, PaletteFiles.pluginID: path = URL(string: url)?.path ?? ""
         case Self.settingsPluginID: path = Self.settingsApp
         default: return nil
         }
