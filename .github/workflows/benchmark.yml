@@ -1,0 +1,67 @@
+name: Benchmark
+
+# Times Stackbar on a clean macOS runner: launch, plugins ready, palette
+# open, search answers and idle memory (Benchmark.swift). Runs after each
+# release and from the Actions tab; the numbers land in the run summary and
+# in benchmark.json, which the site quotes.
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Build
+        run: scripts/bundle.sh
+
+      - name: Run
+        run: |
+          HOME_DIR=$(mktemp -d)
+          OUT="$PWD/build/benchmark.json"
+          # Three runs; the first warms the disk cache, like a second launch would.
+          for run in 1 2 3; do
+            rm -rf "$HOME_DIR"/home
+            STACKBAR_HOME="$HOME_DIR/home" STACKBAR_BENCHMARK="$PWD/build/benchmark-$run.json" \
+              build/Stackbar.app/Contents/MacOS/Stackbar &
+            pid=$!
+            ( sleep 300; kill "$pid" 2>/dev/null ) &
+            wait "$pid" || true
+            [ -f "build/benchmark-$run.json" ] || { echo "::error::run $run wrote no results"; exit 1; }
+          done
+          cp build/benchmark-3.json "$OUT"
+          python3 - build/benchmark-*.json <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, sys
+          runs = [json.load(open(p)) for p in sys.argv[1:]]
+          last = runs[-1]
+          print(f"## Stackbar {last['version']} on {last['macOS']}\n")
+          print("| | " + " | ".join(f"run {i + 1}" for i in range(len(runs))) + " |")
+          print("|---|" + "---|" * len(runs))
+          def row(name, get):
+              print(f"| {name} | " + " | ".join(str(get(r)) for r in runs) + " |")
+          row("Launch (ms)", lambda r: r["launchMs"])
+          row("Plugins ready (ms)", lambda r: r["pluginsReadyMs"])
+          row("Palette open, median (ms)", lambda r: r["paletteOpenMs"].get("median"))
+          for query in last["searchMs"]:
+              row(f"Search “{query}” (ms)", lambda r, q=query: r["searchMs"].get(q))
+          row("Idle memory (MB)", lambda r: r["idleMemoryMB"])
+          print(f"\nPlugins: {', '.join(last['plugins'])}")
+          PY
+          cat "$OUT"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: benchmark
+          path: build/benchmark*.json

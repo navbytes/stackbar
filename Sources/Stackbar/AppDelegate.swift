@@ -33,7 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.start()
         _ = palette
         syncItems()
-        welcomeIfNeeded()
+        if Benchmark.output == nil {
+            welcomeIfNeeded()
+        } else {
+            Benchmark.run(app: self, launched: Date())
+        }
 
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {

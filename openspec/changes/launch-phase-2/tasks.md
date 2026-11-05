@@ -20,5 +20,5 @@
 - [x] 3.3 Snippets and Quicklinks import Raycast's JSON exports (already in the plugins); Settings › General links to both
 
 ## 4. Proof
-- [ ] 4.1 Benchmark workflow: launch time, palette open time, idle memory
+- [x] 4.1 Benchmark workflow: launch time, palette open time, idle memory
 - [ ] 4.2 Mac check by Naveen: update from 0.23.0 to the next release in place
