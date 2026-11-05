@@ -420,6 +420,12 @@ source compiles against; a plugin index hides Install on older apps.
 the plugin its own colour and icon on its store card and its page on the
 Stackbar site; `Theme(.teal)` is the same hue for its own views. Without them
 the store uses the category's colour and the name's first letter.
+`replaces: ["dev.example.old-clock"]` (minimumStackbar 0.25.0) takes other
+plugins over, when two merge into one or one is renamed: the first time it
+loads, the user's aliases, hotkeys and favourites move from the old plugin's
+commands to this plugin's commands with the same ids, the old plugin is turned
+off and offered for uninstall, and stores stop listing it. Keep the old
+command ids to keep the shortcuts.
 To publish (`stackbarctl sign`, `index build`) a plugin also needs an `x.y.z`
 `version`, a `summary` and a `minimumStackbar`.
 

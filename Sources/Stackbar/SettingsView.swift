@@ -452,7 +452,14 @@ struct PluginPage: View {
                     .toggleStyle(.switch)
                     .help(controller.isEnabled ? "Turn \(controller.name) off. Its settings and data stay." : "Turn \(controller.name) on")
             }
-            if !controller.isEnabled {
+            if let replacement = model.replacement(for: controller) {
+                SettingsGroup {
+                    SettingsRow(symbol: "arrow.triangle.merge", color: .blue, title: "\(replacement) replaces \(controller.name)",
+                                caption: "Everything \(controller.name) did is in \(replacement) now, and its shortcuts and aliases moved there. You can uninstall it.") {
+                        Button("Uninstall…") { confirmingUninstall = true }
+                    }
+                }
+            } else if !controller.isEnabled {
                 SettingsGroup {
                     SettingsRow(symbol: "power", color: .gray, title: "\(controller.name) is turned off", caption: "It doesn't run, and isn't in the menu bar, the palette or widgets, until you turn it on.")
                 }

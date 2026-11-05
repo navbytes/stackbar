@@ -32,8 +32,14 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// An SF Symbol name for the plugin's icon, like `timer` or
     /// `cloud.sun.fill`. The store draws it on a tile in `accent`.
     public var symbol: String?
+    /// Plugins this one takes over, by id: two plugins merged into one, or
+    /// one renamed. When it loads, the host moves their aliases, hotkeys and
+    /// palette favourites to this plugin's commands with the same ids, turns
+    /// them off and offers to uninstall them; stores stop listing them.
+    /// Stackbar 0.25.0.
+    public var replaces: [String]?
 
-    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil, minimumStackbar: String? = nil, homepage: String? = nil, accent: Accent? = nil, symbol: String? = nil) {
+    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil, minimumStackbar: String? = nil, homepage: String? = nil, accent: Accent? = nil, symbol: String? = nil, replaces: [String]? = nil) {
         self.id = id
         self.name = name
         self.version = version
@@ -46,13 +52,13 @@ public struct Manifest: Codable, Equatable, Sendable {
         self.homepage = homepage
         self.accent = accent
         self.symbol = symbol
+        self.replaces = replaces
     }
 
     /// Problems that make the manifest unusable, in words. Empty means valid.
     public var problems: [String] {
         var result: [String] = []
-        let idPattern = id.split(separator: ".", omittingEmptySubsequences: false)
-        if idPattern.count < 2 || idPattern.contains(where: { $0.isEmpty || !$0.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" } }) {
+        if !Self.isPluginID(id) {
             result.append("id \"\(id)\" must be reverse-DNS, like dev.example.clock")
         }
         if name.trimmingCharacters(in: .whitespaces).isEmpty { result.append("name is empty") }
@@ -68,6 +74,9 @@ public struct Manifest: Codable, Equatable, Sendable {
         }
         if let symbol, !Self.isSymbolName(symbol) {
             result.append("symbol \"\(symbol)\" must be an SF Symbol name, like timer or cloud.sun.fill")
+        }
+        for other in replaces ?? [] where other == id || !Self.isPluginID(other) {
+            result.append(other == id ? "a plugin can't replace itself" : "replaces \"\(other)\" must be a plugin id, like dev.example.clock")
         }
         if triggers.contains(.clipboard), !capabilities.contains(.clipboard) {
             result.append("the .clipboard trigger needs the .clipboard capability")
@@ -118,6 +127,12 @@ public struct Manifest: Codable, Equatable, Sendable {
     }
 
     public static let maxStorageMegabytes = 64
+
+    /// Reverse-DNS: two or more dot-separated words of letters, digits and `-`.
+    static func isPluginID(_ id: String) -> Bool {
+        let words = id.split(separator: ".", omittingEmptySubsequences: false)
+        return words.count >= 2 && !words.contains { $0.isEmpty || !$0.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" } }
+    }
 
     /// Lowercase letters and digits in dot-separated words, as SF Symbol
     /// names are spelled: `timer`, `cloud.sun.fill`, `0.circle`.
