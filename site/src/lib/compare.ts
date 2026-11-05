@@ -25,7 +25,7 @@ export const rows: Row[] = [
   { label: 'Extensions in', stackbar: good('Swift, one file'), raycast: good('TypeScript and React'), alfred: good('Workflows and scripts'), spotlight: some('App Intents and Shortcuts') },
   { label: 'Apps, files, sums', stackbar: good('Yes'), raycast: good('Yes'), alfred: good('Yes'), spotlight: good('Yes') },
   { label: 'Clipboard history', stackbar: good('Yes'), raycast: good('Yes'), alfred: some('With Powerpack'), spotlight: good('Yes') },
-  { label: 'Snippets', stackbar: some('Paste by name; no typed expansion yet'), raycast: good('Yes, with expansion'), alfred: some('With Powerpack'), spotlight: none('No') },
+  { label: 'Snippets', stackbar: good('Yes, with expansion'), raycast: good('Yes, with expansion'), alfred: some('With Powerpack'), spotlight: none('No') },
   { label: 'Window layouts', stackbar: good('Yes'), raycast: good('Yes'), alfred: some('With workflows'), spotlight: none('No') },
   { label: 'Live menu bar items', stackbar: good('Yes'), raycast: good('Yes'), alfred: none('No'), spotlight: none('No') },
   { label: 'Desktop widgets', stackbar: good('Yes'), raycast: none('No'), alfred: none('No'), spotlight: none('No') },
