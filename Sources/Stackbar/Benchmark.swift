@@ -45,6 +45,7 @@ enum Benchmark {
             report["paletteOpenMs"] = summary(opens)
 
             var searches: [String: Any] = [:]
+            var misses: [String: [String]] = [:]
             for (query, expected) in [("safari", "Safari"), ("12*12", "144"), ("terminal", "Terminal")] {
                 app.palette.toggle()
                 _ = await waitUntil(seconds: 5) { app.palette.isVisible }
@@ -54,10 +55,17 @@ enum Benchmark {
                     app.palette.session.results.contains { $0.title.contains(expected) || ($0.subtitle ?? "").contains(expected) }
                 }
                 searches[query] = found ? ms(Date().timeIntervalSince(start)) : NSNull()
+                if !found {
+                    // What the palette showed instead, to see why.
+                    misses[query] = app.palette.session.sections.map { section in
+                        "\(section.title): " + section.entries.prefix(3).map(\.title).joined(separator: ", ")
+                    } + ["root views revision \(app.palette.session.rootViewsRevision)"]
+                }
                 app.palette.hide()
                 try? await Task.sleep(for: .milliseconds(300))
             }
             report["searchMs"] = searches
+            if !misses.isEmpty { report["searchMisses"] = misses }
 
             try? await Task.sleep(for: .seconds(20))
             report["idleMemoryMB"] = footprintMB()
