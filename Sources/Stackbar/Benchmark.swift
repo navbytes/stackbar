@@ -30,6 +30,12 @@ enum Benchmark {
             let ready = await waitUntil(seconds: 60) { !app.model.controllers.isEmpty && app.model.controllers.allSatisfy(\.isSettled) }
             report["plugins"] = app.model.controllers.map(\.name).sorted()
             report["pluginsReadyMs"] = ready ? ms(Date().timeIntervalSince(processStart)) : NSNull()
+            // A fresh home has nothing approved yet. Approve what the core
+            // plugins ask for, as a user does once, so search can answer.
+            for controller in app.model.controllers where controller.isWaitingForApproval {
+                controller.approve()
+            }
+            _ = await waitUntil(seconds: 30) { app.model.controllers.allSatisfy { !$0.isWaitingForApproval && $0.isSettled } }
             try? await Task.sleep(for: .seconds(2))
 
             var opens: [Double] = []
@@ -45,7 +51,8 @@ enum Benchmark {
             report["paletteOpenMs"] = summary(opens)
 
             var searches: [String: Any] = [:]
-            for (query, expected) in [("safari", "Safari"), ("12*12", "144"), ("terminal", "Terminal")] {
+            var misses: [String: [String]] = [:]
+            for (query, expected) in [("calendar", "Calendar"), ("12*12", "144"), ("terminal", "Terminal")] {
                 app.palette.toggle()
                 _ = await waitUntil(seconds: 5) { app.palette.isVisible }
                 let start = Date()
@@ -54,10 +61,15 @@ enum Benchmark {
                     app.palette.session.results.contains { $0.title.contains(expected) || ($0.subtitle ?? "").contains(expected) }
                 }
                 searches[query] = found ? ms(Date().timeIntervalSince(start)) : NSNull()
+                if !found {
+                    // What the palette showed instead, to see why.
+                    misses[query] = missDetail(app)
+                }
                 app.palette.hide()
                 try? await Task.sleep(for: .milliseconds(300))
             }
             report["searchMs"] = searches
+            if !misses.isEmpty { report["searchMisses"] = misses }
 
             try? await Task.sleep(for: .seconds(20))
             report["idleMemoryMB"] = footprintMB()
@@ -67,6 +79,27 @@ enum Benchmark {
             }
             NSApp.terminate(nil)
         }
+    }
+
+    /// What the palette and the command registry held when a search missed.
+    private static func missDetail(_ app: AppDelegate) -> [String] {
+        var lines: [String] = []
+        for section in app.palette.session.sections {
+            let titles = section.entries.prefix(3).map(\.title)
+            lines.append(section.title + ": " + titles.joined(separator: ", "))
+        }
+        lines.append("root views revision \(app.palette.session.rootViewsRevision)")
+        let commands: CommandCenter = app.model.commands
+        for entry in commands.registry.entries {
+            let preference: CommandPreference = commands.preferences[entry.key]
+            let line: String = "command \(entry.key) root=\(entry.spec.rootSearch) enabled=\(preference.enabled) inRoot=\(preference.inRootSearch)"
+            lines.append(line)
+        }
+        for controller in app.model.controllers {
+            let line: String = "plugin \(controller.name) \(controller.state) waiting=\(controller.isWaitingForApproval) supervisor=\(controller.supervisor != nil)"
+            lines.append(line)
+        }
+        return lines
     }
 
     private static func ms(_ seconds: TimeInterval) -> Double { (seconds * 10_000).rounded() / 10 }
