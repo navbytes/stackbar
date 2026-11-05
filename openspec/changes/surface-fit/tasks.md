@@ -11,15 +11,15 @@
 - [x] 1.8 Tests from design.md
 
 ## 2. Plugins (stackbar-plugins)
-- [ ] 2.1 Root search: Ports, World Clock, Jira, Linear, PR Cockpit, Emoji
-- [ ] 2.2 Fallbacks: Todo, Translate
-- [ ] 2.3 Commands: LiteLLM, System Monitor
-- [ ] 2.4 Widgets: Jira, Linear; buttons in Stay Awake, Homebrew, Music widgets
-- [ ] 2.5 Docker logs window; Pomodoro menu bar click
-- [ ] 2.6 Menu bar only when needed: Workspaces, App Switcher, Clipboard History
-- [ ] 2.7 Clipboard History tools opt-in
-- [ ] 2.8 Pin the merged stackbar commit; `minimumStackbar` 0.21.0 where used
+- [x] 2.1 Root search: Ports, World Clock, Jira, Linear, PR Cockpit, Emoji
+- [x] 2.2 Fallbacks: Todo, Translate
+- [x] 2.3 Commands: LiteLLM, System Monitor
+- [x] 2.4 Widgets: Jira, Linear; buttons in Stay Awake, Homebrew, Music widgets
+- [x] 2.5 Docker logs window; Pomodoro menu bar click
+- [x] 2.6 Menu bar only when needed: Workspaces, App Switcher, Clipboard History
+- [x] 2.7 Clipboard History tools opt-in
+- [x] 2.8 Pin the merged stackbar commit; `minimumStackbar` 0.21.0 where used
 
 ## 3. Release and check
-- [ ] 3.1 Release 0.21.0
+- [x] 3.1 Release 0.21.0
 - [ ] 3.2 Mac checks from design.md (Naveen's Mac)
