@@ -52,7 +52,7 @@ enum Benchmark {
 
             var searches: [String: Any] = [:]
             var misses: [String: [String]] = [:]
-            for (query, expected) in [("safari", "Safari"), ("12*12", "144"), ("terminal", "Terminal")] {
+            for (query, expected) in [("calendar", "Calendar"), ("12*12", "144"), ("terminal", "Terminal")] {
                 app.palette.toggle()
                 _ = await waitUntil(seconds: 5) { app.palette.isVisible }
                 let start = Date()
