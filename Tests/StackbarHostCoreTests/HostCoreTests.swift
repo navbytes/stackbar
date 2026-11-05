@@ -418,4 +418,15 @@ final class PluginSupervisorTests: XCTestCase {
         XCTAssertEqual(report.restarts, 0)
         XCTAssertTrue(report.passed, "\(report)")
     }
+
+    func testSoakWaitsForARefreshThatMayRemoveTheButton() async throws {
+        let log = Log()
+        // The soak presses "Slow refreshes" on its first tick, so every
+        // refresh after it outlasts the tick.
+        let supervisor = try PluginSupervisor.make(executable: Self.helper("FixturePlugin"), onUpdate: log.add)
+        let report = await Soak(duration: 3, interval: 0.05, pressEvents: true).run(supervisor)
+        XCTAssertEqual(report.restarts, 0)
+        let stale = log.all.filter { $0.contains("no handler") }
+        XCTAssertEqual(stale, [], "a press must see the panel the queued refresh left")
+    }
 }
