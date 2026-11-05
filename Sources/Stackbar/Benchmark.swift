@@ -57,13 +57,7 @@ enum Benchmark {
                 searches[query] = found ? ms(Date().timeIntervalSince(start)) : NSNull()
                 if !found {
                     // What the palette showed instead, to see why.
-                    misses[query] = app.palette.session.sections.map { section in
-                        "\(section.title): " + section.entries.prefix(3).map(\.title).joined(separator: ", ")
-                    } + [
-                        "root views revision \(app.palette.session.rootViewsRevision)",
-                        "registry: " + app.model.commands.registry.entries.map { "\($0.key) root=\($0.spec.rootSearch) on=\(app.model.commands.preferences[$0.key].enabled)/\(app.model.commands.preferences[$0.key].inRootSearch)" }.joined(separator: "; "),
-                        "plugins: " + app.model.controllers.map { "\($0.name) \($0.state) waiting=\($0.isWaitingForApproval) supervisor=\($0.supervisor != nil)" }.joined(separator: "; "),
-                    ]
+                    misses[query] = missDetail(app)
                 }
                 app.palette.hide()
                 try? await Task.sleep(for: .milliseconds(300))
@@ -79,6 +73,27 @@ enum Benchmark {
             }
             NSApp.terminate(nil)
         }
+    }
+
+    /// What the palette and the command registry held when a search missed.
+    private static func missDetail(_ app: AppDelegate) -> [String] {
+        var lines: [String] = []
+        for section in app.palette.session.sections {
+            let titles = section.entries.prefix(3).map(\.title)
+            lines.append(section.title + ": " + titles.joined(separator: ", "))
+        }
+        lines.append("root views revision \(app.palette.session.rootViewsRevision)")
+        let commands = app.model.commands
+        for entry in commands.registry.entries {
+            let preference: CommandPreference = commands.preferences[entry.key]
+            let line: String = "command \(entry.key) root=\(entry.spec.rootSearch) enabled=\(preference.enabled) inRoot=\(preference.inRootSearch)"
+            lines.append(line)
+        }
+        for controller in app.model.controllers {
+            let line: String = "plugin \(controller.name) \(controller.state) waiting=\(controller.isWaitingForApproval) supervisor=\(controller.supervisor != nil)"
+            lines.append(line)
+        }
+        return lines
     }
 
     private static func ms(_ seconds: TimeInterval) -> Double { (seconds * 10_000).rounded() / 10 }
