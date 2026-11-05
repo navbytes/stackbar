@@ -346,6 +346,9 @@ struct PrivacySettings: View {
             } trailing: {
                 EmptyView()
             }
+            if CrashReports.isAvailable {
+                CrashReportsGroup()
+            }
             if groups.isEmpty {
                 SettingsGroup {
                     SettingsRow(symbol: "checkmark.shield.fill", color: .green, title: "No plugin reaches beyond the basics", caption: "No network, files, commands, clipboard or calendar.")
@@ -685,6 +688,18 @@ struct UninstallDialog: ViewModifier {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Its file goes to the Trash. Its saved data stays unless you delete it, so installing it again picks up where it left off. Secrets you entered are shared by name with other plugins, so they stay either way.")
+        }
+    }
+}
+/// Settings › Privacy: the crash-report switch.
+struct CrashReportsGroup: View {
+    @State private var allowed = CrashReports.isAllowed
+
+    var body: some View {
+        SettingsGroup("Crash Reports", footer: "A report has where Stackbar crashed, its version, the macOS version and the Mac model. Never plugin names, logs, files or your computer's name.") {
+            Toggle("Send a report when Stackbar crashes", isOn: $allowed)
+                .toggleStyle(TrailingSwitchStyle())
+                .onChange(of: allowed) { _, on in CrashReports.isAllowed = on }
         }
     }
 }

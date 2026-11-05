@@ -58,6 +58,7 @@ struct WelcomeView: View {
     let finish: (_ picked: Set<String>, _ openAtLogin: Bool, _ openPalette: Bool) -> Void
     @State private var picked: Set<String>
     @State private var openAtLogin = true
+    @State private var sendCrashReports = false
 
     init(starters: [Manifest], finish: @escaping (Set<String>, Bool, Bool) -> Void) {
         self.starters = starters
@@ -106,13 +107,21 @@ struct WelcomeView: View {
                 }
             }
             step(starters.isEmpty ? 2 : 3, "Keep it running") {
-                Toggle("Open Stackbar at login", isOn: $openAtLogin)
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Open Stackbar at login", isOn: $openAtLogin)
+                    if CrashReports.isAvailable {
+                        Toggle("Send a crash report if Stackbar crashes (no plugin names, logs or files)", isOn: $sendCrashReports)
+                    }
+                }
             }
             HStack {
                 Button("Skip") { finish([], false, false) }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Open the Palette") { finish(picked, openAtLogin, true) }
+                Button("Open the Palette") {
+                    if CrashReports.isAvailable { CrashReports.isAllowed = sendCrashReports }
+                    finish(picked, openAtLogin, true)
+                }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
             }
