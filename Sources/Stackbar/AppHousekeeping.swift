@@ -108,7 +108,7 @@ enum AppHousekeeping {
             }
             let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: KeychainSecretStore().service]
             SecItemDelete(query as CFDictionary)
-            try? SMAppService.mainApp.unregister()
+            try? await SMAppService.mainApp.unregister()
             if let domain = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: domain) }
             NSApp.terminate(nil)
         }
