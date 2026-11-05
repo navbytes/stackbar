@@ -27,6 +27,15 @@ KEYCHAIN_FLAG=""
 
 # 1. The Xcode build, unsigned: signing happens below, in one place.
 xcodegen generate --quiet
+# Sentry's package lists every binary variant, and GitHub's release downloads
+# sometimes answer 504. Resolve first and retry; finished downloads are kept.
+for attempt in 1 2 3 4 5; do
+    xcodebuild -quiet -project Stackbar.xcodeproj -scheme Stackbar \
+        -derivedDataPath "$DERIVED" -resolvePackageDependencies && break
+    [ "$attempt" = 5 ] && { echo "release: could not resolve packages" >&2; exit 1; }
+    echo "release: package resolution failed, retrying in $((attempt * 15))s" >&2
+    sleep $((attempt * 15))
+done
 xcodebuild -quiet -project Stackbar.xcodeproj -scheme Stackbar -configuration Release \
     -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DERIVED" \
     CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" build
