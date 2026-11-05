@@ -105,6 +105,12 @@ final class PaletteSectionsTests: XCTestCase {
         XCTAssertEqual(PaletteIndex.Entry.matching([withKeyword], query: "vscode").map(\.title), ["Visual Studio Code"])
     }
 
+    func testSpotlightQueryNeedsEveryWordAndEscapes() {
+        XCTAssertEqual(FileSearchFilter.spotlightQuery(["q3", "plan"]),
+                       #"kMDItemFSName == "*q3*"cd && kMDItemFSName == "*plan*"cd"#)
+        XCTAssertEqual(FileSearchFilter.spotlightQuery([#"a"b*c\"#]), #"kMDItemFSName == "*a\"b\*c\\*"cd"#)
+    }
+
     func testFoundFilesSkipBundlesHiddenAndLibraryAndShortenHome() {
         let home = "/Users/n"
         let file = FileSearchFilter.found(path: "/Users/n/Documents/Q3 plan.pdf", home: home)

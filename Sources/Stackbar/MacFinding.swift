@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import CoreServices
 import StackbarHostCore
 import StackbarProtocol
 
@@ -85,69 +86,58 @@ actor InstalledApps {
 
 /// One Spotlight search: every word somewhere in the name, case and accents
 /// ignored, in the user's home, most recently used first.
-@MainActor
+///
+/// This uses Spotlight's C API (`MDQuery`) run synchronously on a background
+/// queue, not `NSMetadataQuery`: that one must be set up on the main thread
+/// with a run loop, and when it is not it raises an Objective-C exception,
+/// which unwinds through Swift's concurrency runtime and leaves the app to
+/// crash a few seconds later (0.20.0 did this).
 enum SpotlightFiles {
-    /// Gives up after this long, with what it has.
-    static let timeout: Duration = .seconds(3)
+    /// How many hits Spotlight hands back at most: some are left out
+    /// (bundles, Library, hidden files), so a little past the limit.
+    static let gathered = 80
 
     static func find(_ query: FileQuery) async throws -> [FoundFile] {
-        let words = query.text.split(separator: " ").map(String.init)
+        let words = query.text.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return [] }
-        let search = NSMetadataQuery()
-        search.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: words.map {
-            NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\($0)*")
-        })
-        search.searchScopes = [NSMetadataQueryUserHomeScope]
-        search.sortDescriptors = [NSSortDescriptor(key: "kMDItemLastUsedDate", ascending: false)]
-        let gathered = Gathered()
-        let observer = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering, object: search, queue: .main) { _ in
-            MainActor.assumeIsolated { gathered.finish() }
+        let text = FileSearchFilter.spotlightQuery(words)
+        let limit = query.limit
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(with: Result { try search(text, limit: limit) })
+            }
         }
-        defer {
-            search.stop()
-            NotificationCenter.default.removeObserver(observer)
+    }
+
+    private static func search(_ text: String, limit: Int) throws -> [FoundFile] {
+        let sorting = [kMDItemLastUsedDate] as CFArray
+        guard let search = MDQueryCreate(kCFAllocatorDefault, text as CFString, nil, sorting) else {
+            throw SystemServiceError("Spotlight couldn't read that search")
         }
-        guard search.start() else { throw SystemServiceError("Spotlight couldn't search") }
-        await gathered.wait(timeout: timeout)
-        search.disableUpdates()
+        MDQuerySetSearchScope(search, [kMDQueryScopeHome] as CFArray, 0)
+        // Newest first (kMDQueryReverseSortOrderFlag), then the first few.
+        MDQuerySetSortOptionFlagsForAttribute(search, kMDItemLastUsedDate, 1)
+        MDQuerySetMaxCount(search, gathered)
+        guard MDQueryExecute(search, CFOptionFlags(kMDQuerySynchronous.rawValue)) else {
+            throw SystemServiceError("Spotlight couldn't search")
+        }
+        defer { MDQueryStop(search) }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var found: [FoundFile] = []
-        // Look a little past the limit: some hits are left out (bundles,
-        // Library, hidden files).
-        for index in 0..<min(search.resultCount, 80) where found.count < query.limit {
-            guard let item = search.result(at: index) as? NSMetadataItem,
-                  let path = item.value(forAttribute: NSMetadataItemPathKey) as? String else { continue }
-            let type = item.value(forAttribute: NSMetadataItemContentTypeKey) as? String
-            let used = item.value(forAttribute: "kMDItemLastUsedDate") as? Date
+        let count = MDQueryGetResultCount(search)
+        var index = 0
+        while index < count, found.count < limit {
+            defer { index += 1 }
+            guard let raw = MDQueryGetResultAtIndex(search, index) else { continue }
+            let item = Unmanaged<MDItem>.fromOpaque(raw).takeUnretainedValue()
+            guard let path = MDItemCopyAttribute(item, kMDItemPath) as? String else { continue }
+            let type = MDItemCopyAttribute(item, kMDItemContentType) as? String
+            let used = MDItemCopyAttribute(item, kMDItemLastUsedDate) as? Date
             if let file = FileSearchFilter.found(path: path, home: home, isFolder: type == "public.folder", lastUsed: used) {
                 found.append(file)
             }
         }
         return found
-    }
-
-    /// Resumes once Spotlight has gathered, or at the timeout.
-    @MainActor
-    private final class Gathered {
-        private var done = false
-        private var waiter: CheckedContinuation<Void, Never>?
-
-        func finish() {
-            done = true
-            waiter?.resume()
-            waiter = nil
-        }
-
-        func wait(timeout: Duration) async {
-            if done { return }
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: timeout)
-                self?.finish()
-            }
-            await withCheckedContinuation { continuation in
-                if done { continuation.resume() } else { waiter = continuation }
-            }
-        }
     }
 }
 #endif

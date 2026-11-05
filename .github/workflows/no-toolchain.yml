@@ -1,0 +1,35 @@
+name: No toolchain
+
+# Checks that a released Stackbar runs plugins on a Mac without Xcode or the
+# Command Line Tools: the plugins the app carries and every store plugin, from
+# prebuilt helpers (scripts/test-no-toolchain.sh). Run it from the Actions tab
+# once a release's store helpers are published (stackbar-plugins' Helpers
+# workflow).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release to test, like 0.20.0 (default the newest)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Built while the tools are still visible; it fetches the store's
+      # helpers on install as the app does (older releases' stackbarctl
+      # doesn't).
+      - name: Build stackbarctl
+        run: swift build -c release --product stackbarctl
+      - name: Test without developer tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          [ -n "$VERSION" ] || VERSION=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '.[0].tag_name' | sed 's/^v//')
+          STACKBARCTL="$(swift build -c release --show-bin-path)/stackbarctl" scripts/test-no-toolchain.sh "$VERSION"

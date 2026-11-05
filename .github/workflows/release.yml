@@ -13,6 +13,9 @@ name: Release
 # Homebrew: with HOMEBREW_TAP_TOKEN (a fine-grained PAT with contents and pull
 # request write on navbytes/homebrew-tap) a notarized release also opens a PR
 # there updating Casks/stackbar.rb. Without it the step is skipped.
+#
+# Prebuilt helpers: each release then runs helpers.yml, which starts the
+# Helpers workflow in navbytes/stackbar-plugins (needs PLUGINS_DISPATCH_TOKEN).
 
 on:
   push:
@@ -125,7 +128,7 @@ jobs:
           cat > build/notes.md <<NOTES
           $INSTALL
 
-          Stackbar compiles plugins on your Mac, so it needs Xcode 26 or the Command Line Tools (\`xcode-select --install\`). Requires macOS 26.
+          Requires macOS 26. Store plugins come prebuilt, so Xcode is not needed to use them. To write your own plugins, install Xcode 26 or the Command Line Tools (\`xcode-select --install\`).
 
           The command-line tool is inside the app: \`ln -sf /Applications/Stackbar.app/Contents/MacOS/stackbarctl ~/.local/bin/stackbarctl\`, then \`stackbarctl doctor\`.
 
@@ -154,3 +157,11 @@ jobs:
       - name: Remove the signing keychain
         if: always() && env.HAS_CERT == 'true'
         run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
+
+  # A helper must match the StackbarKit inside the app, so every release needs
+  # a fresh set.
+  helpers:
+    needs: release
+    uses: ./.github/workflows/helpers.yml
+    secrets:
+      PLUGINS_DISPATCH_TOKEN: ${{ secrets.PLUGINS_DISPATCH_TOKEN }}

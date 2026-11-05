@@ -21,6 +21,7 @@
 ## 5. stackbar-plugins
 - [x] 5.1 `scripts/helpers.sh` and the Helpers workflow
 - [x] 5.2 Raise the Stackbar pin to the release with `stackbarctl helper`
+- [x] 5.3 Each Stackbar release starts the Helpers workflow (`PLUGINS_DISPATCH_TOKEN`), since its hourly schedule is unreliable
 
 ## 6. On a Mac
 - [ ] 6.1 A Mac without the Command Line Tools installs and runs a store plugin
