@@ -18,7 +18,7 @@ public enum SpotlightReplacements {
         Item(title: "Sums and conversions", how: "Type 12% of 340, 5 km in miles or 100 usd in eur.", symbol: "plus.forwardslash.minus", pluginID: "io.navbytes.stackbar.plugins.calculator"),
         Item(title: "Clipboard history", how: "Press ⌘⇧V, or type what you copied.", symbol: "doc.on.clipboard", pluginID: "io.navbytes.stackbar.clipboard"),
         Item(title: "Lock, sleep and restart", how: "Type lock, sleep, empty trash or dark mode.", symbol: "power", pluginID: "io.navbytes.stackbar.plugins.system-commands"),
-        Item(title: "Tile windows", how: "Type left half, center or next display.", symbol: "rectangle.split.2x1", pluginID: "io.navbytes.stackbar.plugins.window-layouts"),
+        Item(title: "Tile windows", how: "Type left half, center or next display.", symbol: "rectangle.split.2x1", pluginID: "io.navbytes.stackbar.plugins.workspaces"),
         Item(title: "Emoji", how: "Type a colon and a word, like :tada.", symbol: "face.smiling", pluginID: "io.navbytes.stackbar.plugins.emoji"),
         Item(title: "Snippets and quicklinks", how: "Type a snippet's or link's name; placeholders ask for what they need.", symbol: "text.quote", pluginID: "io.navbytes.stackbar.snippets"),
     ]
