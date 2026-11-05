@@ -23,7 +23,17 @@ public struct BundledStore {
         "io.navbytes.stackbar.snippets",
         "io.navbytes.stackbar.stay-awake",
         "io.navbytes.stackbar.up-next",
+        "io.navbytes.stackbar.plugins.system-commands",
     ]).union(corePluginIDs)
+
+    /// What the welcome window offers switched on: the commands a launcher
+    /// user reaches for in the first week.
+    public static let starterPluginIDs: Set<String> = [
+        "io.navbytes.stackbar.clipboard",
+        "io.navbytes.stackbar.quicklinks",
+        "io.navbytes.stackbar.snippets",
+        "io.navbytes.stackbar.plugins.system-commands",
+    ]
 
     /// The palette's own results (apps, sums, files) come from these
     /// plugins, so every Mac gets them once, new or upgraded. One the user
@@ -79,6 +89,20 @@ public struct BundledStore {
             if let file = try? installer.install(bundle) { result.append(file) }
         }
         return result + syncExamples(installMissing: true).installed
+    }
+
+    /// Installs the carried plugins with these ids that aren't installed yet
+    /// (the welcome window's picks). Returns the new files.
+    @discardableResult
+    public func install(ids: Set<String>) -> [URL] {
+        let installed = Set(installer.installed.map(\.id))
+        return bundles().filter { ids.contains($0.manifest.id) && !installed.contains($0.manifest.id) }.compactMap { try? installer.install($0) }
+    }
+
+    /// The carried plugins a new user can pick from: everything but the core
+    /// ones, which every Mac gets anyway.
+    public func starters() -> [Manifest] {
+        bundles().map(\.manifest).filter { !Self.corePluginIDs.contains($0.id) }.sorted { $0.name < $1.name }
     }
 
     /// Installs each carried core plugin that was never offered here, and

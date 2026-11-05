@@ -45,6 +45,8 @@ extension HostCall {
         case .deleteReminder: return "deleting a reminder"
         case .installedApps: return "listing installed apps"
         case .findFiles: return "finding files"
+        case .hud: return "showing a message"
+        case .system(let action): return action.title.lowercased()
         }
     }
 
@@ -69,13 +71,14 @@ extension HostCall {
         case .activateApp, .hideApp: return (.apps, "switch, open or hide apps")
         case .installedApps: return (.apps, "list installed apps")
         case .findFiles: return (.fileSearch, "find files by name")
+        case .system: return (.systemActions, "lock, sleep or restart the Mac and empty the Trash")
         // Removing never needs the capability, so a revoked plugin can let go.
         case .setKeyLayer(let layer): return layer == nil ? nil : (.keyLayer, "switch apps from a held key")
         case .keyLayerStatus: return (.keyLayer, "read the key layer's status")
         case .reminderAccess, .reminderLists, .reminders: return (.reminders, "read your reminders")
         case .createReminderList, .saveReminder, .deleteReminder: return (.reminders, "change your reminders")
         case .storageSet, .secret, .http, .oauthToken, .publish, .notify, .alert, .playSound,
-             .openURL, .open, .copy, .run, .cancelRun, .chooseFile, .saveFile, .resolveApplication:
+             .openURL, .open, .copy, .run, .cancelRun, .chooseFile, .saveFile, .resolveApplication, .hud:
             return nil
         }
     }

@@ -36,5 +36,14 @@ final class HostCallDescriptionTests: XCTestCase {
         XCTAssertEqual(HostCall.installedApps.requirement?.capability, .apps)
         XCTAssertEqual(HostCall.findFiles(FileQuery(text: "plan")).requirement?.capability, .fileSearch)
         XCTAssertEqual(FileQuery(text: "x", limit: 500).limit, FileQuery.maxLimit)
+        XCTAssertEqual(HostCall.system(.lockScreen).requirement?.capability, .systemActions)
+        XCTAssertNil(HostCall.hud("Copied", isError: false).requirement, "a HUD needs nothing, like a notification")
+        XCTAssertEqual(HostCall.system(.emptyTrash).label, "empty trash")
+    }
+
+    func testSystemActionsSayWhichAreDestructive() {
+        XCTAssertEqual(Set(SystemAction.allCases.filter(\.isDestructive)), [.restart, .shutDown, .logOut, .emptyTrash, .quitOtherApps])
+        XCTAssertEqual(Set(SystemAction.allCases.map(\.title)).count, SystemAction.allCases.count)
+        XCTAssertEqual(try JSONDecoder().decode(SystemAction.self, from: Data(#""lockScreen""#.utf8)), .lockScreen)
     }
 }

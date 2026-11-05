@@ -1,0 +1,36 @@
+name: Bug report
+description: Something in Stackbar doesn't work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Stackbar version
+      description: Settings › General shows it.
+      placeholder: "0.22.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "26.1"
+  - type: textarea
+    id: doctor
+    attributes:
+      label: stackbarctl doctor
+      description: Paste the output of `stackbarctl doctor`.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Host log (optional)
+      description: "`stackbarctl logs -n 200`, if a plugin won't start or crashes."
+      render: text

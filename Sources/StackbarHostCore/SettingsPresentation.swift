@@ -100,6 +100,7 @@ public enum SettingsPresentation {
             case .userServer: self = .server
             case .windows, .apps: self = .windows
             case .fileSearch: self = .files
+            case .systemActions: self = .power
             case .keyLayer: self = .keyboard
             }
         }
@@ -148,6 +149,7 @@ public enum SettingsPresentation {
         case .apps: return "Switches apps"
         case .keyLayer: return "Held-key shortcuts"
         case .fileSearch: return "Finds files by name"
+        case .systemActions: return "Locks, sleeps and restarts the Mac"
         }
     }
 

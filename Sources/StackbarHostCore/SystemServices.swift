@@ -61,6 +61,8 @@ public protocol SystemServices: Sendable {
     /// used first, without app bundles, their insides, hidden files or
     /// Library internals.
     func findFiles(_ query: FileQuery) async throws -> [FoundFile]
+    /// Locks, sleeps, restarts the Mac and the like.
+    func perform(_ action: SystemAction) async throws
 }
 
 extension SystemServices {
@@ -81,6 +83,7 @@ extension SystemServices {
     public func keyLayerStatus(pluginID: String) -> KeyLayerStatus { .off }
     public func installedApps() async throws -> [InstalledApp] { throw SystemServiceError("apps are not available on this platform") }
     public func findFiles(_ query: FileQuery) async throws -> [FoundFile] { throw SystemServiceError("finding files is not available on this platform") }
+    public func perform(_ action: SystemAction) async throws { throw SystemServiceError("system actions are not available on this platform") }
     public func reminderAccess(ask: Bool) async -> ReminderAccess { .unavailable }
     public func reminderLists() async throws -> [ReminderList] { throw SystemServiceError("Reminders is not available on this platform") }
     public func createReminderList(title: String, color: String?) async throws -> ReminderList { throw SystemServiceError("Reminders is not available on this platform") }
@@ -126,6 +129,13 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     public private(set) var pastes: [(content: ClipboardContent, options: PasteOptions)] = []
     /// How long after a paste the clipboard is put back (0.5 s on the Mac).
     public var restoreDelay: Duration = .milliseconds(500)
+    private var performedActions: [SystemAction] = []
+    /// Every system action asked for, in order (for tests and `render`).
+    public var performed: [SystemAction] { lock.withLock { performedActions } }
+
+    public func perform(_ action: SystemAction) async throws {
+        lock.withLock { performedActions.append(action) }
+    }
 
     public init(status: SystemStatus = SystemStatus(batteryLevel: 0.8, charging: false, onACPower: false, runningApps: [.init(id: "com.apple.Safari", name: "Safari"), .init(id: "com.apple.dt.Xcode", name: "Xcode")]), events: [CalendarEvent]? = nil) {
         self.status = status

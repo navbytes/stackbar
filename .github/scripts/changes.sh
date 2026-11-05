@@ -21,7 +21,7 @@ else
                 linux=true ;;
             # Docs, the site and planning: no Swift job reads them. The site has
             # its own workflow (site.yml), and release.yml only runs on tags.
-            site/*|openspec/*|docs/*|*.md|LICENSE|.gitignore \
+            site/*|openspec/*|docs/*|*.md|LICENSE|.gitignore|.github/ISSUE_TEMPLATE/* \
             |.github/workflows/site.yml|.github/workflows/release.yml \
             |scripts/get-stackbar.sh|scripts/update-homebrew-cask.sh)
                 ;;

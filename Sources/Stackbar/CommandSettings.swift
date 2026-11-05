@@ -50,7 +50,7 @@ struct CommandsSettings: View {
                     }
                 }
             }
-            Text("An alias jumps to a command when you type it in the palette (⌃⌥Space). A hotkey runs it from anywhere. Links look like stackbar://commands/<plugin>/<command>?argument=value.")
+            Text("An alias jumps to a command when you type it in the palette (\(ActionsPanel.glyphs(PaletteController.chosenHotKey))). A hotkey runs it from anywhere. Links look like stackbar://commands/<plugin>/<command>?argument=value.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

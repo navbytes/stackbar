@@ -84,6 +84,7 @@ final class AppModel {
                 notify: { note in Task { @MainActor in Platform.notify(note) } },
                 alert: { note in Task { @MainActor in AlertPresenter.shared.show(note) } },
                 playSound: { sound in Task { @MainActor in NSSound(named: NSSound.Name(sound.rawValue))?.play() } },
+                hud: { message, isError in Task { @MainActor in HUD.shared.show(message, isError: isError) } },
                 open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },
                 openWith: { url, bundleID in try await Platform.open(url, with: bundleID) },
                 copy: { text in Task { @MainActor in Platform.copy(text) } },
@@ -323,6 +324,12 @@ final class AppModel {
         for file in added { add(file) }
         refreshInstalled()
         return added.count
+    }
+
+    /// The carried plugins the welcome window's user picked.
+    func installStarters(_ ids: Set<String>) {
+        for file in bundledStore.install(ids: ids) { add(file) }
+        refreshInstalled()
     }
 
     /// The plugins that ship with the app.

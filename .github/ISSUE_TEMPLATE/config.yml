@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Plugin requests and plugin bugs
+    url: https://github.com/navbytes/stackbar-plugins/issues
+    about: Store plugins live in navbytes/stackbar-plugins.
+  - name: Security problem
+    url: https://github.com/navbytes/stackbar/security/advisories/new
+    about: Report it privately, as SECURITY.md says.

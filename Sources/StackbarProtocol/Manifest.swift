@@ -286,6 +286,11 @@ public enum Capability: Codable, Hashable, Sendable {
     /// index (`Stackbar.findFiles`). Names and paths only; opening one needs
     /// `.openURLs`. Stackbar 0.20.0 and later.
     case fileSearch
+    /// Locks the screen, sleeps, restarts, shuts down or logs out, empties
+    /// the Trash, toggles dark mode, hides or quits other apps and ejects
+    /// disks (`Stackbar.system(_:)`). macOS asks once to let Stackbar control
+    /// Finder and System Events. Stackbar 0.22.0 and later.
+    case systemActions
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

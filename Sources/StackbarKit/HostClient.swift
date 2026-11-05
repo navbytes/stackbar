@@ -284,6 +284,13 @@ public enum Stackbar {
         HostClient.shared.fire(.playSound(sound))
     }
 
+    /// A short message in the HUD over the screen, the one a command
+    /// result's message shows: `Stackbar.hud("Copied")` after a panel button
+    /// or a row acts. Needs nothing; at most 30 a minute. Stackbar 0.22.0.
+    public static func hud(_ message: String, isError: Bool = false) {
+        HostClient.shared.fire(.hud(message, isError: isError))
+    }
+
     public static func open(_ url: String) {
         HostClient.shared.fire(.openURL(url))
     }
@@ -433,6 +440,14 @@ public enum Stackbar {
     public static func findFiles(_ text: String, limit: Int = 8) async throws -> [FoundFile] {
         guard let json = try await value(.findFiles(FileQuery(text: text, limit: limit))) else { return [] }
         return try SystemCodec.decode([FoundFile].self, from: json)
+    }
+
+    /// Locks, sleeps, restarts the Mac and the like (`SystemAction`). Ask
+    /// before a destructive one (`action.isDestructive`). Needs
+    /// `.systemActions`; macOS asks once to let Stackbar control Finder or
+    /// System Events for some. Stackbar 0.22.0.
+    public static func system(_ action: SystemAction) async throws {
+        try await ok(.system(action))
     }
 
     /// Registers this plugin's key layer, replacing the last one, or removes

@@ -180,6 +180,36 @@ final class HostServicesTests: XCTestCase {
         XCTAssertEqual(played.all.count, 10)
     }
 
+    func testHUDShowsTrimmedTextAndIsRateLimited() async {
+        let shown = Log()
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(hud: { message, isError in shown.add(.log(.info, isError ? "error: \(message)" : message)) }))
+        let manifest = Manifest(id: "dev.test.hud", name: "HUD")
+        let empty = await services.handle(.hud("  ", isError: false), for: manifest)
+        guard case .failure = empty else { return XCTFail("an empty HUD is refused") }
+        for _ in 0..<29 {
+            let ok = await services.handle(.hud(" Copied ", isError: false), for: manifest)
+            XCTAssertEqual(ok, .ok, "a HUD needs no capability")
+        }
+        guard case .failure(let message) = await services.handle(.hud("spam", isError: false), for: manifest) else { return XCTFail("HUD messages are rate limited") }
+        XCTAssertTrue(message.contains("30 a minute"), message)
+        XCTAssertEqual(shown.all.count, 29)
+        XCTAssertEqual(shown.all.first, "Copied")
+    }
+
+    func testSystemActionsNeedTheirCapability() async {
+        let system = SimulatedSystem()
+        let services = HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(system: system))
+        let refused = await services.handle(.system(.lockScreen), for: Manifest(id: "dev.test.sys", name: "Sys"))
+        guard case .failure(let message) = refused else { return XCTFail("system actions need .systemActions") }
+        XCTAssertTrue(message.contains("systemActions"), message)
+        let allowed = Manifest(id: "dev.test.sys", name: "Sys", capabilities: [.systemActions])
+        let locked = await services.handle(.system(.lockScreen), for: allowed)
+        XCTAssertEqual(locked, .ok)
+        let emptied = await services.handle(.system(.emptyTrash), for: allowed)
+        XCTAssertEqual(emptied, .ok)
+        XCTAssertEqual(system.performed, [.lockScreen, .emptyTrash])
+    }
+
     func testHTTPGoesOnlyToDeclaredHostsAndRedirectsStayInside() async throws {
         let server = try LoopbackServer { request in
             switch request.path {
