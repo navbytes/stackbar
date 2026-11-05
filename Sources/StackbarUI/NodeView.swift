@@ -41,6 +41,21 @@ extension EnvironmentValues {
     /// and pickers trailing each row. Set by the Settings window for a
     /// plugin's `settings` surface.
     @Entry public var stackbarGroupedSections: Bool = false
+    /// Makes a read-only surface's buttons, toggles, tappables and rows act
+    /// after all. Set by the widget extension, where a press has to run an
+    /// App Intent rather than a closure (protocol 17); nil elsewhere.
+    @Entry public var stackbarWidgetButton: WidgetActionButton? = nil
+}
+
+/// Wraps a widget's control in a button that sends `action` (with `value`)
+/// to the plugin through the app. `plain` is for content that draws its own
+/// look (a row, a tappable).
+public struct WidgetActionButton: Sendable {
+    public let make: @MainActor @Sendable (_ action: ActionID, _ value: EventValue?, _ plain: Bool, _ label: AnyView) -> AnyView
+
+    public init(make: @escaping @MainActor @Sendable (_ action: ActionID, _ value: EventValue?, _ plain: Bool, _ label: AnyView) -> AnyView) {
+        self.make = make
+    }
 }
 
 /// Draws one `ViewNode` for the panel and window surfaces. Every case of the
@@ -56,6 +71,7 @@ public struct NodeView: View {
     @Environment(\.stackbarForeground) private var foreground
     @Environment(\.stackbarSymbol) private var symbolStyle
     @Environment(\.stackbarGroupedSections) private var grouped
+    @Environment(\.stackbarWidgetButton) private var widgetButton
 
     public init(node: ViewNode, send: @escaping SendAction) {
         self.node = node
@@ -99,6 +115,14 @@ public struct NodeView: View {
             RowView(row: row, send: send)
         case .badge(let text, let role):
             BadgeView(text: text, role: role)
+        case .button(let title, let symbol, _, let action) where readOnly && widgetButton != nil:
+            widgetButton?.make(action, nil, false, AnyView(Group {
+                if let symbol { Label(title, systemImage: symbol) } else { Text(title) }
+            }))
+        case .toggle(let title, let isOn, let action) where readOnly && widgetButton != nil && !snapshot:
+            widgetButton?.make(action, .bool(!isOn), true, AnyView(
+                Toggle(title, isOn: .constant(isOn)).allowsHitTesting(false)
+            ))
         case .button(let title, let symbol, let role, let action):
             Button(role: role == .critical ? .destructive : nil) {
                 send(action, nil)
@@ -204,6 +228,8 @@ public struct NodeView: View {
                 .foregroundStyle(tint(.primary))
         case .spacer(let minLength):
             Spacer(minLength: minLength.map { CGFloat($0) })
+        case .tappable(let content, let action) where readOnly && widgetButton != nil:
+            widgetButton?.make(action, nil, true, AnyView(NodeView(node: content, send: send).contentShape(Rectangle())))
         case .tappable(let content, let action):
             Button { send(action, nil) } label: {
                 NodeView(node: content, send: send).contentShape(Rectangle())
@@ -477,6 +503,7 @@ public struct RowView: View {
     @Environment(\.stackbarReadOnly) private var readOnly
     @Environment(\.stackbarSelectedRow) private var selectedRow
     @Environment(\.stackbarRowNumbers) private var rowNumbers
+    @Environment(\.stackbarWidgetButton) private var widgetButton
 
     private var highlight: Color {
         if selectedRow == row.key { return Color.accentColor.opacity(0.22) }
@@ -484,6 +511,14 @@ public struct RowView: View {
     }
 
     public var body: some View {
+        if readOnly, let widgetButton, let primary = row.actions.first, primary.navigate == nil {
+            widgetButton.make(primary.id, nil, true, AnyView(content))
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         HStack(spacing: 8) {
             if let icon = row.appIcon.flatMap(AppIcons.icon) ?? row.fileIcon.map(AppIcons.fileIcon) {
                 Image(nsImage: icon).resizable().frame(width: 18, height: 18)

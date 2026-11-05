@@ -20,7 +20,9 @@ public enum StackbarProtocolVersion {
     /// 15 added Reminders: the reminder calls and the reminders trigger.
     /// 16 added root-search and fallback commands, installed apps, finding
     /// files and file icons on rows.
-    public static let current = 16
+    /// 17 added root patterns on root-search commands, opt-in agent tools,
+    /// widget buttons that act, and menu-bar items that hide while empty.
+    public static let current = 17
 }
 
 /// Host → plugin.
@@ -294,11 +296,38 @@ public struct ToolSpec: Codable, Equatable, Sendable {
     public var name: String
     public var description: String
     public var parameters: [ToolParameter]
+    /// Off until the user turns it on in Settings → Agents, for tools that
+    /// return private data (clipboard contents). A plugin with one also keeps
+    /// its panel from `stackbar_read` until then. Protocol 17.
+    public var optIn: Bool
 
-    public init(name: String, description: String, parameters: [ToolParameter] = []) {
+    public init(name: String, description: String, parameters: [ToolParameter] = [], optIn: Bool = false) {
         self.name = name
         self.description = description
         self.parameters = parameters
+        self.optIn = optIn
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, description, parameters, optIn
+    }
+
+    // Written by hand so specs from plugins built before protocol 17, which
+    // have no `optIn`, still decode.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decode(String.self, forKey: .description)
+        parameters = try container.decodeIfPresent([ToolParameter].self, forKey: .parameters) ?? []
+        optIn = try container.decodeIfPresent(Bool.self, forKey: .optIn) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(description, forKey: .description)
+        try container.encode(parameters, forKey: .parameters)
+        if optIn { try container.encode(optIn, forKey: .optIn) }
     }
 }
 

@@ -1,3 +1,5 @@
+import Foundation
+
 /// A command a plugin offers: something found by name and run, from the
 /// palette, a hotkey, a `stackbar://` link, Spotlight or Shortcuts.
 ///
@@ -37,9 +39,14 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
     /// Offered under the palette's results for whatever was typed: the text
     /// fills the first argument, or a view's search. Protocol 16.
     public var fallback: Bool
+    /// A regular expression the whole typed text must match before the host
+    /// sends it to a root-search command (`^[A-Z]+-\d+$` for an issue key).
+    /// Text that doesn't match never reaches the plugin, and a section that
+    /// matched comes before the other results. Protocol 17.
+    public var rootPattern: String?
 
     public init(id: String, title: String, subtitle: String? = nil, symbol: String? = nil, keywords: [String] = [], kind: Kind = .run, arguments: [ArgumentSpec] = [], exposure: Exposure = .everywhere,
-                rootSearch: Bool = false, rootSection: String? = nil, fallback: Bool = false) {
+                rootSearch: Bool = false, rootSection: String? = nil, fallback: Bool = false, rootPattern: String? = nil) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -51,6 +58,7 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         self.rootSearch = rootSearch
         self.rootSection = rootSection
         self.fallback = fallback
+        self.rootPattern = rootPattern
     }
 
     // Written by hand so specs from plugins built before protocol 16, which
@@ -68,6 +76,7 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         rootSearch = try container.decodeIfPresent(Bool.self, forKey: .rootSearch) ?? false
         rootSection = try container.decodeIfPresent(String.self, forKey: .rootSection)
         fallback = try container.decodeIfPresent(Bool.self, forKey: .fallback) ?? false
+        rootPattern = try container.decodeIfPresent(String.self, forKey: .rootPattern)
     }
 
     /// At most this many arguments, so their fields fit on one line.
@@ -86,6 +95,10 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         if title.trimmingCharacters(in: .whitespaces).isEmpty { result.append("command \(id) has no title") }
         if title.count > 100 { result.append("command \(id): the title is longer than 100 characters") }
         if rootSearch, kind != .view { result.append("command \(id): only a view command can search from the palette's root") }
+        if let rootPattern {
+            if !rootSearch { result.append("command \(id): a root pattern needs .rootSearch()") }
+            if (try? NSRegularExpression(pattern: rootPattern)) == nil { result.append("command \(id): the root pattern \"\(rootPattern)\" is not a valid regular expression") }
+        }
         if arguments.count > Self.maxArguments { result.append("command \(id) has \(arguments.count) arguments; at most \(Self.maxArguments)") }
         var names = Set<String>()
         for argument in arguments {

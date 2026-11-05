@@ -58,6 +58,11 @@ final class Weather: StackbarPlugin {
 }
 ```
 
+People can turn any tool off in Settings → Agents. A tool that returns
+private data (clipboard contents, messages) should be `.optIn()`: it stays
+off until the user turns it on, and so does agents reading the plugin's
+panel (0.21.0).
+
 State is ordinary properties. After `refresh()`, an action, a tool call or a
 topic message, Stackbar re-renders and sends only surfaces that changed. Code
 never runs concurrently with itself, so no locks. Throwing from `refresh()`
@@ -77,6 +82,17 @@ var menuBarClick: MenuBarAction? {
     running ? MenuBarAction("Click to stop") { self.stop() } : MenuBarAction("Click to start") { self.start() }
 }
 ```
+
+A `menuBar` that draws nothing at all takes the item out of the menu bar
+until it draws something again (0.21.0). A background service (window
+layouts, a key layer) stays out of the bar and shows an icon only when the
+user should act; meanwhile its panel opens from the palette.
+
+The widget shows the `widget` surface (the panel when you don't write one),
+cut to fit and refreshed by the host. Buttons, toggles, tappable content and
+rows act there too: a press reaches the plugin through Stackbar like a panel
+click, while Stackbar runs (0.21.0). Fields, pickers and sliders are drawn
+disabled, so give a widget one or two big actions, not a form.
 
 ## Commands
 
@@ -126,7 +142,18 @@ on a view command runs its `search` with whatever the user types at the root
 and shows the view's top three rows as a section under the command's title,
 or `.rootSearch(section: "Applications")`; a section whose first row starts
 with the typed text comes before the other results. Applications, Calculator,
-File Search and Clipboard History do this; keep that search quick. `.fallback()`
+File Search and Clipboard History do this; keep that search quick: one that
+takes longer than 0.4 s three times running sits out for ten minutes. Give it
+`matching:` when it only answers text of one shape, and other text never
+reaches the plugin; a section that matched leads the results (0.21.0):
+
+```swift
+Command("issue", title: "Jira Issue").view(search: { invocation in try await self.load(key: invocation.text) }) { _ in … }
+    .rootSearch(section: "Jira", matching: #"[A-Za-z][A-Za-z0-9]*-\d+"#)   // the whole text: ABC-123
+```
+
+People can turn a command's root search or fallback off in Settings →
+Commands. `.fallback()`
 offers the command under the results for any text ("Search the web for …"):
 the text fills its first argument, or a view's search. A view whose list is a
 `Grid` of rows shows them as tiles the arrow keys move through (an emoji

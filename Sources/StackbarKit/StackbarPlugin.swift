@@ -23,12 +23,15 @@ public protocol StackbarPlugin: AnyObject {
     /// Fetch or recompute state. Thrown errors are logged to the host, and the
     /// previous render stays on screen.
     func refresh() async throws
+    /// The status item. Drawing nothing at all takes the item out of the
+    /// menu bar until it draws something again.
     @ViewBuilder var menuBar: ViewContent { get }
     @ViewBuilder var panel: ViewContent { get }
     /// The window surface. Defaults to the panel's content.
     @ViewBuilder var window: ViewContent { get }
-    /// The widget surface: read-only, so controls in it do nothing. Defaults
-    /// to the panel's content.
+    /// The widget surface. Buttons, toggles, tappables and rows act through
+    /// the app while Stackbar runs; fields, pickers and sliders are drawn
+    /// disabled. Defaults to the panel's content.
     @ViewBuilder var widget: ViewContent { get }
     /// The plugin's page in Stackbar's Settings window. List `.settings` in the
     /// manifest's surfaces to get one; the panel's footer then shows a gear

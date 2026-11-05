@@ -47,6 +47,10 @@ final class AppModel {
     @ObservationIgnored let installer = PluginInstaller(pluginsDirectory: StackbarPaths.pluginsDirectory, publishers: PublisherStore(file: StackbarPaths.publishersFile), recordFile: StackbarPaths.dataDirectory.appendingPathComponent("installed.json"))
     @ObservationIgnored let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
+    /// Presses on widget buttons, left by the widget extension.
+    @ObservationIgnored private let widgetActions = WidgetActionInbox.shared()
+    /// Which plugin tools agents may use (Settings → Agents).
+    @ObservationIgnored let agentConsent = AgentConsent(file: StackbarPaths.dataDirectory.appendingPathComponent("agent-tools.json"))
     /// Plugins run in the App Sandbox unless `STACKBAR_SANDBOX=0` (for
     /// debugging a plugin that needs more than its manifest declares).
     @ObservationIgnored let sandbox = ProcessInfo.processInfo.environment["STACKBAR_SANDBOX"] != "0"
@@ -120,6 +124,7 @@ final class AppModel {
         }
         self.watcher = watcher
         updateAgentGateway()
+        listenForWidgetActions()
         Task { await checkStore() }
         storeTimer = Timer.scheduledTimer(withTimeInterval: 24 * 60 * 60, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.checkStore() }
@@ -357,6 +362,25 @@ final class AppModel {
         AppDelegate.shared?.palette.open(entry, arguments: target.arguments, source: source)
     }
 
+    /// The widget extension posts a Darwin notification after leaving a
+    /// press; presses left while Stackbar was starting are read at once.
+    private func listenForWidgetActions() {
+        let observer = Unmanaged.passUnretained(self).toOpaque()
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), observer, { _, observer, _, _, _ in
+            guard let observer else { return }
+            let model = Unmanaged<AppModel>.fromOpaque(observer).takeUnretainedValue()
+            Task { @MainActor in model.drainWidgetActions() }
+        }, WidgetActionInbox.notification as CFString, nil, .deliverImmediately)
+        drainWidgetActions()
+    }
+
+    /// Sends each waiting widget press to its plugin, as a panel click would.
+    func drainWidgetActions() {
+        for press in widgetActions.drain() {
+            controller(for: press.pluginID)?.send(press.action, press.value)
+        }
+    }
+
     func widgetChanged(_ controller: PluginController) {
         guard let node = controller.widget else { return }
         try? widgets.write(WidgetSnapshot(pluginID: controller.pluginID, name: controller.name, node: node))
@@ -377,7 +401,7 @@ final class AppModel {
         agentGatewayError = nil
         guard agentGatewayEnabled else { return }
         let directory = AgentDirectory(model: self)
-        let server = MCPServer(name: "stackbar", version: StackbarVersion.current, instructions: "Tools from the plugins running in Stackbar. Call stackbar_plugins to see them.", provider: RuntimeTools { await directory.supervisors() })
+        let server = MCPServer(name: "stackbar", version: StackbarVersion.current, instructions: "Tools from the plugins running in Stackbar. Call stackbar_plugins to see them.", provider: RuntimeTools(consent: agentConsent) { await directory.supervisors() })
         do {
             try FileManager.default.createDirectory(at: StackbarPaths.dataDirectory, withIntermediateDirectories: true)
             agentServer = try UnixSocketServer(path: StackbarPaths.agentSocket.path) { line in await server.handle(line: line) }

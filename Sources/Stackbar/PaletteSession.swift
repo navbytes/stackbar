@@ -204,6 +204,9 @@ final class PaletteSession {
     /// root and fed the same text. Their top rows are a section each.
     @ObservationIgnored private var rootViews: [CommandKey: CommandViewModel] = [:]
     @ObservationIgnored private var rootOpening: Set<CommandKey> = []
+    /// When each root view was last given new text and hasn't answered yet,
+    /// for the time budget.
+    @ObservationIgnored private var rootFedAt: [CommandKey: Date] = [:]
     /// What a root row does when chosen: its view and its primary action.
     @ObservationIgnored private var rootRows: [String: (view: CommandViewModel, action: ActionRef, actions: [ActionRef])] = [:]
     /// Bumped when a root view opens, so the list reads it.
@@ -223,14 +226,29 @@ final class PaletteSession {
             closeRootSearch()
             return
         }
-        for entry in model.commands.registry.entries where entry.spec.rootSearch && entry.spec.kind == .view {
+        let commands: CommandCenter = model.commands
+        let wanted = commands.registry.entries.filter {
+            RootSearchGate.accepts($0.spec, text: text, preference: commands.preferences[$0.key]) && !commands.rootBudget.isBenched($0.key)
+        }
+        let keys = Set(wanted.map(\.key))
+        // A view whose pattern no longer matches (or that was benched) closes,
+        // so its rows for older text don't linger.
+        for (key, view) in rootViews where !keys.contains(key) {
+            view.close()
+            rootViews[key] = nil
+            rootFedAt[key] = nil
+            rootViewsRevision += 1
+        }
+        for entry in wanted {
             if let view = rootViews[entry.key] {
+                if view.query != text { rootFedAt[entry.key] = Date() }
                 view.query = text
                 continue
             }
             guard !rootOpening.contains(entry.key), model.controller(for: entry.pluginID)?.supervisor != nil else { continue }
             rootOpening.insert(entry.key)
             let key = entry.key
+            rootFedAt[key] = Date()
             Task {
                 let opened = await model.commands.openView(key, query: CommandQuery(text: text), context: context, recordUse: false)
                 rootOpening.remove(key)
@@ -250,6 +268,7 @@ final class PaletteSession {
         for view in rootViews.values { view.close() }
         rootViews = [:]
         rootRows = [:]
+        rootFedAt = [:]
         if rootViewsRevision != 0 { rootViewsRevision += 1 }
     }
 
@@ -258,6 +277,11 @@ final class PaletteSession {
         _ = rootViewsRevision
         guard rootText != nil else { return [] }
         var table: [String: (view: CommandViewModel, action: ActionRef, actions: [ActionRef])] = [:]
+        for (key, view) in rootViews where !view.isSearching {
+            if let fed = rootFedAt.removeValue(forKey: key) {
+                model.commands.rootBudget.record(key, took: Date().timeIntervalSince(fed))
+            }
+        }
         let sections = rootViews.values.sorted { $0.entry.spec.title < $1.entry.spec.title }.compactMap { view -> PaletteSection? in
             let entries = self.rows(of: view).prefix(Self.rootRowLimit).compactMap { row -> PaletteIndex.Entry? in
                 guard let primary = row.actions.first else { return nil }
@@ -269,7 +293,8 @@ final class PaletteSession {
                 table[entry.id] = (view, primary, row.actions)
                 return entry
             }
-            return entries.isEmpty ? nil : PaletteSection(title: view.entry.spec.rootSection ?? view.entry.spec.title, entries: entries)
+            return entries.isEmpty ? nil : PaletteSection(title: view.entry.spec.rootSection ?? view.entry.spec.title, entries: entries,
+                                                          leads: view.entry.spec.rootPattern != nil)
         }
         rootRows = table
         return sections
@@ -278,7 +303,8 @@ final class PaletteSession {
     /// `.fallback()` commands, offered for whatever was typed.
     private func fallbackEntries() -> [PaletteIndex.Entry] {
         guard stack.isEmpty, !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
-        return model.commands.registry.entries.filter(\.spec.fallback).map { entry in
+        let preferences = model.commands.preferences
+        return model.commands.registry.entries.filter { RootSearchGate.offersFallback($0.spec, preference: preferences[$0.key]) }.map { entry in
             PaletteIndex.Entry(pluginID: entry.pluginID, pluginName: entry.pluginName, title: entry.spec.title,
                                subtitle: entry.pluginName, symbol: entry.spec.symbol, kind: .command(entry.spec))
         }

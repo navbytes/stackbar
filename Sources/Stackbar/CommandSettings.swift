@@ -82,7 +82,7 @@ struct CommandSettingsRow: View {
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.spec.title)
-                    Text(entry.spec.kind == .view ? "Opens a view" : (entry.spec.arguments.isEmpty ? "Runs" : "Runs with " + entry.spec.arguments.map(\.placeholder).joined(separator: ", ")))
+                    Text(Self.caption(entry.spec, preference: preference))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -98,6 +98,11 @@ struct CommandSettingsRow: View {
                     .controlSize(.small)
                     .help("Show in the palette")
                 Menu {
+                    if entry.spec.rootSearch || entry.spec.fallback {
+                        Toggle(entry.spec.rootSearch ? "Answer What You Type in the Palette" : "Offer for Any Text in the Palette",
+                               isOn: Binding(get: { preference.inRootSearch }, set: { shown in save { $0.inRootSearch = shown } }))
+                        Divider()
+                    }
                     if entry.spec.exposure == .everywhere {
                         Button("Copy Link") { Platform.copy(CommandLink(key: entry.key).url) }
                         Toggle("Show in Spotlight", isOn: Binding(get: { preference.showInSpotlight }, set: { shown in save { $0.showInSpotlight = shown } }))
@@ -118,6 +123,13 @@ struct CommandSettingsRow: View {
         .padding(.vertical, 2)
         .background(highlighted ? Color.accentColor.opacity(0.08) : .clear)
         .onAppear { alias = preference.alias ?? "" }
+    }
+
+    static func caption(_ spec: CommandSpec, preference: CommandPreference) -> String {
+        var caption = spec.kind == .view ? "Opens a view" : (spec.arguments.isEmpty ? "Runs" : "Runs with " + spec.arguments.map(\.placeholder).joined(separator: ", "))
+        if spec.rootSearch { caption += preference.inRootSearch ? " · answers in the palette's results" : " · kept out of the palette's results" }
+        if spec.fallback { caption += preference.inRootSearch ? " · offered for any text" : " · not offered for any text" }
+        return caption
     }
 
     private func save(_ change: (inout CommandPreference) -> Void) {

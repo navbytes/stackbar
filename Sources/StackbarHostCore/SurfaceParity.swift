@@ -141,9 +141,11 @@ public enum SurfaceParity {
     private static func widget(_ kind: Kind) -> String {
         switch kind {
         case .list: return "First 4 rows, no filter"
-        case .row: return "Row, not clickable"
-        case .button, .toggle, .textField, .picker, .slider, .form: return "Drawn disabled"
-        case .tappable: return "Drawn, not clickable"
+        case .row: return "Row; click = first action, sent through the app"
+        case .button: return "Button; click sends the action through the app"
+        case .toggle: return "Toggle; click flips it through the app"
+        case .textField, .picker, .slider, .form: return "Drawn disabled"
+        case .tappable: return "Content as a button; click sends the action through the app"
         case .link: return "Link (opens Stackbar's URL)"
         case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .timer, .spacer, .grid: return "As panel"
         case .styled: return "As panel, without hover"

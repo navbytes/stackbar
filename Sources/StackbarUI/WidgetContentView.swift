@@ -3,7 +3,9 @@ import SwiftUI
 import StackbarProtocol
 
 /// The widget surface: the tree drawn read-only, clipped to the widget, with
-/// lists cut to what fits. Shared by the widget extension and snapshots.
+/// lists cut to what fits. Shared by the widget extension and snapshots. The
+/// extension sets `stackbarWidgetButton`, which makes buttons, toggles,
+/// tappables and rows act; fields, pickers and sliders stay disabled.
 public struct WidgetContentView: View {
     let node: ViewNode
     let maxRows: Int
