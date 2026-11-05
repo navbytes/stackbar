@@ -70,6 +70,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: scripts/check.sh
+      # The Release workflow signs the appcast with this script.
+      - name: Sparkle signing script
+        run: |
+          export SPARKLE_PRIVATE_KEY=$(head -c 32 /dev/urandom | base64)
+          echo hello > "$RUNNER_TEMP/archive"
+          [ "$(swift scripts/ed25519.swift public-key | base64 --decode | wc -c | tr -d ' ')" = 32 ]
+          [ "$(swift scripts/ed25519.swift sign "$RUNNER_TEMP/archive" | base64 --decode | wc -c | tr -d ' ')" = 64 ]
 
   # The Xcode build is the one that extracts App Intents metadata (Spotlight
   # and Shortcuts) and builds the widget; this checks both, unsigned.

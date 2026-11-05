@@ -102,10 +102,7 @@ jobs:
         if: env.HAS_SPARKLE_KEY == 'true'
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --quiet cryptography
-          echo "SPARKLE_PUBLIC_KEY=$("$RUNNER_TEMP/venv/bin/python" scripts/appcast.py public-key)" >> "$GITHUB_ENV"
+        run: echo "SPARKLE_PUBLIC_KEY=$(swift scripts/ed25519.swift public-key)" >> "$GITHUB_ENV"
 
       - name: Build
         env:
@@ -136,7 +133,9 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          "$RUNNER_TEMP/venv/bin/python" scripts/appcast.py write --zip "build/Stackbar-$VERSION.zip" --version "$VERSION" --out build/appcast.xml
+          ZIP="build/Stackbar-$VERSION.zip"
+          SIGNATURE=$(swift scripts/ed25519.swift sign "$ZIP")
+          python3 scripts/appcast.py write --zip "$ZIP" --version "$VERSION" --signature "$SIGNATURE" --out build/appcast.xml
           cat build/appcast.xml
 
       - name: Keep the dry run's build

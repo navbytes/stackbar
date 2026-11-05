@@ -22,9 +22,11 @@ CI, and is the same order Sparkle documents.
   "Latest" skips pre-releases, so a pre-release never reaches Sparkle users.
 - `CFBundleVersion` stays equal to the marketing version; Sparkle's
   comparator orders `0.22.0 < 0.23.0` correctly.
-- The appcast is written by `scripts/appcast.py`: one item, with the EdDSA
-  signature (Ed25519 over the zip, via `cryptography`), length, minimum
-  macOS 26, and the CHANGELOG section as HTML.
+- The appcast is written by `scripts/appcast.py` (standard library only):
+  one item, with the EdDSA signature, length, minimum macOS 26, and the
+  CHANGELOG section as HTML. `scripts/ed25519.swift` derives the public key
+  and signs the zip with Apple's CryptoKit, so no third-party crypto package
+  is installed in the release job.
 - The private key is a base64 32-byte Ed25519 seed. Naveen creates it with
   `openssl rand -base64 32 | gh secret set SPARKLE_PRIVATE_KEY -R navbytes/stackbar`;
   the workflow derives the public key, so nothing else needs setting.
