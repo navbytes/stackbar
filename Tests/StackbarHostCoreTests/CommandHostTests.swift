@@ -187,6 +187,9 @@ final class CommandLinkAndViewStateTests: XCTestCase {
         XCTAssertNoThrow(try HostServices.openTarget("https://example.com", granted: plain).get())
         XCTAssertNoThrow(try HostServices.openTarget("mailto:a@b.c", granted: plain).get())
         XCTAssertThrowsError(try HostServices.openTarget("slack://open", granted: plain).get())
+        XCTAssertNoThrow(try HostServices.openTarget("stackbar://store/io.navbytes.stackbar.plugins.app-switcher", granted: plain).get(), "a Store page only shows something")
+        XCTAssertNoThrow(try HostServices.openTarget("stackbar://settings/commands", granted: plain).get())
+        XCTAssertThrowsError(try HostServices.openTarget("stackbar://commands/dev.t.a/run", granted: plain).get(), "running a command still needs the scheme")
         XCTAssertThrowsError(try HostServices.openTarget("/tmp", granted: plain).get())
         XCTAssertThrowsError(try HostServices.openTarget("not a url", granted: plain).get())
 
