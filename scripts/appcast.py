@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """Sparkle's appcast for one release, and the key it is checked with.
 
-    appcast.py public-key                 prints SUPublicEDKey for $SPARKLE_PRIVATE_KEY
-    appcast.py write --zip Stackbar-0.23.0.zip --version 0.23.0 --out appcast.xml
+    appcast.py write --zip Stackbar-0.23.0.zip --version 0.23.0 --signature <base64> --out appcast.xml
     appcast.py notes --version 0.23.0     prints that version's CHANGELOG section
 
-SPARKLE_PRIVATE_KEY is a base64 Ed25519 seed (32 bytes; Sparkle's 64- and
-96-byte exports also work). Sparkle's EdDSA signature is plain Ed25519 over
-the archive, so this needs only the `cryptography` package, not Sparkle's
-tools. The Release workflow publishes appcast.xml next to the zip; SUFeedURL
-points at releases/latest/download/appcast.xml, so pre-releases never reach it.
+The signature is Sparkle's EdDSA (Ed25519) signature of the zip, from
+`swift scripts/ed25519.swift sign` (CryptoKit). This script only writes XML,
+with the standard library. The Release workflow publishes appcast.xml next to
+the zip; SUFeedURL points at releases/latest/download/appcast.xml, so
+pre-releases never reach it.
 """
 
 import argparse
 import base64
 import email.utils
 import html
-import os
 import re
 import sys
 from pathlib import Path
@@ -26,23 +24,6 @@ MINIMUM_MACOS = "26.0"
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def private_key():
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
-    raw = os.environ.get("SPARKLE_PRIVATE_KEY", "").strip()
-    if not raw:
-        sys.exit("appcast: SPARKLE_PRIVATE_KEY is not set")
-    data = base64.b64decode(raw)
-    if len(data) not in (32, 64, 96):
-        sys.exit(f"appcast: SPARKLE_PRIVATE_KEY decodes to {len(data)} bytes, not an Ed25519 seed")
-    return Ed25519PrivateKey.from_private_bytes(data[:32])
-
-
-def public_key_b64(key):
-    from cryptography.hazmat.primitives import serialization
-
-    raw = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-    return base64.b64encode(raw).decode()
 
 
 def changelog_section(version):
@@ -84,9 +65,10 @@ def to_html(markdown):
 
 
 def write(args):
-    key = private_key()
     archive = Path(args.zip).read_bytes()
-    signature = base64.b64encode(key.sign(archive)).decode()
+    signature = args.signature.strip()
+    if len(base64.b64decode(signature, validate=True)) != 64:
+        sys.exit("appcast: --signature is not an Ed25519 signature")
     version = args.version
     url = f"https://github.com/{REPO}/releases/download/v{version}/{Path(args.zip).name}"
     notes = to_html(changelog_section(version)) or f'<p><a href="https://github.com/{REPO}/releases/tag/v{version}">Release notes</a></p>'
@@ -115,17 +97,15 @@ def write(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("public-key")
     writer = commands.add_parser("write")
     writer.add_argument("--zip", required=True)
     writer.add_argument("--version", required=True)
+    writer.add_argument("--signature", required=True)
     writer.add_argument("--out", required=True)
     notes = commands.add_parser("notes")
     notes.add_argument("--version", required=True)
     args = parser.parse_args()
-    if args.command == "public-key":
-        print(public_key_b64(private_key()))
-    elif args.command == "notes":
+    if args.command == "notes":
         print(changelog_section(args.version))
     else:
         write(args)

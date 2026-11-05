@@ -17,12 +17,17 @@ packages:
   Stackbar:
     path: .
   # The release app only: Package.swift and the plugins never see these.
+  # Pinned by commit, so a moved tag can't change what we build; each
+  # package's binary target is checked against the SHA-256 in its own
+  # Package.swift. Before bumping, check the repository is the project's own
+  # (sparkle-project.org and docs.sentry.io link to it), take the commit the
+  # release tag points to, and see docs/dependencies.md.
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    exactVersion: 2.10.1
+    revision: ab7d71291238df6e0492143b120c9b696a35f603 # 2.10.1
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
-    exactVersion: 9.31.0
+    revision: 2f64c77f77514acd01780d1aac86ae75b7fccd04 # 9.31.0
 targets:
   Stackbar:
     type: application
