@@ -28,9 +28,9 @@ final class Updater: NSObject {
         self.controller = controller
         isAvailable = true
         canCheck = controller.updater.canCheckForUpdates
-        canCheckObservation = controller.updater.observe(\.canCheckForUpdates, options: [.new]) { [weak self] updater, _ in
-            let value = updater.canCheckForUpdates
-            Task { @MainActor in self?.canCheck = value }
+        // Sparkle changes this on the main thread.
+        canCheckObservation = controller.updater.observe(\.canCheckForUpdates, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in self?.canCheck = self?.controller?.updater.canCheckForUpdates ?? false }
         }
         #endif
     }

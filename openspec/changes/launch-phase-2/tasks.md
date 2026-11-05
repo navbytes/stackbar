@@ -1,16 +1,16 @@
 # Tasks
 
 ## 1. Release and updates
-- [ ] 1.1 `scripts/release.sh`: Xcode build with the widget, embed, prebuild helpers, sign inside out, notarize, staple
-- [ ] 1.2 Release workflow uses it; `dry_run` input; pre-release off by default
-- [ ] 1.3 Sparkle 2 in the Xcode app; `Updater`; Check for Updates in menus and Settings; automatic checks toggle
-- [ ] 1.4 `scripts/appcast.py` and the workflow step that signs the zip and publishes `appcast.xml`
-- [ ] 1.5 CHANGELOG.md; release notes and the appcast use the version's section
-- [ ] 1.6 Cask `auto_updates true` (homebrew-tap and `update-homebrew-cask.sh`)
+- [x] 1.1 `scripts/release.sh`: Xcode build with the widget, embed, prebuild helpers, sign inside out, notarize, staple
+- [x] 1.2 Release workflow uses it; `dry_run` input; pre-release off by default
+- [x] 1.3 Sparkle 2 in the Xcode app; `Updater`; Check for Updates in menus and Settings; automatic checks toggle
+- [x] 1.4 `scripts/appcast.py` and the workflow step that signs the zip and publishes `appcast.xml`
+- [x] 1.5 CHANGELOG.md; release notes and the appcast use the version's section
+- [x] 1.6 Cask `auto_updates true` (homebrew-tap and `update-homebrew-cask.sh`)
 - [ ] 1.7 Naveen sets `SPARKLE_PRIVATE_KEY`; a dry run shows a signed appcast
 
 ## 2. App chrome and crash reports
-- [ ] 2.1 Help menu: docs, release notes, Report a Problem (issue with doctor output)
+- [x] 2.1 Help menu: docs, release notes, Report a Problem (issue with doctor output)
 - [ ] 2.2 Sentry, opt-in from Welcome and Settings › Privacy; DSN from `SENTRY_DSN`
 - [ ] 2.3 Naveen creates the Sentry project and sets `SENTRY_DSN`
 
