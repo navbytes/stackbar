@@ -13,6 +13,13 @@ name: Release
 # Homebrew: with HOMEBREW_TAP_TOKEN (a fine-grained PAT with contents and pull
 # request write on navbytes/homebrew-tap) a notarized release also opens a PR
 # there updating Casks/stackbar.rb. Without it the step is skipped.
+#
+# Prebuilt helpers: with PLUGINS_DISPATCH_TOKEN (a fine-grained PAT with
+# Actions read and write on navbytes/stackbar-plugins) each release starts that
+# repo's Helpers workflow, which builds the store plugins against this
+# release's StackbarKit so a Mac without Xcode can run them. Without it the
+# step is skipped and the Helpers workflow's hourly schedule picks the release
+# up, which GitHub runs late or not at all.
 
 on:
   push:
@@ -38,6 +45,7 @@ jobs:
       HAS_CERT: ${{ secrets.APPLE_CERT_P12 != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_NOTARY_PASSWORD != '' }}
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      PLUGINS_DISPATCH_TOKEN: ${{ secrets.PLUGINS_DISPATCH_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -125,7 +133,7 @@ jobs:
           cat > build/notes.md <<NOTES
           $INSTALL
 
-          Stackbar compiles plugins on your Mac, so it needs Xcode 26 or the Command Line Tools (\`xcode-select --install\`). Requires macOS 26.
+          Requires macOS 26. Store plugins come prebuilt, so Xcode is not needed to use them. To write your own plugins, install Xcode 26 or the Command Line Tools (\`xcode-select --install\`).
 
           The command-line tool is inside the app: \`ln -sf /Applications/Stackbar.app/Contents/MacOS/stackbarctl ~/.local/bin/stackbarctl\`, then \`stackbarctl doctor\`.
 
@@ -150,6 +158,15 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           ZIP: build/Stackbar-${{ steps.version.outputs.version }}.zip
         run: scripts/update-homebrew-cask.sh
+
+      # A helper must match the StackbarKit inside the app, so every release
+      # needs a fresh set. A failure here should not fail the release.
+      - name: Build prebuilt plugin helpers (navbytes/stackbar-plugins)
+        if: env.PLUGINS_DISPATCH_TOKEN != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ env.PLUGINS_DISPATCH_TOKEN }}
+        run: gh workflow run helpers.yml -R navbytes/stackbar-plugins --ref main
 
       - name: Remove the signing keychain
         if: always() && env.HAS_CERT == 'true'
