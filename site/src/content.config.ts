@@ -1,6 +1,7 @@
 import { defineCollection } from 'astro:content';
 import { z } from 'astro/zod';
 import { fetchStore } from '../scripts/store.mjs';
+import { readDocs } from '../scripts/docs.mjs';
 import kit from './generated/kit.json';
 
 // One entry per published plugin, from the signed store index (verified with
@@ -57,4 +58,32 @@ const plugins = defineCollection({
   }),
 });
 
-export const collections = { plugins };
+// The docs: the user guide in src/docs/*.md and the plugin reference, which is
+// the repository's llms.txt (so it never drifts from what agents read).
+const docs = defineCollection({
+  loader: {
+    name: 'stackbar-docs',
+    async load({ store, parseData, renderMarkdown, generateDigest, watcher }) {
+      store.clear();
+      const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+      for (const doc of readDocs()) {
+        const { body, ...fields } = doc;
+        const data = await parseData({ id: doc.slug, data: fields });
+        const rendered = await renderMarkdown(body);
+        // Links in the Markdown are written from the site root.
+        rendered.html = rendered.html.replace(/href="\/(?!\/)/g, `href="${base}/`);
+        store.set({ id: doc.slug, data, body, digest: generateDigest({ data, body }), rendered });
+      }
+      watcher?.add('src/docs');
+    },
+  },
+  schema: z.object({
+    slug: z.string(),
+    title: z.string(),
+    description: z.string(),
+    group: z.enum(['Use Stackbar', 'Build plugins']),
+    order: z.number(),
+  }),
+});
+
+export const collections = { plugins, docs };

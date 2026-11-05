@@ -5,6 +5,7 @@ import Base from '../layouts/Base.astro';
 import Button from '../components/Button.astro';
 import Glyph from '../components/Glyph.astro';
 import HeroRotator from '../components/HeroRotator.astro';
+import PaletteScene from '../components/PaletteScene.astro';
 import PluginCard from '../components/PluginCard.astro';
 import { href, repo, version } from '../lib/site';
 import { hueOf, byName } from '../lib/plugins';
@@ -12,7 +13,7 @@ import { organization, stackbarApp, website } from '../lib/seo';
 // The example the repository builds and tests, shown as it is.
 import clock from '../../../Examples/ClockPlugin/Clock.swift?raw';
 
-const description = 'Live apps for your Mac menu bar, written by you or your AI in one Swift file. Menu bar, panels, widgets, a command palette and MCP tools. Free and open source.';
+const description = 'A native Mac launcher you extend in one Swift file: apps, files, sums, clipboard, snippets and every plugin, from one hotkey. Plus menu bar apps and widgets. Free, open source, no account.';
 const plugins = (await getCollection('plugins')).sort(byName);
 // The hero's menu bar: six plugins that show the range, in the order they
 // take turns. One not published (or without a render) is left out.
@@ -23,6 +24,17 @@ const featured = ['pomodoro', 'pr-cockpit', 'system-monitor', 'clipboard', 'lite
   .map((slug) => plugins.find((p) => p.data.slug === slug))
   .filter((p) => p !== undefined);
 
+// What the palette does out of the box (first-party store plugins included).
+const launcher = [
+  { glyph: 'window', hue: 'indigo', title: 'Apps and settings', text: 'Every app and System Settings pane.' },
+  { glyph: 'file', hue: 'blue', title: 'Files', text: 'By name, from Spotlight\'s index.' },
+  { glyph: 'equals', hue: 'orange', title: 'Calculator', text: 'Sums, units, currency, time zones.' },
+  { glyph: 'clip', hue: 'green', title: 'Clipboard history', text: 'Searchable, pinnable, one key to paste.' },
+  { glyph: 'text', hue: 'pink', title: 'Snippets', text: 'With placeholders, imported from Raycast.' },
+  { glyph: 'link', hue: 'violet', title: 'Quicklinks', text: 'Search any site by name.' },
+  { glyph: 'menubar', hue: 'teal', title: 'Window layouts', text: 'Halves, thirds, quarters, by hotkey.' },
+  { glyph: 'bolt', hue: 'amber', title: 'System commands', text: 'Lock, sleep, dark mode, empty Trash.' },
+];
 const surfaces = [
   { glyph: 'menubar', title: 'Menu bar', text: 'Live text, symbols, progress and colour, updated as often as you like.', span: 'wide' },
   { glyph: 'window', title: 'Panels and windows', text: 'Lists, charts, forms, gauges and tabs drawn natively, one click from the bar.' },
@@ -43,13 +55,43 @@ const safety = [
     <div class="wrap hero-grid">
       <div class="hero-copy">
         <p class="eyebrow">Stackbar {version} · Free and open source</p>
-        <h1>Your menu bar, <span class="gradient-text">rewritten in&nbsp;Swift.</span></h1>
-        <p class="lede">Stackbar runs live little apps in your menu bar, panels, widgets and command palette. Each one is a single Swift file, so you can write one in minutes, or ask your AI to.</p>
+        <h1>Your Mac, <span class="gradient-text">one keystroke away.</span></h1>
+        <p class="lede">A native launcher you extend in one Swift file. Free, open source, no account.</p>
         <div class="ctas">
           <Button href={href('/download/')} size="l"><Glyph name="download" /> Download for Mac</Button>
-          <Button href={href('/plugins/')} variant="ghost" size="l">Browse {plugins.length} plugins</Button>
+          <Button href={href('/switch-from-raycast/')} variant="ghost" size="l">Coming from Raycast?</Button>
         </div>
-        <p class="fine">macOS 26 or later · Free · MIT license</p>
+        <p class="fine">macOS 26 or later · Apple Silicon · MIT license</p>
+      </div>
+      <PaletteScene label="Stackbar's command palette finding Terminal, answering 12 × 12 + 8, starting a focus timer and pasting a snippet" />
+    </div>
+  </section>
+
+  <section class="section launcher">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Replace Spotlight</p>
+        <h2>Everything you reach for, in one place.</h2>
+        <p class="lede">Press your hotkey (⌘Space, if you like) and type. Give any command an alias or its own shortcut, and keep the ones you use most at the top.</p>
+      </div>
+      <div class="chips">
+        {launcher.map((l) => (
+          <article class="chip" style={`--h: var(--kit-${l.hue})`}>
+            <span class="tile-icon"><Glyph name={l.glyph} /></span>
+            <div><h3>{l.title}</h3><p>{l.text}</p></div>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section more stage">
+    <div class="wrap hero-grid">
+      <div class="section-head">
+        <p class="eyebrow">And it does more</p>
+        <h2>The same plugins live in your menu bar.</h2>
+        <p class="lede">Your next meeting, your pull requests, a focus timer, the clipboard: live in the menu bar, one click from a native panel, and on your desktop as widgets.</p>
+        <div class="ctas"><Button href={href('/plugins/')} variant="ghost">Browse {plugins.length} plugins</Button></div>
       </div>
       <HeroRotator plugins={showcase} label="A Mac menu bar running Stackbar plugins, each opening its panel in turn" />
     </div>
@@ -154,9 +196,23 @@ const safety = [
     </div>
   </section>
 
+  <section class="section switch">
+    <div class="wrap switch-inner">
+      <div>
+        <p class="eyebrow">Coming from Raycast or Alfred?</p>
+        <h2>Bring your snippets and quicklinks.</h2>
+        <p class="lede">Stackbar reads Raycast's exports, takes over ⌘Space in two clicks, and maps the commands you use to plugins.</p>
+      </div>
+      <div class="ctas">
+        <Button href={href('/switch-from-raycast/')}>Switch from Raycast</Button>
+        <Button href={href('/compare/')} variant="ghost">Compare launchers</Button>
+      </div>
+    </div>
+  </section>
+
   <section class="closer stage">
     <div class="wrap closer-inner">
-      <h2>Make the menu bar <span class="gradient-text">yours.</span></h2>
+      <h2>Your Mac, <span class="gradient-text">your way.</span></h2>
       <div class="ctas">
         <Button href={href('/download/')} size="l"><Glyph name="download" /> Download for Mac</Button>
         <Button href={repo} variant="ghost" size="l"><Glyph name="star" /> Star on GitHub</Button>
@@ -174,7 +230,8 @@ const safety = [
     filter: blur(40px); pointer-events: none; }
   .hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
   .hero-copy { display: grid; gap: 24px; }
-  .hero h1 { font-size: clamp(2.8rem, 1.6rem + 4.2vw, 5.4rem); font-weight: 800; letter-spacing: -0.04em; }
+  .hero h1 { font-size: clamp(2.6rem, 1.4rem + 3.6vw, 4.8rem); font-weight: 800; letter-spacing: -0.04em; text-wrap: balance; }
+  .hero-copy { min-width: 0; }
   .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
   .fine { color: var(--ink-2); font-size: var(--step--1); }
   @media (max-width: 980px) { .hero-grid { grid-template-columns: 1fr; } }
@@ -218,6 +275,20 @@ const safety = [
   .safe h3 { font-size: var(--step-1); }
   @media (max-width: 980px) { .four { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 560px) { .four { grid-template-columns: 1fr; } }
+
+  .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .chip { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 14px; align-items: center; padding: 18px; border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); }
+  .chip h3 { font-size: var(--step-0); }
+  .chip p { color: var(--ink-2); font-size: var(--step--1); margin: 2px 0 0; }
+  @media (max-width: 1080px) { .chips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .chips { grid-template-columns: 1fr; } }
+  .more .section-head { margin: 0; }
+  .more .section-head h2 { font-size: var(--step-3); }
+
+  .switch { background: var(--page-2); border-top: 1px solid var(--line); }
+  .switch-inner { display: flex; justify-content: space-between; align-items: end; gap: 32px; flex-wrap: wrap; }
+  .switch-inner > div:first-child { display: grid; gap: 16px; max-width: 640px; }
+  .switch h2 { font-size: var(--step-3); }
 
   .shelf { background: var(--page-2); }
   .section-head.row { display: flex; justify-content: space-between; align-items: end; max-width: none; gap: 24px; flex-wrap: wrap; }

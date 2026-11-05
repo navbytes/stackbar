@@ -1,0 +1,87 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { href, repo } from '../../lib/site';
+import { breadcrumbs } from '../../lib/seo';
+
+export async function getStaticPaths() {
+  const groupOrder = ['Use Stackbar', 'Build plugins'];
+  const docs = (await getCollection('docs')).sort((a, b) => groupOrder.indexOf(a.data.group) - groupOrder.indexOf(b.data.group) || a.data.order - b.data.order);
+  return docs.map((doc) => ({ params: { slug: doc.id }, props: { doc, docs } }));
+}
+const { doc, docs } = Astro.props;
+const { Content, headings } = await render(doc);
+const toc = headings.filter((h) => h.depth === 2);
+const groups = ['Use Stackbar', 'Build plugins'].map((group) => ({ group, docs: docs.filter((d) => d.data.group === group) }));
+const index = docs.findIndex((d) => d.id === doc.id);
+const next = docs[index + 1];
+const source = doc.id === 'authoring' ? `${repo}/blob/main/llms.txt` : `${repo}/blob/main/site/src/docs/${doc.id}.md`;
+---
+<Base title={doc.data.title} description={doc.data.description} jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Docs', '/docs/'], [doc.data.title, `/docs/${doc.id}/`]])]}>
+  <div class="wrap docs">
+    <nav class="side" aria-label="Docs">
+      <a class="home" href={href('/docs/')}>Docs</a>
+      {groups.map((g) => (
+        <div>
+          <h2>{g.group}</h2>
+          <ul>
+            {g.docs.map((d) => <li><a href={href(`/docs/${d.id}/`)} aria-current={d.id === doc.id ? 'page' : undefined}>{d.data.title}</a></li>)}
+          </ul>
+        </div>
+      ))}
+    </nav>
+    <article class="prose">
+      <p class="eyebrow">{doc.data.group}</p>
+      <h1>{doc.data.title}</h1>
+      <p class="lede">{doc.data.description}</p>
+      <Content />
+      <footer class="doc-foot">
+        <a href={source}>Edit this page on GitHub</a>
+        {next && <a class="next" href={href(`/docs/${next.id}/`)}>Next: {next.data.title} →</a>}
+      </footer>
+    </article>
+    {toc.length > 2 && (
+      <nav class="toc" aria-label="On this page">
+        <h2>On this page</h2>
+        <ul>{toc.map((h) => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ul>
+      </nav>
+    )}
+  </div>
+</Base>
+
+<style>
+  .docs { display: grid; grid-template-columns: 220px minmax(0, 1fr) 200px; gap: clamp(24px, 4vw, 56px); padding-block: clamp(32px, 5vw, 64px) 96px; align-items: start; }
+  .side, .toc { position: sticky; top: 92px; display: grid; gap: 20px; font-size: var(--step--1); max-height: calc(100vh - 110px); overflow: auto; }
+  .side h2, .toc h2 { font: 600 12px/1 var(--font-text); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 8px; }
+  .side ul, .toc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .side a, .toc a { display: block; padding: 6px 10px; border-radius: 8px; color: var(--ink-2); text-decoration: none; }
+  .side a:hover, .toc a:hover { color: var(--ink); background: var(--line); }
+  .side a[aria-current] { color: var(--ink); background: var(--accent-soft); font-weight: 600; }
+  .side .home { font: 700 var(--step-1)/1 var(--font-display); color: var(--ink); padding: 0 10px; }
+  .toc a { padding: 4px 10px; }
+  .prose { min-width: 0; max-width: 760px; overflow-wrap: anywhere; }
+  .prose :global(pre), .prose :global(table) { overflow-wrap: normal; }
+  .prose h1 { font-size: var(--step-3); margin: 8px 0 12px; }
+  .prose .lede { margin-bottom: 32px; }
+  .prose :global(h2) { font-size: var(--step-2); margin: 48px 0 12px; scroll-margin-top: 90px; }
+  .prose :global(h3) { font-size: var(--step-1); margin: 32px 0 8px; scroll-margin-top: 90px; }
+  .prose :global(p), .prose :global(li) { color: var(--ink-2); line-height: 1.7; }
+  .prose :global(strong) { color: var(--ink); }
+  .prose :global(a) { color: var(--accent); }
+  .prose :global(:not(pre) > code) { font: 0.88em var(--font-mono); padding: 0.1em 0.35em; border-radius: 6px; background: var(--line); color: var(--ink); }
+  .prose :global(pre) { padding: 16px 20px; border-radius: var(--radius-s); border: 1px solid var(--line-2); overflow: auto; font-size: 13.5px; line-height: 1.6; }
+  :global(:root:not([data-theme='light'])) .prose :global(.astro-code), :global(:root:not([data-theme='light'])) .prose :global(.astro-code span) { color: var(--shiki-dark) !important; background-color: var(--shiki-dark-bg) !important; }
+  .prose :global(table) { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: var(--step--1); display: block; overflow-x: auto; }
+  .prose :global(th), .prose :global(td) { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .prose :global(th) { color: var(--ink); }
+  .prose :global(td) { color: var(--ink-2); }
+  .doc-foot { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--line); font-size: var(--step--1); }
+  .doc-foot a { color: var(--ink-2); }
+  .doc-foot .next { color: var(--accent); font-weight: 600; }
+  @media (max-width: 1100px) { .docs { grid-template-columns: 200px minmax(0, 1fr); } .toc { display: none; } }
+  @media (max-width: 760px) {
+    .docs { grid-template-columns: 1fr; }
+    .side { position: static; max-height: none; grid-template-columns: 1fr 1fr; }
+    .side .home { grid-column: 1 / -1; }
+  }
+</style>

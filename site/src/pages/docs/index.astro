@@ -1,0 +1,55 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Glyph from '../../components/Glyph.astro';
+import { href } from '../../lib/site';
+import { breadcrumbs } from '../../lib/seo';
+
+const docs = (await getCollection('docs')).sort((a, b) => a.data.order - b.data.order);
+const glyphs: Record<string, string> = {
+  'getting-started': 'download', palette: 'palette', plugins: 'widget', 'updates-and-moving': 'arrows',
+  privacy: 'shield', 'first-plugin': 'swift', authoring: 'book', agents: 'agent',
+};
+const groups = [
+  { group: 'Use Stackbar', text: 'Install it, make the palette yours and pick your plugins.' },
+  { group: 'Build plugins', text: 'One Swift file, checked without the app, by you or your agent.' },
+].map((g) => ({ ...g, docs: docs.filter((d) => d.data.group === g.group) }));
+---
+<Base title="Docs" description="How to use Stackbar, the native Mac launcher, and how to write plugins for it in one Swift file." jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Docs', '/docs/']])]}>
+  <section class="wrap head">
+    <p class="eyebrow">Docs</p>
+    <h1>Everything about Stackbar.</h1>
+    <p class="lede">New here? Start with <a href={href('/docs/getting-started/')}>Getting started</a>. Coming from Raycast? There's a <a href={href('/switch-from-raycast/')}>switching guide</a>.</p>
+  </section>
+  {groups.map((g) => (
+    <section class="wrap group">
+      <div class="group-head"><h2>{g.group}</h2><p>{g.text}</p></div>
+      <div class="cards">
+        {g.docs.map((d) => (
+          <a class="card" href={href(`/docs/${d.id}/`)}>
+            <span class="tile-icon"><Glyph name={glyphs[d.id] ?? 'book'} /></span>
+            <h3>{d.data.title}</h3>
+            <p>{d.data.description}</p>
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
+</Base>
+
+<style>
+  .head { display: grid; gap: 16px; padding-block: clamp(48px, 7vw, 96px) 32px; }
+  .head h1 { font-size: var(--step-4); }
+  .head a { color: var(--accent); }
+  .group { padding-bottom: 56px; }
+  .group-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .group-head h2 { font-size: var(--step-2); }
+  .group-head p { color: var(--ink-2); margin: 0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .card { display: grid; gap: 10px; align-content: start; padding: 24px; border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); text-decoration: none; transition: border-color 0.2s, transform 0.2s var(--ease-out); }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card h3 { font-size: var(--step-1); }
+  .card p { color: var(--ink-2); font-size: var(--step--1); margin: 0; }
+  .tile-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+  .tile-icon :global(svg) { width: 24px; height: 24px; }
+</style>

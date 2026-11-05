@@ -1,0 +1,153 @@
+---
+import Base from '../layouts/Base.astro';
+import Button from '../components/Button.astro';
+import Glyph from '../components/Glyph.astro';
+import { href } from '../lib/site';
+import { breadcrumbs, faq as faqPage } from '../lib/seo';
+import { checked, products, rows, sources } from '../lib/compare';
+
+const description = 'Stackbar next to Raycast, Alfred and Spotlight: price, account, open source, extension language, menu bar, widgets, AI and plugin safety. With the gaps, too.';
+const checkedOn = new Date(checked).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+const why = [
+  { glyph: 'swift', title: 'One Swift file is a plugin', text: 'Type-checked by the compiler, drawn natively, tested headless with stackbarctl. No Node, no bundler, no project.' },
+  { glyph: 'shield', title: 'Every plugin in its own sandbox', text: 'Each one runs in its own process with only the hosts, files and data you approved. A crash stays in its box.' },
+  { glyph: 'menubar', title: 'More than a search box', text: 'The same plugin can live in the menu bar, open a panel or window, and sit on your desktop as a widget.' },
+  { glyph: 'lock', title: 'No account, no subscription', text: 'MIT licensed, nothing to sign in to, no tracking. Crash reports only if you turn them on.' },
+];
+const gaps = [
+  'Snippets paste by name, but don\'t expand as you type a keyword yet.',
+  'Mac only, and only macOS 26 on Apple Silicon.',
+  'No built-in AI chat. Your own agent can use every plugin through MCP, and an Ask AI plugin with your own key is planned.',
+  'A young store: about 25 plugins, against Raycast\'s thousands of extensions.',
+  'No team features or cloud sync. Settings move between Macs as one file.',
+];
+const faq = [
+  { question: 'Can Stackbar replace Spotlight?', answer: 'Yes. Pick ⌘Space as the palette hotkey and turn off Spotlight\'s shortcut; Stackbar finds apps, System Settings panes, files and sums, and runs every plugin\'s commands.' },
+  { question: 'Is Stackbar a Raycast clone?', answer: 'No. It is a separate, open source app written in Swift. It reads Raycast\'s snippet and quicklink exports and uses the same template syntax, so moving is easy, but plugins are Swift files, not TypeScript extensions.' },
+  { question: 'Does Stackbar cost anything?', answer: 'No. It is free and MIT licensed, with no paid tier and no account.' },
+];
+---
+<Base title="Stackbar vs Raycast, Alfred and Spotlight" description={description} jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Compare', '/compare/']]), faqPage(faq)]}>
+  <section class="hero stage">
+    <div class="wrap inner">
+      <p class="eyebrow">Compare</p>
+      <h1>Pick the launcher <span class="gradient-text">that fits.</span></h1>
+      <p class="lede">How Stackbar lines up against Raycast, Alfred and Spotlight, including where it falls short.</p>
+    </div>
+  </section>
+
+  <section class="section table-section">
+    <div class="wrap">
+      <div class="scroll" role="region" aria-label="Comparison table" tabindex="0">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col"><span class="visually-hidden">Feature</span></th>
+              {products.map((p) => <th scope="col" class:list={{ us: p.key === 'stackbar' }}><b>{p.name}</b><small>{p.note}</small></th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr>
+                <th scope="row">{row.label}</th>
+                {products.map((p) => (
+                  <td class:list={[row[p.key].tone, { us: p.key === 'stackbar' }]}>
+                    <span class="dot" aria-hidden="true"></span>{row[p.key].text}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="fine">Checked {checkedOn} against <a href="#sources">each vendor's pages</a>. Prices are for one person. Spotted something out of date? <a href="https://github.com/navbytes/stackbar/blob/main/site/src/lib/compare.ts">Fix it on GitHub</a>.</p>
+    </div>
+  </section>
+
+  <section class="section why">
+    <div class="wrap">
+      <div class="section-head"><p class="eyebrow">Why Stackbar</p><h2>What's different.</h2></div>
+      <div class="four">
+        {why.map((w) => (
+          <article class="card">
+            <span class="tile-icon"><Glyph name={w.glyph} /></span>
+            <h3>{w.title}</h3>
+            <p>{w.text}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section gaps">
+    <div class="wrap split">
+      <div class="section-head">
+        <p class="eyebrow">Honestly</p>
+        <h2>Where Stackbar falls short today.</h2>
+        <p class="lede">If one of these matters to you, Raycast or Alfred may suit you better for now.</p>
+      </div>
+      <ul>{gaps.map((g) => <li>{g}</li>)}</ul>
+    </div>
+  </section>
+
+  <section class="section faq">
+    <div class="wrap">
+      <div class="section-head"><h2>Questions</h2></div>
+      {faq.map((f) => <details><summary>{f.question}</summary><p>{f.answer}</p></details>)}
+      <div class="ctas">
+        <Button href={href('/download/')} size="l"><Glyph name="download" /> Download for Mac</Button>
+        <Button href={href('/switch-from-raycast/')} variant="ghost" size="l">Switch from Raycast</Button>
+      </div>
+      <h2 class="src-head" id="sources">Sources</h2>
+      <ul class="sources">{sources.map((s) => <li><a href={s.url} rel="noopener">{s.label}</a></li>)}</ul>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero { padding-block: clamp(56px, 8vw, 104px) clamp(40px, 6vw, 72px); }
+  .inner { display: grid; gap: 18px; justify-items: start; }
+  .hero h1 { font-size: var(--step-4); font-weight: 800; letter-spacing: -0.04em; }
+  .table-section { padding-top: clamp(40px, 6vw, 72px); }
+  .scroll { overflow-x: auto; border-radius: var(--radius-m); border: 1px solid var(--line); background: var(--card); }
+  table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: var(--step--1); }
+  th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child > * { border-bottom: 0; }
+  thead th { vertical-align: bottom; }
+  thead b { display: block; font: 700 var(--step-1)/1.1 var(--font-display); color: var(--ink); }
+  thead small { color: var(--ink-3); font-weight: 400; }
+  tbody th { font-weight: 600; color: var(--ink); width: 18%; }
+  td { color: var(--ink-2); width: 20.5%; }
+  .us { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  td.us { color: var(--ink); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+  .good .dot { background: var(--kit-green); }
+  .some .dot { background: var(--kit-amber); }
+  .none .dot { background: var(--ink-3); opacity: 0.5; }
+  .fine { color: var(--ink-2); font-size: var(--step--1); margin-top: 16px; }
+  .fine a, .sources a { color: var(--accent); }
+
+  .why { background: var(--page-2); }
+  .four { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .card { display: grid; gap: 10px; align-content: start; padding: 24px; border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); }
+  .card h3 { font-size: var(--step-1); }
+  .card p { color: var(--ink-2); margin: 0; }
+  .tile-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+  .tile-icon :global(svg) { width: 24px; height: 24px; }
+  @media (max-width: 980px) { .four { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .four { grid-template-columns: 1fr; } }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start; }
+  .split .section-head { margin: 0; }
+  .split .section-head h2 { font-size: var(--step-3); }
+  .gaps ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .gaps li { padding: 16px 20px; border-radius: var(--radius-s); background: var(--card); border: 1px solid var(--line); color: var(--ink-2); }
+  @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+
+  .faq .section-head h2, .src-head { font-size: var(--step-3); }
+  details { border-bottom: 1px solid var(--line); padding: 18px 0; max-width: 820px; }
+  summary { cursor: pointer; font-weight: 600; font-size: var(--step-1); }
+  details p { color: var(--ink-2); margin: 12px 0 0; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin: 40px 0 72px; }
+  .sources { color: var(--ink-2); }
+</style>
