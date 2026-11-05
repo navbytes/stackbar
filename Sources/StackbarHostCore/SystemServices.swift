@@ -36,6 +36,12 @@ public protocol SystemServices: Sendable {
     /// Moves windows to the placements (matched with `WindowMatcher`),
     /// opening apps that aren't running first when `launch` is set.
     func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult
+    /// Brings one window to the front, with its app.
+    func focusWindow(_ target: WindowTarget) async throws
+    /// The menu bar of the app the user was in before Stackbar.
+    func menuItems() async throws -> MenuSnapshot
+    /// Chooses a menu item of a running app by its path of titles.
+    func pressMenuItem(appID: String, path: [String]) async throws
     /// The regular apps that are running, in launch order.
     func runningApps() async throws -> [RunningApp]
     /// Brings a running app to the front; with `launch`, opens it when it
@@ -76,6 +82,9 @@ extension SystemServices {
     public func resolveApplication(_ nameOrPath: String) async -> String? { nil }
     public func windows() async throws -> WindowSnapshot { throw SystemServiceError("windows are not available on this platform") }
     public func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult { throw SystemServiceError("windows are not available on this platform") }
+    public func focusWindow(_ target: WindowTarget) async throws { throw SystemServiceError("windows are not available on this platform") }
+    public func menuItems() async throws -> MenuSnapshot { throw SystemServiceError("menus are not available on this platform") }
+    public func pressMenuItem(appID: String, path: [String]) async throws { throw SystemServiceError("menus are not available on this platform") }
     public func runningApps() async throws -> [RunningApp] { throw SystemServiceError("apps are not available on this platform") }
     public func activateApp(_ id: String, launch: Bool) async throws { throw SystemServiceError("apps are not available on this platform") }
     public func hideApp(_ id: String) async throws { throw SystemServiceError("apps are not available on this platform") }
@@ -155,7 +164,8 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     /// `STACKBAR_WINDOWS` (`WindowSnapshot` as JSON, inline or a file) and
     /// `STACKBAR_APPS` (`[RunningApp]` as JSON, inline or a file) and
     /// `STACKBAR_REMINDERS` (`SimulatedReminders` as JSON, inline or a file)
-    /// when set.
+    /// and `STACKBAR_MENUS` (`MenuSnapshot` as JSON, inline or a file) when
+    /// set.
     public static func fromEnvironment() -> SimulatedSystem {
         let environment = ProcessInfo.processInfo.environment
         var events: [CalendarEvent]?
@@ -170,6 +180,10 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
         if let value = environment["STACKBAR_APPS"] {
             let text = value.hasPrefix("[") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
             if let apps = try? SystemCodec.decode([RunningApp].self, from: text) { system.simulate(apps: apps) }
+        }
+        if let value = environment["STACKBAR_MENUS"] {
+            let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
+            if let menus = try? SystemCodec.decode(MenuSnapshot.self, from: text) { system.simulate(menus: menus) }
         }
         if let value = environment["STACKBAR_REMINDERS"] {
             let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
@@ -254,6 +268,51 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
             simulatedWindows = WindowSnapshot(displays: snapshot.displays, windows: ordered)
             return result
         }
+    }
+
+    public func focusWindow(_ target: WindowTarget) async throws {
+        try lock.withLock {
+            var windows = simulatedWindows.windows
+            guard let index = target.index(in: windows) else { throw SystemServiceError("\(target.appID) has no such window") }
+            var window = windows.remove(at: index)
+            window.isMinimized = false
+            windows.insert(window, at: 0)
+            for position in windows.indices { windows[position].order = position }
+            simulatedWindows = WindowSnapshot(displays: simulatedWindows.displays, windows: windows)
+            appActions.append("focus \(target.appID) \(window.title)")
+        }
+    }
+
+    // MARK: Menus
+
+    private var simulatedMenus = SimulatedSystem.sampleMenus()
+    /// The menu bar `menuItems()` reports and `pressMenuItem` chooses from.
+    public func simulate(menus: MenuSnapshot) { lock.withLock { simulatedMenus = menus } }
+
+    public func menuItems() async throws -> MenuSnapshot { lock.withLock { simulatedMenus } }
+
+    public func pressMenuItem(appID: String, path: [String]) async throws {
+        try lock.withLock {
+            guard simulatedMenus.appID == appID else { throw SystemServiceError("\(appID) isn't the app whose menus were read") }
+            guard let item = simulatedMenus.items.first(where: { $0.path == path }) else { throw SystemServiceError("no menu item \(path.joined(separator: " > "))") }
+            guard item.isEnabled else { throw SystemServiceError("\(item.title) is dimmed right now") }
+            appActions.append("press \(appID) \(path.joined(separator: " > "))")
+        }
+    }
+
+    static func sampleMenus() -> MenuSnapshot {
+        MenuSnapshot(appID: "com.apple.Safari", appName: "Safari", items: [
+            MenuItemInfo(path: ["Safari", "Settings…"], shortcut: "⌘,"),
+            MenuItemInfo(path: ["File", "New Window"], shortcut: "⌘N"),
+            MenuItemInfo(path: ["File", "New Private Window"], shortcut: "⇧⌘N"),
+            MenuItemInfo(path: ["File", "Export as PDF…"]),
+            MenuItemInfo(path: ["Edit", "Undo"], shortcut: "⌘Z", isEnabled: false),
+            MenuItemInfo(path: ["View", "Show Tab Bar"], shortcut: "⇧⌘T", isChecked: true),
+            MenuItemInfo(path: ["View", "Zoom In"], shortcut: "⌘+"),
+            MenuItemInfo(path: ["History", "Show All History"], shortcut: "⌘Y"),
+            MenuItemInfo(path: ["Bookmarks", "Add Bookmark…"], shortcut: "⌘D"),
+            MenuItemInfo(path: ["Window", "Merge All Windows"]),
+        ])
     }
 
     // MARK: Apps and key layers

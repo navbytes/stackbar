@@ -161,6 +161,8 @@ struct GeneralSettings: View {
     @State private var loginError: String?
     @AppStorage(PluginWindows.dockIconKey) private var dockIcon = true
     @AppStorage(PaletteSession.compactKey) private var paletteCompact = false
+    @State private var toolInstalled = AppHousekeeping.commandLineToolInstalled
+    @State private var toolError: String?
 
     var body: some View {
         SettingsPage {
@@ -200,9 +202,21 @@ struct GeneralSettings: View {
                 SettingsRow(title: "Bundled plugins and examples", caption: "Copies the examples that ship with Stackbar into the plugins folder.") {
                     Button("Install") { model.installExamples() }
                 }
+                SettingsRow(title: "Command-line tool", caption: toolError ?? (toolInstalled ? "stackbarctl is in /usr/local/bin, so Terminal and agents can run it." : "Puts stackbarctl in /usr/local/bin so you can run it in Terminal. Asks for your password.")) {
+                    Button(toolInstalled ? "Installed" : "Install") {
+                        toolError = AppHousekeeping.installCommandLineTool()
+                        toolInstalled = AppHousekeeping.commandLineToolInstalled
+                    }
+                    .disabled(toolInstalled)
+                }
             }
             SpotlightReplacementsSection(model: model)
             SettingsTransferGroup(model: model)
+            SettingsGroup("Reset") {
+                SettingsRow(title: "Remove all data", caption: "Moves plugins, saved data, caches and logs to the Trash, deletes Stackbar's secrets and settings, and quits.") {
+                    Button("Remove…", role: .destructive) { AppHousekeeping.removeAllData(model: model) }
+                }
+            }
         }
     }
 

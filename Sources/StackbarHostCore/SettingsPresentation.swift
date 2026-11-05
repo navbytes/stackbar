@@ -98,7 +98,7 @@ public enum SettingsPresentation {
             case .openURLs: self = .links
             case .storage: self = .storage
             case .userServer: self = .server
-            case .windows, .apps: self = .windows
+            case .windows, .apps, .menus: self = .windows
             case .fileSearch: self = .files
             case .systemActions: self = .power
             case .keyLayer, .textExpansion: self = .keyboard
@@ -151,6 +151,7 @@ public enum SettingsPresentation {
         case .fileSearch: return "Finds files by name"
         case .systemActions: return "Locks, sleeps and restarts the Mac"
         case .textExpansion: return "Expands keywords as you type"
+        case .menus: return "Menu items of the app you're in"
         }
     }
 
