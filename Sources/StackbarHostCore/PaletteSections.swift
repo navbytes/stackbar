@@ -194,6 +194,20 @@ public enum FileSearchFilter {
                          isFolder: isFolder, lastUsed: lastUsed)
     }
 
+    /// Spotlight's query for names holding every word, case and accents
+    /// ignored: `kMDItemFSName == "*q3*"cd && kMDItemFSName == "*plan*"cd`.
+    /// Quotes, backslashes and wildcards in a word are matched literally.
+    public static func spotlightQuery(_ words: [String]) -> String {
+        words.map { word -> String in
+            var escaped = ""
+            for character in word {
+                if "\\\"*?".contains(character) { escaped.append("\\") }
+                escaped.append(character)
+            }
+            return "kMDItemFSName == \"*\(escaped)*\"cd"
+        }.joined(separator: " && ")
+    }
+
     /// `/Users/n/Documents/x` → `~/Documents/x`.
     public static func abbreviate(_ path: String, home: String) -> String {
         guard !home.isEmpty else { return path }

@@ -38,7 +38,7 @@ targets:
         NSRemindersFullAccessUsageDescription: Plugins you approve for Reminders keep your to-dos there, so they reach your iPhone, iPad and Watch.
         NSRemindersUsageDescription: Plugins you approve for Reminders keep your to-dos there, so they reach your iPhone, iPad and Watch.
         NSAppleEventsUsageDescription: Plugins you approve can see the files you select in Finder, or control the apps they name, like Music.
-        CFBundleShortVersionString: "0.20.0"
+        CFBundleShortVersionString: "0.20.1"
         LSUIElement: true
         LSMinimumSystemVersion: "26.0"
         # stackbar://commands/<plugin>/<command>?argument=value
@@ -74,7 +74,7 @@ targets:
     info:
       path: Packaging/Widget-Info.generated.plist
       properties:
-        CFBundleShortVersionString: "0.20.0"
+        CFBundleShortVersionString: "0.20.1"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
