@@ -17,6 +17,7 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
     /// The app preferences that travel. Everything else in UserDefaults stays.
     public static let defaultsKeys: Set<String> = [
         PaletteHotKey.defaultsKey, "pluginsOff", "autoUpdatePlugins", "indexURLs", "paletteCompact", "dockIconWithWindows",
+        "textExpansion", "textExpansionExcludedApps",
     ]
 
     /// Files in the data directory that travel, by their path there.

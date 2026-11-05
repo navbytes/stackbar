@@ -45,6 +45,9 @@ public protocol SystemServices: Sendable {
     /// Registers (or with `nil` removes) a plugin's key layer.
     func setKeyLayer(_ layer: KeyLayer?, pluginID: String, pluginName: String) throws -> KeyLayerStatus
     func keyLayerStatus(pluginID: String) -> KeyLayerStatus
+    /// Registers (or with an empty list removes) a plugin's keywords.
+    func setExpansions(_ expansions: [TextExpansion], pluginID: String, pluginName: String) throws -> ExpansionStatus
+    func expansionStatus(pluginID: String) -> ExpansionStatus
     /// Whether Stackbar may use Reminders; with `ask`, asks when macOS
     /// hasn't asked yet.
     func reminderAccess(ask: Bool) async -> ReminderAccess
@@ -81,6 +84,11 @@ extension SystemServices {
         throw SystemServiceError("key layers are not available on this platform")
     }
     public func keyLayerStatus(pluginID: String) -> KeyLayerStatus { .off }
+    public func setExpansions(_ expansions: [TextExpansion], pluginID: String, pluginName: String) throws -> ExpansionStatus {
+        if expansions.isEmpty { return .off }
+        throw SystemServiceError("text expansion is not available on this platform")
+    }
+    public func expansionStatus(pluginID: String) -> ExpansionStatus { .off }
     public func installedApps() async throws -> [InstalledApp] { throw SystemServiceError("apps are not available on this platform") }
     public func findFiles(_ query: FileQuery) async throws -> [FoundFile] { throw SystemServiceError("finding files is not available on this platform") }
     public func perform(_ action: SystemAction) async throws { throw SystemServiceError("system actions are not available on this platform") }
@@ -253,6 +261,7 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     private var simulatedApps = SimulatedSystem.sampleApps()
     /// Every key layer registered, and what presses do with them.
     public let keyLayers = KeyLayerRegistry()
+    public let expansions = TextExpansionRegistry()
     /// Every app the simulated windows cycled, hid or opened, in order (for
     /// tests): `"cycleWindows com.apple.Safari"` and so on.
     public private(set) var appActions: [String] = []
@@ -306,6 +315,17 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
         guard keyLayers.registration(for: pluginID) != nil else { return .off }
         let conflict = keyLayers.conflict(for: pluginID)
         return KeyLayerStatus(listening: conflict == nil, conflict: conflict)
+    }
+
+    public func setExpansions(_ expansions: [TextExpansion], pluginID: String, pluginName: String) throws -> ExpansionStatus {
+        try self.expansions.set(expansions, pluginID: pluginID, pluginName: pluginName)
+        return expansionStatus(pluginID: pluginID)
+    }
+
+    public func expansionStatus(pluginID: String) -> ExpansionStatus {
+        let count = expansions.count(for: pluginID)
+        guard count > 0 else { return .off }
+        return ExpansionStatus(listening: true, keywords: count, taken: expansions.taken(for: pluginID))
     }
 
     /// Presses `key` with `held` down, as the Mac tap would, and applies what

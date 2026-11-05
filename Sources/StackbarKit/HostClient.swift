@@ -462,6 +462,28 @@ public enum Stackbar {
         return try SystemCodec.decode(KeyLayerStatus.self, from: json)
     }
 
+    /// Registers this plugin's keywords, replacing the last set, or removes
+    /// them with `[]`. Typing a keyword in any app deletes it and runs its
+    /// command, which usually pastes (return `.paste(text)`). The plugin
+    /// never sees what is typed: set every keyword up front and set them
+    /// again when they change. Answers whether they expand. Needs
+    /// `.textExpansion`; the host asks for Accessibility access. Stackbar
+    /// 0.24.0.
+    @discardableResult
+    public static func setExpansions(_ expansions: [TextExpansion]) async throws -> ExpansionStatus {
+        guard let json = try await value(.setExpansions(expansions)) else { throw HostError("no expansion status") }
+        return try SystemCodec.decode(ExpansionStatus.self, from: json)
+    }
+
+    /// Whether this plugin's keywords expand, and if not, why: expansion
+    /// switched off in Settings, missing Accessibility access, an app holding
+    /// Secure Input, or keywords another plugin registered first. Needs
+    /// `.textExpansion`. Stackbar 0.24.0.
+    public static func expansionStatus() async throws -> ExpansionStatus {
+        guard let json = try await value(.expansionStatus) else { throw HostError("no expansion status") }
+        return try SystemCodec.decode(ExpansionStatus.self, from: json)
+    }
+
     /// Whether this plugin's key layer is listening, and if not, why: missing
     /// Accessibility access, an app holding Secure Input, or another plugin
     /// on the same trigger. Needs `.keyLayer`. Stackbar 0.16.0.

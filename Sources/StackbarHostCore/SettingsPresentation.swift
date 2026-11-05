@@ -101,7 +101,7 @@ public enum SettingsPresentation {
             case .windows, .apps: self = .windows
             case .fileSearch: self = .files
             case .systemActions: self = .power
-            case .keyLayer: self = .keyboard
+            case .keyLayer, .textExpansion: self = .keyboard
             }
         }
     }
@@ -150,6 +150,7 @@ public enum SettingsPresentation {
         case .keyLayer: return "Held-key shortcuts"
         case .fileSearch: return "Finds files by name"
         case .systemActions: return "Locks, sleeps and restarts the Mac"
+        case .textExpansion: return "Expands keywords as you type"
         }
     }
 
