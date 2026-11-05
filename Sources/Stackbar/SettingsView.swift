@@ -201,7 +201,7 @@ struct GeneralSettings: View {
                 }
             }
             SpotlightReplacementsSection(model: model)
-            SettingsTransferGroup()
+            SettingsTransferGroup(model: model)
         }
     }
 

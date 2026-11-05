@@ -17,7 +17,7 @@
 ## 3. Moving a setup
 - [x] 3.1 `SettingsArchive` export and import, with tests
 - [x] 3.2 Settings › General: Export Settings…, Import Settings…
-- [ ] 3.3 Snippets and Quicklinks import Raycast's JSON exports (stackbar-plugins)
+- [x] 3.3 Snippets and Quicklinks import Raycast's JSON exports (already in the plugins); Settings › General links to both
 
 ## 4. Proof
 - [ ] 4.1 Benchmark workflow: launch time, palette open time, idle memory

@@ -1,13 +1,21 @@
 #if os(macOS)
 import AppKit
 import StackbarHostCore
+import StackbarProtocol
 import StackbarUI
 import SwiftUI
 import UniformTypeIdentifiers
 
 /// Settings › General: export the whole setup to one file, or bring one in.
 struct SettingsTransferGroup: View {
+    let model: AppModel
     @State private var problem: String?
+
+    /// Raycast's own exports, read by the plugins that own the data.
+    private static let raycastImports: [(title: String, key: CommandKey)] = [
+        ("Snippets…", CommandKey(pluginID: "io.navbytes.stackbar.snippets", commandID: "import")),
+        ("Quicklinks…", CommandKey(pluginID: "io.navbytes.stackbar.quicklinks", commandID: "import")),
+    ]
 
     var body: some View {
         SettingsGroup("Move to Another Mac", footer: "The file has your plugins, what they saved, aliases, hotkeys and favourites. It never has secrets or the permissions you gave plugins: they ask again after an import.") {
@@ -17,10 +25,28 @@ struct SettingsTransferGroup: View {
                     Button("Export…") { exportSettings() }
                 }
             }
+            SettingsRow(title: "Coming from Raycast", caption: "In Raycast, export your snippets or quicklinks, then pick the file here.") {
+                HStack {
+                    ForEach(Self.raycastImports, id: \.key) { item in
+                        Button(item.title) { importFromRaycast(item.key) }
+                    }
+                }
+            }
             if let problem {
                 Text(problem).font(.caption).foregroundStyle(.red).textSelection(.enabled)
             }
         }
+    }
+
+    /// Runs the plugin's import, or shows it in the Store when it isn't
+    /// installed yet.
+    private func importFromRaycast(_ key: CommandKey) {
+        guard model.commands.registry.entry(key) != nil else {
+            model.storeFocus = key.pluginID
+            AppDelegate.shared?.showStore()
+            return
+        }
+        Task { await model.commands.run(key, source: .palette) }
     }
 
     private static var type: UTType {
