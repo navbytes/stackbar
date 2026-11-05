@@ -14,12 +14,8 @@ name: Release
 # request write on navbytes/homebrew-tap) a notarized release also opens a PR
 # there updating Casks/stackbar.rb. Without it the step is skipped.
 #
-# Prebuilt helpers: with PLUGINS_DISPATCH_TOKEN (a fine-grained PAT with
-# Actions read and write on navbytes/stackbar-plugins) each release starts that
-# repo's Helpers workflow, which builds the store plugins against this
-# release's StackbarKit so a Mac without Xcode can run them. Without it the
-# step is skipped and the Helpers workflow's hourly schedule picks the release
-# up, which GitHub runs late or not at all.
+# Prebuilt helpers: each release then runs helpers.yml, which starts the
+# Helpers workflow in navbytes/stackbar-plugins (needs PLUGINS_DISPATCH_TOKEN).
 
 on:
   push:
@@ -45,7 +41,6 @@ jobs:
       HAS_CERT: ${{ secrets.APPLE_CERT_P12 != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_NOTARY_PASSWORD != '' }}
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-      PLUGINS_DISPATCH_TOKEN: ${{ secrets.PLUGINS_DISPATCH_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -159,15 +154,14 @@ jobs:
           ZIP: build/Stackbar-${{ steps.version.outputs.version }}.zip
         run: scripts/update-homebrew-cask.sh
 
-      # A helper must match the StackbarKit inside the app, so every release
-      # needs a fresh set. A failure here should not fail the release.
-      - name: Build prebuilt plugin helpers (navbytes/stackbar-plugins)
-        if: env.PLUGINS_DISPATCH_TOKEN != ''
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ env.PLUGINS_DISPATCH_TOKEN }}
-        run: gh workflow run helpers.yml -R navbytes/stackbar-plugins --ref main
-
       - name: Remove the signing keychain
         if: always() && env.HAS_CERT == 'true'
         run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
+
+  # A helper must match the StackbarKit inside the app, so every release needs
+  # a fresh set.
+  helpers:
+    needs: release
+    uses: ./.github/workflows/helpers.yml
+    secrets:
+      PLUGINS_DISPATCH_TOKEN: ${{ secrets.PLUGINS_DISPATCH_TOKEN }}
