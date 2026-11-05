@@ -83,7 +83,7 @@ enum Benchmark {
             lines.append(section.title + ": " + titles.joined(separator: ", "))
         }
         lines.append("root views revision \(app.palette.session.rootViewsRevision)")
-        let commands = app.model.commands
+        let commands: CommandCenter = app.model.commands
         for entry in commands.registry.entries {
             let preference: CommandPreference = commands.preferences[entry.key]
             let line: String = "command \(entry.key) root=\(entry.spec.rootSearch) enabled=\(preference.enabled) inRoot=\(preference.inRootSearch)"
