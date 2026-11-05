@@ -320,6 +320,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showStore()
             return
         }
+        if let link = AppLink(url) {
+            open(link)
+            return
+        }
         guard let link = CommandLink(url.absoluteString) else {
             HUD.shared.show("Stackbar doesn't know the link \(url.absoluteString)", isError: true)
             return
@@ -359,6 +363,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         Task { await model.commands.run(link.key, arguments: link.arguments, source: .link, context: context) }
+    }
+
+    /// `stackbar://settings[/page]` and `stackbar://store`, from a link or
+    /// the palette.
+    func open(_ link: AppLink) {
+        switch link {
+        case .settings(let page):
+            if let tab = page.flatMap(SettingsTab.init(page:)) {
+                showSettings(tab: tab)
+            } else {
+                showSettings()
+            }
+        case .store:
+            showStore()
+        }
     }
 
     /// Opens Settings on one of its pages.

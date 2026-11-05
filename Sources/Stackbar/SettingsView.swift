@@ -84,6 +84,18 @@ enum SettingsTab: Hashable {
     /// The app sections, in sidebar order.
     static let sections: [SettingsTab] = [.general, .commands, .agents, .privacy, .store]
 
+    /// An app section by its `stackbar://settings/<page>` name.
+    init?(page: String) {
+        switch page {
+        case "general": self = .general
+        case "commands": self = .commands
+        case "agents": self = .agents
+        case "privacy": self = .privacy
+        case "store": self = .store
+        default: return nil
+        }
+    }
+
     var title: String {
         switch self {
         case .general: return "General"

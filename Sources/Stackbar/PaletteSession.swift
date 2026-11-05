@@ -423,6 +423,13 @@ final class PaletteSession {
                 AppDelegate.shared?.showStore()
                 return
             }
+            // Stackbar's own places (Settings, the Store) open here too.
+            if let link = AppLink(url) {
+                model.commands.usage.record(entry.id)
+                finish()
+                AppDelegate.shared?.open(link)
+                return
+            }
             model.commands.usage.record(entry.id)
             NSWorkspace.shared.open(url)
             finish()

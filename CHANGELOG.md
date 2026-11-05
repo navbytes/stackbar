@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Typing "settings" in the palette opens Stackbar Settings.** Return used to open whatever file or System Settings pane came first. The palette now has Stackbar Settings, Commands & Hotkeys, Privacy & Secrets and Plugin Store, and typing a command's whole name or keyword puts it first. `stackbar://settings` (or `stackbar://settings/commands`) and `stackbar://store` links open them too.
+
 ## 0.24.0
 
 ### New

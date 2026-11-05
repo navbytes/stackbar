@@ -10,7 +10,7 @@ import StackbarProtocol
 @Observable
 final class AppModel {
     private(set) var controllers: [PluginController] = []
-    private(set) var palette = PaletteIndex()
+    private(set) var palette = PaletteIndex(includesAppEntries: true)
     private(set) var agentGatewayError: String?
     /// Which Settings page is showing: an app section or a plugin's page.
     var settingsTab = SettingsTab.general

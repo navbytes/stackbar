@@ -49,6 +49,11 @@ public struct PaletteIndex: Sendable {
             self.alias = alias
         }
 
+        /// `typed` (lowercased, trimmed) is its whole title or one of its keywords.
+        public func isExactMatch(_ typed: String) -> Bool {
+            !typed.isEmpty && (title.lowercased() == typed || keywords.contains { $0.lowercased() == typed })
+        }
+
         public var commandKey: CommandKey? {
             if case .command(let spec) = kind { return CommandKey(pluginID: pluginID, commandID: spec.id) }
             return nil
@@ -75,8 +80,12 @@ public struct PaletteIndex: Sendable {
     /// Goes up each time the entries change, so a search can be kept until
     /// then.
     public private(set) var revision = 0
+    /// Lists Stackbar's own places (`appEntries`): on in the app.
+    public var includesAppEntries = false
 
-    public init() {}
+    public init(includesAppEntries: Bool = false) {
+        self.includesAppEntries = includesAppEntries
+    }
 
     /// Replaces one plugin's entries with those found in its panel tree,
     /// where its old ones were, so a plugin that re-renders doesn't move its
@@ -120,12 +129,13 @@ public struct PaletteIndex: Sendable {
         revision += 1
     }
 
-    /// Commands first, then panels to open, then panel entries. Each id once:
+    /// Commands first, then Stackbar's own places, then panels to open,
+    /// then panel entries. Each id once:
     /// a list keyed by id (the palette's) can't draw or select a duplicate,
     /// and two links to one URL are one thing to do.
     public var all: [Entry] {
         var seen = Set<String>()
-        return (commands + panels + entries).filter { seen.insert($0.id).inserted }
+        return (commands + (includesAppEntries ? Self.appEntries : []) + panels + entries).filter { seen.insert($0.id).inserted }
     }
 
     /// Entries matching `query`, best first: an exact alias, then the fuzzy
@@ -155,8 +165,12 @@ public struct PaletteIndex: Sendable {
                     Self.score(squeezed, in: text.lowercased()).map { $0 - index * 5 }
                 }.max()
                 guard let best else { return nil }
-                let commandBonus = entry.commandKey == nil ? 0 : 40
-                return (entry, best + bonus(entry) + commandBonus)
+                // Commands, and Stackbar's own places, before panel rows.
+                let commandBonus = entry.commandKey != nil || entry.pluginID == Self.appID ? 40 : 0
+                // Typing a thing's whole name or keyword ("settings") scores
+                // as a whole-name match, ahead of names that merely contain it.
+                let matched = entry.isExactMatch(typed) ? max(best, 1000) + 100 : best
+                return (entry, matched + bonus(entry) + commandBonus)
             }
             .sorted { $0.1 > $1.1 }
             .prefix(limit)
