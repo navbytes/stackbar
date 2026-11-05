@@ -24,7 +24,8 @@ public enum StackbarProtocolVersion {
     /// widget buttons that act, and menu-bar items that hide while empty.
     /// 18 added the HUD call and system actions.
     /// 19 added text expansion: keywords the host expands as you type.
-    public static let current = 19
+    /// 20 added focusing a window and the front app's menu items.
+    public static let current = 20
 }
 
 /// Host → plugin.
@@ -270,6 +271,15 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// Whether the plugin's keywords expand (`ExpansionStatus` as JSON).
     /// Needs `.textExpansion`. Protocol 19.
     case expansionStatus
+    /// Brings one window to the front: unminimizes it, raises it and
+    /// activates its app. Needs `.windows`. Protocol 20.
+    case focusWindow(WindowTarget)
+    /// The menu bar of the app the user was in before Stackbar
+    /// (`MenuSnapshot` as JSON). Needs `.menus`. Protocol 20.
+    case menuItems
+    /// Chooses a menu item of a running app by its path of titles, after
+    /// bringing the app to the front. Needs `.menus`. Protocol 20.
+    case pressMenuItem(appID: String, path: [String])
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

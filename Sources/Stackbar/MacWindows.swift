@@ -17,6 +17,11 @@ extension MacSystem {
         result.opened = opened
         return result
     }
+
+    func focusWindow(_ target: WindowTarget) async throws {
+        guard await MainActor.run(body: { MacWindows.isTrusted() }) else { throw MacWindows.untrusted }
+        try await MainActor.run { try MacWindows.focus(target) }
+    }
 }
 
 /// Windows through Accessibility: reading every regular app's standard
@@ -150,6 +155,20 @@ enum MacWindows {
             NSRunningApplication(processIdentifier: live.pids[front.window])?.activate()
         }
         return result
+    }
+
+    /// Unminimizes and raises the window, then activates its app so the
+    /// raise lands it in front of every other app's windows.
+    static func focus(_ target: WindowTarget) throws {
+        let live = live()
+        guard let index = target.index(in: live.snapshot.windows) else { throw SystemServiceError("\(target.appID) has no window like that open") }
+        let element = live.elements[index]
+        if live.snapshot.windows[index].isMinimized {
+            AXUIElementSetAttributeValue(element, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        }
+        AXUIElementSetAttributeValue(element, kAXMainAttribute as CFString, kCFBooleanTrue)
+        AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+        NSRunningApplication(processIdentifier: live.pids[index])?.activate()
     }
 
     /// Position, size, then position again: moving a big window onto a

@@ -297,6 +297,10 @@ public enum Capability: Codable, Hashable, Sendable {
     /// The plugin never sees what you type. The host needs Accessibility
     /// access. Stackbar 0.24.0 and later.
     case textExpansion
+    /// Reads the menu bar of the app you were in and chooses an item from it
+    /// (`Stackbar.menuItems()`, `Stackbar.pressMenuItem`). The host needs
+    /// Accessibility access. Stackbar 0.25.0 and later.
+    case menus
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

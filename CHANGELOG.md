@@ -3,6 +3,15 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## 0.25.0
+
+### New
+- **Keys you know from Raycast in the palette.** ⌃N and ⌃J move down, ⌃P and ⌃K move up, ⌘, opens the selected plugin's settings, and ⌘⌫ clears the search.
+- **Move to Applications.** Opened from Downloads or a disk image, Stackbar offers to move itself, so it can update and open at login.
+- **Install the command-line tool** from Settings › General: it puts `stackbarctl` in /usr/local/bin.
+- **Remove all data** in Settings › General moves Stackbar's plugins, data, caches and logs to the Trash, deletes its secrets and settings, and quits.
+- For plugin authors: `Stackbar.focusWindow` brings any open window forward, and the new `.menus` capability reads the front app's menu items (`Stackbar.menuItems()`) and chooses one (`Stackbar.pressMenuItem`) (protocol 20). Switch Windows and Search Menu Items in the Store use them.
+
 ## 0.24.0
 
 ### New
