@@ -4,8 +4,9 @@ import { href, repo } from '../lib/site';
 const path = Astro.url.pathname;
 const links = [
   { label: 'Plugins', to: href('/plugins/') },
+  { label: 'Docs', to: href('/docs/') },
+  { label: 'Compare', to: href('/compare/') },
   { label: 'Build one', to: href('/#build') },
-  { label: 'Safety', to: href('/#safety') },
 ];
 ---
 <header class="header" transition:persist>

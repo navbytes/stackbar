@@ -7,7 +7,7 @@
 - [x] 1.4 `scripts/appcast.py` and the workflow step that signs the zip and publishes `appcast.xml`
 - [x] 1.5 CHANGELOG.md; release notes and the appcast use the version's section
 - [x] 1.6 Cask `auto_updates true` (homebrew-tap and `update-homebrew-cask.sh`)
-- [ ] 1.7 Naveen sets `SPARKLE_PRIVATE_KEY`; a dry run shows a signed appcast
+- [x] 1.7 Naveen sets `SPARKLE_PRIVATE_KEY`; a dry run shows a signed appcast (v0.23.0 appcast verified)
 
 ## 2. App chrome and crash reports
 - [x] 2.1 Help menu: docs, release notes, Report a Problem (issue with doctor output)
