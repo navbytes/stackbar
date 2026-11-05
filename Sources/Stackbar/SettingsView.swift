@@ -5,6 +5,7 @@ import SwiftUI
 import StackbarHostCore
 import StackbarProtocol
 import StackbarUI
+import UniformTypeIdentifiers
 
 /// Settings, laid out like System Settings: app sections at the top of a
 /// sidebar, then every plugin with its icon and status. Each item opens one
@@ -349,6 +350,9 @@ struct PrivacySettings: View {
             if CrashReports.isAvailable {
                 CrashReportsGroup()
             }
+            if model.controllers.contains(where: { $0.manifest?.capabilities.contains(.textExpansion) == true }) {
+                TextExpansionGroup()
+            }
             if groups.isEmpty {
                 SettingsGroup {
                     SettingsRow(symbol: "checkmark.shield.fill", color: .green, title: "No plugin reaches beyond the basics", caption: "No network, files, commands, clipboard or calendar.")
@@ -692,6 +696,74 @@ struct UninstallDialog: ViewModifier {
     }
 }
 /// Settings › Privacy: the crash-report switch.
+/// The switch for text expansion and the apps it skips. Plugins register
+/// keywords; this is where the user can stop all of it at once.
+struct TextExpansionGroup: View {
+    @State private var enabled = MacTextExpansion.isEnabled
+    @State private var excluded = MacTextExpansion.excludedApps
+    @State private var tick = 0
+
+    var body: some View {
+        let summary = MacTextExpansion.shared.summary
+        SettingsGroup("Text Expansion", footer: "Stackbar watches what you type only for the keywords plugins set up, keeps the last few characters in memory and nothing else, and never in password fields. Plugins never see your typing.") {
+            Toggle("Expand keywords as you type", isOn: $enabled)
+                .toggleStyle(TrailingSwitchStyle())
+                .onChange(of: enabled) { _, on in MacTextExpansion.isEnabled = on; tick += 1 }
+            if enabled {
+                SettingsRow(symbol: Self.symbol(summary), color: Self.color(summary), title: Self.title(summary), caption: Self.caption(summary)) {
+                    if summary.needsAccessibility {
+                        Button("Open Accessibility…") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") { NSWorkspace.shared.open(url) }
+                        }
+                    }
+                }
+                .id(tick)
+                ForEach(excluded, id: \.self) { id in
+                    SettingsRow(title: Self.appName(id), caption: "Never expands here") {
+                        Button("Remove") { set(excluded.filter { $0 != id }) }
+                    }
+                }
+                SettingsRow(title: "Skip another app", caption: "Keywords won't expand while it is in front.") {
+                    Button("Choose App…") { chooseApp() }
+                }
+            }
+        }
+    }
+
+    private func set(_ apps: [String]) {
+        excluded = apps
+        MacTextExpansion.excludedApps = apps
+    }
+
+    private func chooseApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "Skip"
+        guard panel.runModal() == .OK, let url = panel.url, let id = Bundle(url: url)?.bundleIdentifier, !excluded.contains(id) else { return }
+        set(excluded + [id])
+    }
+
+    private static func appName(_ id: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return id }
+        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+    }
+
+    private typealias Summary = (keywords: Int, plugins: [String], listening: Bool, needsAccessibility: Bool)
+    private static func symbol(_ s: Summary) -> String { s.needsAccessibility ? "exclamationmark.triangle.fill" : "keyboard" }
+    private static func color(_ s: Summary) -> Color { s.needsAccessibility ? .orange : (s.listening ? .green : .gray) }
+    private static func title(_ s: Summary) -> String {
+        if s.needsAccessibility { return "Needs Accessibility access" }
+        if s.keywords == 0 { return "No keywords yet" }
+        return "\(s.keywords) keyword\(s.keywords == 1 ? "" : "s") from \(s.plugins.joined(separator: ", "))"
+    }
+    private static func caption(_ s: Summary) -> String? {
+        if s.needsAccessibility { return "Stackbar uses it to see keywords as you type them and to paste." }
+        if let app = MacKeyLayer.secureInputHolder() { return "Paused while \(app) has Secure Input on." }
+        return s.keywords == 0 ? "Give a snippet a keyword in Snippets." : nil
+    }
+}
+
 struct CrashReportsGroup: View {
     @State private var allowed = CrashReports.isAllowed
 

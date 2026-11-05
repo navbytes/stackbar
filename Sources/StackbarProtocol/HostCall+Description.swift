@@ -47,6 +47,8 @@ extension HostCall {
         case .findFiles: return "finding files"
         case .hud: return "showing a message"
         case .system(let action): return action.title.lowercased()
+        case .setExpansions(let expansions): return expansions.isEmpty ? "removing keywords" : "registering \(expansions.count) keywords"
+        case .expansionStatus: return "reading the keywords' status"
         }
     }
 
@@ -75,6 +77,8 @@ extension HostCall {
         // Removing never needs the capability, so a revoked plugin can let go.
         case .setKeyLayer(let layer): return layer == nil ? nil : (.keyLayer, "switch apps from a held key")
         case .keyLayerStatus: return (.keyLayer, "read the key layer's status")
+        case .setExpansions(let expansions): return expansions.isEmpty ? nil : (.textExpansion, "expand keywords as you type")
+        case .expansionStatus: return (.textExpansion, "read the keywords' status")
         case .reminderAccess, .reminderLists, .reminders: return (.reminders, "read your reminders")
         case .createReminderList, .saveReminder, .deleteReminder: return (.reminders, "change your reminders")
         case .storageSet, .secret, .http, .oauthToken, .publish, .notify, .alert, .playSound,

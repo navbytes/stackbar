@@ -155,6 +155,19 @@ final class CommandCenter {
         if let message = outcome.message { HUD.shared.show(message, isError: outcome.isError) }
     }
 
+    /// A keyword typed in some app (text expansion): runs its command there,
+    /// as a hotkey does. One that still needs arguments opens in the palette
+    /// to ask for them; a switched-off command does nothing.
+    func runFromExpansion(_ key: CommandKey) async {
+        guard let entry = registry.entry(key), preferences[key].enabled else { return }
+        let context = captureContext(for: entry.pluginID)
+        guard entry.spec.kind == .run, entry.spec.requiredArguments.isEmpty else {
+            AppDelegate.shared?.palette.open(entry, arguments: [:], query: "", source: .hotkey, context: context)
+            return
+        }
+        await run(key, source: .hotkey, context: context)
+    }
+
     /// Tells Spotlight the user ran this, so it suggests it.
     private func donate(_ key: CommandKey) {
         guard let entry = registry.entry(key), CommandIndexing.isExposed(entry, preferences: preferences) else { return }

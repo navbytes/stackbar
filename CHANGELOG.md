@@ -3,6 +3,12 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## 0.24.0
+
+### New
+- **Snippets expand as you type.** Give a snippet a keyword like `;sig`, type it in any app, and Stackbar replaces it with the snippet. Stackbar watches only for the keywords you set up, never in password fields, and plugins never see what you type. Settings › Privacy & Secrets has a switch to stop it and a list of apps to skip (password managers are skipped from the start).
+- For plugin authors: `Stackbar.setExpansions` and the `.textExpansion` capability (protocol 19).
+
 ## 0.23.0
 
 ### New

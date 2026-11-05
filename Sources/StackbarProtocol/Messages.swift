@@ -23,7 +23,8 @@ public enum StackbarProtocolVersion {
     /// 17 added root patterns on root-search commands, opt-in agent tools,
     /// widget buttons that act, and menu-bar items that hide while empty.
     /// 18 added the HUD call and system actions.
-    public static let current = 18
+    /// 19 added text expansion: keywords the host expands as you type.
+    public static let current = 19
 }
 
 /// Host → plugin.
@@ -261,6 +262,14 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// Locks, sleeps, restarts the Mac and the like. Needs
     /// `.systemActions`. Protocol 18.
     case system(SystemAction)
+    /// Registers the plugin's keywords, replacing the last set; an empty
+    /// list removes them. Typing one in any app deletes it and runs its
+    /// command. Answers `ExpansionStatus` as JSON. Needs `.textExpansion`.
+    /// Protocol 19.
+    case setExpansions([TextExpansion])
+    /// Whether the plugin's keywords expand (`ExpansionStatus` as JSON).
+    /// Needs `.textExpansion`. Protocol 19.
+    case expansionStatus
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

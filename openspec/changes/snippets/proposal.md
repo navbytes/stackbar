@@ -24,14 +24,15 @@ to bring them along.
   install sheet, for more than the default 1 MB. Snippets asks for 16 MB,
   enough for thousands of snippets at Raycast's 65,536-character limit.
 
-## Needs a decision later: typing a keyword to expand
+## Typing a keyword to expand
 
-Expanding `;sig` as you type needs a system-wide keystroke monitor and the
-Input Monitoring permission. That is a real trust cost for a developer tool,
-and Text Replacements already covers plain keywords. Naveen decided on 2026-11-01 not to add one yet, because a system-wide keyboard
-monitor would worry many people. Keyword expansion stays designed here
-(design.md, "Keyword expansion") but is not built. Keywords imported from
-Raycast are kept, so they work the day it ships.
+Expanding `;sig` as you type needs the host to watch the keyboard. Naveen
+held it on 2026-11-01 and asked for it on 2026-11-05. The host watches only
+for registered keywords, keeps at most 33 characters in memory, skips
+password fields (Secure Input) and password managers, and has one switch in
+Settings › Privacy & Secrets. Plugins never see keystrokes. It reuses the
+Accessibility access Stackbar already has for pasting, so there is no new
+permission prompt. See design.md, "Keyword expansion".
 
 ## Depends on
 

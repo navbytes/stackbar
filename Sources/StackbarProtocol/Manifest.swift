@@ -291,6 +291,12 @@ public enum Capability: Codable, Hashable, Sendable {
     /// disks (`Stackbar.system(_:)`). macOS asks once to let Stackbar control
     /// Finder and System Events. Stackbar 0.22.0 and later.
     case systemActions
+    /// Expands the keywords it registers as you type them in any app
+    /// (`Stackbar.setExpansions`): the host watches typing for those
+    /// keywords, deletes one when it is typed and runs the plugin's command.
+    /// The plugin never sees what you type. The host needs Accessibility
+    /// access. Stackbar 0.24.0 and later.
+    case textExpansion
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

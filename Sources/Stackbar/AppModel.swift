@@ -104,6 +104,10 @@ final class AppModel {
         MacKeyLayer.shared.onAssign = { [weak self] key, arguments in
             Task { @MainActor in await self?.commands.run(key, arguments: arguments, source: .hotkey) }
         }
+        // A typed keyword runs its plugin's command, which pastes.
+        MacTextExpansion.shared.onExpand = { [weak self] key in
+            Task { @MainActor in await self?.commands.runFromExpansion(key) }
+        }
         store = StoreModel(model: self)
     }
 

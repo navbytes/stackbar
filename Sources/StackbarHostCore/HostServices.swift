@@ -436,6 +436,16 @@ public final class HostServices: Sendable {
         case .keyLayerStatus:
             return .value(SystemCodec.encode(platform.system.keyLayerStatus(pluginID: granted.id)))
 
+        case .setExpansions(let expansions):
+            do {
+                return .value(SystemCodec.encode(try platform.system.setExpansions(expansions, pluginID: granted.id, pluginName: granted.name)))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .expansionStatus:
+            return .value(SystemCodec.encode(platform.system.expansionStatus(pluginID: granted.id)))
+
         case .arrangeWindows(let placements, let launch):
             guard placements.count <= WindowPlacement.maxPerCall else { return .failure("at most \(WindowPlacement.maxPerCall) windows at a time") }
             guard arrangements.allow(granted.id) else { return .failure("too many window arrangements; at most 10 a minute") }
@@ -488,6 +498,7 @@ public final class HostServices: Sendable {
     public func release(pluginID: String) {
         try? platform.system.keepAwake(nil, pluginID: pluginID)
         _ = try? platform.system.setKeyLayer(nil, pluginID: pluginID, pluginName: "")
+        _ = try? platform.system.setExpansions([], pluginID: pluginID, pluginName: "")
         runs.cancelAll(pluginID: pluginID)
     }
 

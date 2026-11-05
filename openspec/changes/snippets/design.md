@@ -64,20 +64,34 @@ says "Stores up to 16 MB". Plugins without it keep 1 MB.
 - **Export** writes the same format.
 - The files come from `chooseFile` and `saveFile`, the same as Quicklinks.
 
-## Keyword expansion (designed, not built: Naveen, 2026-11-01)
+## Keyword expansion (built 2026-11-05, protocol 19)
 
-- **Plugins never see keystrokes.** A host service, `ExpansionMonitor`, uses a
-  listen-only `CGEventTap`, which needs Input Monitoring. It is off until the
-  user turns it on in Settings.
-- **Registration.** With a new `.textExpansion` capability, plugins register
-  keywords with `Stackbar.setExpansions([keyword: commandID])`.
-- **Matching.** The monitor keeps the last 32 typed characters. Clicks, app
-  switches, arrow keys and modifier chords clear them. Secure input (password
-  fields) stops the tap entirely. 1Password and Keychain Access are excluded
-  by default, with a user list.
-- **On a match**, after a delimiter or immediately (a setting), the host
-  sends backspaces for the keyword and runs the command, which pastes.
-- **Not built.** Naveen decided on 2026-11-01 not to add a system-wide keyboard monitor yet.
+- **Plugins never see keystrokes.** `MacTextExpansion` owns a listen-only
+  session `CGEventTap` (key-downs and mouse-downs), created only while some
+  plugin has keywords and the user hasn't switched expansion off. It needs
+  Accessibility, which pasting already needs.
+- **Registration.** With `.textExpansion`, a plugin calls
+  `Stackbar.setExpansions([TextExpansion(keyword:command:)])`, replacing its
+  set (`[]` removes it; stopping the plugin removes it too). Keywords are 1
+  to 32 characters without whitespace, quotes or backticks; at most 1,000 a
+  plugin. A keyword two plugins register belongs to the first
+  (`TextExpansionRegistry`), and the other's status lists it as `taken`.
+- **Matching** (`TextExpansionMatcher`, pure and tested). The last 33
+  typed characters. A keyword expands as its last character is typed (as in
+  Raycast), only at the start of a word unless it starts with punctuation,
+  and the longest wins. Delete forgets a character; clicks, arrows, Return,
+  Tab, Esc, ⌘ or ⌃ chords and app switches start over. Stackbar's own
+  windows and the skipped apps (1Password, Bitwarden, Passwords, Keychain
+  Access by default; the user's list) never expand. Secure Input blocks the
+  tap entirely.
+- **On a match**, the host waits 30 ms for the last character to land,
+  posts one backspace per grapheme (marked so the tap ignores them), and
+  runs the command through `CommandCenter.runFromExpansion` as a hotkey
+  would; a command that needs arguments opens in the palette.
+- **Settings › Privacy & Secrets › Text Expansion** (shown when a plugin has
+  the capability): the switch, the status (keywords, plugins,
+  Accessibility, Secure Input) and the skipped apps. Both settings travel in
+  `.stackbarsettings`.
 
 ## Tests
 
