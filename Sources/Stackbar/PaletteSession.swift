@@ -226,7 +226,7 @@ final class PaletteSession {
             closeRootSearch()
             return
         }
-        let commands = model.commands
+        let commands: CommandCenter = model.commands
         let wanted = commands.registry.entries.filter {
             RootSearchGate.accepts($0.spec, text: text, preference: commands.preferences[$0.key]) && !commands.rootBudget.isBenched($0.key)
         }
@@ -509,7 +509,7 @@ final class PaletteSession {
 
     /// Closes the palette first, so a paste goes to the app the user was in.
     private func run(_ entry: CommandRegistry.Entry, _ arguments: [String: String], source: InvocationSource) {
-        let commands = model.commands
+        let commands: CommandCenter = model.commands
         let context = context
         finish()
         Task { await commands?.run(entry.key, arguments: arguments, source: source, context: context) }
