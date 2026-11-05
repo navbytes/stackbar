@@ -137,6 +137,21 @@ public final class PaletteFavorites: @unchecked Sendable {
         return pinned
     }
 
+    /// Re-pins plugin `from`'s pinned commands as plugin `to`'s commands with
+    /// the same ids, in the same places.
+    public func move(pluginID from: String, to: String, carries: (String) -> Bool = { _ in true }) {
+        lock.withLock {
+            var seen = Set<String>()
+            stored = stored.map { id in
+                guard id.hasPrefix(from + "/") else { return id }
+                let command = String(id.dropFirst(from.count + 1))
+                return carries(command) ? to + "/" + command : id
+            }
+                .filter { seen.insert($0).inserted }
+        }
+        save()
+    }
+
     /// The pinned entries that still exist, in pinned order.
     public func entries(in all: [PaletteIndex.Entry]) -> [PaletteIndex.Entry] {
         let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

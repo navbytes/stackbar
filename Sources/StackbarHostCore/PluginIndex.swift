@@ -41,8 +41,11 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         public var symbol: String?
         /// When this version was published, `YYYY-MM-DD`.
         public var updated: String?
+        /// From the manifest: the plugins this one takes over. The store
+        /// stops listing them where this one is listed.
+        public var replaces: [String]?
 
-        public init(id: String, name: String, summary: String? = nil, version: String, publisher: String, bundle: String, sha256: String, capabilities: [String], category: String? = nil, surfaces: [String]? = nil, minimumStackbar: String? = nil, screenshot: String? = nil, homepage: String? = nil, accent: String? = nil, symbol: String? = nil, updated: String? = nil) {
+        public init(id: String, name: String, summary: String? = nil, version: String, publisher: String, bundle: String, sha256: String, capabilities: [String], category: String? = nil, surfaces: [String]? = nil, minimumStackbar: String? = nil, screenshot: String? = nil, homepage: String? = nil, accent: String? = nil, symbol: String? = nil, updated: String? = nil, replaces: [String]? = nil) {
             self.id = id
             self.name = name
             self.summary = summary
@@ -59,6 +62,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             self.accent = accent
             self.symbol = symbol
             self.updated = updated
+            self.replaces = replaces
         }
 
         /// The Stackbar version this entry needs when `running` is too old to
@@ -311,7 +315,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             formatter.formatOptions = [.withFullDate]
             return formatter.string(from: date)
         }
-        return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, accent: manifest.accent?.rawValue, symbol: manifest.symbol, updated: day)
+        return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, accent: manifest.accent?.rawValue, symbol: manifest.symbol, updated: day, replaces: manifest.replaces)
     }
 
     public static func download(_ url: URL, limit: Int = 8 * 1024 * 1024) async throws -> Data {

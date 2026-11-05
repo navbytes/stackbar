@@ -336,7 +336,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `Stackbar.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
 | `Stackbar.notify(title, body:, actions: [NotificationAction("Join", url:)])`, `Stackbar.alert(title, body:, actions:)` (full screen, one a minute), `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
 | `Stackbar.hud("Copied")` (or `isError: true`) shows the HUD a command result's message shows, after a panel button or a row acts; at most 30 a minute; 0.22.0 | nothing |
-| `try await Stackbar.open(url, with: "com.apple.Safari")`; links other than https, http, mailto, tel and meeting apps, and files or folders | `.openURLs(schemes: ["slack"])`; `["*"]` for any scheme and paths |
+| `try await Stackbar.open(url, with: "com.apple.Safari")`; links other than https, http, mailto, tel, meeting apps and Stackbar's own `stackbar://store/<plugin-id>` and `stackbar://settings` pages (0.25.0), and files or folders | `.openURLs(schemes: ["slack"])`; `["*"]` for any scheme and paths |
 | `try await Stackbar.run("brew", ["outdated", "--json=v2"], timeout: .seconds(120))` returns `RunResult` (status, stdout, stderr, text, truncated, timedOut); a non-zero exit is not thrown | `.run(commands: ["brew"])` |
 | `for try await event in Stackbar.stream("docker", ["logs", "-f", id]) { switch event { case .stdout(let data), .stderr(let data): …; case .exit(let exit): … } }`; leaving the loop stops it | `.run(commands: ["docker"])` |
 | `invocation.context` in commands, or `try await Stackbar.context()` now: frontmostApp, windowTitle, selectedText (nil when the app doesn't share it); `try await Stackbar.finderSelection()` returns paths | `.context` |
@@ -420,6 +420,12 @@ source compiles against; a plugin index hides Install on older apps.
 the plugin its own colour and icon on its store card and its page on the
 Stackbar site; `Theme(.teal)` is the same hue for its own views. Without them
 the store uses the category's colour and the name's first letter.
+`replaces: ["dev.example.old-clock"]` (minimumStackbar 0.25.0) takes other
+plugins over, when two merge into one or one is renamed: the first time it
+loads, the user's aliases, hotkeys and favourites move from the old plugin's
+commands to this plugin's commands with the same ids, the old plugin is turned
+off and offered for uninstall, and stores stop listing it. Keep the old
+command ids to keep the shortcuts.
 To publish (`stackbarctl sign`, `index build`) a plugin also needs an `x.y.z`
 `version`, a `summary` and a `minimumStackbar`.
 

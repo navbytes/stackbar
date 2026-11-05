@@ -41,18 +41,35 @@ public enum StoreListing {
         }
     }
 
-    /// Every listed entry across stores, in store order then by name.
-    public static func all(_ catalogs: [PluginStore.Catalog], query: String = "", running: String = StackbarVersion.current) -> [Item] {
-        catalogs.flatMap { catalog in
+    /// Every listed entry across stores, in store order then by name. A
+    /// plugin another listed plugin `replaces` is left out unless it is in
+    /// `keeping` (installed, so it can still be updated or uninstalled).
+    public static func all(_ catalogs: [PluginStore.Catalog], query: String = "", keeping: Installed = Installed(),
+                           running: String = StackbarVersion.current) -> [Item] {
+        let replaced = replacedIDs(catalogs, running: running)
+        return catalogs.flatMap { catalog in
             catalog.index.search(query, running: running)
+                .filter { !replaced.keys.contains($0.id) || keeping.contains($0.id) }
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
                 .map { Item(catalog: catalog, entry: $0) }
         }
     }
 
+    /// Plugins a listed plugin takes over: replaced id → the entry that
+    /// replaces it.
+    public static func replacedIDs(_ catalogs: [PluginStore.Catalog], running: String = StackbarVersion.current) -> [String: PluginIndex.Entry] {
+        var result: [String: PluginIndex.Entry] = [:]
+        for catalog in catalogs {
+            for entry in catalog.index.search("", running: running) {
+                for id in entry.replaces ?? [] where id != entry.id && result[id] == nil { result[id] = entry }
+            }
+        }
+        return result
+    }
+
     public static func items(_ catalogs: [PluginStore.Catalog], query: String = "", category: String? = nil, filter: Filter = .all,
                              installed: Installed = Installed(), running: String = StackbarVersion.current) -> [Item] {
-        all(catalogs, query: query, running: running).filter { item in
+        all(catalogs, query: query, keeping: installed, running: running).filter { item in
             if let category, (item.entry.category ?? "Other") != category { return false }
             switch filter {
             case .all: return true

@@ -39,7 +39,7 @@ palette. You can also press âŒ˜K on a command and choose **Set Alias and Hotkeyâ
 - **Calculator** (plugin): sums, units, currency and time zones, such as
   `12 * 12`, `5 km in miles`, `100 usd in eur` or `5pm london in tokyo`.
 - **Every installed plugin's commands.** Clipboard History, Snippets,
-  Quicklinks, Window Layouts, Emoji, System Commands and the rest add their
+  Quicklinks, Windows, Emoji, System Commands and the rest add their
   own. Some take arguments, which the palette asks for after you pick them.
 
 When nothing matches, fallback commands at the bottom offer to search the web

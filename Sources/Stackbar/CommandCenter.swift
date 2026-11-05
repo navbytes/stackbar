@@ -59,6 +59,11 @@ final class CommandCenter {
     func commandsChanged(_ controller: PluginController, _ specs: [CommandSpec]) {
         let dropped = registry.update(pluginID: controller.pluginID, pluginName: controller.name, specs: specs)
         problems[controller.pluginID] = dropped.isEmpty ? nil : dropped
+        // A plugin that replaces others takes over their shortcuts, once,
+        // as soon as it says which commands it has.
+        if let manifest = controller.manifest, manifest.replaces?.isEmpty == false {
+            model?.handOver(to: manifest, commands: registry.commands(for: manifest.id))
+        }
         changed()
     }
 
@@ -89,6 +94,12 @@ final class CommandCenter {
     /// The switch for all of Spotlight and Shortcuts; off empties the index.
     func setSpotlightEnabled(_ enabled: Bool) {
         preferences.spotlightEnabled = enabled
+        changed()
+    }
+
+    /// Preferences changed underneath (a plugin handover moved some):
+    /// register the hotkeys again and redraw.
+    func reloadPreferences() {
         changed()
     }
 

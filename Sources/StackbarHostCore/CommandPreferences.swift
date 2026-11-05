@@ -135,6 +135,29 @@ public final class CommandPreferences: @unchecked Sendable {
         return lock.withLock { saved.commands.first(where: { $0.value.alias == alias })?.key }
     }
 
+    /// Moves the command preferences of plugin `from` to the commands with
+    /// the same ids in plugin `to` (those `carries` accepts), unless that
+    /// command already has one of its own. The old command keeps nothing,
+    /// so a hotkey is never registered twice. Returns the commands that
+    /// moved, by their new key.
+    @discardableResult
+    public func move(pluginID from: String, to: String, carries: (String) -> Bool = { _ in true }) -> [CommandKey] {
+        let moved: [CommandKey] = lock.withLock {
+            var moved: [CommandKey] = []
+            for (key, preference) in saved.commands where key.pluginID == from && carries(key.commandID) {
+                let target = CommandKey(pluginID: to, commandID: key.commandID)
+                saved.commands[key] = nil
+                if saved.commands[target] == nil {
+                    saved.commands[target] = preference
+                    moved.append(target)
+                }
+            }
+            return moved.sorted()
+        }
+        save()
+        return moved
+    }
+
     /// Drops the preferences of commands that no longer exist.
     public func retain(only keys: Set<CommandKey>) {
         let changed: Bool = lock.withLock {
@@ -190,6 +213,23 @@ public final class PaletteUsage: @unchecked Sendable {
             if uses.count > 2000 {
                 let oldest = uses.sorted { $0.value.last < $1.value.last }.prefix(uses.count - 2000).map(\.key)
                 for key in oldest { uses[key] = nil }
+            }
+        }
+        save()
+    }
+
+    /// Carries the use of plugin `from`'s commands (`from/command`) over to
+    /// plugin `to`'s commands with the same ids, adding to what is there.
+    public func move(pluginID from: String, to: String, carries: (String) -> Bool = { _ in true }) {
+        lock.withLock {
+            for (id, use) in uses where id.hasPrefix(from + "/") && carries(String(id.dropFirst(from.count + 1))) {
+                let target = to + "/" + id.dropFirst(from.count + 1)
+                uses[id] = nil
+                if let existing = uses[target] {
+                    uses[target] = Use(score: existing.score + use.score, last: max(existing.last, use.last))
+                } else {
+                    uses[target] = use
+                }
             }
         }
         save()

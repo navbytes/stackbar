@@ -555,6 +555,11 @@ public final class HostServices: Sendable {
             guard FileManager.default.fileExists(atPath: url.path) else { return .failure(SystemServiceError("\(url.path) does not exist")) }
             return .success(url)
         }
+        // Stackbar's own Settings and Store pages only show something; a
+        // command link (`stackbar://commands/...`) still needs the scheme.
+        if scheme == "stackbar", AppLink(url) != nil || StoreLink(url) != nil {
+            return .success(url)
+        }
         guard openableSchemes.contains(scheme) || anything || extra.contains(scheme) else {
             return .failure(SystemServiceError("\(scheme): links need .openURLs(schemes: [\"\(scheme)\"]); https, http, mailto, tel and meeting links need nothing"))
         }

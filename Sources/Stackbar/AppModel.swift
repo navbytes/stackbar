@@ -46,6 +46,8 @@ final class AppModel {
     @ObservationIgnored let ledger: CapabilityLedger
     /// Which plugins are turned off, by id.
     @ObservationIgnored let switches = PluginSwitches()
+    /// Plugins taken over by one that `replaces` them.
+    @ObservationIgnored let handover = PluginHandover(file: StackbarPaths.dataDirectory.appendingPathComponent("handovers.json"))
     @ObservationIgnored let installer = PluginInstaller(pluginsDirectory: StackbarPaths.pluginsDirectory, publishers: PublisherStore(file: StackbarPaths.publishersFile), recordFile: StackbarPaths.dataDirectory.appendingPathComponent("installed.json"))
     @ObservationIgnored let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
@@ -291,6 +293,37 @@ final class AppModel {
         commands.forget(pluginID: controller.pluginID)
         widgets.remove(controller.pluginID)
         onPluginsChanged?()
+    }
+
+    /// `manifest`'s plugin is running and reported `commands`: hand over each
+    /// plugin it `replaces` that hasn't been yet. Aliases, hotkeys, usage and
+    /// favourites move to its commands with the same ids, and the old plugin
+    /// is turned off (its page in Settings then offers to uninstall it).
+    func handOver(to manifest: Manifest, commands specs: [CommandSpec]) {
+        for oldID in handover.pending(for: manifest) {
+            let old = controllers.first { $0.pluginID == oldID }
+            let wasInstalled = old != nil || installer.installed.contains { $0.id == oldID }
+            let oldTitles = Dictionary(commands.registry.commands(for: oldID).map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
+            let moved = handover.hand(from: oldID, to: manifest.id, commands: Dictionary(specs.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }),
+                                      oldTitles: oldTitles, preferences: commands.preferences, usage: commands.usage, favorites: commands.favorites)
+            guard wasInstalled else { continue }
+            if let old, old.isEnabled {
+                old.isEnabled = false
+            } else {
+                switches.set(oldID, on: false)
+            }
+            let oldName = old?.name ?? oldID
+            let carried = moved.isEmpty ? "" : " Your shortcuts and aliases moved over."
+            HostLog.shared.write(.info, "\(manifest.name) replaces \(oldName): turned it off, moved \(moved.count) command preferences", plugin: manifest.id)
+            Platform.notify(HostNotification(pluginID: manifest.id, pluginName: "Stackbar", title: "\(manifest.name) replaces \(oldName)",
+                                             body: "\(oldName) is turned off and can be uninstalled from Settings.\(carried)"))
+        }
+    }
+
+    /// The name of the plugin that took `controller`'s plugin over, if one did.
+    func replacement(for controller: PluginController) -> String? {
+        guard let id = handover.replacement(of: controller.pluginID) else { return nil }
+        return controllers.first { $0.pluginID == id }?.name
     }
 
     func controller(for pluginID: String) -> PluginController? {
