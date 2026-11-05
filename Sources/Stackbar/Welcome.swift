@@ -114,6 +114,7 @@ struct WelcomeView: View {
                     }
                 }
             }
+            Spacer(minLength: 0)
             HStack {
                 Button("Skip") { finish([], false, false) }
                     .keyboardShortcut(.cancelAction)
@@ -128,6 +129,7 @@ struct WelcomeView: View {
         }
         .padding(28)
         .frame(width: 560)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private func binding(_ id: String) -> Binding<Bool> {
@@ -152,6 +154,8 @@ struct WelcomeView: View {
 }
 
 extension AppDelegate {
+    private static let welcomeNoteRoom: CGFloat = 72
+
     /// Shows the welcome window once per user.
     func welcomeIfNeeded() {
         guard !UserDefaults.standard.bool(forKey: WelcomeView.seenKey) else { return }
@@ -159,8 +163,10 @@ extension AppDelegate {
     }
 
     func showWelcome() {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 480), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.titlebarAppearsTransparent = true
+        // A plain titled window sized once. A transparent full-size title bar
+        // with `.preferredContentSize` sizing made the safe area and the
+        // window frame resize each other until AppKit threw (0.22.0 crash).
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 480), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "Welcome to Stackbar"
         window.isReleasedWhenClosed = false
         let starters = model.bundledStore.starters()
@@ -173,8 +179,12 @@ extension AppDelegate {
             if openPalette { self.palette.toggle() }
         }
         let host = NSHostingController(rootView: view)
-        host.sizingOptions = [.preferredContentSize]
+        host.sizingOptions = []
         window.contentViewController = host
+        // Room for the note the hotkey picker adds when Spotlight still
+        // holds ⌘Space; the window never resizes itself.
+        let fitting = host.view.fittingSize
+        window.setContentSize(NSSize(width: 560, height: fitting.height + Self.welcomeNoteRoom))
         window.center()
         window.delegate = windows
         welcomeWindow = window
