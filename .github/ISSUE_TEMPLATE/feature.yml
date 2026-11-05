@@ -1,0 +1,16 @@
+name: Feature request
+description: Something Stackbar could do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The task, and how you do it today (in Raycast, Spotlight or elsewhere).
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: Could it be a plugin? If so, say which host call or view it would need.

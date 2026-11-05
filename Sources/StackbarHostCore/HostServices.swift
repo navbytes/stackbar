@@ -34,6 +34,8 @@ public final class HostServices: Sendable {
         public var alert: @Sendable (HostNotification) -> Void
         /// Plays a system sound.
         public var playSound: @Sendable (SystemSound) -> Void
+        /// A short message in the HUD over the screen.
+        public var hud: @Sendable (_ message: String, _ isError: Bool) -> Void
         public var open: @Sendable (URL) -> Void
         /// Opens with a specific app by bundle id; throws when it isn't installed.
         public var openWith: @Sendable (URL, String) async throws -> Void
@@ -50,6 +52,7 @@ public final class HostServices: Sendable {
             notify: @escaping @Sendable (HostNotification) -> Void = { _ in },
             alert: @escaping @Sendable (HostNotification) -> Void = { _ in },
             playSound: @escaping @Sendable (SystemSound) -> Void = { _ in },
+            hud: @escaping @Sendable (String, Bool) -> Void = { _, _ in },
             open: @escaping @Sendable (URL) -> Void = { _ in },
             openWith: @escaping @Sendable (URL, String) async throws -> Void = { _, _ in throw SystemServiceError("opening with a chosen app is not available here") },
             copy: @escaping @Sendable (String) -> Void = { _ in },
@@ -61,6 +64,7 @@ public final class HostServices: Sendable {
             self.notify = notify
             self.alert = alert
             self.playSound = playSound
+            self.hud = hud
             self.open = open
             self.openWith = openWith
             self.copy = copy
@@ -90,6 +94,8 @@ public final class HostServices: Sendable {
     private let panels = RateLimiter(limit: 10, per: 60)
     private let arrangements = RateLimiter(limit: 10, per: 60)
     private let appSwitches = RateLimiter(limit: 120, per: 60)
+    private let huds = RateLimiter(limit: 30, per: 60)
+    private let systemActions = RateLimiter(limit: 10, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
     private let calls = RateLimiter(limit: 1200, per: 60)
@@ -193,6 +199,22 @@ public final class HostServices: Sendable {
             case .success(let buttons):
                 platform.notify(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
                 return .ok
+            }
+
+        case .hud(let message, let isError):
+            guard huds.allow(granted.id) else { return .failure("too many HUD messages; at most 30 a minute") }
+            let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return .failure("a HUD message needs text") }
+            platform.hud(String(text.prefix(200)), isError)
+            return .ok
+
+        case .system(let action):
+            guard systemActions.allow(granted.id) else { return .failure("too many system actions; at most 10 a minute") }
+            do {
+                try await platform.system.perform(action)
+                return .ok
+            } catch {
+                return .failure("\(error)")
             }
 
         case .playSound(let sound):

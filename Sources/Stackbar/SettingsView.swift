@@ -163,7 +163,7 @@ struct GeneralSettings: View {
 
     var body: some View {
         SettingsPage {
-            SettingsPageHeader(title: "Stackbar", subtitle: "Live Swift plugins for your menu bar, palette and desktop.", detail: "Version \(StackbarVersion.current)") {
+            SettingsPageHeader(title: "Stackbar", subtitle: "A launcher, menu bar and widgets you extend in one Swift file.", detail: "Version \(StackbarVersion.current)") {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
                     .frame(width: 60, height: 60)
@@ -183,8 +183,8 @@ struct GeneralSettings: View {
                     .onChange(of: dockIcon) { AppDelegate.shared?.windows.updatePresence() }
             }
             SettingsGroup("Command Palette") {
-                SettingsRow(title: "Open the palette", caption: "Search every plugin's commands, then press Return.") {
-                    KeyCaps(text: "⌃⌥Space")
+                SettingsRow(title: "Open the palette", caption: "Apps, files, sums and every plugin's commands. Click to record another hotkey.") {
+                    PaletteHotKeyPicker()
                 }
                 SettingsRow(title: "Aliases and hotkeys", caption: "Give any command a short alias or its own shortcut.") {
                     Button("Edit…") { model.settingsTab = .commands }
@@ -200,7 +200,7 @@ struct GeneralSettings: View {
                     Button("Install") { model.installExamples() }
                 }
             }
-            MacOSAlternativesSection()
+            SpotlightReplacementsSection(model: model)
         }
     }
 
@@ -487,7 +487,7 @@ struct PluginPage: View {
                         KeyCaps(text: ActionsPanel.glyphs(hotkey))
                     }
                 }
-                SettingsRow(title: "Find it in the palette", caption: "Press ⌃⌥Space and type \(controller.name).")
+                SettingsRow(title: "Find it in the palette", caption: "Press \(ActionsPanel.glyphs(PaletteController.chosenHotKey)) and type \(controller.name).")
                 ForEach(entries, id: \.key) { entry in
                     CommandSettingsRow(center: model.commands, entry: entry, highlighted: entry.key == model.settingsCommand)
                 }

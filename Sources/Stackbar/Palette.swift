@@ -7,14 +7,16 @@ import StackbarProtocol
 
 import StackbarUI
 
-/// The command palette: ⌃⌥Space from anywhere, type, return. It lists every
+/// The command palette: its hotkey (⌃⌥Space unless the user picked another)
+/// from anywhere, type, return. It lists every
 /// plugin's commands first, then every action plugins show on their panels
 /// (see `PaletteIndex`), and hosts command views and argument fields.
 @MainActor
 final class PaletteController {
     private let model: AppModel
     private var panel: KeyablePanel?
-    private var hotKey: HotKey?
+    private var hotKeys: [HotKey] = []
+    private var activeObserver: NSObjectProtocol?
     private var flagsMonitor: Any?
     let session: PaletteSession
 
@@ -28,8 +30,11 @@ final class PaletteController {
         self.model = model
         session = PaletteSession(model: model)
         session.dismiss = { [weak self] in self?.hide() }
-        hotKey = HotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(controlKey | optionKey)) { [weak self] in
-            self?.toggle()
+        applyHotKey()
+        // Spotlight's shortcut is turned off in System Settings, so look
+        // again whenever the user comes back to Stackbar.
+        activeObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyHotKey() }
         }
         // ⌘ held shows the ⌘1…⌘9 hints on the first rows.
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
@@ -45,6 +50,32 @@ final class PaletteController {
     }
 
     var isVisible: Bool { panel?.isVisible == true }
+
+    /// The hotkey the user chose (Settings › General, or the welcome window).
+    static var chosenHotKey: String {
+        get { PaletteHotKey.spec(stored: UserDefaults.standard.string(forKey: PaletteHotKey.defaultsKey)) }
+        set { UserDefaults.standard.set(newValue, forKey: PaletteHotKey.defaultsKey) }
+    }
+
+    /// Whether Spotlight still answers ⌘Space.
+    static var spotlightHoldsCommandSpace: Bool {
+        let hotKeys = UserDefaults(suiteName: "com.apple.symbolichotkeys")?.dictionary(forKey: "AppleSymbolicHotKeys")
+        return SpotlightShortcut.holdsCommandSpace(hotKeys)
+    }
+
+    /// Registers the chosen hotkey, and ⌃⌥Space too while Spotlight still
+    /// takes ⌘Space, so the palette can always be reached.
+    func applyHotKey() {
+        let specs = PaletteHotKey.registered(Self.chosenHotKey, spotlightHoldsCommandSpace: Self.spotlightHoldsCommandSpace)
+        guard specs != registeredSpecs else { return }
+        hotKeys.forEach { $0.unregister() }
+        hotKeys = specs.compactMap { HotKeySpec($0) }.compactMap { spec in
+            HotKey(spec: spec) { [weak self] in self?.toggle() }
+        }
+        registeredSpecs = specs
+    }
+
+    private var registeredSpecs: [String] = []
 
     func toggle() {
         if isVisible {
@@ -813,6 +844,7 @@ struct ActionsPanel: View {
             case "ctrl", "control": return "⌃"
             case "return", "enter": return "↩"
             case "delete", "backspace": return "⌫"
+            case "space": return "Space"
             default: return part.uppercased()
             }
         }.joined()

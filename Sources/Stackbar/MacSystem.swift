@@ -19,7 +19,7 @@ final class MacSystem: SystemServices, @unchecked Sendable {
     private let store = EKEventStore()
     /// The last app the user was in that wasn't Stackbar: where a paste goes,
     /// and what a copy came from when Stackbar itself is frontmost.
-    @MainActor private var previousApp: NSRunningApplication?
+    @MainActor private(set) var previousApp: NSRunningApplication?
     @MainActor private var observer: NSObjectProtocol?
 
     init(images: ClipboardImageStore) {

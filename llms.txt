@@ -329,6 +329,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.oauthToken("github")` | `.oauth(OAuthProvider(name:, authorizeURL:, tokenURL:, clientID:, scopes:))` |
 | `Stackbar.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
 | `Stackbar.notify(title, body:, actions: [NotificationAction("Join", url:)])`, `Stackbar.alert(title, body:, actions:)` (full screen, one a minute), `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
+| `Stackbar.hud("Copied")` (or `isError: true`) shows the HUD a command result's message shows, after a panel button or a row acts; at most 30 a minute; 0.22.0 | nothing |
 | `try await Stackbar.open(url, with: "com.apple.Safari")`; links other than https, http, mailto, tel and meeting apps, and files or folders | `.openURLs(schemes: ["slack"])`; `["*"]` for any scheme and paths |
 | `try await Stackbar.run("brew", ["outdated", "--json=v2"], timeout: .seconds(120))` returns `RunResult` (status, stdout, stderr, text, truncated, timedOut); a non-zero exit is not thrown | `.run(commands: ["brew"])` |
 | `for try await event in Stackbar.stream("docker", ["logs", "-f", id]) { switch event { case .stdout(let data), .stderr(let data): …; case .exit(let exit): … } }`; leaving the loop stops it | `.run(commands: ["docker"])` |
@@ -346,6 +347,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.runningApps()` returns `[RunningApp]` (id, name, path, isActive, isHidden); `try await Stackbar.activateApp("com.apple.Safari", launch: true)`, `Stackbar.hideApp(id)`; 0.16.0 | `.apps` |
 | `try await Stackbar.installedApps()` returns `[InstalledApp]` (id, name, path, kind `.app` or `.settingsPane`, keywords, url): open an app with `activateApp(id, launch: true)`, a pane with `Stackbar.open(url)`; 0.20.0 | `.apps` |
 | `try await Stackbar.findFiles("q3 plan", limit: 8)` returns `[FoundFile]` (path, name, folder from `~`, isFolder, lastUsed) from Spotlight, every word in the name, most recently used first; opening one needs `.openURLs(["*"])`; 0.20.0 | `.fileSearch` |
+| `try await Stackbar.system(.lockScreen)` (and `.sleep`, `.sleepDisplays`, `.startScreenSaver`, `.restart`, `.shutDown`, `.logOut`, `.emptyTrash`, `.toggleDarkMode`, `.hideOtherApps`, `.quitOtherApps`, `.ejectDisks`); ask first when `action.isDestructive`; at most 10 a minute; 0.22.0 | `.systemActions` |
 | `try await Stackbar.setKeyLayer(KeyLayer(trigger: .rightCommand, bindings: [KeyBinding(key: "s", apps: ["com.apple.Safari"], launch: true)], secondPress: .hide, assignCommand: "assign"))`: while Right ⌘ is held, S switches to Safari (the host decides each press itself; set the whole map again when it changes); Right ⌘ ⌥ + a key runs command `assign` with `key` and `app`; returns `KeyLayerStatus` (listening, needsAccessibility, secureInputApp, conflict), also `Stackbar.keyLayerStatus()`; 0.16.0 | `.keyLayer` |
 
 `auth:` reads a declared secret and adds the header: `.bearer(secret: "GITHUB_TOKEN")`

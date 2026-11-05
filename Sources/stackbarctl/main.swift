@@ -115,6 +115,7 @@ func makeServices() -> HostServices {
             },
             alert: { posted in note("[alert] \(posted.pluginName): \(posted.title)" + (posted.body.map { " — \($0)" } ?? "") + " [" + posted.actions.map(\.title).joined(separator: ", ") + "]") },
             playSound: { sound in note("[sound] \(sound.rawValue)") },
+            hud: { message, isError in note("[hud\(isError ? " error" : "")] \(message)") },
             open: { url in note("[open] \(url.absoluteString)") },
             copy: { text in note("[copy] \(text.prefix(200))") },
             secretMissing: { _, name in note("[secret] \(name) is not set; run: stackbarctl secret set \(name) <value>") },

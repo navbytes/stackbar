@@ -1,17 +1,29 @@
 # Stackbar
 
-Stackbar is a native macOS host for small, live apps that you (or an AI) write in
-Swift. A plugin is one `.swift` file. It declares what it shows in a
-SwiftUI-like syntax, and Stackbar builds it, runs it in its own process, and draws
-it natively in the menu bar, a panel, a window, a desktop widget and the
-command palette. Agents can call its tools over MCP. It is the successor to Vee
-for developers who want apps rather than scripts; Vee keeps serving script and
-xbar plugins.
+**A native Mac launcher you extend in one Swift file.** Press a hotkey (⌘Space
+if you like) and type: apps, System Settings, files, sums and currencies,
+clipboard history, snippets, quicklinks, emoji, window layouts, lock or sleep
+the Mac, and every command your plugins add. The same plugins can also live in
+the menu bar, a panel, a window or a desktop widget, and agents can call their
+tools over MCP.
 
-The vision and architecture are in the design doc
-([Stackbar: the successor to Vee](https://claude.ai/artifact/FKTDdAHT9q76TojhZkS2K9)).
-All four phases of its roadmap are built. What still needs a real Mac is listed
-under "Status".
+Stackbar is free and open source (MIT), needs no account, and is pure Swift
+with Liquid Glass. Each plugin runs sandboxed in its own process and asks for
+what it needs before it runs. A plugin is one `.swift` file that you, or your
+coding agent, can write in minutes.
+
+- **Palette:** frecency ranking, aliases, a hotkey per command, ⌘K actions,
+  favorites, fallbacks such as web search, grids and a preview pane.
+- **Store:** reviewed plugins, signed and prebuilt, so you don't need Xcode to
+  use them. See [stackbar.app](https://stackbar.app) and
+  [navbytes/stackbar-plugins](https://github.com/navbytes/stackbar-plugins).
+- **Authoring:** `stackbarctl` builds, renders and tests a plugin without the
+  app, on macOS or Linux, and serves the same loop to agents over MCP.
+
+Stackbar is the successor to [Vee](https://github.com/navbytes/vee), for
+developers who want apps rather than scripts; Vee keeps serving script and
+xbar plugins. The original design doc is
+[Stackbar: the successor to Vee](https://claude.ai/artifact/FKTDdAHT9q76TojhZkS2K9).
 
 ## Install
 
@@ -28,7 +40,9 @@ curl -fsSL https://stackbar.app/install.sh | bash
 ```
 
 Both install the notarized app into /Applications and put `stackbarctl` on your
-PATH. Plugins from the store, and the ones Stackbar ships with, come prebuilt,
+PATH. On first launch Stackbar asks which hotkey opens the palette and which
+plugins to start with; to use ⌘Space, it shows you where to turn Spotlight's
+shortcut off. Plugins from the store, and the ones Stackbar ships with, come prebuilt,
 so you don't need Xcode. To write or change a plugin you need Xcode or the
 Command Line Tools (`xcode-select --install`). The installer is
 [`scripts/get-stackbar.sh`](scripts/get-stackbar.sh) (`--help` for options), or
@@ -102,7 +116,7 @@ small plugins that each teach one idea.
 ## What the host provides
 
 - **Surfaces:** menu bar, panel (popover), window, desktop widget (WidgetKit,
-  from snapshots), and the command palette (Control-Option-Space) that searches
+  from snapshots), and the command palette (⌃⌥Space, or the hotkey you pick) that searches
   every plugin's commands and actions. `docs/surface-parity.md` says what each
   surface does with each view, and a test keeps it in sync with the code.
 - **Commands:** a plugin's `commands` are found by name in the palette, with

@@ -22,7 +22,8 @@ public enum StackbarProtocolVersion {
     /// files and file icons on rows.
     /// 17 added root patterns on root-search commands, opt-in agent tools,
     /// widget buttons that act, and menu-bar items that hide while empty.
-    public static let current = 17
+    /// 18 added the HUD call and system actions.
+    public static let current = 18
 }
 
 /// Host → plugin.
@@ -254,6 +255,12 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// from Spotlight's index, most recently used first (`[FoundFile]` as
     /// JSON). Needs `.fileSearch`. Protocol 16.
     case findFiles(FileQuery)
+    /// A short message in the HUD over the screen, as a command result's
+    /// message shows; at most 30 a minute. Needs nothing. Protocol 18.
+    case hud(String, isError: Bool)
+    /// Locks, sleeps, restarts the Mac and the like. Needs
+    /// `.systemActions`. Protocol 18.
+    case system(SystemAction)
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

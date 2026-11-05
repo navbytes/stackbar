@@ -300,6 +300,19 @@ final class BundledStoreTests: XCTestCase {
         XCTAssertEqual(Set(installer.installed.map(\.id)), ["io.navbytes.stackbar.clipboard", "io.navbytes.stackbar.stay-awake"])
         XCTAssertEqual(store.installMissing(), [], "running it again changes nothing")
     }
+
+    func testWelcomeInstallsOnlyThePickedStarters() throws {
+        let key = try Signing.generateKey()
+        for (id, name) in [("io.navbytes.stackbar.clipboard", "Clipboard History"), ("io.navbytes.stackbar.stay-awake", "Stay Awake"), ("io.navbytes.stackbar.plugins.calculator", "Calculator")] {
+            let bundle = try Signing.bundle(source: "// \(id)", manifest: Manifest(id: id, name: name, version: "1.0.0"), publisherName: "navbytes", privateKey: key.privateKey)
+            try bundle.encoded().write(to: root.appendingPathComponent("Bundles/\(id).stackbarplugin"))
+        }
+        let (store, installer) = store(publicKey: key.publicKey.base64EncodedString())
+        XCTAssertEqual(store.starters().map(\.name), ["Clipboard History", "Stay Awake"], "core plugins are not offered: every Mac gets them")
+        XCTAssertEqual(store.install(ids: ["io.navbytes.stackbar.clipboard", "dev.not.carried"]).count, 1)
+        XCTAssertEqual(installer.installed.map(\.id), ["io.navbytes.stackbar.clipboard"])
+        XCTAssertEqual(store.install(ids: ["io.navbytes.stackbar.clipboard"]), [], "an installed plugin is left alone")
+    }
     #endif
 }
 
