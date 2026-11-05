@@ -24,6 +24,34 @@ enum Platform {
         }
     }
 
+    /// Opens a new GitHub issue with the version, macOS and
+    /// `stackbarctl doctor` filled in; the user reads it before sending.
+    static func reportProblem() {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let macOS = "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
+        Task {
+            let doctor = await doctorOutput()
+            NSWorkspace.shared.open(ProblemReport.issueURL(version: StackbarVersion.current, macOS: macOS, doctor: doctor))
+        }
+    }
+
+    /// The embedded stackbarctl's `doctor`, or a note when it can't run.
+    private static func doctorOutput() async -> String {
+        guard let tool = Bundle.main.url(forAuxiliaryExecutable: "stackbarctl") else { return "(stackbarctl is not in this build)" }
+        return await Task.detached {
+            let process = Process()
+            let pipe = Pipe()
+            process.executableURL = tool
+            process.arguments = ["doctor"]
+            process.standardOutput = pipe
+            process.standardError = pipe
+            do { try process.run() } catch { return "(could not run stackbarctl doctor: \(error.localizedDescription))" }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return String(decoding: data, as: UTF8.self)
+        }.value
+    }
+
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

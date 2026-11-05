@@ -9,6 +9,8 @@
 #                       navbytes/homebrew-tap (Vee's token works)
 #   VERSION             the release version without the v, e.g. 0.14.0
 #   ZIP                 path to Stackbar-<version>.zip
+#   AUTO_UPDATES        "true" when the app updates itself (Sparkle), so
+#                       `brew upgrade` leaves it to the app
 # The workflow skips this step when HOMEBREW_TAP_TOKEN is not set.
 set -euo pipefail
 
@@ -33,6 +35,11 @@ if [ -n "$remote_branch" ]; then
 fi
 mkdir -p "$tap/Casks"
 
+auto_updates=""
+if [ "${AUTO_UPDATES:-}" = true ]; then
+  auto_updates=$'\n\n  # Stackbar updates itself (Sparkle).\n  auto_updates true'
+fi
+
 cat > "$tap/Casks/stackbar.rb" <<EOF
 cask "stackbar" do
   version "${VERSION}"
@@ -41,13 +48,13 @@ cask "stackbar" do
   url "https://github.com/navbytes/stackbar/releases/download/v#{version}/Stackbar-#{version}.zip",
       verified: "github.com/navbytes/stackbar/"
   name "Stackbar"
-  desc "Menu-bar host for live plugins written in Swift"
+  desc "Launcher, menu bar and widgets you extend in Swift"
   homepage "https://stackbar.app/"
 
   livecheck do
     url :url
     strategy :github_releases
-  end
+  end${auto_updates}
 
   # Apple Silicon + macOS 26 (Tahoe) or later, matching the app.
   depends_on arch: :arm64

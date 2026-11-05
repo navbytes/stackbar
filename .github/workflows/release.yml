@@ -3,6 +3,8 @@ name: Release
 # Builds Stackbar.app on GitHub's macOS runner and publishes it to GitHub
 # Releases. Run it from the Actions tab (it creates the tag) or push a v* tag.
 #
+# scripts/release.sh builds the Xcode project (app, widget, Sparkle, Sentry).
+#
 # Signing: with the Developer ID secrets below the app is signed, notarized
 # and stapled. Without them it is ad-hoc signed, which runs on any Mac after
 # the Gatekeeper override in the release notes.
@@ -14,6 +16,13 @@ name: Release
 # request write on navbytes/homebrew-tap) a notarized release also opens a PR
 # there updating Casks/stackbar.rb. Without it the step is skipped.
 #
+# Updates: with SPARKLE_PRIVATE_KEY (a base64 Ed25519 seed) the app carries
+# its public key and the release publishes a signed appcast.xml, which Sparkle
+# reads from releases/latest. Without it the app doesn't update itself.
+#
+# Crash reports: SENTRY_DSN goes into the app; reports still need the user's
+# yes. Without it the app has no crash reporting at all.
+#
 # Prebuilt helpers: each release then runs helpers.yml, which starts the
 # Helpers workflow in navbytes/stackbar-plugins (needs PLUGINS_DISPATCH_TOKEN).
 
@@ -23,9 +32,13 @@ on:
   workflow_dispatch:
     inputs:
       prerelease:
-        description: Mark as a pre-release
+        description: Mark as a pre-release (Sparkle and Homebrew users won't get it)
         type: boolean
-        default: true
+        default: false
+      dry_run:
+        description: Build, sign and notarize only; keep the zip as a workflow artifact
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -41,6 +54,8 @@ jobs:
       HAS_CERT: ${{ secrets.APPLE_CERT_P12 != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_NOTARY_PASSWORD != '' }}
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -52,6 +67,7 @@ jobs:
           if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match StackbarVersion.current ($VERSION)"; exit 1
           fi
+          grep -qE "^## $VERSION( |$)" CHANGELOG.md || { echo "::error::CHANGELOG.md has no section for $VERSION"; exit 1; }
 
       - name: Import the Developer ID certificate
         if: env.HAS_CERT == 'true'
@@ -82,19 +98,59 @@ jobs:
             echo "NOTARY_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
           fi
 
+      - name: Sparkle's public key
+        if: env.HAS_SPARKLE_KEY == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet cryptography
+          echo "SPARKLE_PUBLIC_KEY=$("$RUNNER_TEMP/venv/bin/python" scripts/appcast.py public-key)" >> "$GITHUB_ENV"
+
       - name: Build
-        run: scripts/bundle.sh
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: scripts/release.sh
 
       - name: Check the app
         run: |
           APP=build/Stackbar.app
-          codesign --verify --strict --verbose=2 "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          [ -d "$APP/Contents/PlugIns/StackbarWidget.appex" ]
+          [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]
+          if [ -n "${SPARKLE_PUBLIC_KEY:-}" ]; then
+            [ "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP/Contents/Info.plist")" = "$SPARKLE_PUBLIC_KEY" ]
+          fi
+          if [ -n "${STACKBAR_NOTARY_PROFILE:-}" ]; then
+            spctl --assess --type execute --verbose "$APP"
+            xcrun stapler validate "$APP"
+          fi
           "$APP/Contents/MacOS/stackbarctl" version
           [ -d "$APP/Contents/Resources/StackbarKit/Sources/StackbarKit" ]
           ls "$APP/Contents/Resources/StackbarKit/Bundles"
           (cd build && shasum -a 256 Stackbar-*.zip) | tee build/SHA256SUMS.txt
 
+      - name: Appcast
+        if: env.HAS_SPARKLE_KEY == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" scripts/appcast.py write --zip "build/Stackbar-$VERSION.zip" --version "$VERSION" --out build/appcast.xml
+          cat build/appcast.xml
+
+      - name: Keep the dry run's build
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Stackbar-${{ steps.version.outputs.version }}
+          path: |
+            build/Stackbar-*.zip
+            build/appcast.xml
+          if-no-files-found: error
+
       - name: Publish
+        if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -125,33 +181,39 @@ jobs:
           NOTES
           )
           fi
+          CHANGES=$(python3 scripts/appcast.py notes --version "$VERSION")
           cat > build/notes.md <<NOTES
+          $CHANGES
+
+          ## Install
+
           $INSTALL
 
           Requires macOS 26. Store plugins come prebuilt, so Xcode is not needed to use them. To write your own plugins, install Xcode 26 or the Command Line Tools (\`xcode-select --install\`).
 
           The command-line tool is inside the app: \`ln -sf /Applications/Stackbar.app/Contents/MacOS/stackbarctl ~/.local/bin/stackbarctl\`, then \`stackbarctl doctor\`.
 
-          This build has no desktop widget (it is built with SwiftPM, not Xcode).
-
           Built from $(git rev-parse --short HEAD).
           NOTES
           FLAGS=""
           [ "$PRERELEASE" = true ] && FLAGS=--prerelease
+          set -- build/Stackbar-"$VERSION".zip build/SHA256SUMS.txt
+          [ -f build/appcast.xml ] && set -- "$@" build/appcast.xml
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" build/Stackbar-"$VERSION".zip build/SHA256SUMS.txt --clobber
+            gh release upload "$TAG" "$@" --clobber
             gh release edit "$TAG" --notes-file build/notes.md $FLAGS
           else
-            gh release create "$TAG" build/Stackbar-"$VERSION".zip build/SHA256SUMS.txt \
+            gh release create "$TAG" "$@" \
               --target "$GITHUB_SHA" --title "Stackbar $VERSION" --notes-file build/notes.md $FLAGS
           fi
 
       # Only notarized builds go to the tap: an ad-hoc one would not open.
       - name: Update the Homebrew cask (navbytes/homebrew-tap)
-        if: env.HOMEBREW_TAP_TOKEN != '' && env.STACKBAR_NOTARY_PROFILE != ''
+        if: env.DRY_RUN != 'true' && env.HOMEBREW_TAP_TOKEN != '' && env.STACKBAR_NOTARY_PROFILE != ''
         env:
           VERSION: ${{ steps.version.outputs.version }}
           ZIP: build/Stackbar-${{ steps.version.outputs.version }}.zip
+          AUTO_UPDATES: ${{ env.HAS_SPARKLE_KEY }}
         run: scripts/update-homebrew-cask.sh
 
       - name: Remove the signing keychain
@@ -162,6 +224,7 @@ jobs:
   # a fresh set.
   helpers:
     needs: release
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     uses: ./.github/workflows/helpers.yml
     secrets:
       PLUGINS_DISPATCH_TOKEN: ${{ secrets.PLUGINS_DISPATCH_TOKEN }}
