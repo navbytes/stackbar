@@ -509,7 +509,7 @@ final class PaletteSession {
 
     /// Closes the palette first, so a paste goes to the app the user was in.
     private func run(_ entry: CommandRegistry.Entry, _ arguments: [String: String], source: InvocationSource) {
-        let commands: CommandCenter = model.commands
+        let commands = model.commands
         let context = context
         finish()
         Task { await commands?.run(entry.key, arguments: arguments, source: source, context: context) }
