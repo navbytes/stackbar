@@ -30,6 +30,12 @@ enum Benchmark {
             let ready = await waitUntil(seconds: 60) { !app.model.controllers.isEmpty && app.model.controllers.allSatisfy(\.isSettled) }
             report["plugins"] = app.model.controllers.map(\.name).sorted()
             report["pluginsReadyMs"] = ready ? ms(Date().timeIntervalSince(processStart)) : NSNull()
+            // A fresh home has nothing approved yet. Approve what the core
+            // plugins ask for, as a user does once, so search can answer.
+            for controller in app.model.controllers where controller.isWaitingForApproval {
+                controller.approve()
+            }
+            _ = await waitUntil(seconds: 30) { app.model.controllers.allSatisfy { !$0.isWaitingForApproval && $0.isSettled } }
             try? await Task.sleep(for: .seconds(2))
 
             var opens: [Double] = []
