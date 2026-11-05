@@ -15,8 +15,8 @@
 - [ ] 2.3 Naveen creates the Sentry project and sets `SENTRY_DSN`
 
 ## 3. Moving a setup
-- [ ] 3.1 `SettingsArchive` export and import, with tests
-- [ ] 3.2 Settings › General: Export Settings…, Import Settings…
+- [x] 3.1 `SettingsArchive` export and import, with tests
+- [x] 3.2 Settings › General: Export Settings…, Import Settings…
 - [ ] 3.3 Snippets and Quicklinks import Raycast's JSON exports (stackbar-plugins)
 
 ## 4. Proof
