@@ -38,7 +38,12 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
             // A fallback the search found already shows in Results.
             let shown = Set(results.map(\.id))
             let rest = fallbacks.filter { !shown.contains($0.id) }
-            return (leads + [result] + follows
+            // Typing a command's whole name or keyword ("settings") puts it
+            // under Return, ahead of a file or app that merely starts with
+            // the text. Only a matched root pattern (`ABC-123`) goes first.
+            let ahead = results.first?.isExactMatch(typed.lowercased()) == true
+            let top = ahead ? leads.filter(\.leads) + [result] + leads.filter { !$0.leads } : leads + [result]
+            return (top + follows
                 + [PaletteSection(title: "From the Store", entries: store), PaletteSection(title: fallbackTitle(typed), entries: rest)])
                 .filter { !$0.entries.isEmpty }
         }
@@ -49,6 +54,11 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
         for entry in results where !pinned.contains(entry.id) {
             if recent.count < recentLimit, isRecent(entry) {
                 recent.append(entry)
+                continue
+            }
+            // Stackbar's own places (Settings, the Store) are commands too.
+            if entry.pluginID == PaletteIndex.appID {
+                commands.append(entry)
                 continue
             }
             switch entry.kind {

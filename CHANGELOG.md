@@ -12,6 +12,9 @@ window. Write for people who use Stackbar, not for the code.
 - **Remove all data** in Settings › General moves Stackbar's plugins, data, caches and logs to the Trash, deletes its secrets and settings, and quits.
 - For plugin authors: `Stackbar.focusWindow` brings any open window forward, and the new `.menus` capability reads the front app's menu items (`Stackbar.menuItems()`) and chooses one (`Stackbar.pressMenuItem`) (protocol 20). Switch Windows and Search Menu Items in the Store use them.
 
+### Fixed
+- **Typing "settings" in the palette opens Stackbar Settings.** Return used to open whatever file or System Settings pane came first. The palette now has Stackbar Settings, Commands & Hotkeys, Privacy & Secrets and Plugin Store, and typing a command's whole name or keyword puts it first. `stackbar://settings` (or `stackbar://settings/commands`) and `stackbar://store` links open them too.
+
 ## 0.24.0
 
 ### New

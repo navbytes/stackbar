@@ -491,7 +491,7 @@ struct RootResults: View {
         }
         .overlay {
             if sections.isEmpty {
-                Text(session.model.palette.all.isEmpty ? "No plugin has any commands or actions yet." : "No matches")
+                Text(session.model.palette.all.allSatisfy({ $0.pluginID == PaletteIndex.appID }) ? "No plugin has any commands or actions yet." : "No matches")
                     .foregroundStyle(.secondary)
             }
         }
