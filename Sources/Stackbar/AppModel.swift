@@ -36,6 +36,8 @@ final class AppModel {
     }
 
     @ObservationIgnored let services: HostServices
+    /// Stackbar's own updates (Sparkle, in the release build).
+    @ObservationIgnored let updater = Updater()
     /// Commands: the registry, preferences, hotkeys and the runner.
     @ObservationIgnored private(set) var commands: CommandCenter!
     /// The Store's indexes, installs and toasts, shared by the Store window

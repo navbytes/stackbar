@@ -20,7 +20,8 @@ struct StoreSettings: View {
                 Button("Open Store") { AppDelegate.shared?.showStore() }
                     .buttonStyle(.borderedProminent)
             }
-            SettingsGroup("Updates", footer: "Updates that ask for something new still wait for you to allow it.") {
+            AppUpdatesGroup(updater: model.updater)
+            SettingsGroup("Plugin Updates", footer: "Updates that ask for something new still wait for you to allow it.") {
                 Toggle("Update plugins automatically", isOn: $model.autoUpdatePlugins)
                     .toggleStyle(TrailingSwitchStyle())
                 let updates = store.updates
@@ -87,6 +88,26 @@ struct StoreSettings: View {
         model.indexURLs.append(trimmed)
         newIndex = ""
         Task { await store.load() }
+    }
+}
+/// Stackbar's own version and Sparkle's settings.
+struct AppUpdatesGroup: View {
+    @Bindable var updater: Updater
+
+    var body: some View {
+        SettingsGroup("Stackbar", footer: updater.isAvailable ? "Stackbar checks for a new version once a day and asks before it installs one." : Updater.unavailableNote) {
+            SettingsRow(title: "Version \(StackbarVersion.current)", caption: "What changed in each release is in the release notes.") {
+                HStack {
+                    Button("Release Notes") { NSWorkspace.shared.open(ProblemReport.releasesURL) }
+                    Button("Check for Updates…") { updater.checkForUpdates(nil) }
+                        .disabled(updater.isAvailable && !updater.canCheck)
+                }
+            }
+            if updater.isAvailable {
+                Toggle("Check for Stackbar updates automatically", isOn: $updater.checksAutomatically)
+                    .toggleStyle(TrailingSwitchStyle())
+            }
+        }
     }
 }
 #endif

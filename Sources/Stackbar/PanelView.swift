@@ -169,6 +169,8 @@ struct PanelFooter: View {
                 Button("Command Palette") { AppDelegate.shared?.palette.toggle() }
                 Button("Stackbar Settings…") { AppDelegate.shared?.showSettings() }
                 Button("Plugin Store…") { AppDelegate.shared?.showStore() }
+                Button("Check for Updates…") { AppDelegate.shared?.model.updater.checkForUpdates(nil) }
+                Button("Report a Problem…") { Platform.reportProblem() }
                 Button("Quit Stackbar") { NSApp.terminate(nil) }
             } label: {
                 Image(systemName: "ellipsis.circle")

@@ -156,6 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item(title: "Open Plugins Folder", action: #selector(openPluginsFolder)))
         menu.addItem(item(title: "Browse the Plugin Store…", action: #selector(openStore)))
         menu.addItem(item(title: "Settings…", action: #selector(openSettings)))
+        let updates = NSMenuItem(title: "Check for Updates…", action: #selector(Updater.checkForUpdates(_:)), keyEquivalent: "")
+        updates.target = model.updater
+        menu.addItem(updates)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Stackbar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
@@ -193,6 +196,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.target = self
         let storeItem = key("Plugin Store…", #selector(openStore), "")
         storeItem.target = self
+        let updates = key("Check for Updates…", #selector(Updater.checkForUpdates(_:)), "")
+        updates.target = model.updater
+        let report = key("Report a Problem…", #selector(reportProblem), "")
+        report.target = self
+        let releaseNotes = key("Release Notes", #selector(openReleaseNotes), "")
+        releaseNotes.target = self
+        let website = key("Stackbar Website", #selector(openWebsite), "")
+        website.target = self
+        let help = menu("Help", [website, releaseNotes, .separator(), report])
+        NSApp.helpMenu = help.submenu
         let window = menu("Window", [
             key("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
             key("Zoom", #selector(NSWindow.performZoom(_:)), ""),
@@ -204,6 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         [
             menu("Stackbar", [
                 key("About Stackbar", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
+                updates,
                 .separator(),
                 settings,
                 storeItem,
@@ -224,6 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 key("Select All", #selector(NSText.selectAll(_:)), "a"),
             ]),
             window,
+            help,
         ].forEach(main.addItem)
         return main
     }
@@ -232,6 +247,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menuItem = NSMenuItem(title: title, action: action, keyEquivalent: "")
         menuItem.target = self
         return menuItem
+    }
+
+    @objc private func reportProblem() {
+        Platform.reportProblem()
+    }
+
+    @objc private func openReleaseNotes() {
+        NSWorkspace.shared.open(ProblemReport.releasesURL)
+    }
+
+    @objc private func openWebsite() {
+        NSWorkspace.shared.open(ProblemReport.docsURL)
     }
 
     @objc private func openPalette() {
