@@ -13,9 +13,9 @@
 - [x] 1.10 CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue and PR templates, README rewrite
 
 ## 2. Plugins (stackbar-plugins)
-- [ ] 2.1 System Commands plugin
-- [ ] 2.2 Calculator: currency and time zones
-- [ ] 2.3 Pin to the merged stackbar commit; `minimumStackbar` 0.22.0
+- [x] 2.1 System Commands plugin
+- [x] 2.2 Calculator: currency and time zones
+- [x] 2.3 Pin to the merged stackbar commit (fdb5042); System Commands `minimumStackbar` 0.22.0 (stackbar-plugins #36)
 
 ## 3. Release
 - [ ] 3.1 Release 0.22.0 (Naveen says "release")
