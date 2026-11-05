@@ -59,7 +59,11 @@ enum Benchmark {
                     // What the palette showed instead, to see why.
                     misses[query] = app.palette.session.sections.map { section in
                         "\(section.title): " + section.entries.prefix(3).map(\.title).joined(separator: ", ")
-                    } + ["root views revision \(app.palette.session.rootViewsRevision)"]
+                    } + [
+                        "root views revision \(app.palette.session.rootViewsRevision)",
+                        "registry: " + app.model.commands.registry.entries.map { "\($0.key) root=\($0.spec.rootSearch) on=\(app.model.commands.preferences[$0.key].enabled)/\(app.model.commands.preferences[$0.key].inRootSearch)" }.joined(separator: "; "),
+                        "plugins: " + app.model.controllers.map { "\($0.name) \($0.state) waiting=\($0.isWaitingForApproval) supervisor=\($0.supervisor != nil)" }.joined(separator: "; "),
+                    ]
                 }
                 app.palette.hide()
                 try? await Task.sleep(for: .milliseconds(300))
