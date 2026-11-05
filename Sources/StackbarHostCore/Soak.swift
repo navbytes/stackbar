@@ -120,14 +120,20 @@ public struct Soak: Sendable {
     }
 
     /// Presses `action` if the panel still offers it (an earlier press may
-    /// have removed it, like "Mark all as seen"), then waits for the plugin to
-    /// settle so the next press sees the panel that press produced.
+    /// have removed it, like "Mark all as seen"). It first waits for the
+    /// plugin to settle everything sent so far, so the panel it checks is the
+    /// one the earlier presses and this tick's refresh left behind; counting
+    /// any one `settled` is not enough, since a folded refresh settles too.
     private func press(_ action: ActionID, on supervisor: PluginSupervisor) async {
+        await settle(supervisor)
         guard let panel = await supervisor.views[.panel], panel.actions.contains(action) else { return }
-        let before = await supervisor.settledCount
         await supervisor.event(action)
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline, await supervisor.settledCount <= before {
+        await settle(supervisor)
+    }
+
+    private func settle(_ supervisor: PluginSupervisor) async {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline, await supervisor.settledCount < supervisor.sentCount {
             try? await Task.sleep(for: .milliseconds(10))
         }
     }

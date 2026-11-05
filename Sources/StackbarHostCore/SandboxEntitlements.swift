@@ -14,7 +14,7 @@ public enum SandboxEntitlements {
             switch capability {
             case .network, .oauth, .userServer:
                 result["com.apple.security.network.client"] = true
-            case .files, .run, .secret, .clipboard, .power, .calendar, .reminders, .context, .openURLs, .storage, .windows, .apps, .keyLayer, .fileSearch, .systemActions, .textExpansion:
+            case .files, .run, .secret, .clipboard, .power, .calendar, .reminders, .context, .openURLs, .storage, .windows, .apps, .keyLayer, .fileSearch, .systemActions, .textExpansion, .menus:
                 // Files are opened up path by path (`fileExceptions`).
                 // Children inherit the sandbox; secrets, the clipboard, power
                 // assertions and calendar events all go through the host.
@@ -103,6 +103,7 @@ extension Capability {
         case .fileSearch: return "Finds files and folders in your home folder by name, with Spotlight"
         case .systemActions: return "Locks, sleeps, restarts, shuts down or logs out the Mac, empties the Trash, toggles dark mode, hides or quits other apps and ejects disks"
         case .textExpansion: return "Replaces keywords it sets up as you type them, in any app (it never sees what you type)"
+        case .menus: return "Reads the menus of the app you were in and chooses items from them"
         }
     }
 
@@ -128,6 +129,7 @@ extension Capability {
         case .fileSearch: return "fileSearch"
         case .systemActions: return "systemActions"
         case .textExpansion: return "textExpansion"
+        case .menus: return "menus"
         }
     }
 }

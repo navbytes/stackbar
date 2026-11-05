@@ -446,6 +446,32 @@ public final class HostServices: Sendable {
         case .expansionStatus:
             return .value(SystemCodec.encode(platform.system.expansionStatus(pluginID: granted.id)))
 
+        case .focusWindow(let target):
+            guard appSwitches.allow(granted.id) else { return .failure("too many app switches; at most 120 a minute") }
+            do {
+                try await platform.system.focusWindow(target)
+                return .ok
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .menuItems:
+            do {
+                return .value(SystemCodec.encode(try await platform.system.menuItems()))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .pressMenuItem(let appID, let path):
+            guard !path.isEmpty, path.count <= MenuSnapshot.maxDepth + 1 else { return .failure("a menu path has 1 to \(MenuSnapshot.maxDepth + 1) titles") }
+            guard appSwitches.allow(granted.id) else { return .failure("too many menu presses; at most 120 a minute") }
+            do {
+                try await platform.system.pressMenuItem(appID: appID, path: path)
+                return .ok
+            } catch {
+                return .failure("\(error)")
+            }
+
         case .arrangeWindows(let placements, let launch):
             guard placements.count <= WindowPlacement.maxPerCall else { return .failure("at most \(WindowPlacement.maxPerCall) windows at a time") }
             guard arrangements.allow(granted.id) else { return .failure("too many window arrangements; at most 10 a minute") }

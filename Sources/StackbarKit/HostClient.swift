@@ -512,6 +512,31 @@ public enum Stackbar {
         return try SystemCodec.decode(ArrangeResult.self, from: json)
     }
 
+    /// Brings one window to the front: unminimizes and raises it, and makes
+    /// its app active. Point at a window from `windows()` with
+    /// `WindowTarget(window, in: snapshot)`. Needs `.windows`. Stackbar 0.25.0.
+    public static func focusWindow(_ target: WindowTarget) async throws {
+        try await ok(.focusWindow(target))
+    }
+
+    // MARK: Menus
+
+    /// The menu bar of the app the user was in before Stackbar (the Apple
+    /// menu left out): every item that does something, with its path of
+    /// titles and shortcut. Needs `.menus`; the host asks for Accessibility
+    /// access the first time. Stackbar 0.25.0.
+    public static func menuItems() async throws -> MenuSnapshot {
+        guard let json = try await value(.menuItems) else { throw HostError("no menus") }
+        return try SystemCodec.decode(MenuSnapshot.self, from: json)
+    }
+
+    /// Brings the app forward and chooses its menu item at `path`, as
+    /// `menuItems()` gave it. Fails when the item is gone or dimmed. Needs
+    /// `.menus`. Stackbar 0.25.0.
+    public static func pressMenuItem(appID: String, path: [String]) async throws {
+        try await ok(.pressMenuItem(appID: appID, path: path))
+    }
+
     // MARK: Commands and context
 
     /// Runs a command the manifest declares with `.run(commands:)` and

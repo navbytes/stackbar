@@ -387,6 +387,36 @@ struct PaletteView: View {
         default:
             break
         }
+        // Emacs and Vim style moves, as in Raycast: ⌃N/⌃J down, ⌃P/⌃K up.
+        if press.modifiers.intersection([.command, .shift, .option, .control]) == .control {
+            switch String(press.key.character).lowercased() {
+            case "n", "j":
+                session.move(columns ?? 1)
+                return .handled
+            case "p", "k":
+                session.move(-(columns ?? 1))
+                return .handled
+            default:
+                break
+            }
+        }
+        if press.modifiers.intersection([.command, .shift, .option, .control]) == .command {
+            // ⌘, opens the selected command's plugin settings, or Stackbar's.
+            if press.key.character == "," {
+                let controller = session.currentPluginID.flatMap { session.model.controller(for: $0) }
+                if let controller, controller.manifest?.surfaces.contains(.settings) == true {
+                    AppDelegate.shared?.showSettings(plugin: controller)
+                } else {
+                    AppDelegate.shared?.showSettings()
+                }
+                return .handled
+            }
+            // ⌘⌫ clears the search field.
+            if press.key == .delete, focus == .search, !session.query.isEmpty {
+                session.query = ""
+                return .handled
+            }
+        }
         if press.modifiers.intersection([.command, .shift, .option, .control]) == .command, press.key.character == "k" {
             session.toggleActions()
             return .handled

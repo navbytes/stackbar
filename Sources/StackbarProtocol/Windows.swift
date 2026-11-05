@@ -172,3 +172,34 @@ public struct ArrangeResult: Codable, Equatable, Sendable {
         self.failed = failed
     }
 }
+
+/// Which window `HostCall.focusWindow` brings forward: the app's window with
+/// this title, else its window at `ordinal` (its place among that app's
+/// windows in the last snapshot, front first). Make one from a snapshot's
+/// window with `WindowTarget(window, in: snapshot)`.
+public struct WindowTarget: Codable, Equatable, Hashable, Sendable {
+    public var appID: String
+    public var title: String
+    public var ordinal: Int
+
+    public init(appID: String, title: String = "", ordinal: Int = 0) {
+        self.appID = appID
+        self.title = title
+        self.ordinal = ordinal
+    }
+
+    /// Points at `window`, counting its place among its app's windows.
+    public init(_ window: WindowInfo, in snapshot: WindowSnapshot) {
+        let siblings = snapshot.windows.filter { $0.appID == window.appID }
+        self.init(appID: window.appID, title: window.title, ordinal: siblings.firstIndex(of: window) ?? 0)
+    }
+
+    /// The index in `windows` this target names: the first of the app's
+    /// windows with the title, else the one at `ordinal`, else its first.
+    public func index(in windows: [WindowInfo]) -> Int? {
+        let own = windows.indices.filter { windows[$0].appID == appID }
+        guard !own.isEmpty else { return nil }
+        if !title.isEmpty, let titled = own.first(where: { windows[$0].title == title }) { return titled }
+        return own.indices.contains(ordinal) ? own[ordinal] : own.first
+    }
+}

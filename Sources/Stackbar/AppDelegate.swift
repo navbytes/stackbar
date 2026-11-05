@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Self.shared = self
         CrashReports.startIfAllowed()
         NSApp.mainMenu = mainMenu()
+        if Benchmark.output == nil { AppHousekeeping.offerMoveIfNeeded() }
         if Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" {
             UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         }

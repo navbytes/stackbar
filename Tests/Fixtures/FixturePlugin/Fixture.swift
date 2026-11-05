@@ -22,10 +22,17 @@ final class Fixture: StackbarPlugin {
     var status = "idle"
     var refreshes = 0
     var slowRefresh = false
+    /// Like PR Cockpit's "Mark all as seen", which a refresh can take away
+    /// (the new pull request merged) while a press of it is still queued:
+    /// with slow refreshes on, each refresh shows or hides it in turn.
+    var unseen = false
 
     func refresh() async throws {
         refreshes += 1
-        if slowRefresh { try await Task.sleep(for: .milliseconds(300)) }
+        if slowRefresh {
+            try await Task.sleep(for: .milliseconds(300))
+            unseen.toggle()
+        }
     }
 
     var menuBar: ViewContent {
@@ -36,6 +43,7 @@ final class Fixture: StackbarPlugin {
         Text("saved \(saved)")
         Text("status \(status)")
         Text("refreshes \(refreshes)")
+        if unseen { Button("Mark seen") { self.unseen = false } }
         Button("Increment") { self.count += 1 }
         Button("Save") { self.saved += 1 }
         Button("Print") {
