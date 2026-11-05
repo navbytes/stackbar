@@ -123,8 +123,8 @@ struct WelcomeView: View {
                     if CrashReports.isAvailable { CrashReports.isAllowed = sendCrashReports }
                     finish(picked, openAtLogin, true)
                 }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
             }
         }
         .padding(28)

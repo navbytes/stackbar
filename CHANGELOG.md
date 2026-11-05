@@ -12,6 +12,9 @@ window. Write for people who use Stackbar, not for the code.
 - **Crash reports, if you want them.** Off unless you turn them on in the welcome window or Settings › Privacy. A report has where Stackbar crashed and the versions, never plugin names, logs or files.
 - **Report a Problem…** in the Help menu opens a GitHub issue with your Stackbar and macOS versions and a health check filled in. You read it before anything is sent.
 
+### Fixed
+- Stackbar no longer crashes on first launch while showing the welcome window (0.22.0).
+
 ## 0.22.0
 
 ### New
