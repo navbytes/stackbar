@@ -21,6 +21,16 @@ public struct AgentTool: Sendable {
         self.spec = ToolSpec(name: name, description: description, parameters: parameters)
         self.perform = perform
     }
+
+    /// Keeps the tool from agents until the user turns it on in Settings →
+    /// Agents. Use it for tools that return private data, like clipboard
+    /// contents; the plugin's panel then stays out of `stackbar_read` too.
+    /// Protocol 17.
+    public func optIn() -> AgentTool {
+        var copy = self
+        copy.spec.optIn = true
+        return copy
+    }
 }
 
 @resultBuilder

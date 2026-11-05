@@ -271,7 +271,8 @@ public enum Surface: String, Codable, Sendable, CaseIterable {
     case panel
     /// A resizable window, for plugins that need room.
     case window
-    /// A desktop or Notification Center widget: read-only, refreshed by the host.
+    /// A desktop or Notification Center widget, refreshed by the host. Its
+    /// buttons, toggles and rows act through the app (protocol 17).
     case widget
     /// The plugin's page in Stackbar's Settings window: preferences people set
     /// once, kept out of the panel so it stays about doing things. The host

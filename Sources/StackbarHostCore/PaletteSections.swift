@@ -8,11 +8,15 @@ import StackbarProtocol
 public struct PaletteSection: Equatable, Sendable, Identifiable {
     public var title: String
     public var entries: [PaletteIndex.Entry]
+    /// A plugin section that answers the typed text's shape (its root
+    /// pattern matched, like `ABC-123`), so it comes before the results.
+    public var leads: Bool
     public var id: String { title }
 
-    public init(title: String, entries: [PaletteIndex.Entry]) {
+    public init(title: String, entries: [PaletteIndex.Entry], leads: Bool = false) {
         self.title = title
         self.entries = entries
+        self.leads = leads
     }
 
     /// Groups `results` (already in search order) without reordering within
@@ -29,9 +33,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
                              recentLimit: Int = 5, isRecent: (PaletteIndex.Entry) -> Bool) -> [PaletteSection] {
         let typed = query.trimmingCharacters(in: .whitespaces)
         guard typed.isEmpty else {
-            let lowered = typed.lowercased()
-            let leads = plugins.filter { $0.entries.first?.title.lowercased().hasPrefix(lowered) ?? false }
-            let follows = plugins.filter { !($0.entries.first?.title.lowercased().hasPrefix(lowered) ?? false) }
+            let (leads, follows) = rank(plugins, query: typed)
             let result = PaletteSection(title: "Results", entries: results)
             // A fallback the search found already shows in Results.
             let shown = Set(results.map(\.id))
@@ -64,6 +66,28 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
 }
 
 extension PaletteSection {
+    /// Plugin sections split into those that lead the results and those that
+    /// follow them, each best first. A section leads when its root pattern
+    /// matched or its first row starts with the typed text (`saf` → Safari,
+    /// `2+2` → its sum). Within each group, a pattern match comes first, then
+    /// the section whose rows match the text best; ties keep the given order.
+    public static func rank(_ sections: [PaletteSection], query: String) -> (leads: [PaletteSection], follows: [PaletteSection]) {
+        let lowered = query.trimmingCharacters(in: .whitespaces).lowercased()
+        func startsWithQuery(_ section: PaletteSection) -> Bool {
+            section.entries.first?.title.lowercased().hasPrefix(lowered) ?? false
+        }
+        func best(_ section: PaletteSection) -> Int {
+            section.entries.compactMap { TextMatch.score(lowered, in: $0.title) }.max() ?? Int.min
+        }
+        let scored = sections.enumerated().map { (index: $0.offset, section: $0.element, score: best($0.element)) }
+        let ordered = scored.sorted { left, right in
+            if left.section.leads != right.section.leads { return left.section.leads }
+            if left.score != right.score { return left.score > right.score }
+            return left.index < right.index
+        }.map(\.section)
+        return (ordered.filter { $0.leads || startsWithQuery($0) }, ordered.filter { !($0.leads || startsWithQuery($0)) })
+    }
+
     /// The heading over the fallback commands.
     public static func fallbackTitle(_ typed: String) -> String {
         let short = typed.count > 40 ? String(typed.prefix(39)) + "…" : typed

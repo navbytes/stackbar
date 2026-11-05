@@ -69,10 +69,16 @@ public struct Command: Sendable {
     /// root search does. The view's `search` runs with what was typed; keep
     /// it quick. A section whose first row starts with the typed text comes
     /// before the other results (an app by name, a sum). Protocol 16.
-    public func rootSearch(section: String? = nil) -> Command {
+    ///
+    /// `matching` is a regular expression the whole typed text must match
+    /// before the host asks the plugin at all, like `#"^[A-Za-z][A-Za-z0-9]*-\d+$"#`
+    /// for an issue key: other text costs the plugin nothing, and a section
+    /// that matched comes first. Protocol 17.
+    public func rootSearch(section: String? = nil, matching pattern: String? = nil) -> Command {
         var copy = self
         copy.spec.rootSearch = true
         copy.spec.rootSection = section
+        copy.spec.rootPattern = pattern
         return copy
     }
 

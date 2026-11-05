@@ -11,9 +11,24 @@ public final class RuntimeTools: MCPToolProvider, Sendable {
     public typealias Directory = @Sendable () async -> [PluginSupervisor]
 
     private let directory: Directory
+    /// The user's per-tool choices; nil (stackbarctl running plugin files
+    /// itself) allows every tool the plugin didn't mark opt-in.
+    private let consent: AgentConsent?
 
-    public init(directory: @escaping Directory) {
+    public init(consent: AgentConsent? = nil, directory: @escaping Directory) {
+        self.consent = consent
         self.directory = directory
+    }
+
+    private func allows(_ supervisor: PluginSupervisor, _ tool: String, _ specs: [ToolSpec]) -> Bool {
+        let id = supervisor.manifest.id
+        return consent?.allows(pluginID: id, tool: tool, specs: specs) ?? !AgentConsent.isOptIn(tool, specs: specs)
+    }
+
+    /// The tools agents may call, by the user's choices.
+    private func allowed(_ supervisor: PluginSupervisor) async -> [ToolSpec] {
+        let specs = await supervisor.tools
+        return specs.filter { allows(supervisor, $0.name, specs) }
     }
 
     public func tools() async -> [MCPTool] {
@@ -25,7 +40,7 @@ public final class RuntimeTools: MCPToolProvider, Sendable {
         ]
         for supervisor in await directory() {
             let prefix = Self.shortName(supervisor.manifest.id)
-            for tool in await supervisor.tools {
+            for tool in await allowed(supervisor) {
                 var properties: [String: JSONValue] = [:]
                 for parameter in tool.parameters {
                     properties[parameter.name] = MCPTool.property(parameter.kind.rawValue, parameter.description)
@@ -48,7 +63,7 @@ public final class RuntimeTools: MCPToolProvider, Sendable {
             var lines: [String] = []
             for supervisor in plugins {
                 let manifest = supervisor.manifest
-                let tools = await supervisor.tools.map(\.name)
+                let tools = await allowed(supervisor).map(\.name)
                 lines.append("\(Self.shortName(manifest.id)) — \(manifest.name) (\(manifest.id)), \(await supervisor.state)" + (manifest.summary.map { ": \($0)" } ?? ""))
                 if !tools.isEmpty { lines.append("  tools: " + tools.map { "\(Self.shortName(manifest.id))__\($0)" }.joined(separator: ", ")) }
             }
@@ -57,12 +72,15 @@ public final class RuntimeTools: MCPToolProvider, Sendable {
             guard let wanted = arguments["plugin"]?.string, let supervisor = Self.find(wanted, in: plugins) else {
                 return .text("no running plugin matches \(arguments["plugin"]?.string ?? "")", isError: true)
             }
+            guard allows(supervisor, AgentConsent.panel, await supervisor.tools) else {
+                return .text("\(supervisor.manifest.name) keeps its panel private; the user can allow reading it in Stackbar Settings → Agents", isError: true)
+            }
             let views = await supervisor.views
             guard let node = views[.panel] ?? views[.window] ?? views[.menuBar] else { return .text("\(supervisor.manifest.name) has not rendered anything yet") }
             return .text(TreeTextRenderer.render(node, showActions: false))
         default:
             let parts = name.components(separatedBy: "__")
-            guard parts.count == 2, let supervisor = Self.find(parts[0], in: plugins) else {
+            guard parts.count == 2, let supervisor = Self.find(parts[0], in: plugins), await allowed(supervisor).contains(where: { $0.name == parts[1] }) else {
                 return .text("unknown tool \(name); call stackbar_plugins to see what is available", isError: true)
             }
             let result = await supervisor.callTool(parts[1], arguments: arguments.compactMapValues(\.eventValue))

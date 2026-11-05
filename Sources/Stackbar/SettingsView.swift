@@ -270,29 +270,60 @@ struct AgentsSettings: View {
                 }
             }
             let offering = model.controllers.filter { !$0.tools.isEmpty }
-            SettingsGroup("Tools Your Plugins Offer") {
+            SettingsGroup("Tools Your Plugins Offer", footer: "Turn off any tool you don't want agents to call. Tools that return private data, like your clipboard, stay off until you turn them on.") {
                 if offering.isEmpty {
                     Text("None of your plugins offers tools yet.").foregroundStyle(.secondary)
                 }
                 ForEach(offering) { controller in
-                    Button {
-                        model.settingsTab = .plugin(controller.id)
-                    } label: {
-                        HStack(spacing: 10) {
-                            PluginIcon(manifest: controller.manifest, size: 20)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(controller.name)
-                                Text(controller.tools.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                    AgentToolsRow(model: model, controller: controller)
                 }
             }
         }
+    }
+}
+
+/// One plugin's tools in Settings → Agents, each with its own switch, plus
+/// the switch for agents reading its panel.
+struct AgentToolsRow: View {
+    let model: AppModel
+    let controller: PluginController
+    /// The consent store isn't observable; bumped after each change.
+    @State private var revision = 0
+
+    var body: some View {
+        let _ = revision
+        let specs = controller.tools
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                PluginIcon(manifest: controller.manifest, size: 20)
+                Text(controller.name)
+                Spacer()
+                Button("Plugin Settings") { model.settingsTab = .plugin(controller.id) }
+                    .buttonStyle(.link)
+                    .font(.caption)
+            }
+            ForEach(specs.map(\.name) + [AgentConsent.panel], id: \.self) { tool in
+                Toggle(isOn: Binding(get: { model.agentConsent.allows(pluginID: controller.pluginID, tool: tool, specs: specs) },
+                                     set: { allowed in
+                                         model.agentConsent.set(allowed, pluginID: controller.pluginID, tool: tool, specs: specs)
+                                         revision += 1
+                                     })) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(tool == AgentConsent.panel ? "Read its panel" : tool)
+                        Text(caption(tool, specs)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .padding(.leading, 30)
+            }
+        }
+    }
+
+    private func caption(_ tool: String, _ specs: [ToolSpec]) -> String {
+        let optIn = AgentConsent.isOptIn(tool, specs: specs) ? " Off until you turn it on." : ""
+        if tool == AgentConsent.panel { return "stackbar_read: what its panel shows, as text." + optIn }
+        return (specs.first { $0.name == tool }?.description ?? "") + optIn
     }
 }
 
@@ -471,6 +502,9 @@ struct PluginPage: View {
         var parts: [String] = []
         if !hasMenuBar { parts.append("\(controller.name) has no menu bar item.") }
         if hasMenuBar && controller.hiddenFromMenuBar { parts.append("Hidden from the menu bar: open its panel from the palette.") }
+        if hasMenuBar && !controller.hiddenFromMenuBar && controller.menuBarIdle {
+            parts.append("Out of the menu bar until it has something to show: open its panel from the palette.")
+        }
         if hasCommands { parts.append("An alias jumps to a command when you type it in the palette. A hotkey runs it from anywhere.") }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }

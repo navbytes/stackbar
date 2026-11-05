@@ -12,13 +12,28 @@ public struct CommandPreference: Codable, Equatable, Sendable {
     public var showInSpotlight: Bool
     /// Whether `stackbar://` links may run it without asking.
     public var linksAllowed: Bool
+    /// Whether a root-search command answers what is typed at the palette's
+    /// root, and a fallback command is offered under it.
+    public var inRootSearch: Bool
 
-    public init(alias: String? = nil, hotkey: String? = nil, enabled: Bool = true, showInSpotlight: Bool = true, linksAllowed: Bool = false) {
+    public init(alias: String? = nil, hotkey: String? = nil, enabled: Bool = true, showInSpotlight: Bool = true, linksAllowed: Bool = false, inRootSearch: Bool = true) {
         self.alias = alias
         self.hotkey = hotkey
         self.enabled = enabled
         self.showInSpotlight = showInSpotlight
         self.linksAllowed = linksAllowed
+        self.inRootSearch = inRootSearch
+    }
+
+    // Written by hand so preferences saved before `inRootSearch` still load.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        alias = try container.decodeIfPresent(String.self, forKey: .alias)
+        hotkey = try container.decodeIfPresent(String.self, forKey: .hotkey)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        showInSpotlight = try container.decodeIfPresent(Bool.self, forKey: .showInSpotlight) ?? true
+        linksAllowed = try container.decodeIfPresent(Bool.self, forKey: .linksAllowed) ?? false
+        inRootSearch = try container.decodeIfPresent(Bool.self, forKey: .inRootSearch) ?? true
     }
 
     public static let `default` = CommandPreference()

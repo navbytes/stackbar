@@ -30,6 +30,8 @@ final class CommandCenter {
     @ObservationIgnored private var views: [Int: CommandViewModel] = [:]
     @ObservationIgnored private var nextSession = 1
     @ObservationIgnored private let indexer = CommandSpotlightIndexer()
+    /// How quickly each root search answers; a slow one sits out a while.
+    @ObservationIgnored let rootBudget = RootSearchBudget()
 
     /// The palette's own shortcut, which no command may take.
     static let paletteHotKey = "ctrl+option+space"
@@ -232,6 +234,7 @@ final class CommandCenter {
 
     /// The plugin restarted: its views are gone with the old process.
     func pluginRestarted(_ pluginID: String) {
+        rootBudget.forget(pluginID: pluginID)
         for view in views.values where view.entry.pluginID == pluginID { view.pluginRestarted() }
     }
 

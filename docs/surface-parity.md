@@ -15,10 +15,10 @@ renderer and the menu-bar renderer all handle it.
 | `stack` | VStack / HStack / ZStack, aligned | VStack / HStack / ZStack, aligned | VStack / HStack / ZStack, aligned | Children on one line; layered when depth | As panel | As panel | Searched through | Lines, or one line when horizontal |
 | `list` | List; filter field when searchable | List; filter field when searchable | List; filter field when searchable | Hidden (panel only) | First 4 rows, no filter | List filtered by the plugin as the user types | Searched through | `List` then indented rows |
 | `section` | Captioned group | Captioned group | Captioned group | Hidden (panel only) | As panel | As panel | Searched through | `-- title --` |
-| `row` | Row with app icon or symbol; click = first action, context menu = all | Row with app icon or symbol; click = first action, context menu = all | Row with app icon or symbol; click = first action, context menu = all | Hidden (panel only) | Row, not clickable | Row; Return = first action, ⌘K = all, navigate pushes | Entry per action, searchable by title and subtitle | `* title - subtitle <actions {ids}>` |
+| `row` | Row with app icon or symbol; click = first action, context menu = all | Row with app icon or symbol; click = first action, context menu = all | Row with app icon or symbol; click = first action, context menu = all | Hidden (panel only) | Row; click = first action, sent through the app | Row; Return = first action, ⌘K = all, navigate pushes | Entry per action, searchable by title and subtitle | `* title - subtitle <actions {ids}>` |
 | `badge` | Capsule | Capsule | Capsule | Small capsule | As panel | As panel | Not listed | `[text]` |
-| `button` | Button | Button | Button | Hidden (click opens the panel) | Drawn disabled | As panel | Entry, runs the button | `(title) {id}` |
-| `toggle` | Toggle | Toggle | Toggle | Hidden (click opens the panel) | Drawn disabled | As panel | Entry, flips the toggle | `[x] title {id}` |
+| `button` | Button | Button | Button | Hidden (click opens the panel) | Button; click sends the action through the app | As panel | Entry, runs the button | `(title) {id}` |
+| `toggle` | Toggle | Toggle | Toggle | Hidden (click opens the panel) | Toggle; click flips it through the app | As panel | Entry, flips the toggle | `[x] title {id}` |
 | `progress` | Bar or ring; a timed range animates on its own | Bar or ring; a timed range animates on its own | Bar or ring; a timed range animates on its own | 12 pt ring, timed ones animate | As panel | As panel | Not listed | `[####......] 40%` |
 | `divider` | Divider | Divider | Divider | Hidden | As panel | As panel | Not listed | `----` |
 | `labeled` | LabeledContent | LabeledContent | LabeledContent | Label and value | As panel | As panel | Not listed | `label: value` |
@@ -34,6 +34,6 @@ renderer and the menu-bar renderer all handle it.
 | `image` | SF Symbol sized by the font; a remote image fills its frame | SF Symbol sized by the font; a remote image fills its frame | SF Symbol sized by the font; a remote image fills its frame | Symbol; a remote image is hidden | Symbol; a remote image shows its placeholder | As panel | Not listed | `[symbol]`, or `[image]` for a remote one |
 | `timer` | Live timer text the host counts | Live timer text the host counts | Live timer text the host counts | Live timer text | As panel | As panel | Not listed | `12:34` as of now |
 | `spacer` | Spacer | Spacer | Spacer | Hidden | As panel | As panel | Not listed | Nothing |
-| `tappable` | Content as a plain button; click sends the action | Content as a plain button; click sends the action | Content as a plain button; click sends the action | Hidden (click opens the panel) | Drawn, not clickable | As panel | Entry named by its text | `(text) {id}` |
+| `tappable` | Content as a plain button; click sends the action | Content as a plain button; click sends the action | Content as a plain button; click sends the action | Hidden (click opens the panel) | Content as a button; click sends the action through the app | As panel | Entry named by its text | `(text) {id}` |
 | `grid` | Equal-width columns, filled left to right | Equal-width columns, filled left to right | Equal-width columns, filled left to right | Hidden (panel only) | As panel | As panel | Searched through | Lines, one per cell |
 <!-- ledger:end -->

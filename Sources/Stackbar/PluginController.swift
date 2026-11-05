@@ -33,6 +33,17 @@ final class PluginController: Identifiable {
             model?.onPluginsChanged?()
         }
     }
+    /// The plugin's menu bar drew nothing at all last time (protocol 17), so
+    /// its item is out of the bar until it draws something; its panel opens
+    /// from the palette meanwhile. Remembered across launches so the item
+    /// doesn't flash in while the plugin starts.
+    private(set) var menuBarIdle: Bool {
+        didSet {
+            guard menuBarIdle != oldValue else { return }
+            UserDefaults.standard.set(menuBarIdle, forKey: "menuBarIdle." + source.path)
+            model?.onPluginsChanged?()
+        }
+    }
     /// The user turned the plugin off (Settings or the store): it is listed
     /// but not built or run, and it shows nowhere else. Kept by plugin id
     /// (`PluginSwitches`), so it survives the file moving.
@@ -77,15 +88,20 @@ final class PluginController: Identifiable {
         self.name = UserDefaults.standard.string(forKey: "pluginName." + source.path) ?? source.deletingPathExtension().lastPathComponent
         self.pluginID = model.switches.knownID(for: source) ?? source.path
         hiddenFromMenuBar = UserDefaults.standard.bool(forKey: "hiddenFromMenuBar." + source.path)
+        menuBarIdle = UserDefaults.standard.bool(forKey: "menuBarIdle." + source.path)
         isEnabled = model.switches.isOn(file: source)
     }
 
     /// Whether the plugin draws in the menu bar: it lists `.menuBar` (or did
-    /// last time, while it builds) and the user hasn't hidden it.
+    /// last time, while it builds), the user hasn't hidden it, and its menu
+    /// bar isn't empty right now.
     var showsInMenuBar: Bool {
-        let declares = manifest.map { $0.surfaces.contains(.menuBar) }
+        declaresMenuBar && !hiddenFromMenuBar && !menuBarIdle && isEnabled
+    }
+
+    var declaresMenuBar: Bool {
+        manifest.map { $0.surfaces.contains(.menuBar) }
             ?? (UserDefaults.standard.object(forKey: "declaresMenuBar." + source.path) as? Bool ?? true)
-        return declares && !hiddenFromMenuBar && isEnabled
     }
 
     /// A plugin with a panel and no menu-bar item opens it centered instead.
@@ -340,6 +356,7 @@ final class PluginController: Identifiable {
             state = newState
         case .render(.menuBar, let root):
             menuBar = root
+            menuBarIdle = root.isNothing
         case .render(.panel, let root):
             panel = root
             model?.panelChanged(self)

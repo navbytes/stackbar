@@ -67,3 +67,60 @@ public struct WidgetSnapshotStore: Sendable {
         if legacy != file(pluginID) { try? FileManager.default.removeItem(at: legacy) }
     }
 }
+
+/// A press on a widget's button, row or toggle, left by the widget extension
+/// for the app to send to the plugin (protocol 17). The extension can't
+/// reach plugins, so it writes one file per press in the shared directory and
+/// posts `notification`; the app sends each press as if it came from the
+/// panel and deletes the file.
+public struct WidgetAction: Codable, Equatable, Sendable {
+    public var pluginID: String
+    public var action: ActionID
+    public var value: EventValue?
+    public var pressedAt: Date
+
+    public init(pluginID: String, action: ActionID, value: EventValue? = nil, pressedAt: Date = Date()) {
+        self.pluginID = pluginID
+        self.action = action
+        self.value = value
+        self.pressedAt = pressedAt
+    }
+}
+
+public struct WidgetActionInbox: Sendable {
+    /// The Darwin notification the extension posts after leaving a press.
+    public static let notification = "io.navbytes.stackbar.widget-action"
+    /// Presses older than this are dropped: the app wasn't running, and
+    /// acting on a stale tap minutes later would surprise.
+    public static let maxAge: TimeInterval = 60
+
+    public var directory: URL
+
+    public init(directory: URL) { self.directory = directory }
+
+    /// Beside the widget snapshots, in the app group when there is one.
+    public static func shared() -> WidgetActionInbox {
+        WidgetActionInbox(directory: WidgetSnapshotStore.shared().directory.deletingLastPathComponent().appendingPathComponent("WidgetActions", isDirectory: true))
+    }
+
+    public func post(_ action: WidgetAction) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let name = String(format: "%.6f", action.pressedAt.timeIntervalSince1970) + "-" + UUID().uuidString + ".json"
+        try JSONEncoder().encode(action).write(to: directory.appendingPathComponent(name), options: .atomic)
+    }
+
+    /// Every waiting press, oldest first, each removed as it is read; ones
+    /// older than `maxAge` are removed and not returned.
+    public func drain(now: Date = Date()) -> [WidgetAction] {
+        let files = ((try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "json" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var result: [WidgetAction] = []
+        for file in files {
+            defer { try? FileManager.default.removeItem(at: file) }
+            guard let data = try? Data(contentsOf: file), let action = try? JSONDecoder().decode(WidgetAction.self, from: data) else { continue }
+            if now.timeIntervalSince(action.pressedAt) <= Self.maxAge { result.append(action) }
+        }
+        return result
+    }
+}

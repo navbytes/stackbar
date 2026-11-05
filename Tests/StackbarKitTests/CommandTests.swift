@@ -214,4 +214,15 @@ final class CommandSpecRootSearchTests: XCTestCase {
         wrong.rootSearch = true
         XCTAssertFalse(wrong.problems.isEmpty)
     }
+
+    func testRootSearchCanNameAPatternAndToolsCanBeOptIn() {
+        let issue = Command("issue", title: "Issue").rootSearch(section: "Jira", matching: #"[A-Z]+-\d+"#)
+        XCTAssertEqual(issue.spec.rootPattern, #"[A-Z]+-\d+"#)
+        XCTAssertEqual(issue.spec.rootSection, "Jira")
+        XCTAssertTrue(issue.spec.problems.isEmpty)
+        XCTAssertNil(Command("search", title: "Search").rootSearch().spec.rootPattern)
+        let clips = AgentTool("recent_clips", description: "Recent clips") { _ in "" }.optIn()
+        XCTAssertTrue(clips.spec.optIn)
+        XCTAssertFalse(AgentTool("count", description: "Count") { _ in "" }.spec.optIn)
+    }
 }

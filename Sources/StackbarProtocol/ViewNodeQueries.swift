@@ -48,6 +48,15 @@ extension ViewNode {
         }
     }
 
+    /// True for content with no nodes at all: a `menuBar` that returned
+    /// nothing. The host then takes the plugin's item out of the menu bar
+    /// until it draws something again (protocol 17). A tree with only
+    /// panel-only nodes is not nothing; it shows the plugin's name.
+    public var isNothing: Bool {
+        if case .stack(_, _, _, let children) = self { return children.allSatisfy(\.isNothing) }
+        return false
+    }
+
     /// Whether a form in the tree shows a problem with a field: a submitted
     /// form that comes back this way keeps the palette open.
     public var hasFormErrors: Bool {
