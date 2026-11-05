@@ -61,7 +61,8 @@ public actor PluginSupervisor {
     /// and tests wait on it instead of guessing with sleeps.
     public private(set) var settledCount = 0
     /// Messages sent to the current helper that it answers with `settled`.
-    private var sentCount = 0
+    /// Messages sent that the plugin answers with `settled`.
+    public private(set) var sentCount = 0
     /// `sentCount` right after the last timer and file triggers, so a new one
     /// is skipped while the plugin hasn't got to the previous one yet.
     private var triggerMarks: [TriggerReason: Int] = [:]
