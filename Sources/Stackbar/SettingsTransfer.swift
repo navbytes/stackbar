@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import StackbarHostCore
+import StackbarUI
 import SwiftUI
 import UniformTypeIdentifiers
 
