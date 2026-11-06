@@ -54,3 +54,15 @@ final class RichUITests: XCTestCase {
         XCTAssertEqual(StyleLint.warnings(unnamed.styled(Style(accessibilityLabel: "Settings"))), [], "a label outside the button names it too")
     }
 }
+
+final class ShortcutRenderTests: XCTestCase {
+    func testAShortcutThatCantBeReadIsFlagged() {
+        let row = RowNode(key: "r", title: "Issue", actions: [
+            ActionRef(id: "a", title: "Open", shortcut: "cmd+return"),
+            ActionRef(id: "b", title: "Copy", shortcut: "cmd+shft+c"),
+        ])
+        let text = TreeTextRenderer.render(.row(row))
+        XCTAssertTrue(text.contains("Open (cmd+return)  {a}"), text)
+        XCTAssertTrue(text.contains("Copy (cmd+shft+c: not a shortcut, so it never fires)  {b}"), text)
+    }
+}

@@ -41,7 +41,7 @@ public enum TreeTextRenderer {
             }
             if !row.actions.isEmpty {
                 let actions = row.actions.map { action in
-                    action.title + (action.shortcut.map { " (\($0))" } ?? "") + (action.navigate.map { " -> \($0.command)" } ?? tag(action.id))
+                    action.title + (action.shortcut.map { " (\($0)" + (KeyCombo($0) == nil ? ": not a shortcut, so it never fires" : "") + ")" } ?? "") + (action.navigate.map { " -> \($0.command)" } ?? tag(action.id))
                 }
                 line += "  <" + actions.joined(separator: ", ") + ">"
             }

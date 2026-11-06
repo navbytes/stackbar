@@ -442,37 +442,37 @@ struct PreviewPane: View {
 }
 
 /// A row action's shortcut (`cmd+return`, `cmd+1`, `cmd+shift+k`) matched
-/// against a key press.
+/// against a key press. `KeyCombo` reads the spec.
 public struct KeyShortcut: Equatable {
     public var key: KeyEquivalent
     public var modifiers: EventModifiers
 
     public init?(_ spec: String) {
+        guard let combo = KeyCombo(spec) else { return nil }
         var modifiers: EventModifiers = []
-        var key: KeyEquivalent?
-        for part in spec.lowercased().split(separator: "+").map({ $0.trimmingCharacters(in: .whitespaces) }) {
-            switch part {
-            case "cmd", "command": modifiers.insert(.command)
-            case "shift": modifiers.insert(.shift)
-            case "opt", "option", "alt": modifiers.insert(.option)
-            case "ctrl", "control": modifiers.insert(.control)
-            case "return", "enter": key = .return
-            case "delete", "backspace": key = .delete
-            case "forwarddelete": key = .deleteForward
-            case "escape", "esc": key = .escape
-            case "space": key = .space
-            case "tab": key = .tab
-            case "up": key = .upArrow
-            case "down": key = .downArrow
-            case "left": key = .leftArrow
-            case "right": key = .rightArrow
-            default:
-                guard part.count == 1, let character = part.first else { return nil }
-                key = KeyEquivalent(character)
+        for modifier in combo.modifiers {
+            switch modifier {
+            case .command: modifiers.insert(.command)
+            case .shift: modifiers.insert(.shift)
+            case .option: modifiers.insert(.option)
+            case .control: modifiers.insert(.control)
             }
         }
-        guard let key else { return nil }
-        self.key = key
+        switch combo.key {
+        case .character(let character): key = KeyEquivalent(character)
+        case .return: key = .return
+        case .delete: key = .delete
+        case .forwardDelete: key = .deleteForward
+        case .escape: key = .escape
+        case .space: key = .space
+        case .tab: key = .tab
+        case .up: key = .upArrow
+        case .down: key = .downArrow
+        case .left: key = .leftArrow
+        case .right: key = .rightArrow
+        // SwiftUI has no key equivalent for F-keys; a row can't use one.
+        case .function: return nil
+        }
         self.modifiers = modifiers
     }
 

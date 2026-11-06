@@ -412,41 +412,20 @@ public enum Accent: String, Codable, CaseIterable, Sendable {
     case blue, indigo, violet, pink, red, orange, amber, green, teal, cyan, graphite
 }
 
-/// A parsed hotkey spec: modifiers and one key, all lowercased.
+/// A system-wide hotkey: a `KeyCombo` with ⌘, ⌃ or ⌥ and a letter, digit,
+/// space or F1 to F12.
 public struct HotKeySpec: Equatable, Sendable {
-    public enum Modifier: String, Sendable, CaseIterable {
-        case command, control, option, shift
-    }
+    public typealias Modifier = KeyCombo.Modifier
 
     public var modifiers: Set<Modifier>
     /// `a`...`z`, `0`...`9`, `space`, or `f1`...`f12`.
     public var key: String
 
     public init?(_ spec: String) {
-        var modifiers: Set<Modifier> = []
-        var key: String?
-        for part in spec.lowercased().split(separator: "+").map({ $0.trimmingCharacters(in: .whitespaces) }) {
-            switch part {
-            case "cmd", "command", "⌘": modifiers.insert(.command)
-            case "ctrl", "control", "⌃": modifiers.insert(.control)
-            case "opt", "option", "alt", "⌥": modifiers.insert(.option)
-            case "shift", "⇧": modifiers.insert(.shift)
-            default:
-                guard key == nil else { return nil }
-                key = part
-            }
-        }
-        guard let key, Self.keys.contains(key), !modifiers.isDisjoint(with: [.command, .control, .option]) else { return nil }
-        self.modifiers = modifiers
-        self.key = key
+        guard let combo = KeyCombo(spec), combo.isHotKey else { return nil }
+        modifiers = combo.modifiers
+        key = combo.key.name
     }
-
-    public static let keys: Set<String> = {
-        var keys = Set("abcdefghijklmnopqrstuvwxyz0123456789".map(String.init))
-        keys.insert("space")
-        for number in 1...12 { keys.insert("f\(number)") }
-        return keys
-    }()
 }
 
 /// URL helpers that work the same on every platform without Foundation's URL

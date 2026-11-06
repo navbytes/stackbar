@@ -25,7 +25,7 @@ struct PaletteHotKeyPicker: View {
                 HotKeyRecorder(spec: spec) { choose($0 ?? PaletteHotKey.standard) }
             }
             if wantsCommandSpace && spotlightHolds {
-                Text("Spotlight still answers ⌘Space, so \(ActionsPanel.glyphs(PaletteHotKey.standard)) opens the palette until you turn Spotlight's shortcut off.")
+                Text("Spotlight still answers ⌘Space, so \(KeyCombo.glyphs(PaletteHotKey.standard)) opens the palette until you turn Spotlight's shortcut off.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.trailing)
