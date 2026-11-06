@@ -6,17 +6,51 @@ import StackbarProtocol
 /// then the actions plugins show on their panels; once you type, one ranked
 /// list, then matching plugins from the Store that aren't installed.
 public struct PaletteSection: Equatable, Sendable, Identifiable {
+    /// What a section holds. Code tells sections apart by this, never by
+    /// their titles, which are for people.
+    public enum Kind: Equatable, Sendable {
+        case favorites, recent, commands, panelActions
+        case results, topHit, store, fallback
+        /// A root-search command's rows.
+        case plugin
+
+        /// The heading of a section of this kind; a plugin's section and
+        /// the fallbacks have their own.
+        public var title: String? {
+            switch self {
+            case .favorites: return "Favorites"
+            case .recent: return "Recent"
+            case .commands: return "Commands"
+            case .panelActions: return "Panel Actions"
+            case .results: return "Results"
+            case .topHit: return "Top Hit"
+            case .store: return "From the Store"
+            case .fallback, .plugin: return nil
+            }
+        }
+
+        /// Every fixed heading, which a plugin's section must not repeat.
+        public static let fixedTitles: Set<String> = Set([Kind.favorites, .recent, .commands, .panelActions, .results, .topHit, .store].compactMap(\.title))
+    }
+
     public var title: String
+    public var kind: Kind
     public var entries: [PaletteIndex.Entry]
     /// A plugin section that answers the typed text's shape (its root
     /// pattern matched, like `ABC-123`), so it comes before the results.
     public var leads: Bool
     public var id: String { title }
 
-    public init(title: String, entries: [PaletteIndex.Entry], leads: Bool = false) {
+    public init(title: String, kind: Kind = .plugin, entries: [PaletteIndex.Entry], leads: Bool = false) {
         self.title = title
+        self.kind = kind
         self.entries = entries
         self.leads = leads
+    }
+
+    /// A section of a fixed kind, under its own heading.
+    public init(_ kind: Kind, entries: [PaletteIndex.Entry]) {
+        self.init(title: kind.title ?? "", kind: kind, entries: entries)
     }
 
     /// Groups `results` (already in search order) without reordering within
@@ -41,7 +75,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
             let shown = Set(results.map(\.id))
             let rest = fallbacks.filter { !shown.contains($0.id) }
             let top = rank(plugins, results: results, ranker: ranker, resultScore: resultScore)
-            return (top + [PaletteSection(title: "From the Store", entries: store), PaletteSection(title: fallbackTitle(typed), entries: rest)])
+            return (top + [PaletteSection(.store, entries: store), PaletteSection(title: fallbackTitle(typed), kind: .fallback, entries: rest)])
                 .filter { !$0.entries.isEmpty }
         }
         let pinned = Set(favorites.map(\.id))
@@ -64,10 +98,10 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
             }
         }
         return [
-            PaletteSection(title: "Favorites", entries: favorites),
-            PaletteSection(title: "Recent", entries: recent),
-            PaletteSection(title: "Commands", entries: commands),
-            PaletteSection(title: "Panel Actions", entries: actions),
+            PaletteSection(.favorites, entries: favorites),
+            PaletteSection(.recent, entries: recent),
+            PaletteSection(.commands, entries: commands),
+            PaletteSection(.panelActions, entries: actions),
         ].filter { !$0.entries.isEmpty }
     }
 }
@@ -75,7 +109,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
 extension PaletteSection {
     /// The title of the section holding the best row of all, when that row
     /// isn't first in its own section.
-    public static let topHitTitle = "Top Hit"
+    public static let topHitTitle = Kind.topHit.title ?? ""
 
     /// Results and the plugins' sections in the order drawn (see `group`).
     /// Rows inside a plugin's section keep the plugin's order.
@@ -102,9 +136,9 @@ extension PaletteSection {
         let led = sections.indices.filter { sections[$0].leads }.sorted { (best($0), -$0) > (best($1), -$1) }.map { sections[$0] }
         // Results is index -1: it wins ties with every plugin section.
         var ordered: [(section: PaletteSection, score: Int, index: Int)] = candidates.map { (sections[$0], best($0), $0) }
-        if let resultTop { ordered.append((PaletteSection(title: "Results", entries: results), resultTop, -1)) }
+        if let resultTop { ordered.append((PaletteSection(.results, entries: results), resultTop, -1)) }
         ordered.sort { ($0.score, -$0.index) > ($1.score, -$1.index) }
-        let hit = topHit.map { [PaletteSection(title: topHitTitle, entries: [$0])] } ?? []
+        let hit = topHit.map { [PaletteSection(.topHit, entries: [$0])] } ?? []
         return (led + hit + ordered.map(\.section)).filter { !$0.entries.isEmpty }
     }
 
@@ -164,6 +198,11 @@ public final class PaletteFavorites: @unchecked Sendable {
 
     /// The pinned entries that still exist, in pinned order.
     public func entries(in all: [PaletteIndex.Entry]) -> [PaletteIndex.Entry] {
+        Self.entries(ids, in: all)
+    }
+
+    /// The entries with these pinned ids that still exist, in pinned order.
+    public static func entries(_ ids: [String], in all: [PaletteIndex.Entry]) -> [PaletteIndex.Entry] {
         let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return ids.compactMap { byID[$0] }
     }

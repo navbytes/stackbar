@@ -453,14 +453,6 @@ struct PaletteView: View {
         if modifiers == .command, let digit = Int(String(press.characters)), (1...9).contains(digit), session.activate(line: digit) {
             return .handled
         }
-        if modifiers == [.command, .shift], String(press.key.character).lowercased() == "f", session.toggleFavoriteOfSelection() {
-            return .handled
-        }
-        if session.top == nil, press.modifiers.intersection([.command, .shift, .option, .control]) == [.command, .shift], String(press.key.character).lowercased() == "c" {
-            let actions = session.actions
-            if let index = actions.firstIndex(where: { $0.shortcut == "cmd+shift+c" }) { session.runAction(index) }
-            return .handled
-        }
         return .ignored
     }
 
