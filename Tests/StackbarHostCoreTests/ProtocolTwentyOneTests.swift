@@ -23,12 +23,9 @@ final class ProtocolTwentyOneTests: XCTestCase {
         return HostServices.local(directory: directory, secrets: MemorySecretStore([:]), platform: .init(system: system))
     }
 
-    private func value<T: Decodable>(_ type: T.Type, _ result: HostResult, file: StaticString = #filePath, line: UInt = #line) throws -> T {
-        guard case .value(let json?) = result else {
-            XCTFail("expected a value, got \(result)", file: file, line: line)
-            throw SystemServiceError("no value")
-        }
-        return try SystemCodec.decode(type, from: json)
+    /// The value a call answered with, as its reply type reads it.
+    private func value<T>(_ reply: HostReply<T>, _ result: HostResult) throws -> T {
+        try XCTUnwrap(reply.decode(result), "expected a value, got \(result)")
     }
 
     func testEachCallNeedsItsCapability() async {
@@ -59,19 +56,19 @@ final class ProtocolTwentyOneTests: XCTestCase {
         let system = SimulatedSystem()
         let services = services(system)
         let manifest = Manifest(id: "dev.test.cal", name: "Cal", capabilities: [.calendar, .calendarWrite])
-        let calendars = try value([CalendarInfo].self, await services.handle(.writableCalendars, for: manifest))
+        let calendars = try value(HostReplies.writableCalendars, await services.handle(.writableCalendars, for: manifest))
         XCTAssertEqual(calendars.map(\.title), ["Work", "Home"])
         XCTAssertEqual(calendars.first(where: \.isDefault)?.id, "work")
 
         let start = Date(timeIntervalSince1970: 1_800_000_000)
-        let added = try value(CalendarEvent.self, await services.handle(.saveCalendarEvent(CalendarEventDraft(title: "Lunch", start: start, end: start + 3600, calendarID: "home", alertMinutes: 10)), for: manifest))
+        let added = try value(HostReplies.saveCalendarEvent, await services.handle(.saveCalendarEvent(CalendarEventDraft(title: "Lunch", start: start, end: start + 3600, calendarID: "home", alertMinutes: 10)), for: manifest))
         XCTAssertEqual(added.calendar, "Home")
         XCTAssertFalse(added.id.isEmpty)
         var moved = CalendarEventDraft(id: added.id, title: "Lunch with Sam", start: start + 1800, end: start + 5400, calendarID: "home")
-        let changed = try value(CalendarEvent.self, await services.handle(.saveCalendarEvent(moved), for: manifest))
+        let changed = try value(HostReplies.saveCalendarEvent, await services.handle(.saveCalendarEvent(moved), for: manifest))
         XCTAssertEqual(changed.id, added.id)
         XCTAssertEqual(changed.title, "Lunch with Sam")
-        let listed = try value([CalendarEvent].self, await services.handle(.calendarEvents(from: start, to: start + 86400), for: manifest))
+        let listed = try value(HostReplies.calendarEvents, await services.handle(.calendarEvents(from: start, to: start + 86400), for: manifest))
         XCTAssertEqual(listed.filter { $0.id == added.id }.map(\.start), [start + 1800])
 
         moved.end = moved.start - 60
@@ -101,12 +98,12 @@ final class ProtocolTwentyOneTests: XCTestCase {
         let services = services(system)
         system.simulate(text: RecognizedText(lines: [.init(text: "Invoice 42", confidence: 0.99), .init(text: "Total $10", confidence: 0.8)]), inImage: "abc123")
         let clipboard = Manifest(id: "dev.test.clip", name: "Clip", capabilities: [.clipboard])
-        let text = try value(RecognizedText.self, await services.handle(.recognizeText(imageID: "abc123", languages: ["en-US"]), for: clipboard))
+        let text = try value(HostReplies.recognizedText, await services.handle(.recognizeText(imageID: "abc123", languages: ["en-US"]), for: clipboard))
         XCTAssertEqual(text.text, "Invoice 42\nTotal $10")
         guard case .failure = await services.handle(.recognizeText(imageID: "missing", languages: nil), for: clipboard) else { return XCTFail("an unknown image fails") }
 
         let screen = Manifest(id: "dev.test.screen", name: "Screen", capabilities: [.screenText])
-        let read = try value(RecognizedText.self, await services.handle(.captureScreenText(languages: nil), for: screen))
+        let read = try value(HostReplies.recognizedText, await services.handle(.captureScreenText(languages: nil), for: screen))
         XCTAssertEqual(read.text, "Bonjour tout le monde")
         system.simulate(screenText: nil)
         let cancelled = await services.handle(.captureScreenText(languages: nil), for: screen)
@@ -117,7 +114,7 @@ final class ProtocolTwentyOneTests: XCTestCase {
         let system = SimulatedSystem()
         let services = services(system)
         let manifest = Manifest(id: "dev.test.sensors", name: "Sensors", capabilities: [.sensors])
-        let readings = try value([SensorReading].self, await services.handle(.sensors, for: manifest))
+        let readings = try value(HostReplies.sensors, await services.handle(.sensors, for: manifest))
         XCTAssertEqual(readings.filter { $0.kind == .temperature }.map(\.id), ["cpu", "gpu", "battery"])
         XCTAssertEqual(readings.first { $0.kind == .fan }?.maximum, 4900)
     }

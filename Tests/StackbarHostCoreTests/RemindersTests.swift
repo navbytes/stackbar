@@ -12,12 +12,9 @@ final class RemindersTests: XCTestCase {
 
     private let granted = Manifest(id: "dev.test.todo", name: "Todo", capabilities: [.reminders])
 
-    private func value<T: Decodable>(_ type: T.Type, _ result: HostResult, file: StaticString = #filePath, line: UInt = #line) throws -> T {
-        guard case .value(let json?) = result else {
-            XCTFail("expected a value, got \(result)", file: file, line: line)
-            throw SystemServiceError("no value")
-        }
-        return try SystemCodec.decode(type, from: json)
+    /// The value a call answered with, as its reply type reads it.
+    private func value<T>(_ reply: HostReply<T>, _ result: HostResult) throws -> T {
+        try XCTUnwrap(reply.decode(result), "expected a value, got \(result)")
     }
 
     func testCallsNeedTheCapability() async {
@@ -39,14 +36,14 @@ final class RemindersTests: XCTestCase {
         let (services, directory) = services(system)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let lists = try value([ReminderList].self, await services.handle(.reminderLists, for: granted))
+        let lists = try value(HostReplies.reminderLists, await services.handle(.reminderLists, for: granted))
         XCTAssertEqual(lists.map(\.title), ["Reminders", "Groceries"])
-        let home = try value(ReminderList.self, await services.handle(.createReminderList(title: "  Home ", color: "#FF2D55"), for: granted))
+        let home = try value(HostReplies.createReminderList, await services.handle(.createReminderList(title: "  Home ", color: "#FF2D55"), for: granted))
         XCTAssertEqual(home.title, "Home")
         guard case .failure = await services.handle(.createReminderList(title: " ", color: nil), for: granted) else { return XCTFail("a list needs a title") }
 
         let due = Date(timeIntervalSince1970: 1_800_000_000)
-        let added = try value(Reminder.self, await services.handle(.saveReminder(Reminder(title: "Call mum", due: due, dueHasTime: true, priority: .high), fields: nil), for: granted))
+        let added = try value(HostReplies.saveReminder, await services.handle(.saveReminder(Reminder(title: "Call mum", due: due, dueHasTime: true, priority: .high), fields: nil), for: granted))
         XCTAssertFalse(added.id.isEmpty)
         XCTAssertEqual(added.list, "list-1", "a reminder with no list goes to the default one")
 
@@ -56,18 +53,18 @@ final class RemindersTests: XCTestCase {
         _ = try await system.saveReminder(onPhone, fields: [.due])
         var stale = added
         stale.title = "Call mum back"
-        let renamed = try value(Reminder.self, await services.handle(.saveReminder(stale, fields: [.title]), for: granted))
+        let renamed = try value(HostReplies.saveReminder, await services.handle(.saveReminder(stale, fields: [.title]), for: granted))
         XCTAssertEqual(renamed.title, "Call mum back")
         XCTAssertEqual(renamed.due, due.addingTimeInterval(86400), "a field the Mac didn't send keeps the phone's change")
 
         var done = renamed
         done.completed = due
-        _ = try value(Reminder.self, await services.handle(.saveReminder(done, fields: [.completed]), for: granted))
-        let open = try value([Reminder].self, await services.handle(.reminders(ReminderQuery()), for: granted))
+        _ = try value(HostReplies.saveReminder, await services.handle(.saveReminder(done, fields: [.completed]), for: granted))
+        let open = try value(HostReplies.reminders, await services.handle(.reminders(ReminderQuery()), for: granted))
         XCTAssertTrue(open.isEmpty, "completed reminders are left out unless asked for")
-        let recent = try value([Reminder].self, await services.handle(.reminders(ReminderQuery(completedSince: due.addingTimeInterval(-60))), for: granted))
+        let recent = try value(HostReplies.reminders, await services.handle(.reminders(ReminderQuery(completedSince: due.addingTimeInterval(-60))), for: granted))
         XCTAssertEqual(recent.map(\.title), ["Call mum back"])
-        let elsewhere = try value([Reminder].self, await services.handle(.reminders(ReminderQuery(lists: [home.id], completedSince: .distantPast)), for: granted))
+        let elsewhere = try value(HostReplies.reminders, await services.handle(.reminders(ReminderQuery(lists: [home.id], completedSince: .distantPast)), for: granted))
         XCTAssertTrue(elsewhere.isEmpty)
 
         guard case .ok = await services.handle(.deleteReminder(id: added.id), for: granted) else { return XCTFail("delete failed") }
@@ -81,9 +78,9 @@ final class RemindersTests: XCTestCase {
         system.simulate(reminders: SimulatedReminders(access: .notDetermined, grantWhenAsked: false))
         let (services, directory) = services(system)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let checked = try value(ReminderAccess.self, await services.handle(.reminderAccess(ask: false), for: granted))
+        let checked = try value(HostReplies.reminderAccess, await services.handle(.reminderAccess(ask: false), for: granted))
         XCTAssertEqual(checked, .notDetermined, "checking doesn't ask")
-        let asked = try value(ReminderAccess.self, await services.handle(.reminderAccess(ask: true), for: granted))
+        let asked = try value(HostReplies.reminderAccess, await services.handle(.reminderAccess(ask: true), for: granted))
         XCTAssertEqual(asked, .denied)
         guard case .failure(let message) = await services.handle(.reminderLists, for: granted) else { return XCTFail("declined access fails") }
         XCTAssertTrue(message.contains("System Settings"), message)

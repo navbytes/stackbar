@@ -132,3 +132,31 @@ final class TextMatchTests: XCTestCase {
         XCTAssertNil(row.preview)
     }
 }
+
+final class HostReplyTests: XCTestCase {
+    func testTheHostsAnswerReadsBackAsTheSameType() throws {
+        let readings = [SensorReading(id: "cpu", name: "CPU", kind: .temperature, value: 52.5)]
+        let result = HostReplies.sensors.result(readings)
+        XCTAssertEqual(try HostReplies.sensors.decode(result), readings)
+        guard case .value(let json) = result else { return XCTFail("expected a value") }
+        XCTAssertEqual(try HostReplies.sensors.decode(json), readings)
+    }
+
+    func testNothingStaysNothing() throws {
+        XCTAssertEqual(HostReplies.pickColor.result(ifAny: nil), .value(nil))
+        XCTAssertNil(try HostReplies.pickColor.decode(HostResult.value(nil)))
+        XCTAssertNil(try HostReplies.pickColor.decode(nil as String?))
+    }
+
+    func testARefusalIsThrown() {
+        XCTAssertThrowsError(try HostReplies.sensors.decode(HostResult.failure("to read temperatures and fans, add .sensors"))) { error in
+            XCTAssertEqual((error as? HostReplyError)?.message, "to read temperatures and fans, add .sensors")
+        }
+        XCTAssertThrowsError(try HostReplies.sensors.decode(HostResult.ok))
+    }
+
+    func testAnotherTypesAnswerDoesntDecode() {
+        let status = HostReplies.keyLayer.result(KeyLayerStatus(listening: true))
+        XCTAssertThrowsError(try HostReplies.sensors.decode(status))
+    }
+}

@@ -359,6 +359,16 @@ final class HardeningTests: XCTestCase {
         XCTAssertTrue(limiter.allow("b", now: start), "limits are per plugin")
         XCTAssertTrue(limiter.allow("a", now: start.addingTimeInterval(10.1)))
     }
+
+    func testRateLimiterWordsItsOwnLimit() {
+        let start = Date()
+        let sounds = RateLimiter(limit: 10, per: 60)
+        for _ in 0..<10 { XCTAssertNil(sounds.refusal("a", "sounds", now: start)) }
+        XCTAssertEqual(sounds.refusal("a", "sounds", now: start), .failure("too many sounds; at most 10 a minute"))
+        let alerts = RateLimiter(limit: 1, per: 60)
+        XCTAssertNil(alerts.refusal("a", "alerts", now: start))
+        XCTAssertEqual(alerts.refusal("a", "alerts", now: start), .failure("too many alerts; at most one a minute"))
+    }
 }
 
 final class InstanceLockTests: XCTestCase {
