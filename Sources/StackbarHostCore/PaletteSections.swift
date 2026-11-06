@@ -203,7 +203,9 @@ public extension StoreListing {
             if let score = TextMatch.score(typed, in: entry.name) { return (entry, 1000 + score) }
             let words = [entry.summary ?? "", entry.category ?? ""].joined(separator: " ").lowercased()
                 .split { !$0.isLetter && !$0.isNumber }
-            if words.contains(where: { $0.hasPrefix(typed) }) { return (entry, 100) }
+            // Every word typed starts a word of the summary ("time zone").
+            let parts = typed.split(separator: " ")
+            if parts.allSatisfy({ part in words.contains { $0.hasPrefix(part) } }) { return (entry, 100) }
             return nil
         }
         return scored

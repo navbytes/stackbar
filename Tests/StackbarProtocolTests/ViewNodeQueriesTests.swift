@@ -46,6 +46,13 @@ final class ViewNodeQueriesTests: XCTestCase {
         XCTAssertNil(RowFilter.items(in: .list(children: [.section(title: "S", children: [.divider])]), query: ""))
     }
 
+    func testDuplicateRowKeysAreMadeUniqueForTheKeyboard() {
+        let list = ViewNode.list(searchable: true, children: [row("Untitled", "Untitled"), row("a", "A"), row("Untitled", "Untitled"), row("Untitled", "Untitled")])
+        XCTAssertEqual(RowFilter.items(in: list, query: "")?.map(\.id), ["Untitled", "a", "Untitled#2", "Untitled#3"])
+        let clash = ViewNode.list(children: [row("x", "X"), row("x#2", "X2"), row("x", "X")])
+        XCTAssertEqual(RowFilter.items(in: clash, query: "")?.map(\.id), ["x", "x#2", "x#2+"], "a renamed key never takes one already used")
+    }
+
     func testGridsOfRowsAreFilteredInsideAndTiledInThePalette() {
         let grid = ViewNode.grid(columns: 8, children: [row("grin", "Grinning face"), row("cat", "Cat face"), row("heart", "Red heart")])
         let list = ViewNode.list(searchable: true, children: [grid])

@@ -256,10 +256,24 @@ final class CommandCenter {
         views[session]?.received(seq: seq, root: root)
     }
 
-    /// The plugin restarted: its views are gone with the old process.
-    func pluginRestarted(_ pluginID: String) {
-        rootBudget.forget(pluginID: pluginID)
-        for view in views.values where view.entry.pluginID == pluginID { view.pluginRestarted() }
+    /// The plugin's process changed state. Restarting: its views are gone
+    /// with the old process, so they wait and open again once it runs.
+    /// Failed or stopped: they say so, instead of spinning forever.
+    func pluginStateChanged(_ pluginID: String, _ state: PluginSupervisor.State) {
+        let affected = views.values.filter { $0.entry.pluginID == pluginID }
+        switch state {
+        case .restarting:
+            rootBudget.forget(pluginID: pluginID)
+            affected.forEach { $0.pluginRestarted() }
+        case .running:
+            affected.forEach { $0.pluginRunning() }
+        case .failed(let reason):
+            affected.forEach { $0.pluginStopped("\($0.entry.pluginName) stopped: \(reason)") }
+        case .stopped:
+            affected.forEach { $0.pluginStopped("\($0.entry.pluginName) is turned off") }
+        case .starting:
+            break
+        }
     }
 
     // MARK: - Looking plugins up
@@ -358,6 +372,9 @@ final class CommandViewModel: Identifiable {
     }
 
     private func changed() {
+        // Waiting for a restart or stopped: the newest text goes out when
+        // the session opens again.
+        guard !waitingForPlugin, !stopped else { return }
         guard !closed, let next = state.change(CommandQuery(text: query, arguments: arguments)) else {
             isSearching = state.isSearching
             return
@@ -400,15 +417,42 @@ final class CommandViewModel: Identifiable {
     /// for its answer: the palette closes once it comes back without errors.
     func perform(_ action: ActionID, _ value: EventValue? = nil) {
         // After closeView the plugin has no handler for the view's actions.
-        guard !closed else { return }
+        guard canAct else { return }
         if case .fields = value { submitting = true }
         let supervisor = supervisor
         enqueue { await supervisor.event(action, value: value) }
     }
 
+    /// Whether an action can reach the plugin now.
+    var canAct: Bool { !closed && !waitingForPlugin && !stopped }
+    /// Stopped or failed: nothing will answer.
+    var isStopped: Bool { stopped }
+    @ObservationIgnored private var waitingForPlugin = false
+    @ObservationIgnored private var stopped = false
+
     func pluginRestarted() {
         guard !closed else { return }
-        problem = "\(entry.pluginName) restarted; open the command again"
+        waitingForPlugin = true
+        stopped = false
+        problem = "\(entry.pluginName) restarted; reconnecting…"
+        isSearching = true
+    }
+
+    /// Running again after a restart: the session opens again with what is
+    /// typed now, so the list comes back without reopening the command.
+    func pluginRunning() {
+        guard !closed, waitingForPlugin || stopped else { return }
+        waitingForPlugin = false
+        stopped = false
+        problem = nil
+        deliver(state.reopen(CommandQuery(text: query, arguments: arguments)))
+    }
+
+    func pluginStopped(_ message: String) {
+        guard !closed else { return }
+        waitingForPlugin = false
+        stopped = true
+        problem = message
         isSearching = false
     }
 

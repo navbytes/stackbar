@@ -99,6 +99,18 @@ final class CommandRegistryTests: XCTestCase {
         XCTAssertEqual(usage.score("x"), 1, accuracy: 0.001)
         XCTAssertEqual(usage.score("never"), 0)
     }
+
+    func testRecentMeansUsedThisWeek() {
+        final class Clock: @unchecked Sendable { var now = Date(timeIntervalSince1970: 0) }
+        let clock = Clock()
+        let usage = PaletteUsage(file: nil) { clock.now }
+        usage.record("x")
+        XCTAssertTrue(usage.isRecent("x"))
+        XCTAssertFalse(usage.isRecent("never"))
+        clock.now = clock.now.addingTimeInterval(PaletteUsage.recentWindow + 1)
+        XCTAssertFalse(usage.isRecent("x"), "a decayed score is still above zero, but it isn't recent")
+        XCTAssertGreaterThan(usage.score("x"), 0)
+    }
 }
 
 final class PaletteCommandTests: XCTestCase {
@@ -180,6 +192,19 @@ final class CommandLinkAndViewStateTests: XCTestCase {
         XCTAssertFalse(state.received(seq: 1, root: .text("old", style: .body, role: .primary)).show, "older trees are dropped")
         XCTAssertNil(state.change(CommandQuery(text: "ab")), "the same query sends nothing")
         XCTAssertEqual(state.change(CommandQuery(text: "abc")), .update(seq: 3, query: CommandQuery(text: "abc")))
+    }
+
+    func testReopenAfterARestartSendsTheNewestQueryAndDropsOldTrees() {
+        var state = ViewSessionState(session: 1, query: CommandQuery(text: ""))
+        _ = state.open()
+        XCTAssertNil(state.change(CommandQuery(text: "a")))
+        XCTAssertEqual(state.reopen(CommandQuery(text: "ab")), .open(seq: 2, query: CommandQuery(text: "ab")), "the restarted plugin gets a fresh open")
+        XCTAssertTrue(state.isSearching)
+        XCTAssertFalse(state.received(seq: 1, root: .text("old", style: .body, role: .primary)).show, "the dead process's tree is dropped")
+        let fresh = state.received(seq: 2, root: .text("new", style: .body, role: .primary))
+        XCTAssertTrue(fresh.show)
+        XCTAssertNil(fresh.next, "nothing was left pending")
+        XCTAssertFalse(state.isSearching)
     }
 
     func testOpenAllowsSafeSchemesAndDeclaredOnes() throws {

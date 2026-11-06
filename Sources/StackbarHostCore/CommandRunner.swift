@@ -182,6 +182,17 @@ public struct ViewSessionState: Sendable {
         return .open(seq: seq, query: query)
     }
 
+    /// The plugin restarted and lost the session: open it again with the
+    /// newest query. The seq keeps counting, so a late tree from the old
+    /// process is never shown over the new one.
+    public mutating func reopen(_ query: CommandQuery) -> Send {
+        self.query = query
+        pending = false
+        let seq = take()
+        inFlight = seq
+        return .open(seq: seq, query: query)
+    }
+
     /// The user changed the query; returns an update to send now, or nil
     /// when one is in flight (the newest is sent when it answers).
     public mutating func change(_ query: CommandQuery) -> Send? {
