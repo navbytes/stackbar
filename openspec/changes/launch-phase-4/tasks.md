@@ -11,20 +11,20 @@
 - [ ] 1.8 Mac check: switch to a window on another display and a minimized one; search and choose a menu item in Safari, Finder and Xcode; the four palette keys; the move prompt from Downloads; install the tool; Remove all data on a test account
 
 ## 2. Store, alongside 0.25
-- [ ] 2.1 Switch Windows
-- [ ] 2.2 Search Menu Items
-- [ ] 2.3 Kill Process
-- [ ] 2.4 Recent Projects (VS Code, Cursor, Xcode)
-- [ ] 2.5 Timers
-- [ ] 2.6 Script Commands
-- [ ] 2.7 Browser Bookmarks and Tabs
+- [x] 2.1 Switch Windows
+- [x] 2.2 Search Menu Items
+- [x] 2.3 Kill Process
+- [x] 2.4 Recent Projects (VS Code, Cursor, Xcode)
+- [x] 2.5 Timers
+- [x] 2.6 Script Commands
+- [x] 2.7 Browser Bookmarks and Tabs
 
 ## 3. 0.26.0
-- [ ] 3.1 Color Picker host call and plugin
-- [ ] 3.2 Dictionary host call and plugin
-- [ ] 3.3 VoiceOver labels pass
-- [ ] 3.4 Community lane: `Community/<user>/`, ids `io.github.<user>.<name>`, author on the store page, filter
-- [ ] 3.5 Sparkle beta channel
+- [x] 3.1 Color Picker host call and plugin
+- [x] 3.2 Dictionary host call and plugin
+- [x] 3.3 VoiceOver labels pass
+- [x] 3.4 Community lane: `Community/<user>/`, ids `io.github.<user>.<name>`, author on the store page, filter
+- [x] 3.5 Sparkle beta channel
 
 ## 4. Beta and 1.0
 - [ ] 4.1 Sentry DSN set (Naveen)

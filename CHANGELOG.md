@@ -5,6 +5,12 @@ window. Write for people who use Stackbar, not for the code.
 
 ## Unreleased
 
+### New
+- **Get beta versions.** Settings › Store & Updates has a switch to try new versions before everyone else. Turn it off to go back to the next regular release.
+- **VoiceOver reads every button** in plugin panels, the palette and the Store, including the ones that show only an icon.
+- **Community plugins in the Store.** Plugins people publish under their own name get a Community section, and their page says who wrote them with a link to their GitHub.
+- For plugin authors: `Stackbar.pickColor()` shows the system magnifier and returns the color the user clicks, and `Stackbar.define(_:)` looks a word up in the Mac's own Dictionary, offline (protocol 21). Neither needs a capability. Color Picker and Dictionary in the Store use them.
+
 ### Fixed
 - **Return on the palette's first result works while you type.** If a plugin was still answering your latest letters, Return could act on a result from the earlier answer that the plugin had already dropped, close the palette and do nothing. The palette now waits for the answer and runs the same result, or says it went away.
 - In ⌘K, a shortcut such as ⌘⇧C now runs the action shown in the list, not something on the row behind it. ⌘⌫ clears an open command's search field too.

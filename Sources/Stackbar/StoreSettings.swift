@@ -106,6 +106,11 @@ struct AppUpdatesGroup: View {
             if updater.isAvailable {
                 Toggle("Check for Stackbar updates automatically", isOn: $updater.checksAutomatically)
                     .toggleStyle(TrailingSwitchStyle())
+                SettingsRow(title: "Get beta versions", caption: "Try new versions before everyone else. Betas can have rough edges; turn this off to go back to the next regular release.") {
+                    Toggle("Get beta versions", isOn: $updater.getsBetas)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
             }
         }
     }

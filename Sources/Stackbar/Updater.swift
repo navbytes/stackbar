@@ -24,7 +24,7 @@ final class Updater: NSObject {
         #if canImport(Sparkle)
         let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? ""
         guard !key.isEmpty else { return }
-        let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: self)
+        let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: self)
         self.controller = controller
         isAvailable = true
         canCheck = controller.updater.canCheckForUpdates
@@ -54,6 +54,26 @@ final class Updater: NSObject {
         }
     }
 
+    /// Whether updates come from the beta feed, which also has pre-releases.
+    nonisolated static let betaKey = "betaUpdates"
+    nonisolated static let betaFeed = "https://github.com/navbytes/stackbar/releases/download/beta/appcast.xml"
+
+    var getsBetas: Bool {
+        get {
+            access(keyPath: \.getsBetas)
+            return UserDefaults.standard.bool(forKey: Self.betaKey)
+        }
+        set {
+            withMutation(keyPath: \.getsBetas) {
+                UserDefaults.standard.set(newValue, forKey: Self.betaKey)
+            }
+            #if canImport(Sparkle)
+            // Look now, so turning betas on finds the current one.
+            if newValue { controller?.updater.checkForUpdatesInBackground() }
+            #endif
+        }
+    }
+
     /// What Settings says when this build can't update itself.
     static let unavailableNote = "This build doesn't update itself. Update with Homebrew (brew upgrade --cask stackbar) or download the latest release from stackbar.app."
 
@@ -72,6 +92,13 @@ final class Updater: NSObject {
 }
 
 #if canImport(Sparkle)
+extension Updater: SPUUpdaterDelegate {
+    /// The beta feed when Get beta versions is on; nil keeps SUFeedURL.
+    nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
+        UserDefaults.standard.bool(forKey: Updater.betaKey) ? Updater.betaFeed : nil
+    }
+}
+
 extension Updater: SPUStandardUserDriverDelegate {
     /// Stackbar has no Dock icon, so Sparkle's scheduled reminder would open
     /// behind other apps. Bring Stackbar forward first.

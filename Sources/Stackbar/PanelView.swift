@@ -124,6 +124,7 @@ struct PanelFooter: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(stateColor).frame(width: 8, height: 8).help(stateText)
+                .accessibilityLabel(stateText)
             Text(controller.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             Spacer()
             if controller.manifest?.surfaces.contains(.window) == true {
@@ -135,6 +136,7 @@ struct PanelFooter: View {
                 }
                 .buttonStyle(.borderless)
                 .help(isOpen ? "Show Window" : "Open in a Window")
+                .accessibilityLabel(isOpen ? "Show Window" : "Open in a Window")
             }
             Button {
                 controller.refresh()
@@ -143,6 +145,7 @@ struct PanelFooter: View {
             }
             .buttonStyle(.borderless)
             .help("Refresh")
+            .accessibilityLabel("Refresh")
             if controller.manifest?.surfaces.contains(.settings) == true {
                 Button {
                     AppDelegate.shared?.showSettings(plugin: controller)
@@ -152,6 +155,7 @@ struct PanelFooter: View {
                 .buttonStyle(.borderless)
                 .keyboardShortcut(",", modifiers: .command)
                 .help("\(controller.name) Settings (⌘,)")
+                .accessibilityLabel("\(controller.name) Settings")
             }
             Menu {
                 Button("Restart Plugin") { controller.restart() }
@@ -175,6 +179,7 @@ struct PanelFooter: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
+            .accessibilityLabel("More")
             .menuStyle(.button)
             .buttonStyle(.borderless)
             .menuIndicator(.hidden)

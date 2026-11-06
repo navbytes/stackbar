@@ -317,6 +317,7 @@ struct PaletteView: View {
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
                 .help("Back (Esc)")
+                .accessibilityLabel("Back")
                 ForEach(Array(session.stack.enumerated()), id: \.element.id) { index, stage in
                     Text(stage.title)
                         .font(.callout.weight(.medium))
