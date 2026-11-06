@@ -133,7 +133,7 @@ public final class HostServices: Sendable {
     /// sends a streamed run's output to the plugin.
     public func handle(_ call: HostCall, for granted: Manifest, declared: Manifest? = nil, id: Int = 0, emit: (@Sendable (HostMessage) -> Void)? = nil) async -> HostResult {
         let declared = declared ?? granted
-        guard calls.allow(granted.id) else { return .failure("too many host calls; at most 1200 a minute") }
+        if let refused = calls.refusal(granted.id, "host calls") { return refused }
         // Capabilities a call needs whatever its arguments; the cases below
         // check what depends on the manifest's details.
         if let need = call.requirement, !granted.capabilities.contains(need.capability) {
@@ -143,12 +143,7 @@ public final class HostServices: Sendable {
         }
         switch call {
         case .storageSet(let key, let value):
-            do {
-                try await storage.set(key, value, for: granted.id, quota: granted.storageQuotaBytes)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            return await perform { try await self.storage.set(key, value, for: granted.id, quota: granted.storageQuotaBytes) }
 
         case .secret(let name):
             guard Manifest.isValidSecretName(name) else {
@@ -167,7 +162,7 @@ public final class HostServices: Sendable {
             }
 
         case .http(let request):
-            guard requests.allow(granted.id) else { return .failure("too many HTTP requests; at most 300 a minute") }
+            if let refused = requests.refusal(granted.id, "HTTP requests") { return refused }
             let allowed = granted.networkHosts + userServerHosts(granted)
             let result = await http.perform(request, pluginID: granted.id, allowedHosts: allowed)
             if case .failure = result, let host = URLParts.host(of: request.url),
@@ -188,15 +183,10 @@ public final class HostServices: Sendable {
             }
 
         case .publish(let topic, let payload):
-            do {
-                try await bus.publish(topic, payload: payload, from: granted.id)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            return await perform { try await self.bus.publish(topic, payload: payload, from: granted.id) }
 
         case .notify(let title, let body, let actions):
-            guard notifications.allow(granted.id) else { return .failure("too many notifications; at most 10 a minute") }
+            if let refused = notifications.refusal(granted.id, "notifications") { return refused }
             switch Self.checked(actions ?? []) {
             case .failure(let message): return .failure(message)
             case .success(let buttons):
@@ -205,28 +195,23 @@ public final class HostServices: Sendable {
             }
 
         case .hud(let message, let isError):
-            guard huds.allow(granted.id) else { return .failure("too many HUD messages; at most 30 a minute") }
+            if let refused = huds.refusal(granted.id, "HUD messages") { return refused }
             let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return .failure("a HUD message needs text") }
             platform.hud(String(text.prefix(200)), isError)
             return .ok
 
         case .system(let action):
-            guard systemActions.allow(granted.id) else { return .failure("too many system actions; at most 10 a minute") }
-            do {
-                try await platform.system.perform(action)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = systemActions.refusal(granted.id, "system actions") { return refused }
+            return await perform { try await self.platform.system.perform(action) }
 
         case .playSound(let sound):
-            guard sounds.allow(granted.id) else { return .failure("too many sounds; at most 10 a minute") }
+            if let refused = sounds.refusal(granted.id, "sounds") { return refused }
             platform.playSound(sound)
             return .ok
 
         case .alert(let title, let body, let actions):
-            guard alerts.allow(granted.id) else { return .failure("too many alerts; at most one a minute") }
+            if let refused = alerts.refusal(granted.id, "alerts") { return refused }
             switch Self.checked(actions) {
             case .failure(let message): return .failure(message)
             case .success(let buttons):
@@ -250,11 +235,8 @@ public final class HostServices: Sendable {
             if url.isFileURL, app == nil, Self.isProgram(url) {
                 return .failure("\(url.path) is a program; open it with an app chosen explicitly")
             }
-            if let app {
-                do { try await platform.openWith(url, app) } catch { return .failure("\(error)") }
-            } else {
-                platform.open(url)
-            }
+            if let app { return await perform { try await self.platform.openWith(url, app) } }
+            platform.open(url)
             return .ok
 
         case .copy(let text):
@@ -263,61 +245,47 @@ public final class HostServices: Sendable {
             return .ok
 
         case .clipboardRead:
-            return .value(platform.system.readClipboard().map(SystemCodec.encode))
+            return HostReplies.clipboardRead.result(ifAny: platform.system.readClipboard())
 
         case .clipboardWrite(let content), .paste(let content, _):
             if case .text(let text) = content, text.utf8.count > 1024 * 1024 { return .failure("text is too large to copy") }
-            do {
-                if case .paste(_, let options) = call {
-                    var options = options ?? PasteOptions()
-                    options.cursorFromEnd = min(options.cursorFromEnd, PasteOptions.maxCursorFromEnd)
-                    try await platform.system.paste(content, options: options)
-                } else {
-                    try platform.system.writeClipboard(content)
-                }
-                return .ok
-            } catch {
-                return .failure("\(error)")
+            if case .paste(_, let options) = call {
+                var options = options ?? PasteOptions()
+                options.cursorFromEnd = min(options.cursorFromEnd, PasteOptions.maxCursorFromEnd)
+                return await perform { try await self.platform.system.paste(content, options: options) }
             }
+            return await perform { try self.platform.system.writeClipboard(content) }
 
         case .keepAwake(let request):
-            do {
-                try platform.system.keepAwake(request.map { KeepAwakeRequest(display: $0.display, reason: "\(granted.name): \($0.reason.prefix(120))") }, pluginID: granted.id)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            return await perform { try self.platform.system.keepAwake(request.map { KeepAwakeRequest(display: $0.display, reason: "\(granted.name): \($0.reason.prefix(120))") }, pluginID: granted.id) }
 
         case .systemStatus:
-            return .value(SystemCodec.encode(platform.system.systemStatus()))
+            return HostReplies.systemStatus.result(platform.system.systemStatus())
 
         case .calendarEvents(let from, let to):
             guard to > from else { return .failure("calendarEvents needs to > from") }
             guard to.timeIntervalSince(from) <= 31 * 86400 + 3600 else { return .failure("calendarEvents covers at most 31 days at a time") }
-            do {
-                let events = try await platform.system.calendarEvents(from: from, to: to).prefix(500).map { event -> CalendarEvent in
+            return await answer(HostReplies.calendarEvents) {
+                try await self.platform.system.calendarEvents(from: from, to: to).prefix(500).map { event -> CalendarEvent in
                     var event = event
                     event.notes = event.notes.map { String($0.prefix(4000)) }
                     return event
                 }
-                return .value(SystemCodec.encode(Array(events)))
-            } catch {
-                return .failure("\(error)")
             }
 
         case .reminderAccess(let ask):
-            return .value(SystemCodec.encode(await platform.system.reminderAccess(ask: ask)))
+            return HostReplies.reminderAccess.result(await platform.system.reminderAccess(ask: ask))
 
         case .reminderLists:
-            return await answer { try await self.platform.system.reminderLists() }
+            return await answer(HostReplies.reminderLists) { try await self.platform.system.reminderLists() }
 
         case .createReminderList(let title, let color):
             let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !title.isEmpty else { return .failure("a Reminders list needs a title") }
-            return await answer { try await self.platform.system.createReminderList(title: String(title.prefix(200)), color: color) }
+            return await answer(HostReplies.createReminderList) { try await self.platform.system.createReminderList(title: String(title.prefix(200)), color: color) }
 
         case .reminders(let query):
-            return await answer {
+            return await answer(HostReplies.reminders) {
                 try await self.platform.system.reminders(query).prefix(ReminderQuery.limit).map { reminder -> Reminder in
                     var reminder = reminder
                     reminder.notes = reminder.notes.map { String($0.prefix(4000)) }
@@ -331,15 +299,10 @@ public final class HostServices: Sendable {
             }
             var reminder = reminder
             reminder.notes = reminder.notes.map { String($0.prefix(4000)) }
-            return await answer { try await self.platform.system.saveReminder(reminder, fields: fields) }
+            return await answer(HostReplies.saveReminder) { try await self.platform.system.saveReminder(reminder, fields: fields) }
 
         case .deleteReminder(let reminderID):
-            do {
-                try await platform.system.deleteReminder(id: reminderID)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            return await perform { try await self.platform.system.deleteReminder(id: reminderID) }
 
         case .run(let request):
             return await run(request, id: id, granted: granted, declared: declared, emit: emit)
@@ -349,27 +312,23 @@ public final class HostServices: Sendable {
             return .ok
 
         case .context:
-            return .value(SystemCodec.encode(await platform.system.context()))
+            return HostReplies.context.result(await platform.system.context())
 
         case .finderSelection:
-            do {
-                return .value(SystemCodec.encode(try await platform.system.finderSelection()))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.finderSelection) { try await self.platform.system.finderSelection() }
 
         case .chooseFile(let types):
-            guard panels.allow(granted.id) else { return .failure("too many file panels; at most 10 a minute") }
+            if let refused = panels.refusal(granted.id, "file panels") { return refused }
             do {
                 guard let file = try await platform.system.chooseFile(types: types, for: granted.name) else { return .value(nil) }
                 guard file.data.count <= ChosenFile.maxBytes else { return .failure("\(file.name) is larger than 5 MB") }
-                return .value(SystemCodec.encode(file))
+                return HostReplies.chooseFile.result(file)
             } catch {
                 return .failure("\(error)")
             }
 
         case .saveFile(let name, let data):
-            guard panels.allow(granted.id) else { return .failure("too many file panels; at most 10 a minute") }
+            if let refused = panels.refusal(granted.id, "file panels") { return refused }
             guard data.count <= ChosenFile.maxBytes else { return .failure("files saved this way are at most 5 MB") }
             let safe = (name as NSString).lastPathComponent
             do {
@@ -382,176 +341,115 @@ public final class HostServices: Sendable {
             return .value(await platform.system.resolveApplication(nameOrPath))
 
         case .windows:
-            do {
-                return .value(SystemCodec.encode(try await platform.system.windows()))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.windows) { try await self.platform.system.windows() }
 
         case .installedApps:
-            do {
-                return .value(SystemCodec.encode(try await platform.system.installedApps()))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.installedApps) { try await self.platform.system.installedApps() }
 
         case .findFiles(let query):
             let query = FileQuery(text: query.text, limit: query.limit)
-            guard !query.text.trimmingCharacters(in: .whitespaces).isEmpty else { return .value(SystemCodec.encode([FoundFile]())) }
-            do {
-                return .value(SystemCodec.encode(try await platform.system.findFiles(query)))
-            } catch {
-                return .failure("\(error)")
-            }
+            guard !query.text.trimmingCharacters(in: .whitespaces).isEmpty else { return HostReplies.findFiles.result([]) }
+            return await answer(HostReplies.findFiles) { try await self.platform.system.findFiles(query) }
 
         case .runningApps:
-            do {
-                return .value(SystemCodec.encode(try await platform.system.runningApps()))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.runningApps) { try await self.platform.system.runningApps() }
 
         case .activateApp(let id, let launch):
-            guard appSwitches.allow(granted.id) else { return .failure("too many app switches; at most 120 a minute") }
-            do {
-                try await platform.system.activateApp(id, launch: launch)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = appSwitches.refusal(granted.id, "app switches") { return refused }
+            return await perform { try await self.platform.system.activateApp(id, launch: launch) }
 
         case .hideApp(let id):
-            guard appSwitches.allow(granted.id) else { return .failure("too many app switches; at most 120 a minute") }
-            do {
-                try await platform.system.hideApp(id)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = appSwitches.refusal(granted.id, "app switches") { return refused }
+            return await perform { try await self.platform.system.hideApp(id) }
 
         case .setKeyLayer(let layer):
-            do {
-                return .value(SystemCodec.encode(try platform.system.setKeyLayer(layer, pluginID: granted.id, pluginName: granted.name)))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.keyLayer) { try self.platform.system.setKeyLayer(layer, pluginID: granted.id, pluginName: granted.name) }
 
         case .keyLayerStatus:
-            return .value(SystemCodec.encode(platform.system.keyLayerStatus(pluginID: granted.id)))
+            return HostReplies.keyLayer.result(platform.system.keyLayerStatus(pluginID: granted.id))
 
         case .setExpansions(let expansions):
-            do {
-                return .value(SystemCodec.encode(try platform.system.setExpansions(expansions, pluginID: granted.id, pluginName: granted.name)))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.expansions) { try self.platform.system.setExpansions(expansions, pluginID: granted.id, pluginName: granted.name) }
 
         case .expansionStatus:
-            return .value(SystemCodec.encode(platform.system.expansionStatus(pluginID: granted.id)))
+            return HostReplies.expansions.result(platform.system.expansionStatus(pluginID: granted.id))
 
         case .saveCalendarEvent(let draft):
             if let problem = draft.problem { return .failure(problem) }
-            guard calendarWrites.allow(granted.id) else { return .failure("too many calendar changes; at most 30 a minute") }
-            do {
-                return .value(SystemCodec.encode(try await platform.system.saveCalendarEvent(draft)))
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = calendarWrites.refusal(granted.id, "calendar changes") { return refused }
+            return await answer(HostReplies.saveCalendarEvent) { try await self.platform.system.saveCalendarEvent(draft) }
 
         case .writableCalendars:
-            do {
-                return .value(SystemCodec.encode(try await platform.system.writableCalendars()))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.writableCalendars) { try await self.platform.system.writableCalendars() }
 
         case .openInTerminal(let command, let title):
             if let problem = Self.terminalProblem(command) { return .failure(problem) }
-            guard terminals.allow(granted.id) else { return .failure("too many terminals; at most 5 a minute") }
-            do {
-                try await platform.system.openInTerminal(command, title: title.map { String($0.prefix(80)) })
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = terminals.refusal(granted.id, "terminals") { return refused }
+            return await perform { try await self.platform.system.openInTerminal(command, title: title.map { String($0.prefix(80)) }) }
 
         case .recognizeText(let imageID, let languages):
-            guard textReads.allow(granted.id) else { return .failure("too many text reads; at most 30 a minute") }
-            do {
-                return .value(SystemCodec.encode(try await platform.system.recognizeText(imageID: imageID, languages: languages.map { Array($0.prefix(8)) })))
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = textReads.refusal(granted.id, "text reads") { return refused }
+            return await answer(HostReplies.recognizedText) { try await self.platform.system.recognizeText(imageID: imageID, languages: languages.map { Array($0.prefix(8)) }) }
 
         case .captureScreenText(let languages):
-            guard textReads.allow(granted.id) else { return .failure("too many text reads; at most 30 a minute") }
-            do {
-                return .value(try await platform.system.captureScreenText(languages: languages.map { Array($0.prefix(8)) }).map(SystemCodec.encode))
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = textReads.refusal(granted.id, "text reads") { return refused }
+            return await answer(HostReplies.recognizedText) { try await self.platform.system.captureScreenText(languages: languages.map { Array($0.prefix(8)) }) }
 
         case .sensors:
-            do {
-                return .value(SystemCodec.encode(try await platform.system.sensors()))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.sensors) { try await self.platform.system.sensors() }
 
         case .focusWindow(let target):
-            guard appSwitches.allow(granted.id) else { return .failure("too many app switches; at most 120 a minute") }
-            do {
-                try await platform.system.focusWindow(target)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = appSwitches.refusal(granted.id, "app switches") { return refused }
+            return await perform { try await self.platform.system.focusWindow(target) }
 
         case .menuItems:
-            do {
-                return .value(SystemCodec.encode(try await platform.system.menuItems()))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await answer(HostReplies.menuItems) { try await self.platform.system.menuItems() }
 
         case .pressMenuItem(let appID, let path):
             guard !path.isEmpty, path.count <= MenuSnapshot.maxDepth + 1 else { return .failure("a menu path has 1 to \(MenuSnapshot.maxDepth + 1) titles") }
-            guard appSwitches.allow(granted.id) else { return .failure("too many menu presses; at most 120 a minute") }
-            do {
-                try await platform.system.pressMenuItem(appID: appID, path: path)
-                return .ok
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = appSwitches.refusal(granted.id, "menu presses") { return refused }
+            return await perform { try await self.platform.system.pressMenuItem(appID: appID, path: path) }
 
         case .pickColor:
-            guard panels.allow(granted.id) else { return .failure("too many color pickers; at most 10 a minute") }
-            do {
-                return .value(try await platform.system.pickColor().map(SystemCodec.encode))
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = panels.refusal(granted.id, "color pickers") { return refused }
+            return await answer(HostReplies.pickColor) { try await self.platform.system.pickColor() }
 
         case .define(let word):
             let query = word.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !query.isEmpty, query.count <= Definition.maxQuery else { return .failure("look up 1 to \(Definition.maxQuery) characters") }
-            return .value(await platform.system.define(query).map(SystemCodec.encode))
+            return HostReplies.define.result(ifAny: await platform.system.define(query))
 
         case .arrangeWindows(let placements, let launch):
             guard placements.count <= WindowPlacement.maxPerCall else { return .failure("at most \(WindowPlacement.maxPerCall) windows at a time") }
-            guard arrangements.allow(granted.id) else { return .failure("too many window arrangements; at most 10 a minute") }
-            do {
-                return .value(SystemCodec.encode(try await platform.system.arrangeWindows(placements, launch: launch)))
-            } catch {
-                return .failure("\(error)")
-            }
+            if let refused = arrangements.refusal(granted.id, "window arrangements") { return refused }
+            return await answer(HostReplies.arrangeWindows) { try await self.platform.system.arrangeWindows(placements, launch: launch) }
         }
     }
 
-    /// A system value as JSON, or the error in words.
-    private func answer(_ body: () async throws -> some Encodable) async -> HostResult {
+    /// The value as its call's reply, or the error in words.
+    private func answer<Value>(_ reply: HostReply<Value>, _ body: () async throws -> Value) async -> HostResult {
         do {
-            return .value(SystemCodec.encode(try await body()))
+            return reply.result(try await body())
+        } catch {
+            return .failure("\(error)")
+        }
+    }
+
+    /// A value that may be nothing (a picker the user closed) as its call's
+    /// reply, or the error in words.
+    private func answer<Value>(_ reply: HostReply<Value>, _ body: () async throws -> Value?) async -> HostResult {
+        do {
+            return reply.result(ifAny: try await body())
+        } catch {
+            return .failure("\(error)")
+        }
+    }
+
+    /// `.ok` once the work is done, or the error in words.
+    private func perform(_ body: () async throws -> Void) async -> HostResult {
+        do {
+            try await body()
+            return .ok
         } catch {
             return .failure("\(error)")
         }
@@ -578,7 +476,7 @@ public final class HostServices: Sendable {
             return .ok
         }
         switch await runs.run(request, id: id, grant: grant) {
-        case .success(let result): return .value(SystemCodec.encode(result))
+        case .success(let result): return HostReplies.run.result(result)
         case .failure(let refusal): return refused(refusal)
         }
     }
@@ -707,6 +605,15 @@ final class RateLimiter: @unchecked Sendable {
     init(limit: Int, per window: Double) {
         self.limit = limit
         self.window = window
+    }
+
+    /// The refusal once `key` has used up its calls: "too many sounds; at
+    /// most 10 a minute". `what` names the calls in the plural.
+    func refusal(_ key: String, _ what: String, now: Date = Date()) -> HostResult? {
+        guard !allow(key, now: now) else { return nil }
+        let count = limit == 1 ? "one" : "\(limit)"
+        let span = window == 60 ? "a minute" : "every \(Int(window)) seconds"
+        return .failure("too many \(what); at most \(count) \(span)")
     }
 
     func allow(_ key: String, now: Date = Date()) -> Bool {

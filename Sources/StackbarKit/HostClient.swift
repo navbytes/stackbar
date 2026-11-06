@@ -312,8 +312,7 @@ public enum Stackbar {
     /// What is on the clipboard now, or `nil` when it is empty. Needs
     /// `.clipboard`. Pair it with the `.clipboard` trigger to hear every copy.
     public static func clipboard() async throws -> ClipboardItem? {
-        guard let json = try await value(.clipboardRead) else { return nil }
-        return try SystemCodec.decode(ClipboardItem.self, from: json)
+        try await HostReplies.clipboardRead.decode(value(.clipboardRead))
     }
 
     /// Puts text, files or a kept image on the clipboard. Needs `.clipboard`
@@ -348,15 +347,14 @@ public enum Stackbar {
 
     /// Battery, power and running apps. Needs `.power`.
     public static func systemStatus() async throws -> SystemStatus {
-        guard let json = try await value(.systemStatus) else { throw HostError("no system status") }
-        return try SystemCodec.decode(SystemStatus.self, from: json)
+        guard let reply = try await HostReplies.systemStatus.decode(value(.systemStatus)) else { throw HostError("no system status") }
+        return reply
     }
 
     /// Events overlapping `from..<to` (at most 31 days), sorted by start.
     /// Needs `.calendar`; the first call asks the user for calendar access.
     public static func calendarEvents(from: Date, to: Date) async throws -> [CalendarEvent] {
-        guard let json = try await value(.calendarEvents(from: from, to: to)) else { return [] }
-        return try SystemCodec.decode([CalendarEvent].self, from: json)
+        try await HostReplies.calendarEvents.decode(value(.calendarEvents(from: from, to: to))) ?? []
     }
 
     /// Adds an event to a calendar, or changes the one `draft.id` names (an
@@ -366,15 +364,14 @@ public enum Stackbar {
     /// time. Stackbar 0.26.0.
     @discardableResult
     public static func saveCalendarEvent(_ draft: CalendarEventDraft) async throws -> CalendarEvent {
-        guard let json = try await value(.saveCalendarEvent(draft)) else { throw HostError("the event wasn't saved") }
-        return try SystemCodec.decode(CalendarEvent.self, from: json)
+        guard let reply = try await HostReplies.saveCalendarEvent.decode(value(.saveCalendarEvent(draft))) else { throw HostError("the event wasn't saved") }
+        return reply
     }
 
     /// The calendars events can be added to, the default one marked. Needs
     /// `.calendarWrite`. Stackbar 0.26.0.
     public static func writableCalendars() async throws -> [CalendarInfo] {
-        guard let json = try await value(.writableCalendars) else { return [] }
-        return try SystemCodec.decode([CalendarInfo].self, from: json)
+        try await HostReplies.writableCalendars.decode(value(.writableCalendars)) ?? []
     }
 
     // MARK: Terminal, text and sensors
@@ -393,16 +390,14 @@ public enum Stackbar {
     /// (`["ja", "en"]`); nil lets Vision pick. Needs `.clipboard`.
     /// Stackbar 0.26.0.
     public static func recognizeText(imageID: String, languages: [String]? = nil) async throws -> RecognizedText {
-        guard let json = try await value(.recognizeText(imageID: imageID, languages: languages)) else { return RecognizedText(lines: []) }
-        return try SystemCodec.decode(RecognizedText.self, from: json)
+        try await HostReplies.recognizedText.decode(value(.recognizeText(imageID: imageID, languages: languages))) ?? RecognizedText(lines: [])
     }
 
     /// Lets the user drag over part of the screen, like ⇧⌘4, and answers the
     /// text in it; nil when they press Esc. Needs `.screenText`; the host
     /// asks for Screen Recording access the first time. Stackbar 0.26.0.
     public static func captureScreenText(languages: [String]? = nil) async throws -> RecognizedText? {
-        guard let json = try await value(.captureScreenText(languages: languages)) else { return nil }
-        return try SystemCodec.decode(RecognizedText.self, from: json)
+        try await HostReplies.recognizedText.decode(value(.captureScreenText(languages: languages)))
     }
 
     /// The Mac's temperatures (°C: CPU, GPU, battery, SSD as it reports
@@ -410,8 +405,7 @@ public enum Stackbar {
     /// sensor the Mac doesn't expose is left out. Needs `.sensors`.
     /// Stackbar 0.26.0.
     public static func sensors() async throws -> [SensorReading] {
-        guard let json = try await value(.sensors) else { return [] }
-        return try SystemCodec.decode([SensorReading].self, from: json)
+        try await HostReplies.sensors.decode(value(.sensors)) ?? []
     }
 
     // MARK: Reminders
@@ -419,28 +413,25 @@ public enum Stackbar {
     /// Whether Stackbar may use the user's reminders. With `ask`, macOS asks
     /// the user if it hasn't yet. Needs `.reminders`. Stackbar 0.18.0.
     public static func reminderAccess(ask: Bool = false) async throws -> ReminderAccess {
-        guard let json = try await value(.reminderAccess(ask: ask)) else { return .unavailable }
-        return try SystemCodec.decode(ReminderAccess.self, from: json)
+        try await HostReplies.reminderAccess.decode(value(.reminderAccess(ask: ask))) ?? .unavailable
     }
 
     /// The user's Reminders lists. Needs `.reminders`; the first call asks
     /// for access.
     public static func reminderLists() async throws -> [ReminderList] {
-        guard let json = try await value(.reminderLists) else { return [] }
-        return try SystemCodec.decode([ReminderList].self, from: json)
+        try await HostReplies.reminderLists.decode(value(.reminderLists)) ?? []
     }
 
     /// Makes a Reminders list (`color` as `#RRGGBB`). Needs `.reminders`.
     public static func createReminderList(_ title: String, color: String? = nil) async throws -> ReminderList {
-        guard let json = try await value(.createReminderList(title: title, color: color)) else { throw HostError("no list") }
-        return try SystemCodec.decode(ReminderList.self, from: json)
+        guard let reply = try await HostReplies.createReminderList.decode(value(.createReminderList(title: title, color: color))) else { throw HostError("no list") }
+        return reply
     }
 
     /// Open reminders in `lists` (nil for all), plus those completed since
     /// `completedSince`. Needs `.reminders`.
     public static func reminders(in lists: [String]? = nil, completedSince: Date? = nil) async throws -> [Reminder] {
-        guard let json = try await value(.reminders(ReminderQuery(lists: lists, completedSince: completedSince))) else { return [] }
-        return try SystemCodec.decode([Reminder].self, from: json)
+        try await HostReplies.reminders.decode(value(.reminders(ReminderQuery(lists: lists, completedSince: completedSince)))) ?? []
     }
 
     /// Adds a reminder (empty `id`) or saves one. Pass the `fields` you
@@ -449,8 +440,8 @@ public enum Stackbar {
     /// reminder with its id. Needs `.reminders`.
     @discardableResult
     public static func saveReminder(_ reminder: Reminder, fields: [Reminder.Field]? = nil) async throws -> Reminder {
-        guard let json = try await value(.saveReminder(reminder, fields: fields)) else { throw HostError("no reminder") }
-        return try SystemCodec.decode(Reminder.self, from: json)
+        guard let reply = try await HostReplies.saveReminder.decode(value(.saveReminder(reminder, fields: fields))) else { throw HostError("no reminder") }
+        return reply
     }
 
     /// Deletes a reminder. Needs `.reminders`.
@@ -463,8 +454,8 @@ public enum Stackbar {
     /// The regular apps that are running, in launch order, with the one in
     /// front marked `isActive`. Needs `.apps`. Stackbar 0.16.0.
     public static func runningApps() async throws -> [RunningApp] {
-        guard let json = try await value(.runningApps) else { throw HostError("no running apps") }
-        return try SystemCodec.decode([RunningApp].self, from: json)
+        guard let reply = try await HostReplies.runningApps.decode(value(.runningApps)) else { throw HostError("no running apps") }
+        return reply
     }
 
     /// Brings the app with this bundle id to the front, unhiding it; with
@@ -484,8 +475,8 @@ public enum Stackbar {
     /// `activateApp(id, launch: true)` and a pane with `open(pane.url)`.
     /// Needs `.apps`. Stackbar 0.20.0.
     public static func installedApps() async throws -> [InstalledApp] {
-        guard let json = try await value(.installedApps) else { throw HostError("no apps") }
-        return try SystemCodec.decode([InstalledApp].self, from: json)
+        guard let reply = try await HostReplies.installedApps.decode(value(.installedApps)) else { throw HostError("no apps") }
+        return reply
     }
 
     /// Files and folders in the user's home whose names hold every word of
@@ -493,8 +484,7 @@ public enum Stackbar {
     /// hidden files and Library internals are left out. Needs `.fileSearch`.
     /// Stackbar 0.20.0.
     public static func findFiles(_ text: String, limit: Int = 8) async throws -> [FoundFile] {
-        guard let json = try await value(.findFiles(FileQuery(text: text, limit: limit))) else { return [] }
-        return try SystemCodec.decode([FoundFile].self, from: json)
+        try await HostReplies.findFiles.decode(value(.findFiles(FileQuery(text: text, limit: limit)))) ?? []
     }
 
     /// Locks, sleeps, restarts the Mac and the like (`SystemAction`). Ask
@@ -513,8 +503,8 @@ public enum Stackbar {
     /// `.keyLayer`; the host asks for Accessibility access. Stackbar 0.16.0.
     @discardableResult
     public static func setKeyLayer(_ layer: KeyLayer?) async throws -> KeyLayerStatus {
-        guard let json = try await value(.setKeyLayer(layer)) else { throw HostError("no key layer status") }
-        return try SystemCodec.decode(KeyLayerStatus.self, from: json)
+        guard let reply = try await HostReplies.keyLayer.decode(value(.setKeyLayer(layer))) else { throw HostError("no key layer status") }
+        return reply
     }
 
     /// Registers this plugin's keywords, replacing the last set, or removes
@@ -526,8 +516,8 @@ public enum Stackbar {
     /// 0.24.0.
     @discardableResult
     public static func setExpansions(_ expansions: [TextExpansion]) async throws -> ExpansionStatus {
-        guard let json = try await value(.setExpansions(expansions)) else { throw HostError("no expansion status") }
-        return try SystemCodec.decode(ExpansionStatus.self, from: json)
+        guard let reply = try await HostReplies.expansions.decode(value(.setExpansions(expansions))) else { throw HostError("no expansion status") }
+        return reply
     }
 
     /// Whether this plugin's keywords expand, and if not, why: expansion
@@ -535,16 +525,16 @@ public enum Stackbar {
     /// Secure Input, or keywords another plugin registered first. Needs
     /// `.textExpansion`. Stackbar 0.24.0.
     public static func expansionStatus() async throws -> ExpansionStatus {
-        guard let json = try await value(.expansionStatus) else { throw HostError("no expansion status") }
-        return try SystemCodec.decode(ExpansionStatus.self, from: json)
+        guard let reply = try await HostReplies.expansions.decode(value(.expansionStatus)) else { throw HostError("no expansion status") }
+        return reply
     }
 
     /// Whether this plugin's key layer is listening, and if not, why: missing
     /// Accessibility access, an app holding Secure Input, or another plugin
     /// on the same trigger. Needs `.keyLayer`. Stackbar 0.16.0.
     public static func keyLayerStatus() async throws -> KeyLayerStatus {
-        guard let json = try await value(.keyLayerStatus) else { throw HostError("no key layer status") }
-        return try SystemCodec.decode(KeyLayerStatus.self, from: json)
+        guard let reply = try await HostReplies.keyLayer.decode(value(.keyLayerStatus)) else { throw HostError("no key layer status") }
+        return reply
     }
 
     // MARK: Windows
@@ -553,8 +543,8 @@ public enum Stackbar {
     /// monitor setup's id (`WindowSnapshot.setupID`). Needs `.windows`; the
     /// host asks for Accessibility access the first time. Stackbar 0.15.0.
     public static func windows() async throws -> WindowSnapshot {
-        guard let json = try await value(.windows) else { throw HostError("no windows") }
-        return try SystemCodec.decode(WindowSnapshot.self, from: json)
+        guard let reply = try await HostReplies.windows.decode(value(.windows)) else { throw HostError("no windows") }
+        return reply
     }
 
     /// Moves and resizes windows to `placements` (take them from
@@ -563,8 +553,8 @@ public enum Stackbar {
     /// At most 200 placements and 10 calls a minute. Needs `.windows`.
     @discardableResult
     public static func arrangeWindows(_ placements: [WindowPlacement], launch: Bool = false) async throws -> ArrangeResult {
-        guard let json = try await value(.arrangeWindows(placements, launch: launch)) else { throw HostError("no result from arranging windows") }
-        return try SystemCodec.decode(ArrangeResult.self, from: json)
+        guard let reply = try await HostReplies.arrangeWindows.decode(value(.arrangeWindows(placements, launch: launch))) else { throw HostError("no result from arranging windows") }
+        return reply
     }
 
     /// Brings one window to the front: unminimizes and raises it, and makes
@@ -581,8 +571,8 @@ public enum Stackbar {
     /// titles and shortcut. Needs `.menus`; the host asks for Accessibility
     /// access the first time. Stackbar 0.25.0.
     public static func menuItems() async throws -> MenuSnapshot {
-        guard let json = try await value(.menuItems) else { throw HostError("no menus") }
-        return try SystemCodec.decode(MenuSnapshot.self, from: json)
+        guard let reply = try await HostReplies.menuItems.decode(value(.menuItems)) else { throw HostError("no menus") }
+        return reply
     }
 
     /// Brings the app forward and chooses its menu item at `path`, as
@@ -602,16 +592,14 @@ public enum Stackbar {
     /// if let color = try await Stackbar.pickColor() { Stackbar.copy(color.hex) }
     /// ```
     public static func pickColor() async throws -> PickedColor? {
-        guard let json = try await value(.pickColor) else { return nil }
-        return try SystemCodec.decode(PickedColor.self, from: json)
+        try await HostReplies.pickColor.decode(value(.pickColor))
     }
 
     /// The definition the Mac's own Dictionary has for a word or phrase, as
     /// plain text, or nil when it has none. Needs no capability; the lookup
     /// stays on the Mac. Stackbar 0.26.0 and later.
     public static func define(_ word: String) async throws -> Definition? {
-        guard let json = try await value(.define(word)) else { return nil }
-        return try SystemCodec.decode(Definition.self, from: json)
+        try await HostReplies.define.decode(value(.define(word)))
     }
 
     // MARK: Commands and context
@@ -631,8 +619,8 @@ public enum Stackbar {
     /// cut (`result.truncated`); the timeout is at most 10 minutes.
     public static func run(_ command: String, _ arguments: [String] = [], input: Data? = nil, workingDirectory: String? = nil, environment: [String: String] = [:], timeout: Duration = .seconds(60)) async throws -> RunResult {
         let request = RunRequest(command: command, arguments: arguments, input: input, workingDirectory: workingDirectory, environment: environment, timeout: timeout.seconds)
-        guard let json = try await value(.run(request)) else { throw HostError("no result from \(command)") }
-        return try SystemCodec.decode(RunResult.self, from: json)
+        guard let reply = try await HostReplies.run.decode(value(.run(request))) else { throw HostError("no result from \(command)") }
+        return reply
     }
 
     /// Runs a declared command and hands over its output as it is written,
@@ -656,15 +644,13 @@ public enum Stackbar {
     /// command, prefer `invocation.context`: it was read when the command
     /// started, before Stackbar's palette took focus.
     public static func context() async throws -> InvocationContext {
-        guard let json = try await value(.context) else { return InvocationContext() }
-        return try SystemCodec.decode(InvocationContext.self, from: json)
+        try await HostReplies.context.decode(value(.context)) ?? InvocationContext()
     }
 
     /// The paths selected in Finder. Needs `.context`; macOS asks the user
     /// once to let Stackbar read Finder's selection.
     public static func finderSelection() async throws -> [String] {
-        guard let json = try await value(.finderSelection) else { return [] }
-        return try SystemCodec.decode([String].self, from: json)
+        try await HostReplies.finderSelection.decode(value(.finderSelection)) ?? []
     }
 
     // MARK: Files and apps
@@ -673,8 +659,7 @@ public enum Stackbar {
     /// returns its name and contents, at most 5 MB; `nil` when they cancel.
     /// Needs no capability: the user chooses.
     public static func chooseFile(types: [String] = []) async throws -> ChosenFile? {
-        guard let json = try await value(.chooseFile(types: types)) else { return nil }
-        return try SystemCodec.decode(ChosenFile.self, from: json)
+        try await HostReplies.chooseFile.decode(value(.chooseFile(types: types)))
     }
 
     /// Asks the user where to save `data`, suggesting `name`; returns the
