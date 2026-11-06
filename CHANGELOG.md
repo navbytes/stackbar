@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Palette answers keep up with your typing.** A plugin's answer in the palette, like Calculator's, sometimes showed the result for the text before your last keystroke: `(54*8)+33` showed the answer to `(54*8)+3`. The palette now redraws whenever a plugin's answer changes.
+
 ## 0.27.0
 
 ### New

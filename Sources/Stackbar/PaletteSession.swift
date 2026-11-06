@@ -154,7 +154,7 @@ final class PaletteSession {
 
     /// The root's search, kept until the query or the index changes: the
     /// view, the footer, ⌘K and every arrow press ask for it.
-    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, plugins: [String], sections: [PaletteSection], results: [PaletteIndex.Entry])?
+    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, plugins: [PaletteSection], sections: [PaletteSection], results: [PaletteIndex.Entry])?
     /// The Store's indexes were asked for once, for its suggestions.
     @ObservationIgnored private var storeRequested = false
 
@@ -174,10 +174,12 @@ final class PaletteSession {
         // Read every time, so the list redraws once the Store's indexes arrive.
         let storeCount = model.store?.catalogs.count ?? 0
         // Plugins' rows arrive after the query does, so they are read every
-        // time and are part of the cache's key.
+        // time and are part of the cache's key: whole rows, not just ids. A
+        // row's id stays put while its title changes (a sum's answer is
+        // always the row `answer`), so keying on ids kept the answer to the
+        // text before the last keystroke on screen.
         let plugins = rootSearchSections()
-        let pluginKey = plugins.flatMap(\.entries).map(\.id)
-        if let cache, cache.query == query, cache.revision == palette.revision, cache.store == storeCount, cache.plugins == pluginKey {
+        if let cache, cache.query == query, cache.revision == palette.revision, cache.store == storeCount, cache.plugins == plugins {
             return (cache.sections, cache.results)
         }
         let usage = model.commands.usage
@@ -202,7 +204,7 @@ final class PaletteSession {
                                             plugins: plugins, fallbacks: fallbackEntries(), ranker: ranker,
                                             resultScore: resultScore) { usage.isRecent($0.learnID) }
         let ordered = sections.flatMap(\.entries)
-        cache = (query, palette.revision, storeCount, pluginKey, sections, ordered)
+        cache = (query, palette.revision, storeCount, plugins, sections, ordered)
         return (sections, ordered)
     }
 
