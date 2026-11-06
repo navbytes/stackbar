@@ -693,7 +693,7 @@ public final class HostServices: Sendable {
     }
 
     private static func missing(_ capability: Capability, _ what: String) -> HostResult {
-        .failure("to \(what), add .\(capability.caseName) to the manifest's capabilities")
+        .failure("to \(what), add .\(capability.kind.rawValue) to the manifest's capabilities")
     }
 }
 

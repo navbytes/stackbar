@@ -81,7 +81,7 @@ struct StorePluginPage: View {
 
     /// The facts people check before installing, in one row.
     private var infoStrip: some View {
-        let kinds = entry.capabilities.compactMap(SettingsPresentation.Access.init(summary:))
+        let kinds = SettingsPresentation.storePermissions(entry).compactMap(\.access)
         let surfaces = (entry.surfaces ?? []).filter { $0 != "settings" }
         let cells: [(String, String, String)] = [
             ("Version", entry.version, entry.updated ?? " "),
@@ -180,9 +180,9 @@ struct StorePluginPage: View {
                 if entry.capabilities.isEmpty {
                     privacyCard(symbol: "checkmark.shield.fill", color: .green, title: "Asks for nothing", text: "No network, files, commands, secrets or clipboard.")
                 }
-                ForEach(entry.capabilities, id: \.self) { capability in
-                    let access = SettingsPresentation.Access(summary: capability)
-                    privacyCard(symbol: access?.symbol ?? "lock.fill", color: access?.color ?? .gray, title: access?.title ?? "Access", text: capability)
+                ForEach(Array(SettingsPresentation.storePermissions(entry).enumerated()), id: \.offset) { _, permission in
+                    let access = permission.access
+                    privacyCard(symbol: access?.symbol ?? "lock.fill", color: access?.color ?? .gray, title: access?.title ?? "Access", text: permission.summary)
                 }
                 privacyCard(symbol: "lock.shield.fill", color: .blue, title: "Sandboxed", text: "Stackbar asks before the plugin can use any of this, and blocks everything else.")
             }

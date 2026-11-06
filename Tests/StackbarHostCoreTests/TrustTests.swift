@@ -143,6 +143,7 @@ final class BundleTests: XCTestCase {
         let index = try PluginIndex.build(name: "Test", bundles: [bundleFile])
         XCTAssertEqual(index.plugins.map(\.id), ["dev.t.bundle"])
         XCTAssertEqual(index.plugins.first?.capabilities, ["Connects to api.example.com"])
+        XCTAssertEqual(index.plugins.first?.capabilityKinds, ["network"])
         XCTAssertEqual(index.search("bund").count, 1)
         XCTAssertEqual(index.search("nothing").count, 0)
 

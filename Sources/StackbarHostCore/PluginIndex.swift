@@ -25,7 +25,11 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         /// Absolute, or relative to the index's own URL.
         public var bundle: String
         public var sha256: String
+        /// Each capability in words, as `Capability.summary` says it.
         public var capabilities: [String]
+        /// Each capability's `Capability.Kind`, in the same order as
+        /// `capabilities`. Missing from indexes built before 0.28.0.
+        public var capabilityKinds: [String]?
         /// The store groups entries by this, like `System` or `Developer`.
         public var category: String?
         public var surfaces: [String]?
@@ -45,7 +49,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         /// stops listing them where this one is listed.
         public var replaces: [String]?
 
-        public init(id: String, name: String, summary: String? = nil, version: String, publisher: String, bundle: String, sha256: String, capabilities: [String], category: String? = nil, surfaces: [String]? = nil, minimumStackbar: String? = nil, screenshot: String? = nil, homepage: String? = nil, accent: String? = nil, symbol: String? = nil, updated: String? = nil, replaces: [String]? = nil) {
+        public init(id: String, name: String, summary: String? = nil, version: String, publisher: String, bundle: String, sha256: String, capabilities: [String], capabilityKinds: [String]? = nil, category: String? = nil, surfaces: [String]? = nil, minimumStackbar: String? = nil, screenshot: String? = nil, homepage: String? = nil, accent: String? = nil, symbol: String? = nil, updated: String? = nil, replaces: [String]? = nil) {
             self.id = id
             self.name = name
             self.summary = summary
@@ -54,6 +58,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             self.bundle = bundle
             self.sha256 = sha256
             self.capabilities = capabilities
+            self.capabilityKinds = capabilityKinds
             self.category = category
             self.surfaces = surfaces
             self.minimumStackbar = minimumStackbar
@@ -323,7 +328,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             formatter.formatOptions = [.withFullDate]
             return formatter.string(from: date)
         }
-        return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, accent: manifest.accent?.rawValue, symbol: manifest.symbol, updated: day, replaces: manifest.replaces)
+        return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), capabilityKinds: manifest.capabilities.map(\.kind.rawValue), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, accent: manifest.accent?.rawValue, symbol: manifest.symbol, updated: day, replaces: manifest.replaces)
     }
 
     public static func download(_ url: URL, limit: Int = 8 * 1024 * 1024) async throws -> Data {

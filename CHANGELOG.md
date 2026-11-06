@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **The Store names every permission correctly.** A plugin page showed "Opening Links" for a plugin that opens Terminal, and left Sensors, Menus, Screen Text, System Actions, Text Expansion and Adding Calendar Events out of "Asks For". Each permission now shows its own kind.
+
 ## 0.27.1
 
 ### New
