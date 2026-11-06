@@ -156,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: "square.stack.3d.up", accessibilityDescription: "Stackbar")
         let menu = NSMenu()
         menu.delegate = self
-        menu.addItem(item(title: "Command Palette  " + ActionsPanel.glyphs(PaletteController.chosenHotKey), action: #selector(openPalette)))
+        menu.addItem(item(title: "Command Palette  " + KeyCombo.glyphs(PaletteController.chosenHotKey), action: #selector(openPalette)))
         menu.addItem(.separator())
         menu.addItem(item(title: "Install Bundled Plugins", action: #selector(installExamples)))
         menu.addItem(item(title: "Open Plugins Folder", action: #selector(openPluginsFolder)))

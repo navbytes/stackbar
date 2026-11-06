@@ -874,29 +874,13 @@ struct ActionsPanel: View {
             Text(action.title).foregroundStyle(action.role == .critical ? Color.red : Color.primary)
             Spacer(minLength: 16)
             if let shortcut = action.shortcut {
-                Keycap(Self.glyphs(shortcut))
+                Keycap(KeyCombo.glyphs(shortcut))
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(selected ? Color.primary.opacity(0.1) : .clear, in: .rect(cornerRadius: 8))
         .contentShape(Rectangle())
-    }
-
-    /// `cmd+shift+c` as ⌘⇧C.
-    static func glyphs(_ shortcut: String) -> String {
-        shortcut.lowercased().split(separator: "+").map { part -> String in
-            switch part {
-            case "cmd", "command": return "⌘"
-            case "shift": return "⇧"
-            case "opt", "option", "alt": return "⌥"
-            case "ctrl", "control": return "⌃"
-            case "return", "enter": return "↩"
-            case "delete", "backspace": return "⌫"
-            case "space": return "Space"
-            default: return part.uppercased()
-            }
-        }.joined()
     }
 }
 

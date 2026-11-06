@@ -538,10 +538,10 @@ struct PluginPage: View {
                 if let hotkey = manifest?.hotkey {
                     let command = manifest?.hotkeyCommand.flatMap { id in entries.first { $0.spec.id == id } }
                     SettingsRow(title: command.map { "Open \($0.spec.title)" } ?? "Open its panel", caption: "Set by the plugin") {
-                        KeyCaps(text: ActionsPanel.glyphs(hotkey))
+                        KeyCaps(text: KeyCombo.glyphs(hotkey))
                     }
                 }
-                SettingsRow(title: "Find it in the palette", caption: "Press \(ActionsPanel.glyphs(PaletteController.chosenHotKey)) and type \(controller.name).")
+                SettingsRow(title: "Find it in the palette", caption: "Press \(KeyCombo.glyphs(PaletteController.chosenHotKey)) and type \(controller.name).")
                 ForEach(entries, id: \.key) { entry in
                     CommandSettingsRow(center: model.commands, entry: entry, highlighted: entry.key == model.settingsCommand)
                 }
