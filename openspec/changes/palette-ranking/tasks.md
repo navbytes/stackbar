@@ -11,7 +11,7 @@
 - [x] 1.8 Authoring guide note: the host ranks root rows; llms.txt
 
 ## 2. Plugins (stackbar-plugins)
-- [ ] 2.1 Applications: use `TextMatch.match` instead of its own matcher, drop its own open counts once the host learns
+- [x] 2.1 Applications 1.2.0: `TextMatch.match` instead of its own matcher (plugins #49). It keeps its open counts, which choose the three rows the palette shows
 
 ## 3. Check
 - [ ] 3.1 Mac check: `s` then pick a non-first app twice; it leads for `s`
