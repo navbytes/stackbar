@@ -27,4 +27,20 @@ final class ReleaseTests: XCTestCase {
         }
         XCTAssertTrue(project.contains("SUFeedURL: https://github.com/navbytes/stackbar/releases/latest/download/appcast.xml"))
     }
+
+    /// The release has no provisioning profile, so the app group must be the
+    /// macOS-style one that starts with the team id: a `group.` id leaves the
+    /// sandboxed widget without the container and its plugin list empty.
+    func testAppGroupNeedsNoProvisioningProfile() throws {
+        let project = try read("project.yml")
+        let team = try XCTUnwrap(project.components(separatedBy: "\n").first { $0.contains("DEVELOPMENT_TEAM:") }?
+            .components(separatedBy: ":").last?.trimmingCharacters(in: .whitespaces))
+        let group = WidgetSnapshotStore.appGroup
+        XCTAssertTrue(group.hasPrefix(team + "."), group)
+        let claims = project.components(separatedBy: "\n").filter { $0.contains("com.apple.security.application-groups:") }
+        XCTAssertEqual(claims.count, 2, "the app and the widget both claim the group")
+        for claim in claims { XCTAssertTrue(claim.hasSuffix("[\(group)]"), claim) }
+        XCTAssertTrue(try read("Packaging/Stackbar.entitlements").contains("<string>\(group)</string>"))
+        XCTAssertFalse(project.contains("group.io.navbytes"))
+    }
 }

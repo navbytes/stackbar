@@ -70,7 +70,7 @@ targets:
       path: Packaging/Stackbar.entitlements
       properties:
         com.apple.security.app-sandbox: false
-        com.apple.security.application-groups: [group.io.navbytes.stackbar]
+        com.apple.security.application-groups: [59J9RQXYYP.io.navbytes.stackbar]
         # The hardened runtime denies calendar and reminders access,
         # without a prompt, unless the app carries this entitlement (Up Next
         # and Todo need it; there is no separate one for reminders).
@@ -102,6 +102,6 @@ targets:
       path: Packaging/Widget.entitlements
       properties:
         com.apple.security.app-sandbox: true
-        com.apple.security.application-groups: [group.io.navbytes.stackbar]
+        com.apple.security.application-groups: [59J9RQXYYP.io.navbytes.stackbar]
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: io.navbytes.stackbar.widget
