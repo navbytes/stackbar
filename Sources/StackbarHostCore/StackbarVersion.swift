@@ -1,4 +1,4 @@
 /// Stackbar's own version, shown by the app and reported by the MCP servers.
 public enum StackbarVersion {
-    public static let current = "0.25.1"
+    public static let current = "0.26.0"
 }
