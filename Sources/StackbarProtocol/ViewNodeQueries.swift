@@ -272,6 +272,29 @@ public enum RowFilter {
         return nil
     }
 
+    /// What the palette shows beside a list for the selected row, or `nil`
+    /// to draw the list alone. Once any row of the list has a preview, every
+    /// row gets the detail pane: a row without one shows its own title and
+    /// subtitle, and an empty result keeps an empty pane. Deciding per row
+    /// made the list jump between half and full width as the selection
+    /// moved, as it did in Clipboard History where only long copies had a
+    /// preview. The whole list decides, not the filtered rows, so typing
+    /// doesn't flip the layout either.
+    public static func detail(for selected: RowNode?, in root: ViewNode) -> RowPreview? {
+        if let preview = selected?.preview { return preview }
+        guard hasPreviews(root) else { return nil }
+        guard let selected else { return RowPreview() }
+        return RowPreview(text: selected.title, caption: selected.subtitle)
+    }
+
+    /// Whether any row of a list has a preview.
+    static func hasPreviews(_ root: ViewNode) -> Bool {
+        (items(in: root, query: "") ?? []).contains { item in
+            if case .row(let row) = item { return row.preview != nil }
+            return false
+        }
+    }
+
     /// The rows of a grid made only of rows.
     static func gridRows(_ node: ViewNode) -> [RowNode]? {
         guard case .grid(_, _, let children) = node else { return nil }
