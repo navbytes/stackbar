@@ -38,8 +38,9 @@ final class AppLinkTests: XCTestCase {
         let sections = PaletteSection.group(found, query: "settings", plugins: [files]) { _ in false }
         XCTAssertEqual(sections.map(\.title), ["Results", "Files"])
         XCTAssertEqual(sections.first?.entries.first?.title, "Stackbar Settings")
-        // Something that merely starts with the text still leads a fuzzy match.
+        // A part typed: the shortest name that starts with it leads, from any source.
         let partial = PaletteSection.group(index.search("sett"), query: "sett", plugins: [files]) { _ in false }
-        XCTAssertEqual(partial.map(\.title), ["Files", "Results"])
+        XCTAssertEqual(partial.map(\.title), ["Results", "Files"])
+        XCTAssertEqual(partial.first?.entries.first?.title, "Settings")
     }
 }

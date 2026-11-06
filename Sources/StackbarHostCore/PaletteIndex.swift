@@ -36,6 +36,13 @@ public struct PaletteIndex: Sendable {
         /// root-search row's `appIcon` and `fileIcon`.
         public var appIcon: String?
         public var fileIcon: String?
+        /// A stable id for what this row stands for, when `id` isn't one: a
+        /// plugin's root-search row (`plugin|row|command|rowKey`), whose
+        /// action ids change with every answer.
+        public var rankKey: String?
+
+        /// The id that use and learned picks are kept under.
+        public var learnID: String { rankKey ?? id }
 
         public init(pluginID: String, pluginName: String, title: String, subtitle: String? = nil, symbol: String? = nil, kind: Kind,
                     keywords: [String] = [], alias: String? = nil) {
@@ -138,49 +145,32 @@ public struct PaletteIndex: Sendable {
         return (commands + (includesAppEntries ? Self.appEntries : []) + panels + entries).filter { seen.insert($0.id).inserted }
     }
 
-    /// Entries matching `query`, best first: an exact alias, then the fuzzy
-    /// match plus a bonus for what was used often and lately. An empty query
-    /// lists the most used first, then everything in plugin order.
-    public func search(_ query: String, limit: Int = 50, usage: PaletteUsage? = nil) -> [Entry] {
-        let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
-        let squeezed = typed.filter { !$0.isWhitespace }
+    /// Entries matching `query`, best first, by `PaletteRanker`: an exact
+    /// alias, then the text's tier, then what was picked for this text and
+    /// what is used often. An empty query lists the most used first, then
+    /// everything in plugin order.
+    public func search(_ query: String, limit: Int = 50, usage: PaletteUsage? = nil, picks: PalettePicks? = nil) -> [Entry] {
+        scored(query, limit: limit, ranker: PaletteRanker(query: query, usage: usage, picks: picks), usage: usage).map(\.entry)
+    }
+
+    /// `search` with each entry's score, for ranking it against plugins'
+    /// rows. Empty-query scores are 0.
+    public func scored(_ query: String, limit: Int = 50, ranker: PaletteRanker, usage: PaletteUsage? = nil) -> [(entry: Entry, score: Int)] {
         let all = all
-        func bonus(_ entry: Entry) -> Int {
-            guard let usage else { return 0 }
-            let score = usage.score(entry.id)
-            // At most 150: enough to lift what you use among similar
-            // matches, never enough to put a mid-word match above a prefix.
-            return score > 0 ? min(150, Int(60 * log2(1 + score))) : 0
-        }
-        guard !squeezed.isEmpty else {
-            guard usage != nil else { return Array(all.prefix(limit)) }
-            return Array(all.enumerated()
-                .sorted { (bonus($0.element), -$0.offset) > (bonus($1.element), -$1.offset) }
-                .map(\.element)
-                .prefix(limit))
+        guard !ranker.typed.isEmpty else {
+            guard let usage else { return all.prefix(limit).map { ($0, 0) } }
+            let used = all.map { usage.score($0.learnID) }
+            return all.enumerated()
+                .sorted { (used[$0.offset], -$0.offset) > (used[$1.offset], -$1.offset) }
+                .prefix(limit)
+                .map { ($0.element, 0) }
         }
         return all.enumerated()
-            .compactMap { offset, entry -> (Entry, Int, Int)? in
-                if let alias = entry.alias, alias == typed { return (entry, 100_000, offset) }
-                let haystacks = [entry.title, entry.subtitle ?? "", entry.keywords.joined(separator: " "), entry.pluginName]
-                let best = haystacks.enumerated().compactMap { index, text in
-                    // The plugin's name finds its things, but below anything
-                    // whose own words match: "git" shouldn't list every row
-                    // of a plugin called GitHub ahead of "Reset Git Cache".
-                    Self.score(squeezed, in: text.lowercased()).map { index == 3 ? min($0, 600) : $0 - index * 5 }
-                }.max()
-                guard let best else { return nil }
-                // Commands, and Stackbar's own places, before panel rows.
-                let commandBonus = entry.commandKey != nil || entry.pluginID == Self.appID ? 40 : 0
-                // Typing a thing's whole name or keyword ("settings") scores
-                // as a whole-name match, ahead of names that merely contain it.
-                let matched = entry.isExactMatch(typed) ? max(best, 1000) + 100 : best
-                return (entry, matched + bonus(entry) + commandBonus, offset)
-            }
+            .compactMap { offset, entry in ranker.score(entry).map { (entry, $0, offset) } }
             // Ties keep the index's order, so the list doesn't reshuffle.
             .sorted { ($0.1, -$0.2) > ($1.1, -$1.2) }
             .prefix(limit)
-            .map(\.0)
+            .map { ($0.0, $0.1) }
     }
 
     /// `gh react` → the command aliased `gh` and the rest of the line, which

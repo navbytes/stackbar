@@ -14,6 +14,8 @@ final class CommandCenter {
     @ObservationIgnored let registry: CommandRegistry
     @ObservationIgnored let preferences: CommandPreferences
     @ObservationIgnored let usage: PaletteUsage
+    /// What was picked in the palette for what was typed.
+    @ObservationIgnored let picks: PalettePicks
     /// The palette entries pinned to the top of its root.
     @ObservationIgnored let favorites: PaletteFavorites
     @ObservationIgnored let runner: CommandRunner
@@ -41,6 +43,7 @@ final class CommandCenter {
         registry = CommandRegistry(file: directory.appendingPathComponent("commands.json"))
         preferences = CommandPreferences(file: directory.appendingPathComponent("command-preferences.json"))
         usage = PaletteUsage(file: directory.appendingPathComponent("palette-usage.json"))
+        picks = PalettePicks(file: directory.appendingPathComponent("palette-picks.json"))
         favorites = PaletteFavorites(file: directory.appendingPathComponent("palette-favorites.json"))
         let lookup = CommandLookup()
         runner = CommandRunner(registry: registry, services: services) { id in await lookup.target(for: id) }
