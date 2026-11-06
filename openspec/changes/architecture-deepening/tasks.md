@@ -15,4 +15,9 @@
 
 ## Wave 3 (stackbar-plugins)
 - [x] 3.1 `lint.py` reads `stackbarctl manifest --json`; raise `stackbarRevision`
-- [ ] 3.2 Plugins adopt `getJSON(auth:)` (handed to the plugin-redesign thread; the kit side is in stackbar #43)
+- [x] 3.2 ~~Plugins adopt `getJSON(auth:)`~~ Dropped (2026-11-06). Every API plugin (PR Cockpit, Linear,
+  Translate, Jira, LiteLLM) reads its own status codes (401, 403, 404, 422, 456, GraphQL 400)
+  to word a specific fix, which `getJSON`'s generic non-2xx error would lose; Jira needs Basic
+  auth and LiteLLM trims a URL secret, which `Auth` doesn't cover. Swapping in `http(_:auth:)`
+  alone would only change each plugin's missing-secret wording and bump five store versions,
+  so it is not a no-behaviour-change refactor. New API plugins should start from `auth:`.
