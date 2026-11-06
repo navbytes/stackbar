@@ -241,6 +241,16 @@ public final class PaletteUsage: @unchecked Sendable {
         return lock.withLock { uses[id].map { $0.score * Self.decay(from: $0.last, to: time) } ?? 0 }
     }
 
+    /// How long "Recent" in the palette remembers a use.
+    public static let recentWindow: TimeInterval = 7 * 24 * 3600
+
+    /// Used within the last week: what the palette lists under Recent. A
+    /// decayed score never reaches zero, so the score can't say this.
+    public func isRecent(_ id: String) -> Bool {
+        let time = now()
+        return lock.withLock { uses[id].map { time.timeIntervalSince($0.last) < Self.recentWindow } ?? false }
+    }
+
     static func decay(from: Date, to: Date) -> Double {
         pow(0.5, max(0, to.timeIntervalSince(from)) / halfLife)
     }

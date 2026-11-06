@@ -592,6 +592,28 @@ public enum Stackbar {
         try await ok(.pressMenuItem(appID: appID, path: path))
     }
 
+    // MARK: Colors and the dictionary
+
+    /// Shows the system's magnifier so the user can pick a color anywhere on
+    /// screen. Nil when they press Escape. Needs no capability: nothing is
+    /// read until the user clicks. Stackbar 0.26.0 and later.
+    ///
+    /// ```swift
+    /// if let color = try await Stackbar.pickColor() { Stackbar.copy(color.hex) }
+    /// ```
+    public static func pickColor() async throws -> PickedColor? {
+        guard let json = try await value(.pickColor) else { return nil }
+        return try SystemCodec.decode(PickedColor.self, from: json)
+    }
+
+    /// The definition the Mac's own Dictionary has for a word or phrase, as
+    /// plain text, or nil when it has none. Needs no capability; the lookup
+    /// stays on the Mac. Stackbar 0.26.0 and later.
+    public static func define(_ word: String) async throws -> Definition? {
+        guard let json = try await value(.define(word)) else { return nil }
+        return try SystemCodec.decode(Definition.self, from: json)
+    }
+
     // MARK: Commands and context
 
     /// Runs a command the manifest declares with `.run(commands:)` and

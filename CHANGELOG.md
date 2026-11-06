@@ -6,13 +6,26 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### New
+- **Get beta versions.** Settings › Store & Updates has a switch to try new versions before everyone else. Turn it off to go back to the next regular release.
+- **VoiceOver reads every button** in plugin panels, the palette and the Store, including the ones that show only an icon.
+- **Community plugins in the Store.** Plugins people publish under their own name get a Community section, and their page says who wrote them with a link to their GitHub.
+- For plugin authors: `Stackbar.pickColor()` shows the system magnifier and returns the color the user clicks, and `Stackbar.define(_:)` looks a word up in the Mac's own Dictionary, offline (protocol 21). Neither needs a capability. Color Picker and Dictionary in the Store use them.
 - **Notification buttons that do something.** A plugin's notification can now carry buttons that run its own commands: snooze a meeting, start a break, add five minutes. A command that needs more opens in the palette.
 - For plugin authors (protocol 21): `Stackbar.saveCalendarEvent` and `writableCalendars` add and change calendar events (`.calendarWrite`); `Stackbar.openInTerminal` opens your terminal app running a command, every word quoted by Stackbar (`.terminal`); `Stackbar.recognizeText` reads the text in a copied image and `Stackbar.captureScreenText` in a part of the screen you drag over (`.screenText`), both on your Mac with Vision; `Stackbar.sensors` reads temperatures and fan speeds (`.sensors`); and `NotificationAction(title, command:, arguments:)`.
+
+## 0.25.1
 
 ### Fixed
 - **Return on the palette's first result works while you type.** If a plugin was still answering your latest letters, Return could act on a result from the earlier answer that the plugin had already dropped, close the palette and do nothing. The palette now waits for the answer and runs the same result, or says it went away.
 - In ⌘K, a shortcut such as ⌘⇧C now runs the action shown in the list, not something on the row behind it. ⌘⌫ clears an open command's search field too.
 - Better ordering: a plugin's name no longer pushes all its rows above results whose own title matches, a whole match always ranks above a scattered one, ties keep a stable order, and an alias no longer takes over when you type another command's full name.
+- **An open command survives its plugin restarting.** The list says it is reconnecting and comes back with what you typed, instead of spinning until you reopen it; a plugin that fails or is turned off says so, and its results leave the root list.
+- A command that is slow to open no longer appears after you closed the palette or pressed Esc, and Esc now cancels it.
+- Rows that share a title (two "Untitled" notes) can each be reached with the arrows.
+- In compact mode, Return and the arrows do nothing until results show, so Return no longer runs a command you can't see.
+- A command whose only arguments are pickers opens its form with Return working, and the first text field takes focus.
+- Before you type, the root lists every command again, so Stackbar Settings and the Store aren't cut off. "Recent" means used in the last week, and how often you use something can lift it among similar matches but no longer above a better match.
+- Two plugins whose root sections share a name are both shown, under their plugin's name; a plugin's root results are timed from when it answers, not from its start, so a slow launch doesn't hide them; Store suggestions match every word you type.
 
 ## 0.25.0
 

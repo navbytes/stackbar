@@ -61,6 +61,9 @@ struct StorePluginPage: View {
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
             VStack(alignment: .leading, spacing: 6) {
                 Text(entry.name).font(.largeTitle.weight(.bold))
+                if let author = entry.communityAuthor, let profile = URL(string: "https://github.com/\(author)") {
+                    Link("by @\(author)", destination: profile).font(.headline)
+                }
                 if let summary = entry.summary {
                     Text(summary).font(.title3).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }

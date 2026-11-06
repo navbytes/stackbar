@@ -126,6 +126,7 @@ public enum StoreListing {
         case "Productivity": return (.orange, "checkmark.circle.fill")
         case "System": return (.amber, "bolt.fill")
         case "Network": return (.cyan, "network")
+        case "Community": return (.violet, "person.2.fill")
         default: return (.graphite, "puzzlepiece.extension.fill")
         }
     }

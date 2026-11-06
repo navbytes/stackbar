@@ -42,6 +42,10 @@ public protocol SystemServices: Sendable {
     func menuItems() async throws -> MenuSnapshot
     /// Chooses a menu item of a running app by its path of titles.
     func pressMenuItem(appID: String, path: [String]) async throws
+    /// Shows the screen magnifier; nil when the user presses Escape.
+    func pickColor() async throws -> PickedColor?
+    /// The Mac's Dictionary definition of a word, or nil.
+    func define(_ word: String) async -> Definition?
     /// The regular apps that are running, in launch order.
     func runningApps() async throws -> [RunningApp]
     /// Brings a running app to the front; with `launch`, opens it when it
@@ -97,6 +101,8 @@ extension SystemServices {
     public func focusWindow(_ target: WindowTarget) async throws { throw SystemServiceError("windows are not available on this platform") }
     public func menuItems() async throws -> MenuSnapshot { throw SystemServiceError("menus are not available on this platform") }
     public func pressMenuItem(appID: String, path: [String]) async throws { throw SystemServiceError("menus are not available on this platform") }
+    public func pickColor() async throws -> PickedColor? { throw SystemServiceError("picking colors is not available on this platform") }
+    public func define(_ word: String) async -> Definition? { nil }
     public func runningApps() async throws -> [RunningApp] { throw SystemServiceError("apps are not available on this platform") }
     public func activateApp(_ id: String, launch: Bool) async throws { throw SystemServiceError("apps are not available on this platform") }
     public func hideApp(_ id: String) async throws { throw SystemServiceError("apps are not available on this platform") }
@@ -316,6 +322,28 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
             guard item.isEnabled else { throw SystemServiceError("\(item.title) is dimmed right now") }
             appActions.append("press \(appID) \(path.joined(separator: " > "))")
         }
+    }
+
+    // MARK: Colors and the dictionary
+
+    private var pickedColors: [PickedColor?] = []
+    /// What the next `pickColor()` calls answer, in order (nil: Escape).
+    /// With none queued it picks Stackbar blue.
+    public func simulate(pickedColor: PickedColor?) { lock.withLock { pickedColors.append(pickedColor) } }
+
+    public func pickColor() async throws -> PickedColor? {
+        lock.withLock { pickedColors.isEmpty ? PickedColor(hex: "#0A60C8") : pickedColors.removeFirst() }
+    }
+
+    /// Words `define` knows, lowercased, with their definitions.
+    public var dictionary: [String: String] = [
+        "serendipity": "serendipity | ˌserənˈdipədē | noun the occurrence and development of events by chance in a happy or beneficial way.",
+        "ephemeral": "ephemeral | əˈfem(ə)rəl | adjective lasting for a very short time.",
+    ]
+
+    public func define(_ word: String) async -> Definition? {
+        let key = word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return lock.withLock { dictionary[key] }.map { Definition(word: key, text: $0) }
     }
 
     static func sampleMenus() -> MenuSnapshot {
