@@ -154,22 +154,22 @@ final class PaletteSession {
 
     /// The root's search, kept until the query or the index changes: the
     /// view, the footer, ⌘K and every arrow press ask for it.
-    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, plugins: [PaletteSection], sections: [PaletteSection], results: [PaletteIndex.Entry])?
+    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, plugins: [PaletteRoot.PluginRows], root: PaletteRoot)?
     /// The Store's indexes were asked for once, for its suggestions.
     @ObservationIgnored private var storeRequested = false
 
-    /// The root's results in titled groups, as drawn.
-    var sections: [PaletteSection] {
+    /// The root's results in titled groups, as drawn, and what each row is.
+    var root: PaletteRoot {
         _ = revision
-        return load().sections
+        return load()
     }
+
+    var sections: [PaletteSection] { root.sections }
 
     /// The same results in the order drawn, which the arrows walk.
-    var results: [PaletteIndex.Entry] {
-        load().results
-    }
+    var results: [PaletteIndex.Entry] { root.entries }
 
-    private func load() -> (sections: [PaletteSection], results: [PaletteIndex.Entry]) {
+    private func load() -> PaletteRoot {
         let palette = model.palette
         // Read every time, so the list redraws once the Store's indexes arrive.
         let storeCount = model.store?.catalogs.count ?? 0
@@ -178,36 +178,18 @@ final class PaletteSession {
         // row's id stays put while its title changes (a sum's answer is
         // always the row `answer`), so keying on ids kept the answer to the
         // text before the last keystroke on screen.
-        let plugins = rootSearchSections()
+        let plugins = rootSearchRows()
         if let cache, cache.query == query, cache.revision == palette.revision, cache.store == storeCount, cache.plugins == plugins {
-            return (cache.sections, cache.results)
+            return cache.root
         }
         let usage = model.commands.usage
-        let ranker = PaletteRanker(query: query, usage: usage, picks: model.commands.picks)
-        // Before anything is typed the root lists everything, so the app's
-        // own places aren't cut off by 30 commands.
-        let typedNothing = query.trimmingCharacters(in: .whitespaces).isEmpty
-        let scored = palette.scored(query, limit: typedNothing ? 500 : 30, ranker: ranker, usage: usage)
-        var found = scored.map(\.entry)
-        var resultScore = scored.first?.score
-        // An alias leads, unless what was typed is another command's whole
-        // name ("pr cockpit" with "pr" aliased elsewhere).
-        let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
-        if let match = palette.aliasMatch(query), found.first?.isExactMatch(typed) != true {
-            found.removeAll { $0.id == match.entry.id }
-            found.insert(match.entry, at: 0)
-            resultScore = PaletteRanker.exactAlias
-        }
-        let favorites = model.commands.favorites.entries(in: palette.all)
         let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
-        let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store,
-                                            plugins: plugins, fallbacks: fallbackEntries(), ranker: ranker,
-                                            resultScore: resultScore) { usage.isRecent($0.learnID) }
-        let ordered = sections.flatMap(\.entries)
-        cache = (query, palette.revision, storeCount, plugins, sections, ordered)
-        return (sections, ordered)
+        let root = PaletteRoot.build(query: query, index: palette, ranker: PaletteRanker(query: query, usage: usage, picks: model.commands.picks),
+                                     usage: usage, favorites: model.commands.favorites.ids, store: store, plugins: plugins,
+                                     fallbacks: fallbackCommands()) { usage.isRecent($0.learnID) }
+        cache = (query, palette.revision, storeCount, plugins, root)
+        return root
     }
-
 
     /// A plugin's manifest, for its icon and colour.
     func manifest(of pluginID: String) -> Manifest? {
@@ -230,12 +212,8 @@ final class PaletteSession {
     /// When each root view was last given new text and hasn't answered yet,
     /// for the time budget.
     @ObservationIgnored private var rootFedAt: [CommandKey: Date] = [:]
-    /// What a root row does when chosen: its view and its primary action.
-    @ObservationIgnored private var rootRows: [String: (view: CommandViewModel, key: String, action: ActionRef, actions: [ActionRef])] = [:]
     /// Bumped when a root view opens, so the list reads it.
     private(set) var rootViewsRevision = 0
-    /// Rows from each plugin, at most.
-    static let rootRowLimit = 3
 
     private var rootText: String? {
         let text = query.trimmingCharacters(in: .whitespaces)
@@ -296,63 +274,33 @@ final class PaletteSession {
     private func closeRootSearch() {
         for view in rootViews.values { view.close() }
         rootViews = [:]
-        rootRows = [:]
         rootFedAt = [:]
         if rootViewsRevision != 0 { rootViewsRevision += 1 }
     }
 
-    /// One section per root view with rows, in command-title order.
-    private func rootSearchSections() -> [PaletteSection] {
+    /// What each root view shows now. Also times the views that answered.
+    private func rootSearchRows() -> [PaletteRoot.PluginRows] {
         _ = rootViewsRevision
         guard rootText != nil else { return [] }
-        var table: [String: (view: CommandViewModel, key: String, action: ActionRef, actions: [ActionRef])] = [:]
         for (key, view) in rootViews where !view.isSearching {
             if let fed = rootFedAt.removeValue(forKey: key) {
                 model.commands.rootBudget.record(key, took: Date().timeIntervalSince(fed))
             }
         }
-        var usedTitles: Set<String> = ["Results", PaletteSection.topHitTitle, "From the Store", "Favorites", "Recent", "Commands", "Panel Actions"]
-        let sections = rootViews.values.filter { !$0.isStopped }.sorted { $0.entry.spec.title < $1.entry.spec.title }.compactMap { view -> PaletteSection? in
-            let entries = self.rows(of: view).prefix(Self.rootRowLimit).compactMap { row -> PaletteIndex.Entry? in
-                guard let primary = row.actions.first else { return nil }
-                let kind: PaletteIndex.Entry.Kind = primary.navigate.map { .navigate($0) } ?? .action(primary.id, value: nil)
-                var entry = PaletteIndex.Entry(pluginID: view.entry.pluginID, pluginName: view.entry.pluginName, title: row.title,
-                                               subtitle: row.subtitle, symbol: row.symbol ?? view.entry.spec.symbol, kind: kind)
-                entry.appIcon = row.appIcon
-                entry.fileIcon = row.fileIcon
-                // Action ids change with every answer; the row's key doesn't.
-                entry.rankKey = "\(view.entry.pluginID)|row|\(view.entry.spec.id)|\(row.key)"
-                table[entry.id] = (view, row.key, primary, row.actions)
-                return entry
-            }
-            guard !entries.isEmpty else { return nil }
-            // Sections are told apart by title: two plugins' "Search", or one
-            // called "Results", get the plugin's name.
-            var title = view.entry.spec.rootSection ?? view.entry.spec.title
-            if !usedTitles.insert(title).inserted {
-                title += " — \(view.entry.pluginName)"
-                usedTitles.insert(title)
-            }
-            return PaletteSection(title: title, entries: entries, leads: view.entry.spec.rootPattern != nil)
-        }
-        rootRows = table
-        return sections
+        return rootViews.values.filter { !$0.isStopped }.map { PaletteRoot.PluginRows(command: $0.entry, rows: rows(of: $0)) }
     }
 
-    /// `.fallback()` commands, offered for whatever was typed.
-    private func fallbackEntries() -> [PaletteIndex.Entry] {
-        guard stack.isEmpty, !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+    /// The `.fallback()` commands to offer for whatever was typed.
+    private func fallbackCommands() -> [CommandRegistry.Entry] {
+        guard stack.isEmpty else { return [] }
         let preferences = model.commands.preferences
-        return model.commands.registry.entries.filter { RootSearchGate.offersFallback($0.spec, preference: preferences[$0.key]) }.map { entry in
-            PaletteIndex.Entry(pluginID: entry.pluginID, pluginName: entry.pluginName, title: entry.spec.title,
-                               subtitle: entry.pluginName, symbol: entry.spec.symbol, kind: .command(entry.spec))
-        }
+        return model.commands.registry.entries.filter { RootSearchGate.offersFallback($0.spec, preference: preferences[$0.key]) }
     }
 
-    /// Chosen from the fallback section, so the whole query is its input.
-    func isFallback(_ entry: PaletteIndex.Entry) -> Bool {
-        let title = PaletteSection.fallbackTitle(query.trimmingCharacters(in: .whitespaces))
-        return sections.first { $0.title == title }?.entries.contains { $0.id == entry.id } ?? false
+    /// The live view behind a plugin's row on the root, and the row.
+    private func rootRow(_ entry: PaletteIndex.Entry) -> (view: CommandViewModel, row: PaletteRoot.PluginRow)? {
+        guard let row = root.pluginRow(entry), let view = rootViews[row.command] else { return nil }
+        return (view, row)
     }
 
     // MARK: - Favourites
@@ -371,25 +319,6 @@ final class PaletteSession {
     /// Bumped when something the cache can't see changes (a favourite), so
     /// the list redraws.
     private(set) var revision = 0
-
-    func toggleFavoriteOfSelection() -> Bool {
-        guard top == nil, let entry = selectedEntry, canPin(entry) else { return false }
-        toggleFavorite(entry)
-        return true
-    }
-
-    /// Store suggestions and calculator answers come and go with the query,
-    /// so they can't be pinned.
-    func canPin(_ entry: PaletteIndex.Entry) -> Bool {
-        if case .copy = entry.kind { return false }
-        if rootRows[entry.id] != nil || isFallback(entry) { return false }
-        return !isStoreSuggestion(entry)
-    }
-
-    func isStoreSuggestion(_ entry: PaletteIndex.Entry) -> Bool {
-        if case .open(let url) = entry.kind { return url.hasPrefix("stackbar://store/") }
-        return false
-    }
 
     // MARK: - ⌘1…⌘9
 
@@ -443,12 +372,13 @@ final class PaletteSession {
     func activate(_ entry: PaletteIndex.Entry) {
         problem = nil
         // What was picked for this text, so it ranks higher for it next time.
-        if stack.isEmpty, !isStoreSuggestion(entry) {
+        let root = self.root
+        if stack.isEmpty, root.learns(entry) {
             model.commands.picks.record(query: query, id: entry.learnID)
         }
-        if let row = rootRows[entry.id] {
+        if let found = rootRow(entry), let primary = found.row.actions.first {
             model.commands.usage.record(entry.learnID)
-            activateRootRow(row.view, key: row.key, action: row.action)
+            activateRootRow(found.view, key: found.row.rowKey, action: primary)
             return
         }
         switch entry.kind {
@@ -494,12 +424,7 @@ final class PaletteSession {
             enter(command, arguments: target.arguments, source: .palette)
         case .command:
             guard let key = entry.commandKey, let command = model.commands.registry.entry(key) else { return }
-            // `gh react`: the rest of the line is the command's input.
-            // A fallback: all of it.
-            let rest = isFallback(entry)
-                ? query
-                : model.palette.aliasMatch(query).flatMap { $0.entry.id == entry.id ? $0.rest : nil } ?? ""
-            enter(command, input: rest, source: .palette)
+            enter(command, input: root.input(for: entry, query: query, index: model.palette), source: .palette)
         }
     }
 
@@ -649,14 +574,16 @@ final class PaletteSession {
         switch top {
         case .none:
             guard let entry = selectedEntry else { return [] }
+            let root = self.root
             // A plugin's row in the root: its own actions, as in its view.
-            if let row = rootRows[entry.id] {
-                return row.actions.map { ref in
-                    Action(title: ref.title, shortcut: ref.shortcut, role: ref.role) { [weak self] in self?.perform(ref, in: row.view) }
+            if let found = rootRow(entry) {
+                let view = found.view
+                return found.row.actions.map { ref in
+                    Action(title: ref.title, shortcut: ref.shortcut, role: ref.role) { [weak self] in self?.perform(ref, in: view) }
                 } + [resetRanking(entry)]
             }
-            var actions = [Action(title: primaryTitle ?? "Run") { [weak self] in self?.activate(entry) }]
-            if canPin(entry) {
+            var actions = [Action(title: root.primaryTitle(entry)) { [weak self] in self?.activate(entry) }]
+            if root.canPin(entry) {
                 let pinned = isFavorite(entry)
                 actions.append(Action(title: pinned ? "Remove from Favorites" : "Add to Favorites", shortcut: "cmd+shift+f") { [weak self] in
                     self?.toggleFavorite(entry)
@@ -682,7 +609,7 @@ final class PaletteSession {
                     showingActions = false
                 })
             }
-            if !isStoreSuggestion(entry) { actions.append(resetRanking(entry)) }
+            if root.learns(entry) { actions.append(resetRanking(entry)) }
             return actions
         case .arguments:
             return [Action(title: "Run") { [weak self] in self?.submitArguments() }]
@@ -730,15 +657,7 @@ final class PaletteSession {
     var primaryTitle: String? {
         switch top {
         case .none:
-            guard let entry = selectedEntry else { return nil }
-            if let row = rootRows[entry.id] { return row.action.title }
-            switch entry.kind {
-            case .command(let spec): return spec.kind == .view || !spec.arguments.isEmpty ? "Open" : "Run"
-            case .navigate, .showPanel: return "Open"
-            case .open: return isStoreSuggestion(entry) ? "Show in Store" : "Open"
-            case .action: return "Run"
-            case .copy: return "Copy Answer"
-            }
+            return selectedEntry.map(root.primaryTitle)
         case .arguments:
             return "Run"
         case .view(let view):
@@ -799,11 +718,23 @@ final class PaletteSession {
     }
 
     /// A row action's own shortcut on the selected row of a list view.
+    /// A shortcut pressed without ⌘K open: the selected row's action that
+    /// has it, in a view, or the ⌘K action that has it, at the root
+    /// (⌘⇧F Add to Favorites, ⌘⇧C Copy Link, a plugin row's own).
     func shortcut(matching matches: (String) -> Bool) -> Bool {
-        guard case .view(let view) = top else { return false }
-        guard let action = selectedRow(of: view)?.actions.first(where: { $0.shortcut.map(matches) ?? false }) else { return false }
-        perform(action, in: view)
-        return true
+        switch top {
+        case .view(let view):
+            guard let action = selectedRow(of: view)?.actions.first(where: { $0.shortcut.map(matches) ?? false }) else { return false }
+            perform(action, in: view)
+            return true
+        case .none:
+            guard !collapsed, let index = actions.firstIndex(where: { $0.shortcut.map(matches) ?? false }) else { return false }
+            showingActions = false
+            actions[index].perform()
+            return true
+        case .arguments:
+            return false
+        }
     }
 }
 #endif

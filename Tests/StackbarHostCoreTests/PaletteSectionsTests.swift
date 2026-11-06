@@ -28,7 +28,7 @@ final class PaletteSectionsTests: XCTestCase {
     func testATypedQueryKeepsOneRankedList() {
         let results = [action("a1"), command("c1")]
         let sections = PaletteSection.group(results, query: "x") { _ in true }
-        XCTAssertEqual(sections, [PaletteSection(title: "Results", entries: results)])
+        XCTAssertEqual(sections, [PaletteSection(.results, entries: results)])
         XCTAssertEqual(PaletteSection.group([], query: "x") { _ in true }, [])
     }
 

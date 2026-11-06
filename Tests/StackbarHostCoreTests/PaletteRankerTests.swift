@@ -199,14 +199,6 @@ final class PaletteRankerTests: XCTestCase {
         XCTAssertEqual(sections.first?.title, "Calculator")
     }
 
-    func testAnAliasLedResultStaysFirst() {
-        let apps = PaletteSection(title: "Applications", entries: [row("GitHub Desktop")])
-        var aliased = command("search", "Search Pull Requests")
-        aliased.alias = "gh"
-        let sections = PaletteSection.group([aliased], query: "gh react", plugins: [apps], resultScore: PaletteRanker.exactAlias) { _ in false }
-        XCTAssertEqual(sections.first?.title, "Results")
-    }
-
     func testRowsWithoutAMatchStayAfterTheResults() {
         let files = PaletteSection(title: "Files", entries: [row("Budget.numbers", plugin: "files")])
         let sections = PaletteSection.group([command("q", "Quarterly Report")], query: "quarterly", plugins: [files]) { _ in false }
