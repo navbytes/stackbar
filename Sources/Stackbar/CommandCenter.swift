@@ -116,11 +116,13 @@ final class CommandCenter {
     // MARK: - Hotkeys
 
     private func syncHotKeys() {
-        var wanted: [CommandKey: String] = [:]
-        for entry in registry.entries {
-            let preference = preferences[entry.key]
-            if preference.enabled, let hotkey = preference.hotkey { wanted[entry.key] = hotkey }
+        // A plugin may give its manifest hotkey to one of its commands
+        // (Clipboard History's ⌘⇧V opens its palette view).
+        var manifests: [String: Manifest] = [:]
+        for controller in model?.controllers ?? [] {
+            if let manifest = controller.manifest { manifests[controller.pluginID] = manifest }
         }
+        let wanted = CommandHotKeys.wanted(entries: registry.entries, preference: { self.preferences[$0] }, manifests: manifests)
         for (key, registered) in hotKeys where wanted[key] != registered.spec {
             registered.hotKey.unregister()
             hotKeys[key] = nil
@@ -138,6 +140,11 @@ final class CommandCenter {
 
     private func hotKeyPressed(_ key: CommandKey) {
         guard let entry = registry.entry(key) else { return }
+        // Pressed again while its view is open: close it, like a panel.
+        if let palette = AppDelegate.shared?.palette, palette.isShowing(key) {
+            palette.hide()
+            return
+        }
         let context = captureContext(for: key.pluginID)
         if entry.spec.kind == .run, entry.spec.requiredArguments.isEmpty {
             Task { await run(key, source: .hotkey, context: context) }

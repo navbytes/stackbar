@@ -7,6 +7,8 @@ window. Write for people who use Stackbar, not for the code.
 
 ### New
 - **The palette learns what you pick.** Choose Slack twice after typing "s" and it comes first for "s" from then on, for apps, files and commands alike. The best match from anywhere sits at the top, initials work ("vsc" finds Visual Studio Code), and an alias you have started typing ranks first. ⌘K › Reset Ranking forgets one result, and Settings › Command Palette › Search history clears it all.
+- **A plugin's hotkey can open it in the palette.** Clipboard History's ⌘⇧V opens your history in the palette, with the preview beside it and ⌘K for every action, and closes it on a second press. Its popup is still there from the menu bar icon.
+- For plugin authors: `Manifest(hotkey:, hotkeyCommand:)` gives the manifest hotkey to one of the plugin's own commands (0.27.0).
 
 ### Fixed
 - **The desktop widget lists your plugins.** In the downloaded app, choosing a plugin for the Stackbar widget showed an empty list, because macOS kept the widget out of the folder where Stackbar leaves each plugin's widget. Stackbar now uses a shared folder that the signed download is allowed to open. After updating, open Stackbar once so it fills the widget's list, then edit the widget and pick a plugin.
