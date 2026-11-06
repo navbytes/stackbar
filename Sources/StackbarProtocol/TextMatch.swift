@@ -29,6 +29,8 @@ public enum TextMatch {
             }
             previous = character
         }
-        return remaining.isEmpty ? score - limited.count : nil
+        // Letters in order rank below any match of the whole text, however
+        // long the runs: "a-bcdefg" must not beat "abcdefg" for "abcdefg".
+        return remaining.isEmpty ? min(score - limited.count, 399) : nil
     }
 }

@@ -157,12 +157,15 @@ public struct PaletteIndex: Sendable {
                 .map(\.element)
                 .prefix(limit))
         }
-        return all
-            .compactMap { entry -> (Entry, Int)? in
-                if let alias = entry.alias, alias == typed { return (entry, 100_000) }
+        return all.enumerated()
+            .compactMap { offset, entry -> (Entry, Int, Int)? in
+                if let alias = entry.alias, alias == typed { return (entry, 100_000, offset) }
                 let haystacks = [entry.title, entry.subtitle ?? "", entry.keywords.joined(separator: " "), entry.pluginName]
                 let best = haystacks.enumerated().compactMap { index, text in
-                    Self.score(squeezed, in: text.lowercased()).map { $0 - index * 5 }
+                    // The plugin's name finds its things, but below anything
+                    // whose own words match: "git" shouldn't list every row
+                    // of a plugin called GitHub ahead of "Reset Git Cache".
+                    Self.score(squeezed, in: text.lowercased()).map { index == 3 ? min($0, 600) : $0 - index * 5 }
                 }.max()
                 guard let best else { return nil }
                 // Commands, and Stackbar's own places, before panel rows.
@@ -170,9 +173,10 @@ public struct PaletteIndex: Sendable {
                 // Typing a thing's whole name or keyword ("settings") scores
                 // as a whole-name match, ahead of names that merely contain it.
                 let matched = entry.isExactMatch(typed) ? max(best, 1000) + 100 : best
-                return (entry, matched + bonus(entry) + commandBonus)
+                return (entry, matched + bonus(entry) + commandBonus, offset)
             }
-            .sorted { $0.1 > $1.1 }
+            // Ties keep the index's order, so the list doesn't reshuffle.
+            .sorted { ($0.1, -$0.2) > ($1.1, -$1.2) }
             .prefix(limit)
             .map(\.0)
     }
@@ -180,6 +184,7 @@ public struct PaletteIndex: Sendable {
     /// `gh react` → the command aliased `gh` and the rest of the line, which
     /// fills its first argument (or its view's query).
     public func aliasMatch(_ query: String) -> (entry: Entry, rest: String)? {
+        let query = query.drop { $0 == " " }
         guard let space = query.firstIndex(of: " ") else { return nil }
         let alias = query[..<space].lowercased()
         guard !alias.isEmpty, let entry = commands.first(where: { $0.alias == alias }) else { return nil }

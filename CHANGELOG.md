@@ -3,6 +3,13 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Return on the palette's first result works while you type.** If a plugin was still answering your latest letters, Return could act on a result from the earlier answer that the plugin had already dropped, close the palette and do nothing. The palette now waits for the answer and runs the same result, or says it went away.
+- In ⌘K, a shortcut such as ⌘⇧C now runs the action shown in the list, not something on the row behind it. ⌘⌫ clears an open command's search field too.
+- Better ordering: a plugin's name no longer pushes all its rows above results whose own title matches, a whole match always ranks above a scattered one, ties keep a stable order, and an alias no longer takes over when you type another command's full name.
+
 ## 0.25.0
 
 ### New
