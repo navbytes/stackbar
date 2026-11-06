@@ -108,7 +108,7 @@ final class AppModel {
         }
         // A typed keyword runs its plugin's command, which pastes.
         MacTextExpansion.shared.onExpand = { [weak self] key in
-            Task { @MainActor in await self?.commands.runFromExpansion(key) }
+            Task { @MainActor in self?.commands.runFromExpansion(key) }
         }
         store = StoreModel(model: self)
     }
@@ -405,7 +405,7 @@ final class AppModel {
             HUD.shared.show("\(target.command) is not a command of this plugin", isError: true)
             return
         }
-        AppDelegate.shared?.palette.open(entry, arguments: target.arguments, source: source)
+        commands.start(entry, arguments: target.arguments, source: source)
     }
 
     /// The widget extension posts a Darwin notification after leaving a

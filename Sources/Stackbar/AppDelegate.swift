@@ -307,12 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             HUD.shared.show("That button's command is no longer installed", isError: true)
             return
         }
-        let context = model.commands.captureContext(for: pluginID)
-        if entry.spec.kind == .view || !entry.spec.requiredArguments.allSatisfy({ !(arguments[$0.name] ?? "").isEmpty }) {
-            palette.open(entry, arguments: arguments, source: .panel, context: context)
-            return
-        }
-        Task { await model.commands.run(key, arguments: arguments, source: .panel, context: context) }
+        model.commands.start(entry, arguments: arguments, source: .panel)
     }
 
     /// Settings → Commands, on one command.
@@ -351,14 +346,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             HUD.shared.show("\(link.key) is not an installed command", isError: true)
             return
         }
-        guard entry.spec.exposure == .everywhere else {
-            HUD.shared.show("\(entry.spec.title) can only be run from inside Stackbar", isError: true)
-            return
-        }
         // Read before the palette or the alert below takes focus.
         let context = model.commands.captureContext(for: link.key.pluginID)
-        if entry.spec.kind == .view || !entry.spec.requiredArguments.allSatisfy({ !(link.arguments[$0.name] ?? "").isEmpty }) {
-            palette.open(entry, arguments: link.arguments, source: .link, context: context)
+        let plan = model.commands.plan(entry, source: .link, arguments: link.arguments)
+        guard case .run(let arguments) = plan else {
+            model.commands.carryOut(plan, for: entry, source: .link, context: context)
             return
         }
         var preference = model.commands.preferences[link.key]
@@ -381,7 +373,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
         }
-        Task { await model.commands.run(link.key, arguments: link.arguments, source: .link, context: context) }
+        Task { await model.commands.run(link.key, arguments: arguments, source: .link, context: context) }
     }
 
     /// `stackbar://settings[/page]` and `stackbar://store`, from a link or

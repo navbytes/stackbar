@@ -98,7 +98,7 @@ struct RunCommandIntent: AppIntent {
     @Parameter(title: "Command")
     var command: CommandEntity
 
-    @Parameter(title: "Input", description: "The command's first argument, when it takes one")
+    @Parameter(title: "Input", description: "The command's first argument, or the search of a command that shows a list")
     var input: String?
 
     static var parameterSummary: some ParameterSummary {
