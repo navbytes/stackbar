@@ -4,6 +4,7 @@ import Combine
 import ServiceManagement
 import StackbarHostCore
 import StackbarProtocol
+import StackbarUI
 import SwiftUI
 
 /// The palette's hotkey: a recorder, a one-click ⌘Space, and help for
@@ -50,9 +51,12 @@ struct PaletteHotKeyPicker: View {
 }
 
 /// The first launch: pick the palette's hotkey and a few plugins, then land
-/// in the palette.
+/// in the palette. Drawn with the Settings pieces (`SettingsGroup`,
+/// `SettingsRow`, `PluginIcon`) so it looks like the rest of Stackbar.
 struct WelcomeView: View {
     static let seenKey = "welcomeSeen"
+    static let width: CGFloat = 600
+    static let height: CGFloat = 640
 
     let starters: [Manifest]
     let finish: (_ picked: Set<String>, _ openAtLogin: Bool, _ openPalette: Bool) -> Void
@@ -67,54 +71,52 @@ struct WelcomeView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 14) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 56, height: 56)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Welcome to Stackbar").font(.title2.weight(.semibold))
-                    Text("Apps, files, sums and every plugin's commands, one keystroke away.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            step(1, "Choose the palette's hotkey") {
-                HStack(alignment: .top) {
-                    Text("Most people coming from Raycast or Alfred use ⌘Space.")
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 12)
-                    PaletteHotKeyPicker()
-                }
-            }
-            if !starters.isEmpty {
-                step(2, "Start with these plugins") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(starters, id: \.id) { manifest in
-                            Toggle(isOn: binding(manifest.id)) {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(manifest.name)
-                                    if let summary = manifest.summary {
-                                        Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                    }
-                                }
+        VStack(spacing: 0) {
+            // The groups scroll, so a long starter list or the Spotlight note
+            // never pushes the buttons out of the window.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    SettingsPageHeader(title: "Welcome to Stackbar", subtitle: "Apps, files, sums and every plugin's commands, one keystroke away.") {
+                        Image(nsImage: NSApp.applicationIconImage)
+                            .resizable()
+                            .frame(width: 60, height: 60)
+                            .accessibilityHidden(true)
+                    } trailing: {
+                        EmptyView()
+                    }
+                    SettingsGroup("Command Palette", footer: "Most people coming from Raycast or Alfred use ⌘Space.") {
+                        SettingsRow(title: "Open the palette", caption: "Click to record another hotkey.") {
+                            PaletteHotKeyPicker()
+                        }
+                    }
+                    if !starters.isEmpty {
+                        SettingsGroup("Start With These Plugins", footer: "Applications, Calculator and File Search are already in. Find more in the Store.") {
+                            ForEach(starters, id: \.id) { manifest in
+                                starterRow(manifest)
                             }
                         }
-                        Text("Applications, Calculator and File Search are already in. More in the Store.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    }
+                    SettingsGroup("Startup") {
+                        Toggle("Open Stackbar at login", isOn: $openAtLogin)
+                            .toggleStyle(TrailingSwitchStyle())
+                        if CrashReports.isAvailable {
+                            Toggle(isOn: $sendCrashReports) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("Send crash reports")
+                                    Text("Only when Stackbar itself crashes. No plugin names, logs or files.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .toggleStyle(TrailingSwitchStyle())
+                        }
                     }
                 }
+                .padding(.horizontal, 28)
+                .padding(.top, 24)
+                .padding(.bottom, 16)
             }
-            step(starters.isEmpty ? 2 : 3, "Keep it running") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Open Stackbar at login", isOn: $openAtLogin)
-                    if CrashReports.isAvailable {
-                        Toggle("Send a crash report if Stackbar crashes (no plugin names, logs or files)", isOn: $sendCrashReports)
-                    }
-                }
-            }
-            Spacer(minLength: 0)
+            Divider()
             HStack {
                 Button("Skip") { finish([], false, false) }
                     .keyboardShortcut(.cancelAction)
@@ -126,36 +128,39 @@ struct WelcomeView: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
             }
+            .controlSize(.large)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 16)
         }
-        .padding(28)
-        .frame(width: 560)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .frame(width: Self.width)
+        .frame(minHeight: 360, maxHeight: .infinity)
+    }
+
+    private func starterRow(_ manifest: Manifest) -> some View {
+        Toggle(isOn: binding(manifest.id)) {
+            HStack(spacing: 10) {
+                PluginIcon(manifest: manifest, size: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(manifest.name)
+                    if let summary = manifest.summary {
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .toggleStyle(TrailingSwitchStyle())
     }
 
     private func binding(_ id: String) -> Binding<Bool> {
         Binding(get: { picked.contains(id) }, set: { on in if on { picked.insert(id) } else { picked.remove(id) } })
     }
-
-    private func step<Content: View>(_ number: Int, _ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label {
-                Text(title).font(.headline)
-            } icon: {
-                Text("\(number)")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.accentColor))
-            }
-            content()
-                .padding(.leading, 28)
-        }
-    }
 }
 
 extension AppDelegate {
-    private static let welcomeNoteRoom: CGFloat = 72
-
     /// Shows the welcome window once per user.
     func welcomeIfNeeded() {
         guard !UserDefaults.standard.bool(forKey: WelcomeView.seenKey) else { return }
@@ -163,15 +168,18 @@ extension AppDelegate {
     }
 
     func showWelcome() {
-        // A plain titled window sized once. A transparent full-size title bar
-        // with `.preferredContentSize` sizing made the safe area and the
-        // window frame resize each other until AppKit threw (0.22.0 crash).
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 480), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        // A plain titled window at a fixed size; its groups scroll inside.
+        // Measuring the SwiftUI content instead came back near zero (the
+        // root is height-flexible), so 0.27.0 showed a clipped strip. A
+        // transparent full-size title bar with `.preferredContentSize`
+        // sizing made AppKit throw (0.22.0 crash), so neither is used.
+        let screen = NSScreen.main?.visibleFrame.height ?? WelcomeView.height + 120
+        let height = min(WelcomeView.height, max(360, screen - 120))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: WelcomeView.width, height: height), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "Welcome to Stackbar"
         window.isReleasedWhenClosed = false
         let starters = model.bundledStore.starters()
         let view = WelcomeView(starters: starters) { [weak self, weak window] picked, openAtLogin, openPalette in
-            UserDefaults.standard.set(true, forKey: WelcomeView.seenKey)
             window?.close()
             guard let self else { return }
             if !picked.isEmpty { self.model.installStarters(picked) }
@@ -181,12 +189,15 @@ extension AppDelegate {
         let host = NSHostingController(rootView: view)
         host.sizingOptions = []
         window.contentViewController = host
-        // Room for the note the hotkey picker adds when Spotlight still
-        // holds ⌘Space; the window never resizes itself.
-        let fitting = host.view.fittingSize
-        window.setContentSize(NSSize(width: 560, height: fitting.height + Self.welcomeNoteRoom))
+        window.setContentSize(NSSize(width: WelcomeView.width, height: height))
         window.center()
         window.delegate = windows
+        // Seen however it is dismissed: a button, ⎋ or the close button.
+        // Only the buttons used to count, so closing it brought it back on
+        // every launch.
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+            UserDefaults.standard.set(true, forKey: WelcomeView.seenKey)
+        }
         welcomeWindow = window
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
