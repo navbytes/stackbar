@@ -162,6 +162,8 @@ public struct ViewSessionState: Sendable {
     private var pending = false
     /// The newest seq whose tree was shown.
     public private(set) var shownSeq = 0
+    /// Trees older than this came from a process that has since restarted.
+    private var oldestAccepted = 0
     public private(set) var root: ViewNode?
 
     /// What the caller should send now.
@@ -190,6 +192,7 @@ public struct ViewSessionState: Sendable {
         pending = false
         let seq = take()
         inFlight = seq
+        oldestAccepted = seq
         return .open(seq: seq, query: query)
     }
 
@@ -210,7 +213,7 @@ public struct ViewSessionState: Sendable {
     /// A tree arrived. Returns whether to show it, and the pending query to
     /// send next.
     public mutating func received(seq: Int, root: ViewNode) -> (show: Bool, next: Send?) {
-        guard seq >= shownSeq else { return (false, nil) }
+        guard seq >= shownSeq, seq >= oldestAccepted else { return (false, nil) }
         shownSeq = seq
         self.root = root
         if inFlight.map({ seq >= $0 }) == true { inFlight = nil }
