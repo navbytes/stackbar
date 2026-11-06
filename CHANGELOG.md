@@ -3,15 +3,15 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.26.0
 
 ### New
+- **Notification buttons that do something.** A plugin's notification can carry buttons that run its own commands, so you can snooze a meeting reminder or start your break right from the notification. A command that needs more opens in the palette.
+- **Plugins can do more for you,** each only after you allow it: add events to your calendar, open a command in your terminal app, read the text in a copied image or in a part of the screen you drag over (on your Mac, with Apple's text recognition), and show your Mac's temperatures and fan speeds. Store updates to Up Next, Pomodoro, Docker, Clipboard History, Translate and System Monitor use them.
 - **Get beta versions.** Settings › Store & Updates has a switch to try new versions before everyone else. Turn it off to go back to the next regular release.
 - **VoiceOver reads every button** in plugin panels, the palette and the Store, including the ones that show only an icon.
 - **Community plugins in the Store.** Plugins people publish under their own name get a Community section, and their page says who wrote them with a link to their GitHub.
-- For plugin authors: `Stackbar.pickColor()` shows the system magnifier and returns the color the user clicks, and `Stackbar.define(_:)` looks a word up in the Mac's own Dictionary, offline (protocol 21). Neither needs a capability. Color Picker and Dictionary in the Store use them.
-- **Notification buttons that do something.** A plugin's notification can now carry buttons that run its own commands: snooze a meeting, start a break, add five minutes. A command that needs more opens in the palette.
-- For plugin authors (protocol 21): `Stackbar.saveCalendarEvent` and `writableCalendars` add and change calendar events (`.calendarWrite`); `Stackbar.openInTerminal` opens your terminal app running a command, every word quoted by Stackbar (`.terminal`); `Stackbar.recognizeText` reads the text in a copied image and `Stackbar.captureScreenText` in a part of the screen you drag over (`.screenText`), both on your Mac with Vision; `Stackbar.sensors` reads temperatures and fan speeds (`.sensors`); and `NotificationAction(title, command:, arguments:)`.
+- For plugin authors (protocol 21): `Stackbar.pickColor()` and `Stackbar.define(_:)` (no capability; Color Picker and Dictionary in the Store use them); `NotificationAction(title, command:, arguments:)`; `Stackbar.saveCalendarEvent` and `writableCalendars` (`.calendarWrite`); `Stackbar.openInTerminal`, every word quoted by Stackbar (`.terminal`); `Stackbar.recognizeText` on a kept clipboard image (`.clipboard`) and `Stackbar.captureScreenText` (`.screenText`); `Stackbar.sensors` (`.sensors`).
 
 ## 0.25.1
 
