@@ -21,7 +21,11 @@ name: Release
 # reads from releases/latest. Without it the app doesn't update itself.
 #
 # Crash reports: SENTRY_DSN goes into the app; reports still need the user's
-# yes. Without it the app has no crash reporting at all.
+# yes. Without it the app has no crash reporting at all. With SENTRY_AUTH_TOKEN
+# (a Sentry organization auth token) the release also uploads its dSYMs to the
+# self-190/stackbar project, so crash stacks name functions instead of
+# addresses (a dry run uploads too, which checks the token). A failed upload
+# warns and doesn't stop the release.
 #
 # Prebuilt helpers: each release then runs helpers.yml, which starts the
 # Helpers workflow in navbytes/stackbar-plugins (needs PLUGINS_DISPATCH_TOKEN).
@@ -55,6 +59,7 @@ jobs:
       HAS_NOTARY: ${{ secrets.APPLE_NOTARY_PASSWORD != '' }}
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+      HAS_SENTRY_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -132,6 +137,27 @@ jobs:
           [ -d "$APP/Contents/Resources/StackbarKit/Sources/StackbarKit" ]
           ls "$APP/Contents/Resources/StackbarKit/Bundles"
           (cd build && shasum -a 256 Stackbar-*.zip) | tee build/SHA256SUMS.txt
+
+      - name: Debug symbols to Sentry
+        if: env.HAS_SENTRY_TOKEN == 'true'
+        continue-on-error: true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: self-190
+          SENTRY_PROJECT: stackbar
+          # sentry-cli 3.8.2 from getsentry/sentry-cli's own release (linked
+          # from docs.sentry.io); the same SHA-256 is in Sentry's release
+          # registry. See docs/dependencies.md before bumping.
+          CLI_URL: https://github.com/getsentry/sentry-cli/releases/download/3.8.2/sentry-cli-Darwin-arm64
+          CLI_SHA256: c80d92b6d34eb64fe7402f56cc7968fbb15aab1c763254ad428b55cc98ec7dcf
+        run: |
+          DSYMS=build/xcode-release/Build/Products/Release
+          [ -d "$DSYMS/Stackbar.app.dSYM" ] || { echo "::warning::no Stackbar.app.dSYM, crash stacks won't be symbolicated"; exit 1; }
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/sentry-cli" "$CLI_URL"
+          echo "$CLI_SHA256  $RUNNER_TEMP/sentry-cli" | shasum -a 256 -c -
+          chmod +x "$RUNNER_TEMP/sentry-cli"
+          "$RUNNER_TEMP/sentry-cli" debug-files upload --wait "$DSYMS" \
+            || { echo "::warning::dSYM upload to Sentry failed; crash stacks for this release won't be symbolicated"; exit 1; }
 
       - name: Appcast
         if: env.HAS_SPARKLE_KEY == 'true'

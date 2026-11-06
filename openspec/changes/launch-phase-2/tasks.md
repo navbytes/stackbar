@@ -12,7 +12,7 @@
 ## 2. App chrome and crash reports
 - [x] 2.1 Help menu: docs, release notes, Report a Problem (issue with doctor output)
 - [x] 2.2 Sentry, opt-in from Welcome and Settings › Privacy; DSN from `SENTRY_DSN`
-- [ ] 2.3 Naveen creates the Sentry project and sets `SENTRY_DSN`
+- [x] 2.3 Naveen creates the Sentry project and sets `SENTRY_DSN`
 
 ## 3. Moving a setup
 - [x] 3.1 `SettingsArchive` export and import, with tests
