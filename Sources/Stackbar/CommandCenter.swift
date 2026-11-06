@@ -145,11 +145,33 @@ final class CommandCenter {
             palette.hide()
             return
         }
-        let context = captureContext(for: key.pluginID)
-        if entry.spec.kind == .run, entry.spec.requiredArguments.isEmpty {
-            Task { await run(key, source: .hotkey, context: context) }
-        } else {
-            AppDelegate.shared?.palette.open(entry, source: .hotkey, context: context)
+        start(entry, source: .hotkey)
+    }
+
+    // MARK: - Starting
+
+    /// The plan for starting a command, with the user's settings for it.
+    func plan(_ entry: CommandRegistry.Entry, source: InvocationSource, arguments: [String: String] = [:], input: String = "") -> CommandStart.Plan {
+        CommandStart.plan(entry, preference: preferences[entry.key], source: source, arguments: arguments, input: input)
+    }
+
+    /// Starts a command from outside the palette: runs it here, or opens
+    /// the palette on its fields or view, or says why it can't start.
+    /// `context` is what the user was in; without one, it is read now.
+    func start(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], input: String = "", source: InvocationSource, context: InvocationContext? = nil) {
+        carryOut(plan(entry, source: source, arguments: arguments, input: input), for: entry, source: source, context: context)
+    }
+
+    func carryOut(_ plan: CommandStart.Plan, for entry: CommandRegistry.Entry, source: InvocationSource, context: InvocationContext? = nil) {
+        // Read before the palette takes focus.
+        let context = context ?? captureContext(for: entry.pluginID)
+        switch plan {
+        case .refuse(let message):
+            HUD.shared.show(message, isError: true)
+        case .run(let arguments):
+            Task { await run(entry.key, arguments: arguments, source: source, context: context) }
+        case .ask, .openView:
+            AppDelegate.shared?.palette.open(entry, plan: plan, source: source, context: context)
         }
     }
 
@@ -176,17 +198,11 @@ final class CommandCenter {
         if let message = outcome.message { HUD.shared.show(message, isError: outcome.isError) }
     }
 
-    /// A keyword typed in some app (text expansion): runs its command there,
-    /// as a hotkey does. One that still needs arguments opens in the palette
-    /// to ask for them; a switched-off command does nothing.
-    func runFromExpansion(_ key: CommandKey) async {
-        guard let entry = registry.entry(key), preferences[key].enabled else { return }
-        let context = captureContext(for: entry.pluginID)
-        guard entry.spec.kind == .run, entry.spec.requiredArguments.isEmpty else {
-            AppDelegate.shared?.palette.open(entry, arguments: [:], query: "", source: .hotkey, context: context)
-            return
-        }
-        await run(key, source: .hotkey, context: context)
+    /// A keyword typed in some app (text expansion): starts its command
+    /// there, as a hotkey does.
+    func runFromExpansion(_ key: CommandKey) {
+        guard let entry = registry.entry(key) else { return }
+        start(entry, source: .hotkey)
     }
 
     /// Tells Spotlight the user ran this, so it suggests it.
@@ -200,30 +216,24 @@ final class CommandCenter {
 
     // MARK: - Spotlight and Shortcuts
 
-    private func intentEntry(_ id: String) throws -> CommandRegistry.Entry {
+    /// The command and its plan, or the reason it can't start, as an error
+    /// Spotlight and Shortcuts show. `input` fills the first argument, or a
+    /// view's search.
+    private func intentPlan(_ id: String, input: String?) throws -> (CommandRegistry.Entry, CommandStart.Plan) {
         guard let key = CommandKey(id), let entry = registry.entry(key) else { throw CommandIntentError("That command is no longer installed") }
-        guard entry.spec.exposure == .everywhere else { throw CommandIntentError("\(entry.spec.title) can only be run from inside Stackbar") }
-        guard preferences[key].enabled else { throw CommandIntentError("\(entry.spec.title) is switched off in Stackbar's settings") }
-        return entry
-    }
-
-    /// `input` fills the first argument, or a view's search.
-    private static func inputs(_ entry: CommandRegistry.Entry, _ input: String?) -> (arguments: [String: String], query: String) {
-        guard let input, !input.isEmpty else { return ([:], "") }
-        if let first = entry.spec.arguments.first { return ([first.name: input], "") }
-        return ([:], entry.spec.kind == .view ? input : "")
+        let started = self.plan(entry, source: .spotlight, input: input ?? "")
+        if case .refuse(let message) = started { throw CommandIntentError(message) }
+        return (entry, started)
     }
 
     /// Spotlight's or Shortcuts' Run: a run command with what it needs runs
     /// here and says what happened; anything else opens in the palette.
     func runFromIntent(_ id: String, input: String?) async throws -> String {
-        let entry = try intentEntry(id)
-        let (arguments, query) = Self.inputs(entry, input)
-        let ready = entry.spec.requiredArguments.allSatisfy { !(arguments[$0.name] ?? "").isEmpty }
+        let (entry, plan) = try intentPlan(id, input: input)
         // Spotlight is an overlay: the user's app is still frontmost.
         let context = captureContext(for: entry.pluginID)
-        guard entry.spec.kind == .run, ready else {
-            AppDelegate.shared?.palette.open(entry, arguments: arguments, query: query, source: .spotlight, context: context)
+        guard case .run(let arguments) = plan else {
+            carryOut(plan, for: entry, source: .spotlight, context: context)
             return "Opened \(entry.spec.title) in Stackbar"
         }
         usage.record(entry.key.description)
@@ -232,11 +242,11 @@ final class CommandCenter {
         return outcome.message ?? "Done"
     }
 
-    /// Spotlight opened an indexed command: the palette, at that command.
+    /// Spotlight opened an indexed command: the palette at that command, or
+    /// it runs when it has what it needs.
     func openFromIntent(_ id: String, input: String?) async throws {
-        let entry = try intentEntry(id)
-        let (arguments, query) = Self.inputs(entry, input)
-        AppDelegate.shared?.palette.open(entry, arguments: arguments, query: query, source: .spotlight, context: captureContext(for: entry.pluginID))
+        let (entry, plan) = try intentPlan(id, input: input)
+        carryOut(plan, for: entry, source: .spotlight)
     }
 
     /// Opens a view command: waits for its plugin, then starts the session.
@@ -369,10 +379,7 @@ final class CommandViewModel: Identifiable {
         self.context = context
         self.onClose = onClose
         self.query = query.text
-        var arguments = query.arguments
-        for argument in entry.spec.arguments where arguments[argument.name] == nil {
-            arguments[argument.name] = argument.defaultValue ?? argument.options?.first ?? ""
-        }
+        let arguments = CommandStart.filled(entry.spec, query.arguments)
         self.arguments = arguments
         state = ViewSessionState(session: session, query: CommandQuery(text: query.text, arguments: arguments))
     }

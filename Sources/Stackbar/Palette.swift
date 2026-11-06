@@ -106,19 +106,12 @@ final class PaletteController {
         }
     }
 
-    /// Opens the palette on a command: its view, its argument fields, or
-    /// (with everything it needs) runs it straight away.
-    /// `context` is what the user was in when the command was triggered;
-    /// without one, it is read now.
-    func open(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], query: String = "", source: InvocationSource, context: InvocationContext? = nil) {
-        if entry.spec.kind == .run, entry.spec.arguments.isEmpty || entry.spec.requiredArguments.allSatisfy({ !(arguments[$0.name] ?? "").isEmpty }) {
-            hide()
-            let context = context ?? model.commands.captureContext(for: entry.pluginID)
-            Task { await model.commands.run(entry.key, arguments: arguments, source: source, context: context) }
-            return
-        }
+    /// Opens the palette on a command's argument fields or its view, as
+    /// `CommandCenter.start` planned. `context` is what the user was in
+    /// when the command was triggered.
+    func open(_ entry: CommandRegistry.Entry, plan: CommandStart.Plan, source: InvocationSource, context: InvocationContext?) {
         show(context: context)
-        session.enter(entry, arguments: arguments, query: query, source: source)
+        session.carryOut(plan, for: entry, source: source)
     }
 
     /// Whether the palette is open on this command's view.

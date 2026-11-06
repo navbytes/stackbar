@@ -494,49 +494,39 @@ final class PaletteSession {
             enter(command, arguments: target.arguments, source: .palette)
         case .command:
             guard let key = entry.commandKey, let command = model.commands.registry.entry(key) else { return }
-            // `gh react`: the rest of the line fills the first argument, or a
-            // view's search.
+            // `gh react`: the rest of the line is the command's input.
             // A fallback: all of it.
             let rest = isFallback(entry)
-                ? query.trimmingCharacters(in: .whitespaces)
+                ? query
                 : model.palette.aliasMatch(query).flatMap { $0.entry.id == entry.id ? $0.rest : nil } ?? ""
-            var arguments: [String: String] = [:]
-            var text = ""
-            if !rest.isEmpty {
-                if command.spec.kind == .view {
-                    text = rest
-                } else if let first = command.spec.arguments.first {
-                    arguments[first.name] = rest
-                }
-            }
-            enter(command, arguments: arguments, query: text, source: .palette)
+            enter(command, input: rest, source: .palette)
         }
     }
 
-    /// Starts a command: runs it when it has what it needs, asks for its
-    /// arguments when not, or opens its view.
-    func enter(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], query text: String = "", source: InvocationSource) {
+    /// Starts a command from inside the palette, by `CommandStart`'s plan.
+    func enter(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], input: String = "", source: InvocationSource) {
+        carryOut(model.commands.plan(entry, source: source, arguments: arguments, input: input), for: entry, source: source)
+    }
+
+    /// Runs the command, shows its argument fields, opens its view, or
+    /// shows why it can't start.
+    func carryOut(_ plan: CommandStart.Plan, for entry: CommandRegistry.Entry, source: InvocationSource) {
         problem = nil
         showingActions = false
-        switch entry.spec.kind {
-        case .run:
-            var values = arguments
-            for argument in entry.spec.arguments where (values[argument.name] ?? "").isEmpty {
-                values[argument.name] = argument.defaultValue ?? argument.options?.first ?? ""
-            }
-            let ready = entry.spec.requiredArguments.allSatisfy { !(values[$0.name] ?? "").isEmpty }
-            if entry.spec.arguments.isEmpty || (!arguments.isEmpty && ready) {
-                run(entry, values, source: source)
-            } else {
-                argumentValues = values
-                stack.append(.arguments(entry, source: source))
-            }
-        case .view:
+        switch plan {
+        case .refuse(let message):
+            problem = message
+        case .run(let arguments):
+            run(entry, arguments, source: source)
+        case .ask(let arguments):
+            argumentValues = arguments
+            stack.append(.arguments(entry, source: source))
+        case .openView(let query):
             opening = true
             openToken += 1
             let token = openToken
             Task {
-                let opened = await model.commands.openView(entry.key, query: CommandQuery(text: text, arguments: arguments), context: context)
+                let opened = await model.commands.openView(entry.key, query: query, context: context)
                 // The palette was hidden, reset or went back while the
                 // plugin started: this view belongs to nothing now.
                 guard token == openToken else {
@@ -559,7 +549,7 @@ final class PaletteSession {
     /// Return in the argument fields.
     func submitArguments() {
         guard case .arguments(let entry, let source) = top else { return }
-        if let missing = entry.spec.requiredArguments.first(where: { (argumentValues[$0.name] ?? "").isEmpty }) {
+        if let missing = CommandStart.missing(entry.spec, argumentValues) {
             problem = "\(entry.spec.title) needs \(missing.placeholder)"
             return
         }

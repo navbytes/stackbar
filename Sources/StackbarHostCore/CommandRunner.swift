@@ -71,11 +71,9 @@ public final class CommandRunner: Sendable {
     public func run(_ key: CommandKey, arguments: [String: String] = [:], source: InvocationSource, context: InvocationContext? = nil) async -> Outcome {
         guard let entry = registry.entry(key) else { return .failure("\(key) is not a command") }
         guard entry.spec.kind == .run else { return .failure("\(entry.spec.title) opens a view") }
-        if source == .link || source == .spotlight || source == .shortcuts, entry.spec.exposure == .stackbarOnly {
-            return .failure("\(entry.spec.title) can only be run from inside Stackbar")
-        }
-        for argument in entry.spec.requiredArguments where (arguments[argument.name] ?? "").isEmpty {
-            return .failure("\(entry.spec.title) needs \(argument.placeholder)")
+        if let refusal = CommandStart.refusal(entry.spec, source: source) { return .failure(refusal) }
+        if let missing = CommandStart.missing(entry.spec, arguments) {
+            return .failure("\(entry.spec.title) needs \(missing.placeholder)")
         }
         let supervisor: PluginSupervisor
         switch await self.supervisor(for: key.pluginID) {
