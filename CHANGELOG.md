@@ -3,13 +3,14 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.27.1
 
 ### New
 - **Optional crash reports.** Stackbar can now send a report to its developer when it crashes, so crashes get fixed faster. It's off until you turn it on, in the Welcome window or Settings › Privacy & Secrets. A report has where Stackbar crashed, its version, the macOS version and the Mac model, never plugin names, logs, files or your computer's name.
 
 ### Fixed
 - **Palette answers keep up with your typing.** A plugin's answer in the palette, like Calculator's, sometimes showed the result for the text before your last keystroke: `(54*8)+33` showed the answer to `(54*8)+3`. The palette now redraws whenever a plugin's answer changes.
+- **The Welcome window shows in full, once.** It opened as a clipped strip and came back on every launch. It now shows the whole starter list and stays closed once you close it.
 
 ## 0.27.0
 
