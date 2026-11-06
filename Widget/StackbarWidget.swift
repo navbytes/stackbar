@@ -44,7 +44,7 @@ struct SnapshotEntry: TimelineEntry {
 
 struct Provider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> SnapshotEntry {
-        SnapshotEntry(date: Date(), snapshot: WidgetSnapshot(pluginID: "placeholder", name: "Stackbar", node: .label("Stackbar", symbol: "drop")))
+        SnapshotEntry(date: Date(), snapshot: WidgetSnapshot(pluginID: "placeholder", name: "Stackbar", node: .label("Stackbar", symbol: "square.stack.3d.up")))
     }
 
     func snapshot(for configuration: SelectPlugin, in context: Context) async -> SnapshotEntry {
@@ -106,7 +106,7 @@ struct StackbarWidgetView: View {
                 })
                 .containerBackground(.fill.tertiary, for: .widget)
         } else {
-            ContentUnavailableView("No plugin", systemImage: "drop", description: Text("Open Stackbar and add a plugin with a widget."))
+            ContentUnavailableView("No plugin", systemImage: "square.stack.3d.up", description: Text("Open Stackbar and add a plugin with a widget."))
                 .containerBackground(.fill.tertiary, for: .widget)
         }
     }
