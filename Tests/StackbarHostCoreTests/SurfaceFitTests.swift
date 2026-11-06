@@ -75,18 +75,18 @@ final class SurfaceFitTests: XCTestCase {
         let jira = PaletteSection(title: "Jira", entries: [entry("Fix login")], leads: true)
         let files = PaletteSection(title: "Files", entries: [entry("ABC-123 notes.txt")])
         let apps = PaletteSection(title: "Applications", entries: [entry("Activity Monitor")])
-        let ranked = PaletteSection.rank([apps, files, jira], query: "ABC-123")
-        XCTAssertEqual(ranked.leads.map(\.title), ["Jira", "Files"], "a pattern match first, then a prefix match")
-        XCTAssertEqual(ranked.follows.map(\.title), ["Applications"])
+        let ranked = PaletteSection.rank([apps, files, jira], results: [], ranker: PaletteRanker(query: "ABC-123"))
+        XCTAssertEqual(ranked.map(\.title), ["Jira", "Files", "Applications"], "a pattern match first, then a prefix match")
         let sections = PaletteSection.group([], query: "ABC-123", plugins: [apps, files, jira]) { _ in false }
         XCTAssertEqual(sections.map(\.title), ["Jira", "Files", "Applications"])
     }
 
     func testFollowingSectionsGoBestMatchFirst() {
-        let weak = PaletteSection(title: "Weak", entries: [entry("Xylophone notes")])
-        let strong = PaletteSection(title: "Strong", entries: [entry("Mynotes")])
+        let weak = PaletteSection(title: "Weak", entries: [entry("Mynotes")])
+        let strong = PaletteSection(title: "Strong", entries: [entry("Xylophone notes")])
         let none = PaletteSection(title: "None", entries: [entry("42")])
-        XCTAssertEqual(PaletteSection.rank([none, weak, strong], query: "notes").follows.map(\.title), ["Strong", "Weak", "None"])
+        let ranked = PaletteSection.rank([none, weak, strong], results: [], ranker: PaletteRanker(query: "notes"))
+        XCTAssertEqual(ranked.map(\.title), ["Strong", "Weak", "None"], "a word start beats a match inside a word")
     }
 
     func testOptInToolsStayOffUntilAllowed() throws {

@@ -235,6 +235,18 @@ public final class PaletteUsage: @unchecked Sendable {
         save()
     }
 
+    /// Forgets one entry's use (⌘K's Reset Ranking).
+    public func forget(_ id: String) {
+        lock.withLock { uses[id] = nil }
+        save()
+    }
+
+    /// Forgets every use (Settings' Clear Search History).
+    public func clear() {
+        lock.withLock { uses = [:] }
+        save()
+    }
+
     /// The decayed use count of an entry (0 when never used).
     public func score(_ id: String) -> Double {
         let time = now()

@@ -84,17 +84,19 @@ final class PaletteSectionsTests: XCTestCase {
     }
 
     private func app(_ name: String) -> PaletteIndex.Entry {
-        PaletteIndex.Entry(pluginID: "app", pluginName: "Application", title: name, kind: .open("file:///Applications/\(name).app"))
+        var entry = PaletteIndex.Entry(pluginID: "app", pluginName: "Application", title: name, kind: .open("file:///Applications/\(name).app"))
+        entry.rankKey = "app|row|apps|\(name)"
+        return entry
     }
 
-    func testPluginSectionsLeadOnlyOnAPrefixMatch() {
+    func testPluginSectionsRankWithTheResults() {
         let apps = PaletteSection(title: "Applications", entries: [app("Safari")])
         let sum = PaletteSection(title: "Calculator", entries: [action("2+2 = 4")])
         let lead = PaletteSection.group([command("safe mode")], query: "saf", plugins: [apps]) { _ in false }
         XCTAssertEqual(lead.map(\.title), ["Applications", "Results"])
         XCTAssertEqual(PaletteSection.group([], query: "2+2", plugins: [apps, sum]) { _ in false }.map(\.title), ["Calculator", "Applications"])
         let follow = PaletteSection.group([command("notes")], query: "nts", plugins: [PaletteSection(title: "Applications", entries: [app("Notes")])]) { _ in false }
-        XCTAssertEqual(follow.map(\.title), ["Results", "Applications"], "a fuzzy match goes after the command results")
+        XCTAssertEqual(follow.map(\.title), ["Results", "Applications"], "a letters-in-order match goes after a prefix")
     }
 
     func testMatchingRanksByNameThenUse() {

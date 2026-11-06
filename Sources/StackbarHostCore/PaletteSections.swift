@@ -24,27 +24,24 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// not repeated below; `store` follows a typed one. Empty groups are left
     /// out.
     ///
-    /// A typed query also gets the plugins' root-search sections: before the
-    /// command results when their first row starts with what was typed
-    /// (`saf` → Safari, `2+2` → its sum), after them otherwise; then the
-    /// Store's suggestions and the fallback commands.
+    /// A typed query also gets the plugins' root-search sections, ranked
+    /// with the results on one scale (`PaletteRanker`): a section whose root
+    /// pattern matched (`2+2`, `ABC-123`) first; then the best row of all,
+    /// in a "Top Hit" section of its own when it isn't already first in its
+    /// section; then the sections, Results among them, by their best row.
+    /// `resultScore` is the first result's score (default: the ranker's).
+    /// Then the Store's suggestions and the fallback commands.
     public static func group(_ results: [PaletteIndex.Entry], query: String, favorites: [PaletteIndex.Entry] = [], store: [PaletteIndex.Entry] = [],
-                             plugins: [PaletteSection] = [], fallbacks: [PaletteIndex.Entry] = [],
-                             recentLimit: Int = 5, isRecent: (PaletteIndex.Entry) -> Bool) -> [PaletteSection] {
+                             plugins: [PaletteSection] = [], fallbacks: [PaletteIndex.Entry] = [], ranker: PaletteRanker? = nil,
+                             resultScore: Int? = nil, recentLimit: Int = 5, isRecent: (PaletteIndex.Entry) -> Bool) -> [PaletteSection] {
         let typed = query.trimmingCharacters(in: .whitespaces)
         guard typed.isEmpty else {
-            let (leads, follows) = rank(plugins, query: typed)
-            let result = PaletteSection(title: "Results", entries: results)
+            let ranker = ranker ?? PaletteRanker(query: typed)
             // A fallback the search found already shows in Results.
             let shown = Set(results.map(\.id))
             let rest = fallbacks.filter { !shown.contains($0.id) }
-            // Typing a command's whole name or keyword ("settings") puts it
-            // under Return, ahead of a file or app that merely starts with
-            // the text. Only a matched root pattern (`ABC-123`) goes first.
-            let ahead = results.first?.isExactMatch(typed.lowercased()) == true
-            let top = ahead ? leads.filter(\.leads) + [result] + leads.filter { !$0.leads } : leads + [result]
-            return (top + follows
-                + [PaletteSection(title: "From the Store", entries: store), PaletteSection(title: fallbackTitle(typed), entries: rest)])
+            let top = rank(plugins, results: results, ranker: ranker, resultScore: resultScore)
+            return (top + [PaletteSection(title: "From the Store", entries: store), PaletteSection(title: fallbackTitle(typed), entries: rest)])
                 .filter { !$0.entries.isEmpty }
         }
         let pinned = Set(favorites.map(\.id))
@@ -76,26 +73,39 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
 }
 
 extension PaletteSection {
-    /// Plugin sections split into those that lead the results and those that
-    /// follow them, each best first. A section leads when its root pattern
-    /// matched or its first row starts with the typed text (`saf` → Safari,
-    /// `2+2` → its sum). Within each group, a pattern match comes first, then
-    /// the section whose rows match the text best; ties keep the given order.
-    public static func rank(_ sections: [PaletteSection], query: String) -> (leads: [PaletteSection], follows: [PaletteSection]) {
-        let lowered = query.trimmingCharacters(in: .whitespaces).lowercased()
-        func startsWithQuery(_ section: PaletteSection) -> Bool {
-            section.entries.first?.title.lowercased().hasPrefix(lowered) ?? false
+    /// The title of the section holding the best row of all, when that row
+    /// isn't first in its own section.
+    public static let topHitTitle = "Top Hit"
+
+    /// Results and the plugins' sections in the order drawn (see `group`).
+    /// Rows inside a plugin's section keep the plugin's order.
+    public static func rank(_ sections: [PaletteSection], results: [PaletteIndex.Entry], ranker: PaletteRanker,
+                            resultScore: Int? = nil) -> [PaletteSection] {
+        let resultTop = results.isEmpty ? nil : (resultScore ?? results.first.flatMap(ranker.score) ?? 0)
+        var sections = sections
+        let scores = sections.map { $0.entries.map(ranker.rowScore) }
+        // The best plugin row outside the pattern-led sections; ties go to
+        // the earlier section and row.
+        var topHit: PaletteIndex.Entry?
+        let candidates = sections.indices.filter { !sections[$0].leads }
+        var bestRow: (section: Int, row: Int, score: Int)?
+        for section in candidates {
+            for (row, score) in scores[section].enumerated() where score > (bestRow?.score ?? Int.min) {
+                bestRow = (section, row, score)
+            }
         }
-        func best(_ section: PaletteSection) -> Int {
-            section.entries.compactMap { TextMatch.score(lowered, in: $0.title) }.max() ?? Int.min
+        if let bestRow, bestRow.row > 0, bestRow.score > (resultTop ?? Int.min) {
+            topHit = sections[bestRow.section].entries.remove(at: bestRow.row)
         }
-        let scored = sections.enumerated().map { (index: $0.offset, section: $0.element, score: best($0.element)) }
-        let ordered = scored.sorted { left, right in
-            if left.section.leads != right.section.leads { return left.section.leads }
-            if left.score != right.score { return left.score > right.score }
-            return left.index < right.index
-        }.map(\.section)
-        return (ordered.filter { $0.leads || startsWithQuery($0) }, ordered.filter { !($0.leads || startsWithQuery($0)) })
+        // A section's best row once the Top Hit has left it.
+        func best(_ index: Int) -> Int { sections[index].entries.map(ranker.rowScore).max() ?? Int.min }
+        let led = sections.indices.filter { sections[$0].leads }.sorted { (best($0), -$0) > (best($1), -$1) }.map { sections[$0] }
+        // Results is index -1: it wins ties with every plugin section.
+        var ordered: [(section: PaletteSection, score: Int, index: Int)] = candidates.map { (sections[$0], best($0), $0) }
+        if let resultTop { ordered.append((PaletteSection(title: "Results", entries: results), resultTop, -1)) }
+        ordered.sort { ($0.score, -$0.index) > ($1.score, -$1.index) }
+        let hit = topHit.map { [PaletteSection(title: topHitTitle, entries: [$0])] } ?? []
+        return (led + hit + ordered.map(\.section)).filter { !$0.entries.isEmpty }
     }
 
     /// The heading over the fallback commands.

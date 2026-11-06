@@ -181,21 +181,26 @@ final class PaletteSession {
             return (cache.sections, cache.results)
         }
         let usage = model.commands.usage
+        let ranker = PaletteRanker(query: query, usage: usage, picks: model.commands.picks)
         // Before anything is typed the root lists everything, so the app's
         // own places aren't cut off by 30 commands.
         let typedNothing = query.trimmingCharacters(in: .whitespaces).isEmpty
-        var found = palette.search(query, limit: typedNothing ? 500 : 30, usage: usage)
+        let scored = palette.scored(query, limit: typedNothing ? 500 : 30, ranker: ranker, usage: usage)
+        var found = scored.map(\.entry)
+        var resultScore = scored.first?.score
         // An alias leads, unless what was typed is another command's whole
         // name ("pr cockpit" with "pr" aliased elsewhere).
         let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
         if let match = palette.aliasMatch(query), found.first?.isExactMatch(typed) != true {
             found.removeAll { $0.id == match.entry.id }
             found.insert(match.entry, at: 0)
+            resultScore = PaletteRanker.exactAlias
         }
         let favorites = model.commands.favorites.entries(in: palette.all)
         let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
         let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store,
-                                            plugins: plugins, fallbacks: fallbackEntries()) { usage.isRecent($0.id) }
+                                            plugins: plugins, fallbacks: fallbackEntries(), ranker: ranker,
+                                            resultScore: resultScore) { usage.isRecent($0.learnID) }
         let ordered = sections.flatMap(\.entries)
         cache = (query, palette.revision, storeCount, pluginKey, sections, ordered)
         return (sections, ordered)
@@ -304,7 +309,7 @@ final class PaletteSession {
                 model.commands.rootBudget.record(key, took: Date().timeIntervalSince(fed))
             }
         }
-        var usedTitles: Set<String> = ["Results", "From the Store", "Favorites", "Recent", "Commands", "Panel Actions"]
+        var usedTitles: Set<String> = ["Results", PaletteSection.topHitTitle, "From the Store", "Favorites", "Recent", "Commands", "Panel Actions"]
         let sections = rootViews.values.filter { !$0.isStopped }.sorted { $0.entry.spec.title < $1.entry.spec.title }.compactMap { view -> PaletteSection? in
             let entries = self.rows(of: view).prefix(Self.rootRowLimit).compactMap { row -> PaletteIndex.Entry? in
                 guard let primary = row.actions.first else { return nil }
@@ -313,6 +318,8 @@ final class PaletteSession {
                                                subtitle: row.subtitle, symbol: row.symbol ?? view.entry.spec.symbol, kind: kind)
                 entry.appIcon = row.appIcon
                 entry.fileIcon = row.fileIcon
+                // Action ids change with every answer; the row's key doesn't.
+                entry.rankKey = "\(view.entry.pluginID)|row|\(view.entry.spec.id)|\(row.key)"
                 table[entry.id] = (view, row.key, primary, row.actions)
                 return entry
             }
@@ -433,7 +440,12 @@ final class PaletteSession {
 
     func activate(_ entry: PaletteIndex.Entry) {
         problem = nil
+        // What was picked for this text, so it ranks higher for it next time.
+        if stack.isEmpty, !isStoreSuggestion(entry) {
+            model.commands.picks.record(query: query, id: entry.learnID)
+        }
         if let row = rootRows[entry.id] {
+            model.commands.usage.record(entry.learnID)
             activateRootRow(row.view, key: row.key, action: row.action)
             return
         }
@@ -649,7 +661,7 @@ final class PaletteSession {
             if let row = rootRows[entry.id] {
                 return row.actions.map { ref in
                     Action(title: ref.title, shortcut: ref.shortcut, role: ref.role) { [weak self] in self?.perform(ref, in: row.view) }
-                }
+                } + [resetRanking(entry)]
             }
             var actions = [Action(title: primaryTitle ?? "Run") { [weak self] in self?.activate(entry) }]
             if canPin(entry) {
@@ -678,6 +690,7 @@ final class PaletteSession {
                     showingActions = false
                 })
             }
+            if !isStoreSuggestion(entry) { actions.append(resetRanking(entry)) }
             return actions
         case .arguments:
             return [Action(title: "Run") { [weak self] in self?.submitArguments() }]
@@ -686,6 +699,20 @@ final class PaletteSession {
             return row.actions.map { ref in
                 Action(title: ref.title, shortcut: ref.shortcut, role: ref.role) { [weak self] in self?.perform(ref, in: view) }
             }
+        }
+    }
+
+    /// Forgets what the palette learned about one entry: its use and the
+    /// text it was picked for, as Raycast's Reset Ranking does.
+    private func resetRanking(_ entry: PaletteIndex.Entry) -> Action {
+        Action(title: "Reset Ranking", section: "Ranking") { [weak self] in
+            guard let self else { return }
+            model.commands.usage.forget(entry.learnID)
+            model.commands.picks.forget(entry.learnID)
+            cache = nil
+            revision += 1
+            showingActions = false
+            HUD.shared.show("Ranking reset")
         }
     }
 

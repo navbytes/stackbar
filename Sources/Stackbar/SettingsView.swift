@@ -175,6 +175,7 @@ struct GeneralSettings: View {
     @AppStorage(PaletteSession.compactKey) private var paletteCompact = false
     @State private var toolInstalled = AppHousekeeping.commandLineToolInstalled
     @State private var toolError: String?
+    @State private var confirmingClearHistory = false
 
     var body: some View {
         SettingsPage {
@@ -206,6 +207,17 @@ struct GeneralSettings: View {
                 }
                 Toggle("Compact: show only the search field until you type", isOn: $paletteCompact)
                     .toggleStyle(TrailingSwitchStyle())
+                SettingsRow(title: "Search history", caption: "The palette learns what you pick for what you type, and ranks it first next time.") {
+                    Button("Clear…") { confirmingClearHistory = true }
+                }
+            }
+            .confirmationDialog("Clear the palette's search history?", isPresented: $confirmingClearHistory) {
+                Button("Clear", role: .destructive) {
+                    model.commands.usage.clear()
+                    model.commands.picks.clear()
+                }
+            } message: {
+                Text("Results go back to their default order. Recent and frecency start over; favorites and aliases stay.")
             }
             SettingsGroup("Plugins") {
                 SettingsRow(title: "Plugins folder", caption: "Drop a .swift plugin here and Stackbar builds and runs it.") {

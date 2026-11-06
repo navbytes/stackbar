@@ -140,8 +140,10 @@ var commands: [Command] {
 Two modifiers bring a command into the palette's own results. `.rootSearch()`
 on a view command runs its `search` with whatever the user types at the root
 and shows the view's top three rows as a section under the command's title,
-or `.rootSearch(section: "Applications")`; a section whose first row starts
-with the typed text comes before the other results. Applications, Calculator,
+or `.rootSearch(section: "Applications")`. Stackbar ranks its rows with
+everything else on one scale and learns which row people pick for what they
+type, so keep each row's `key` stable; the best row of all leads, and
+sections follow by their best row. Applications, Calculator,
 File Search and Clipboard History do this; keep that search quick: one that
 takes longer than 0.4 s three times running sits out for ten minutes. Give it
 `matching:` when it only answers text of one shape, and other text never

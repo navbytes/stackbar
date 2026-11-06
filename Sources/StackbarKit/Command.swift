@@ -67,8 +67,9 @@ public struct Command: Sendable {
     /// Shows the view's top rows in the palette's own results while the user
     /// types, under `section` (the command's title when nil), as Raycast's
     /// root search does. The view's `search` runs with what was typed; keep
-    /// it quick. A section whose first row starts with the typed text comes
-    /// before the other results (an app by name, a sum). Protocol 16.
+    /// it quick. Stackbar ranks the rows with every other result and learns
+    /// which one people pick for what they type, so keep row keys stable.
+    /// Protocol 16.
     ///
     /// `matching` is a regular expression the whole typed text must match
     /// before the host asks the plugin at all, like `#"^[A-Za-z][A-Za-z0-9]*-\d+$"#`
