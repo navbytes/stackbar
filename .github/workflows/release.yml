@@ -114,6 +114,12 @@ jobs:
           APP=build/Stackbar.app
           codesign --verify --deep --strict --verbose=2 "$APP"
           [ -d "$APP/Contents/PlugIns/StackbarWidget.appex" ]
+          # The widget reads the plugin list from this group: both must claim it.
+          GROUP=$(sed -n 's/.*static let appGroup = "\(.*\)".*/\1/p' Sources/StackbarHostCore/WidgetSnapshotStore.swift)
+          for bundle in "$APP" "$APP/Contents/PlugIns/StackbarWidget.appex"; do
+            codesign -d --entitlements - --xml "$bundle" 2>/dev/null | grep -q "<string>$GROUP</string>" \
+              || { echo "::error::$bundle does not claim the app group $GROUP"; exit 1; }
+          done
           [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]
           if [ -n "${SPARKLE_PUBLIC_KEY:-}" ]; then
             [ "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP/Contents/Info.plist")" = "$SPARKLE_PUBLIC_KEY" ]

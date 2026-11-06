@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **The desktop widget lists your plugins.** In the downloaded app, choosing a plugin for the Stackbar widget showed an empty list, because macOS kept the widget out of the folder where Stackbar leaves each plugin's widget. Stackbar now uses a shared folder that the signed download is allowed to open. After updating, open Stackbar once so it fills the widget's list, then edit the widget and pick a plugin.
+
 ## 0.26.0
 
 ### New

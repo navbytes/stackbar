@@ -25,8 +25,18 @@ public struct WidgetSnapshotStore: Sendable {
 
     public init(directory: URL) { self.directory = directory }
 
+    /// The app group the app and the widget extension share.
+    ///
+    /// A macOS-style id, prefixed with the team id, because the release is
+    /// signed for Developer ID without a provisioning profile. An iOS-style
+    /// `group.` id must be authorised by a profile; without one the sandboxed
+    /// widget is refused the container, so it found no plugins, and the app is
+    /// asked to approve access (macOS 15 app group container protection). A
+    /// team-prefixed id needs no profile.
+    public static let appGroup = "59J9RQXYYP.io.navbytes.stackbar"
+
     /// The app group's directory when the app is signed with one.
-    public static func shared(appGroup: String = "group.io.navbytes.stackbar") -> WidgetSnapshotStore {
+    public static func shared(appGroup: String = WidgetSnapshotStore.appGroup) -> WidgetSnapshotStore {
         #if os(macOS)
         if let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) {
             return WidgetSnapshotStore(directory: container.appendingPathComponent("Widgets", isDirectory: true))

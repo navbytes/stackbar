@@ -6,7 +6,7 @@
 	<false/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.io.navbytes.stackbar</string>
+		<string>59J9RQXYYP.io.navbytes.stackbar</string>
 	</array>
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
