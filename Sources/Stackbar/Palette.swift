@@ -676,9 +676,11 @@ struct CommandViewBody: View {
             if let items = RowFilter.items(in: root, query: view.query) {
                 if let columns = RowFilter.columns(in: root) {
                     tiles(items, columns: columns)
-                } else if let preview = session.selectedRow(of: view)?.preview {
+                } else if let preview = RowFilter.detail(for: session.selectedRow(of: view), in: root) {
                     // Raycast's list with a detail: the list on the left, the
-                    // selected row's full text or image on the right.
+                    // selected row's full text or image on the right. Once
+                    // one row has a preview every row gets the pane, so the
+                    // layout holds still as the selection moves.
                     HStack(spacing: 0) {
                         list(items).frame(width: PaletteView.size.width * 0.46)
                         Divider().opacity(0.6)

@@ -46,6 +46,16 @@ final class ViewNodeQueriesTests: XCTestCase {
         XCTAssertNil(RowFilter.items(in: .list(children: [.section(title: "S", children: [.divider])]), query: ""))
     }
 
+    func testOnePreviewGivesEveryRowTheDetailPane() {
+        let long = RowNode(key: "long", title: "func greet()", preview: RowPreview(text: "func greet() {\n}"))
+        let short = RowNode(key: "short", title: "hello", subtitle: "Notes · just now")
+        let list = ViewNode.list(searchable: true, children: [.section(title: "History", children: [.row(long), .row(short)])])
+        XCTAssertEqual(RowFilter.detail(for: long, in: list), long.preview)
+        XCTAssertEqual(RowFilter.detail(for: short, in: list), RowPreview(text: "hello", caption: "Notes · just now"), "a row without a preview keeps the pane")
+        XCTAssertEqual(RowFilter.detail(for: nil, in: list), RowPreview(), "no results keep an empty pane")
+        XCTAssertNil(RowFilter.detail(for: short, in: .list(children: [.row(short)])), "a list with no previews has no pane")
+    }
+
     func testDuplicateRowKeysAreMadeUniqueForTheKeyboard() {
         let list = ViewNode.list(searchable: true, children: [row("Untitled", "Untitled"), row("a", "A"), row("Untitled", "Untitled"), row("Untitled", "Untitled")])
         XCTAssertEqual(RowFilter.items(in: list, query: "")?.map(\.id), ["Untitled", "a", "Untitled#2", "Untitled#3"])
