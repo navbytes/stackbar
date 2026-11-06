@@ -86,6 +86,9 @@ final class PaletteSession {
     /// Told when `collapsed` flips, so the window can grow or shrink.
     @ObservationIgnored var onCollapsedChange: (Bool) -> Void = { _ in }
     @ObservationIgnored var dismiss: () -> Void = {}
+    /// Bumped by each view open and by reset and back, so an open that
+    /// finishes late knows it was abandoned.
+    @ObservationIgnored private var openToken = 0
 
     init(model: AppModel) {
         self.model = model
@@ -118,6 +121,7 @@ final class PaletteSession {
         actionQuery = ""
         problem = nil
         opening = false
+        openToken += 1
         context = nil
     }
 
@@ -126,6 +130,12 @@ final class PaletteSession {
         if showingActions {
             showingActions = false
             actionQuery = ""
+            return true
+        }
+        // Esc while a command is still opening cancels it.
+        if opening {
+            openToken += 1
+            opening = false
             return true
         }
         guard let last = stack.popLast() else { return false }
@@ -171,7 +181,10 @@ final class PaletteSession {
             return (cache.sections, cache.results)
         }
         let usage = model.commands.usage
-        var found = palette.search(query, limit: 30, usage: usage)
+        // Before anything is typed the root lists everything, so the app's
+        // own places aren't cut off by 30 commands.
+        let typedNothing = query.trimmingCharacters(in: .whitespaces).isEmpty
+        var found = palette.search(query, limit: typedNothing ? 500 : 30, usage: usage)
         // An alias leads, unless what was typed is another command's whole
         // name ("pr cockpit" with "pr" aliased elsewhere).
         let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
@@ -182,7 +195,7 @@ final class PaletteSession {
         let favorites = model.commands.favorites.entries(in: palette.all)
         let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
         let sections = PaletteSection.group(found, query: query, favorites: favorites, store: store,
-                                            plugins: plugins, fallbacks: fallbackEntries()) { usage.score($0.id) > 0 }
+                                            plugins: plugins, fallbacks: fallbackEntries()) { usage.isRecent($0.id) }
         let ordered = sections.flatMap(\.entries)
         cache = (query, palette.revision, storeCount, pluginKey, sections, ordered)
         return (sections, ordered)
@@ -251,7 +264,6 @@ final class PaletteSession {
             guard !rootOpening.contains(entry.key), model.controller(for: entry.pluginID)?.supervisor != nil else { continue }
             rootOpening.insert(entry.key)
             let key = entry.key
-            rootFedAt[key] = Date()
             Task {
                 let opened = await model.commands.openView(key, query: CommandQuery(text: text), context: context, recordUse: false)
                 rootOpening.remove(key)
@@ -266,6 +278,9 @@ final class PaletteSession {
                 }
                 view.query = now
                 rootViews[key] = view
+                // Timed from here: waiting for the plugin to start isn't
+                // the plugin being slow, and shouldn't bench it.
+                rootFedAt[key] = Date()
                 rootViewsRevision += 1
             }
         }
@@ -289,7 +304,8 @@ final class PaletteSession {
                 model.commands.rootBudget.record(key, took: Date().timeIntervalSince(fed))
             }
         }
-        let sections = rootViews.values.sorted { $0.entry.spec.title < $1.entry.spec.title }.compactMap { view -> PaletteSection? in
+        var usedTitles: Set<String> = ["Results", "From the Store", "Favorites", "Recent", "Commands", "Panel Actions"]
+        let sections = rootViews.values.filter { !$0.isStopped }.sorted { $0.entry.spec.title < $1.entry.spec.title }.compactMap { view -> PaletteSection? in
             let entries = self.rows(of: view).prefix(Self.rootRowLimit).compactMap { row -> PaletteIndex.Entry? in
                 guard let primary = row.actions.first else { return nil }
                 let kind: PaletteIndex.Entry.Kind = primary.navigate.map { .navigate($0) } ?? .action(primary.id, value: nil)
@@ -300,8 +316,15 @@ final class PaletteSession {
                 table[entry.id] = (view, row.key, primary, row.actions)
                 return entry
             }
-            return entries.isEmpty ? nil : PaletteSection(title: view.entry.spec.rootSection ?? view.entry.spec.title, entries: entries,
-                                                          leads: view.entry.spec.rootPattern != nil)
+            guard !entries.isEmpty else { return nil }
+            // Sections are told apart by title: two plugins' "Search", or one
+            // called "Results", get the plugin's name.
+            var title = view.entry.spec.rootSection ?? view.entry.spec.title
+            if !usedTitles.insert(title).inserted {
+                title += " — \(view.entry.pluginName)"
+                usedTitles.insert(title)
+            }
+            return PaletteSection(title: title, entries: entries, leads: view.entry.spec.rootPattern != nil)
         }
         rootRows = table
         return sections
@@ -366,7 +389,7 @@ final class PaletteSession {
         switch top {
         case .none:
             let results = results
-            guard results.indices.contains(line - 1) else { return false }
+            guard !collapsed, results.indices.contains(line - 1) else { return false }
             activate(results[line - 1])
             return true
         case .view(let view):
@@ -496,8 +519,16 @@ final class PaletteSession {
             }
         case .view:
             opening = true
+            openToken += 1
+            let token = openToken
             Task {
                 let opened = await model.commands.openView(entry.key, query: CommandQuery(text: text, arguments: arguments), context: context)
+                // The palette was hidden, reset or went back while the
+                // plugin started: this view belongs to nothing now.
+                guard token == openToken else {
+                    if case .success(let view) = opened { view.close() }
+                    return
+                }
                 opening = false
                 switch opened {
                 case .success(let view):
@@ -586,6 +617,12 @@ final class PaletteSession {
                 return
             }
             enter(command, arguments: target.arguments, source: .palette)
+            return
+        }
+        // A plugin that is restarting or stopped can't act: say so and keep
+        // the palette open, rather than close it with nothing done.
+        guard view.canAct else {
+            problem = view.problem ?? "\(view.entry.pluginName) isn't running"
             return
         }
         view.perform(action.id)
@@ -711,6 +748,8 @@ final class PaletteSession {
         }
         switch top {
         case .none:
+            // Compact and nothing typed: no list shows, so nothing to run.
+            guard !collapsed else { return }
             if let entry = selectedEntry { activate(entry) }
         case .arguments:
             submitArguments()
@@ -725,7 +764,9 @@ final class PaletteSession {
             return
         }
         switch top {
-        case .none: selection.move(delta, in: results.map(\.id), query: query)
+        case .none:
+            guard !collapsed else { return }
+            selection.move(delta, in: results.map(\.id), query: query)
         case .arguments: break
         case .view(let view): selection.move(delta, in: rows(of: view).map(\.key), query: view.query)
         }

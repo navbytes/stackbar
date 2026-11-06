@@ -352,7 +352,7 @@ final class PluginController: Identifiable {
     private func apply(_ update: PluginSupervisor.Update) {
         switch update {
         case .state(let newState):
-            if case .restarting = newState { model?.commands.pluginRestarted(pluginID) }
+            if newState != state { model?.commands.pluginStateChanged(pluginID, newState) }
             state = newState
         case .render(.menuBar, let root):
             menuBar = root

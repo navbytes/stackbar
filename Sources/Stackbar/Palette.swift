@@ -371,6 +371,11 @@ struct PaletteView: View {
         // In a grid list the arrows move by a whole line up and down, and
         // left and right move one tile.
         let columns = session.showingActions ? nil : session.gridColumns
+        // An arguments form of pickers only has no text field to submit it.
+        if press.key == .return, plain, focus == nil, case .arguments = session.top {
+            session.submit()
+            return .handled
+        }
         switch press.key {
         case .downArrow where plain:
             session.move(columns ?? 1)
@@ -464,8 +469,11 @@ struct PaletteView: View {
         DispatchQueue.main.async {
             switch session.top {
             case .arguments(let entry, _):
-                let empty = entry.spec.arguments.first { (session.argumentValues[$0.name] ?? "").isEmpty && $0.options == nil }
-                focus = (empty ?? entry.spec.arguments.first).map { .argument($0.name) }
+                // Only text fields take focus; a picker has none, and focus
+                // given to one left Return and the arrows going nowhere.
+                let fields = entry.spec.arguments.filter { $0.options == nil }
+                let empty = fields.first { (session.argumentValues[$0.name] ?? "").isEmpty }
+                focus = (empty ?? fields.first).map { .argument($0.name) }
             case .view, .none:
                 focus = .search
             }

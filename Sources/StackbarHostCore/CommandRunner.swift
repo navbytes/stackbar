@@ -162,6 +162,8 @@ public struct ViewSessionState: Sendable {
     private var pending = false
     /// The newest seq whose tree was shown.
     public private(set) var shownSeq = 0
+    /// Trees older than this came from a process that has since restarted.
+    private var oldestAccepted = 0
     public private(set) var root: ViewNode?
 
     /// What the caller should send now.
@@ -182,6 +184,18 @@ public struct ViewSessionState: Sendable {
         return .open(seq: seq, query: query)
     }
 
+    /// The plugin restarted and lost the session: open it again with the
+    /// newest query. The seq keeps counting, so a late tree from the old
+    /// process is never shown over the new one.
+    public mutating func reopen(_ query: CommandQuery) -> Send {
+        self.query = query
+        pending = false
+        let seq = take()
+        inFlight = seq
+        oldestAccepted = seq
+        return .open(seq: seq, query: query)
+    }
+
     /// The user changed the query; returns an update to send now, or nil
     /// when one is in flight (the newest is sent when it answers).
     public mutating func change(_ query: CommandQuery) -> Send? {
@@ -199,7 +213,7 @@ public struct ViewSessionState: Sendable {
     /// A tree arrived. Returns whether to show it, and the pending query to
     /// send next.
     public mutating func received(seq: Int, root: ViewNode) -> (show: Bool, next: Send?) {
-        guard seq >= shownSeq else { return (false, nil) }
+        guard seq >= shownSeq, seq >= oldestAccepted else { return (false, nil) }
         shownSeq = seq
         self.root = root
         if inFlight.map({ seq >= $0 }) == true { inFlight = nil }
