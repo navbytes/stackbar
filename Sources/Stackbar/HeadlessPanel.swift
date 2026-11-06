@@ -84,7 +84,7 @@ final class HeadlessPanelController: NSObject, NSWindowDelegate {
         } onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
         }
-        let spec = controller.manifest?.hotkey
+        let spec = CommandHotKeys.opensPanel(controller.manifest) ? controller.manifest?.hotkey : nil
         guard spec != hotKeySpec else { return }
         hotKeySpec = spec
         hotKey?.unregister()

@@ -21,6 +21,11 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// row shortcuts: `cmd+shift+v`, `ctrl+option+k`. At least one of cmd,
     /// ctrl or option, plus one letter, digit, `space` or `f1`...`f12`.
     public var hotkey: String?
+    /// A command's id: `hotkey` then opens that command in the palette
+    /// instead of the panel, and pressing it again closes it, as Raycast
+    /// binds a hotkey to Clipboard History. The panel stays on the menu bar
+    /// icon. Stackbar 0.27.0.
+    public var hotkeyCommand: String?
     /// The oldest Stackbar whose StackbarKit this source compiles against,
     /// like `0.10.0`. A plugin index hides the Install button on older apps.
     public var minimumStackbar: String?
@@ -39,7 +44,7 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// Stackbar 0.25.0.
     public var replaces: [String]?
 
-    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil, minimumStackbar: String? = nil, homepage: String? = nil, accent: Accent? = nil, symbol: String? = nil, replaces: [String]? = nil) {
+    public init(id: String, name: String, version: String = "0.1.0", summary: String? = nil, surfaces: [Surface] = [.menuBar, .panel], triggers: [Trigger] = [.launch], capabilities: [Capability] = [], hotkey: String? = nil, hotkeyCommand: String? = nil, minimumStackbar: String? = nil, homepage: String? = nil, accent: Accent? = nil, symbol: String? = nil, replaces: [String]? = nil) {
         self.id = id
         self.name = name
         self.version = version
@@ -48,6 +53,7 @@ public struct Manifest: Codable, Equatable, Sendable {
         self.triggers = triggers
         self.capabilities = capabilities
         self.hotkey = hotkey
+        self.hotkeyCommand = hotkeyCommand
         self.minimumStackbar = minimumStackbar
         self.homepage = homepage
         self.accent = accent
@@ -65,6 +71,9 @@ public struct Manifest: Codable, Equatable, Sendable {
         if surfaces.isEmpty { result.append("surfaces is empty") }
         if let hotkey, HotKeySpec(hotkey) == nil {
             result.append("hotkey \"\(hotkey)\" needs cmd, ctrl or option plus one letter, digit, space or f1...f12, like cmd+shift+v")
+        }
+        if hotkeyCommand != nil, hotkey == nil {
+            result.append("hotkeyCommand needs a hotkey to open it")
         }
         if let minimumStackbar, !Self.isVersion(minimumStackbar) {
             result.append("minimumStackbar \"\(minimumStackbar)\" must be a version like 0.10.0")

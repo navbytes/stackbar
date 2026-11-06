@@ -416,6 +416,10 @@ needs `.reminders`; 0.18.0). `Stackbar.refreshReason`
 says which one called the running `refresh()`.
 
 `Manifest(..., hotkey: "cmd+shift+v")` opens the panel from anywhere.
+Add `hotkeyCommand: "search"` (minimumStackbar 0.27.0) and the hotkey opens
+that command in the palette instead, and closes it on a second press, the way
+Raycast binds a hotkey to Clipboard History; the panel stays on the menu bar
+icon. The user's own hotkey for the command, set in Settings, wins.
 `minimumStackbar: "0.10.0"` names the oldest Stackbar whose StackbarKit the
 source compiles against; a plugin index hides Install on older apps.
 `homepage: "https://..."` links the plugin's README from the store.

@@ -536,7 +536,8 @@ struct PluginPage: View {
                         .toggleStyle(TrailingSwitchStyle())
                 }
                 if let hotkey = manifest?.hotkey {
-                    SettingsRow(title: "Open its panel", caption: "Set by the plugin") {
+                    let command = manifest?.hotkeyCommand.flatMap { id in entries.first { $0.spec.id == id } }
+                    SettingsRow(title: command.map { "Open \($0.spec.title)" } ?? "Open its panel", caption: "Set by the plugin") {
                         KeyCaps(text: ActionsPanel.glyphs(hotkey))
                     }
                 }

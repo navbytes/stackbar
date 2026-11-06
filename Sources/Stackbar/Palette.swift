@@ -121,6 +121,12 @@ final class PaletteController {
         session.enter(entry, arguments: arguments, query: query, source: source)
     }
 
+    /// Whether the palette is open on this command's view.
+    func isShowing(_ key: CommandKey) -> Bool {
+        guard isVisible, case .view(let view) = session.top else { return false }
+        return view.entry.key == key
+    }
+
     func hide() {
         panel?.orderOut(nil)
         expiry?.cancel()

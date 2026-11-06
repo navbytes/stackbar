@@ -3,6 +3,7 @@ import AppKit
 import ApplicationServices
 import Observation
 import SwiftUI
+import StackbarHostCore
 import StackbarProtocol
 import StackbarUI
 
@@ -169,9 +170,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     /// Registers the manifest's `hotkey` to toggle the panel, and follows
-    /// changes to it when the plugin is edited.
+    /// changes to it when the plugin is edited. A hotkey the manifest gives
+    /// to a command is the command center's.
     private func updateHotKey() {
-        let spec = controller.manifest?.hotkey
+        let spec = CommandHotKeys.opensPanel(controller.manifest) ? controller.manifest?.hotkey : nil
         guard spec != hotKeySpec else { return }
         hotKeySpec = spec
         hotKey?.unregister()
