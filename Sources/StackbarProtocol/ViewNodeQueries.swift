@@ -235,7 +235,25 @@ public enum RowFilter {
                 return nil
             }
         }
-        return items
+        return unique(items)
+    }
+
+    /// Rows key themselves by their title unless told otherwise, so two
+    /// "Untitled" rows share a key; the keyboard, which walks keys, then
+    /// stuck on the first. The second becomes "Untitled#2", and so on.
+    static func unique(_ items: [Item]) -> [Item] {
+        var seen: [String: Int] = [:]
+        return items.map { item in
+            guard case .row(var row) = item else { return item }
+            let count = seen[row.key, default: 0] + 1
+            seen[row.key] = count
+            guard count > 1 else { return item }
+            var key = "\(row.key)#\(count)"
+            while seen[key] != nil { key += "+" }
+            seen[key] = 1
+            row.key = key
+            return .row(row)
+        }
     }
 
     /// How many columns the palette tiles a list's rows in: the first grid

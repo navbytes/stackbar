@@ -148,7 +148,9 @@ public struct PaletteIndex: Sendable {
         func bonus(_ entry: Entry) -> Int {
             guard let usage else { return 0 }
             let score = usage.score(entry.id)
-            return score > 0 ? min(300, Int(60 * log2(1 + score))) : 0
+            // At most 150: enough to lift what you use among similar
+            // matches, never enough to put a mid-word match above a prefix.
+            return score > 0 ? min(150, Int(60 * log2(1 + score))) : 0
         }
         guard !squeezed.isEmpty else {
             guard usage != nil else { return Array(all.prefix(limit)) }

@@ -79,6 +79,8 @@ final class PaletteSectionsTests: XCTestCase {
         XCTAssertEqual(found.first?.symbol, "shippingbox")
         XCTAssertEqual(StoreListing.paletteSuggestions([catalog], query: "contain", installed: installed).map(\.title), ["Docker"], "a summary word matches")
         XCTAssertEqual(StoreListing.paletteSuggestions([catalog], query: "d", installed: installed), [])
+        XCTAssertEqual(StoreListing.paletteSuggestions([catalog], query: "who listen", installed: installed).map(\.title), ["Ports"], "every typed word starts a summary word")
+        XCTAssertEqual(StoreListing.paletteSuggestions([catalog], query: "who docker", installed: installed), [])
     }
 
     private func app(_ name: String) -> PaletteIndex.Entry {
