@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.27.0
 
 ### New
 - **The palette learns what you pick.** Choose Slack twice after typing "s" and it comes first for "s" from then on, for apps, files and commands alike. The best match from anywhere sits at the top, initials work ("vsc" finds Visual Studio Code), and an alias you have started typing ranks first. ⌘K › Reset Ranking forgets one result, and Settings › Command Palette › Search history clears it all.
