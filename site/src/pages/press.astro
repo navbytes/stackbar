@@ -1,0 +1,84 @@
+---
+import Base from '../layouts/Base.astro';
+import Button from '../components/Button.astro';
+import { href, repo, store, version } from '../lib/site';
+import { breadcrumbs } from '../lib/seo';
+
+const short = 'Stackbar is a free, open-source Mac launcher, menu bar and widget host that people extend with plugins written in one Swift file.';
+const long = `${short} It replaces Spotlight with a keyboard-first command palette for apps, files, windows, clipboard history, snippets and calculations, and every plugin can also live in the menu bar, a panel, a window or a desktop widget. Each plugin runs in its own sandboxed process and asks for each permission on an install sheet. Stackbar is native SwiftUI for Apple Silicon Macs on macOS 26, signed and notarized, and released under the MIT license by navbytes.`;
+const facts = [
+  ['Price', 'Free, MIT license'],
+  ['Platform', 'macOS 26 or later, Apple Silicon'],
+  ['Current version', version],
+  ['Install', 'brew install --cask navbytes/tap/stackbar'],
+  ['Plugins', 'Written in Swift, sandboxed, from a signed store'],
+  ['Source', repo.replace('https://', '')],
+];
+const assets = [
+  { name: 'App icon (SVG)', file: '/icon.svg' },
+  { name: 'App icon (PNG, 180 px)', file: '/apple-touch-icon.png' },
+  { name: 'Social card (PNG, 1200 × 630)', file: '/og.png' },
+];
+---
+<Base title="Stackbar press kit" description="Facts, descriptions, the icon and pictures for writing about Stackbar, the open-source Mac launcher and menu-bar plugin host." jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Press', '/press/']])]}>
+  <div class="wrap page">
+    <header>
+      <p class="eyebrow">Press kit</p>
+      <h1>Writing about Stackbar</h1>
+      <p class="lede">Everything here is free to use in articles, videos and reviews. Please call it "Stackbar", one word with a capital S.</p>
+    </header>
+
+    <section>
+      <h2>In one sentence</h2>
+      <blockquote>{short}</blockquote>
+      <h2>In a paragraph</h2>
+      <blockquote>{long}</blockquote>
+    </section>
+
+    <section>
+      <h2>Facts</h2>
+      <dl>{facts.map(([term, text]) => <><dt>{term}</dt><dd>{text}</dd></>)}</dl>
+    </section>
+
+    <section>
+      <h2>Icon and pictures</h2>
+      <ul class="assets">
+        {assets.map((a) => (
+          <li>
+            <img src={href(a.file)} alt="" loading="lazy" />
+            <a href={href(a.file)} download>{a.name}</a>
+          </li>
+        ))}
+      </ul>
+      <p class="note">Each plugin's page in the <a href={href('/plugins/')}>plugin directory</a> has screenshots in light and dark, rendered from the plugin itself. Please keep the icon's shape and colours as they are.</p>
+    </section>
+
+    <section>
+      <h2>Getting in touch</h2>
+      <p>For a review build, an interview or a question, open an issue on <a href={`${repo}/issues`}>GitHub</a> or email the address on the <a href="https://github.com/navbytes">navbytes profile</a>.</p>
+      <div class="ctas">
+        <Button href={href('/download/')}>Download Stackbar</Button>
+        <Button href={href('/changelog/')} variant="ghost">What's new</Button>
+        <Button href={store.repository} variant="ghost">Plugin store</Button>
+      </div>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .page { max-width: 820px; padding-block: clamp(32px, 5vw, 64px) 96px; display: grid; gap: 40px; }
+  h1 { font-size: var(--step-4); margin: 8px 0 12px; }
+  h2 { font-size: var(--step-1); margin: 0 0 12px; }
+  section > h2:not(:first-child) { margin-top: 28px; }
+  blockquote { margin: 0; padding: 16px 20px; border-left: 3px solid var(--accent); background: var(--line); border-radius: 0 var(--radius-s) var(--radius-s) 0; color: var(--ink); line-height: 1.7; }
+  dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 24px; margin: 0; }
+  dt { color: var(--ink-2); }
+  dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+  .assets { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .assets li { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line-2); border-radius: var(--radius-m); }
+  .assets img { width: 100%; height: 120px; object-fit: contain; }
+  .assets a, .note a, p a { color: var(--accent); }
+  .note, p { color: var(--ink-2); line-height: 1.7; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+  @media (max-width: 560px) { dl { grid-template-columns: 1fr; gap: 2px; } dd { margin-bottom: 10px; } }
+</style>

@@ -113,6 +113,7 @@ struct CommandSettingsRow: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("More Options")
                 .menuStyle(.borderlessButton)
                 .fixedSize()
             }

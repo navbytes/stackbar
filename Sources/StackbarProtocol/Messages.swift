@@ -25,7 +25,8 @@ public enum StackbarProtocolVersion {
     /// 18 added the HUD call and system actions.
     /// 19 added text expansion: keywords the host expands as you type.
     /// 20 added focusing a window and the front app's menu items.
-    public static let current = 20
+    /// 21 added picking a color from the screen and dictionary definitions.
+    public static let current = 21
 }
 
 /// Host → plugin.
@@ -280,6 +281,14 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// Chooses a menu item of a running app by its path of titles, after
     /// bringing the app to the front. Needs `.menus`. Protocol 20.
     case pressMenuItem(appID: String, path: [String])
+    /// Shows the system's magnifier so the user can pick a color anywhere on
+    /// screen (`PickedColor` as JSON, or nil when they press Escape). Needs
+    /// nothing: nothing is read until the user clicks. Protocol 21.
+    case pickColor
+    /// The definition the Mac's own Dictionary has for a word or phrase
+    /// (`Definition` as JSON, or nil when it has none). Needs nothing; the
+    /// lookup stays on the Mac. Protocol 21.
+    case define(String)
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

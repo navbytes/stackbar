@@ -205,10 +205,20 @@ jobs:
             gh release create "$TAG" "$@" \
               --target "$GITHUB_SHA" --title "Stackbar $VERSION" --notes-file build/notes.md $FLAGS
           fi
+          # The beta feed: every release, stable or pre-release, is the newest
+          # version there, so the "beta" pre-release holds this release's
+          # appcast. Stackbar reads it when "Get beta versions" is on.
+          if [ -f build/appcast.xml ]; then
+            if ! gh release view beta >/dev/null 2>&1; then
+              gh release create beta --target "$GITHUB_SHA" --prerelease --title "Beta update feed" \
+                --notes "Holds the appcast Stackbar reads when Settings › Store & Updates › Get beta versions is on. Download releases from the Releases page, not from here."
+            fi
+            gh release upload beta build/appcast.xml --clobber
+          fi
 
       # Only notarized builds go to the tap: an ad-hoc one would not open.
       - name: Update the Homebrew cask (navbytes/homebrew-tap)
-        if: env.DRY_RUN != 'true' && env.HOMEBREW_TAP_TOKEN != '' && env.STACKBAR_NOTARY_PROFILE != ''
+        if: env.DRY_RUN != 'true' && env.HOMEBREW_TAP_TOKEN != '' && env.STACKBAR_NOTARY_PROFILE != '' && !(github.event_name == 'workflow_dispatch' && inputs.prerelease)
         env:
           VERSION: ${{ steps.version.outputs.version }}
           ZIP: build/Stackbar-${{ steps.version.outputs.version }}.zip

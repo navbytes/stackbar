@@ -617,6 +617,7 @@ struct StoreToastView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .help("Dismiss")
+            .accessibilityLabel("Dismiss")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)

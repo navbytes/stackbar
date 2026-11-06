@@ -472,6 +472,19 @@ public final class HostServices: Sendable {
                 return .failure("\(error)")
             }
 
+        case .pickColor:
+            guard panels.allow(granted.id) else { return .failure("too many color pickers; at most 10 a minute") }
+            do {
+                return .value(try await platform.system.pickColor().map(SystemCodec.encode))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .define(let word):
+            let query = word.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty, query.count <= Definition.maxQuery else { return .failure("look up 1 to \(Definition.maxQuery) characters") }
+            return .value(await platform.system.define(query).map(SystemCodec.encode))
+
         case .arrangeWindows(let placements, let launch):
             guard placements.count <= WindowPlacement.maxPerCall else { return .failure("at most \(WindowPlacement.maxPerCall) windows at a time") }
             guard arrangements.allow(granted.id) else { return .failure("too many window arrangements; at most 10 a minute") }

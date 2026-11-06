@@ -73,6 +73,14 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             return current < needed ? minimumStackbar : nil
         }
 
+        /// The GitHub user who wrote a community plugin, from its
+        /// `io.github.<user>.` id; nil for the store's own plugins.
+        public var communityAuthor: String? {
+            let parts = id.split(separator: ".", omittingEmptySubsequences: false)
+            guard parts.count >= 4, parts[0] == "io", parts[1] == "github", !parts[2].isEmpty else { return nil }
+            return String(parts[2])
+        }
+
         /// Whether this entry is a newer version than `installed`.
         public func isNewer(than installed: String) -> Bool {
             guard let offered = VersionNumber(version), let current = VersionNumber(installed) else { return version != installed }

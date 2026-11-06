@@ -3,6 +3,14 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### New
+- **Get beta versions.** Settings › Store & Updates has a switch to try new versions before everyone else. Turn it off to go back to the next regular release.
+- **VoiceOver reads every button** in plugin panels, the palette and the Store, including the ones that show only an icon.
+- **Community plugins in the Store.** Plugins people publish under their own name get a Community section, and their page says who wrote them with a link to their GitHub.
+- For plugin authors: `Stackbar.pickColor()` shows the system magnifier and returns the color the user clicks, and `Stackbar.define(_:)` looks a word up in the Mac's own Dictionary, offline (protocol 21). Neither needs a capability. Color Picker and Dictionary in the Store use them.
+
 ## 0.25.1
 
 ### Fixed

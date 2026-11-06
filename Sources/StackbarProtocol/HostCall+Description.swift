@@ -52,6 +52,8 @@ extension HostCall {
         case .focusWindow(let target): return "switching to a window of \(target.appID)"
         case .menuItems: return "reading the menu bar"
         case .pressMenuItem(_, let path): return "choosing \(path.joined(separator: " > "))"
+        case .pickColor: return "picking a color from the screen"
+        case .define(let word): return "looking up \(word.prefix(40))"
         }
     }
 
@@ -88,7 +90,8 @@ extension HostCall {
         case .reminderAccess, .reminderLists, .reminders: return (.reminders, "read your reminders")
         case .createReminderList, .saveReminder, .deleteReminder: return (.reminders, "change your reminders")
         case .storageSet, .secret, .http, .oauthToken, .publish, .notify, .alert, .playSound,
-             .openURL, .open, .copy, .run, .cancelRun, .chooseFile, .saveFile, .resolveApplication, .hud:
+             .openURL, .open, .copy, .run, .cancelRun, .chooseFile, .saveFile, .resolveApplication, .hud,
+             .pickColor, .define:
             return nil
         }
     }

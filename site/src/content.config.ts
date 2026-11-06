@@ -2,6 +2,7 @@ import { defineCollection } from 'astro:content';
 import { z } from 'astro/zod';
 import { fetchStore } from '../scripts/store.mjs';
 import { readDocs } from '../scripts/docs.mjs';
+import { readChangelog } from '../scripts/changelog.mjs';
 import kit from './generated/kit.json';
 
 // One entry per published plugin, from the signed store index (verified with
@@ -86,4 +87,21 @@ const docs = defineCollection({
   }),
 });
 
-export const collections = { plugins, docs };
+// The release notes: one entry per released version in the repository's
+// CHANGELOG.md, newest first. "Unreleased" stays off the site.
+const releases = defineCollection({
+  loader: {
+    name: 'stackbar-changelog',
+    async load({ store, parseData, renderMarkdown, generateDigest, watcher }) {
+      store.clear();
+      for (const [order, release] of readChangelog().entries()) {
+        const data = await parseData({ id: release.version, data: { version: release.version, order } });
+        store.set({ id: release.version, data, body: release.body, digest: generateDigest({ data, body: release.body }), rendered: await renderMarkdown(release.body) });
+      }
+      watcher?.add('../CHANGELOG.md');
+    },
+  },
+  schema: z.object({ version: z.string(), order: z.number() }),
+});
+
+export const collections = { plugins, docs, releases };

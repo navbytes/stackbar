@@ -8,7 +8,8 @@ The signature is Sparkle's EdDSA (Ed25519) signature of the zip, from
 `swift scripts/ed25519.swift sign` (CryptoKit). This script only writes XML,
 with the standard library. The Release workflow publishes appcast.xml next to
 the zip; SUFeedURL points at releases/latest/download/appcast.xml, so
-pre-releases never reach it.
+pre-releases never reach it. Every release also replaces the appcast in the
+"beta" pre-release, the feed Stackbar reads when Get beta versions is on.
 """
 
 import argparse

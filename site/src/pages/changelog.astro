@@ -1,0 +1,45 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { href, repo } from '../lib/site';
+import { breadcrumbs } from '../lib/seo';
+
+// The repository's CHANGELOG.md: the same notes the app's update window and
+// GitHub's releases show.
+const releases = (await getCollection('releases')).sort((a, b) => a.data.order - b.data.order);
+const rendered = await Promise.all(releases.map(async (release) => ({ version: release.data.version, Content: (await render(release)).Content })));
+---
+<Base title="What's new in Stackbar" description="Every Stackbar release and what changed in it: new features, fixes and what's new for plugin authors." jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Changelog', '/changelog/']])]}>
+  <div class="wrap page">
+    <header>
+      <p class="eyebrow">Changelog</p>
+      <h1>What's new</h1>
+      <p class="lede">Every release, newest first. Stackbar updates itself, and Settings › Store &amp; Updates can get beta versions early.</p>
+      <p class="feeds"><a href={href('/download/')}>Download the latest</a> · <a href={`${repo}/releases`}>Releases on GitHub</a></p>
+    </header>
+    {rendered.map(({ version, Content }) => (
+      <section class="release prose" id={`v${version}`}>
+        <h2><a href={`#v${version}`}>{version}</a></h2>
+        <Content />
+        <a class="tag" href={`${repo}/releases/tag/v${version}`}>v{version} on GitHub</a>
+      </section>
+    ))}
+  </div>
+</Base>
+
+<style>
+  .page { max-width: 820px; padding-block: clamp(32px, 5vw, 64px) 96px; }
+  header { margin-bottom: 24px; }
+  h1 { font-size: var(--step-4); margin: 8px 0 12px; }
+  .feeds { color: var(--ink-2); font-size: var(--step--1); }
+  .feeds a, .tag { color: var(--accent); }
+  .release { padding-block: 32px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .release h2 { font-size: var(--step-2); margin: 0 0 8px; scroll-margin-top: 90px; }
+  .release h2 a { color: var(--ink); text-decoration: none; }
+  .release :global(h3) { font-size: var(--step-0); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); margin: 24px 0 8px; }
+  .release :global(p), .release :global(li) { color: var(--ink-2); line-height: 1.7; }
+  .release :global(strong) { color: var(--ink); }
+  .release :global(a) { color: var(--accent); }
+  .release :global(:not(pre) > code) { font: 0.88em var(--font-mono); padding: 0.1em 0.35em; border-radius: 6px; background: var(--line); color: var(--ink); }
+  .tag { display: inline-block; margin-top: 12px; font-size: var(--step--1); }
+</style>
