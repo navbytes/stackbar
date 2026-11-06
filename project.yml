@@ -13,6 +13,11 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: 59J9RQXYYP
     CODE_SIGN_STYLE: Automatic
+  configs:
+    # The Release workflow uploads these to Sentry so crash stacks name
+    # functions, not addresses.
+    Release:
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
 packages:
   Stackbar:
     path: .

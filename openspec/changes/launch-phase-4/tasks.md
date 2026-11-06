@@ -27,7 +27,7 @@
 - [x] 3.5 Sparkle beta channel
 
 ## 4. Beta and 1.0
-- [ ] 4.1 Sentry DSN set (Naveen)
+- [x] 4.1 Sentry DSN set (Naveen)
 - [ ] 4.2 0.9 beta to about 50 testers for two weeks
 - [ ] 4.3 /changelog and /press pages (done); Search Console (Naveen)
 - [ ] 4.4 The 1.0 bar met; release 1.0 and launch posts

@@ -26,6 +26,10 @@ repository (don't search for it), take the commit the release tag points to
 - The release job's crypto (Sparkle's Ed25519 key and signatures) uses Apple's
   CryptoKit through `scripts/ed25519.swift`; no Python or npm package is
   installed there. `scripts/appcast.py` uses only Python's standard library.
+- sentry-cli 3.8.2 (the release's dSYM upload) is downloaded from
+  github.com/getsentry/sentry-cli's release (linked from docs.sentry.io) and
+  checked against its SHA-256 `c80d92b6…7dcf` before it runs; the same hash
+  is in Sentry's release registry. Bump it in `.github/workflows/release.yml`.
 - XcodeGen comes from Homebrew's core formula, which checks the release
   archive's SHA-256.
 - The site's npm packages are locked with integrity hashes in
