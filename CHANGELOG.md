@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Palette lists with a preview pane hold still.** In a list like Clipboard History, moving between a long copy and a short one no longer flips the list between half and full width: once any row has a preview, every row gets the pane.
+
 ## 0.26.0
 
 ### New
