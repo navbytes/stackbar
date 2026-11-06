@@ -332,6 +332,8 @@ final class CommandViewModel: Identifiable {
     @ObservationIgnored private let onClose: () -> Void
     @ObservationIgnored private var submitting = false
     @ObservationIgnored private var closed = false
+    /// Closed: the plugin has dropped the view, so nothing more goes to it.
+    var isClosed: Bool { closed }
     /// Messages to the plugin go out in order: an action before the close
     /// that follows it.
     @ObservationIgnored private var chain: Task<Void, Never>?
@@ -397,6 +399,8 @@ final class CommandViewModel: Identifiable {
     /// Sends an action inside the view to the plugin. A submitted form waits
     /// for its answer: the palette closes once it comes back without errors.
     func perform(_ action: ActionID, _ value: EventValue? = nil) {
+        // After closeView the plugin has no handler for the view's actions.
+        guard !closed else { return }
         if case .fields = value { submitting = true }
         let supervisor = supervisor
         enqueue { await supervisor.event(action, value: value) }

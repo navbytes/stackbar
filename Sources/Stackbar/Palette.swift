@@ -411,15 +411,32 @@ struct PaletteView: View {
                 }
                 return .handled
             }
-            // ⌘⌫ clears the search field.
-            if press.key == .delete, focus == .search, !session.query.isEmpty {
-                session.query = ""
-                return .handled
+            // ⌘⌫ clears the search field: the open command's, or the root's.
+            if press.key == .delete, focus == .search {
+                if case .view(let view) = session.top {
+                    guard !view.query.isEmpty else { return .ignored }
+                    view.query = ""
+                    return .handled
+                }
+                if !session.query.isEmpty {
+                    session.query = ""
+                    return .handled
+                }
             }
         }
         if press.modifiers.intersection([.command, .shift, .option, .control]) == .command, press.key.character == "k" {
             session.toggleActions()
             return .handled
+        }
+        // While ⌘K is open, its list is what the keys act on; the shortcuts
+        // below would act on the rows behind it.
+        if session.showingActions {
+            let actions = session.filteredActions
+            if let index = actions.firstIndex(where: { action in action.shortcut.flatMap { KeyShortcut($0) }?.matches(press) ?? false }) {
+                session.runAction(index)
+                return .handled
+            }
+            return .ignored
         }
         if session.shortcut(matching: { KeyShortcut($0)?.matches(press) ?? false }) {
             return .handled

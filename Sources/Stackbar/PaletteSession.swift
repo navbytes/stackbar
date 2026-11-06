@@ -172,7 +172,10 @@ final class PaletteSession {
         }
         let usage = model.commands.usage
         var found = palette.search(query, limit: 30, usage: usage)
-        if let match = palette.aliasMatch(query) {
+        // An alias leads, unless what was typed is another command's whole
+        // name ("pr cockpit" with "pr" aliased elsewhere).
+        let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
+        if let match = palette.aliasMatch(query), found.first?.isExactMatch(typed) != true {
             found.removeAll { $0.id == match.entry.id }
             found.insert(match.entry, at: 0)
         }
@@ -208,7 +211,7 @@ final class PaletteSession {
     /// for the time budget.
     @ObservationIgnored private var rootFedAt: [CommandKey: Date] = [:]
     /// What a root row does when chosen: its view and its primary action.
-    @ObservationIgnored private var rootRows: [String: (view: CommandViewModel, action: ActionRef, actions: [ActionRef])] = [:]
+    @ObservationIgnored private var rootRows: [String: (view: CommandViewModel, key: String, action: ActionRef, actions: [ActionRef])] = [:]
     /// Bumped when a root view opens, so the list reads it.
     private(set) var rootViewsRevision = 0
     /// Rows from each plugin, at most.
@@ -253,7 +256,11 @@ final class PaletteSession {
                 let opened = await model.commands.openView(key, query: CommandQuery(text: text), context: context, recordUse: false)
                 rootOpening.remove(key)
                 guard case .success(let view) = opened else { return }
-                guard let now = rootText, rootViews[key] == nil else {
+                // The text may have moved on while it opened: keep the view
+                // only if its pattern still matches and it isn't benched.
+                guard let now = rootText, rootViews[key] == nil,
+                      RootSearchGate.accepts(view.entry.spec, text: now, preference: commands.preferences[key]),
+                      !commands.rootBudget.isBenched(key) else {
                     view.close()
                     return
                 }
@@ -276,7 +283,7 @@ final class PaletteSession {
     private func rootSearchSections() -> [PaletteSection] {
         _ = rootViewsRevision
         guard rootText != nil else { return [] }
-        var table: [String: (view: CommandViewModel, action: ActionRef, actions: [ActionRef])] = [:]
+        var table: [String: (view: CommandViewModel, key: String, action: ActionRef, actions: [ActionRef])] = [:]
         for (key, view) in rootViews where !view.isSearching {
             if let fed = rootFedAt.removeValue(forKey: key) {
                 model.commands.rootBudget.record(key, took: Date().timeIntervalSince(fed))
@@ -290,7 +297,7 @@ final class PaletteSession {
                                                subtitle: row.subtitle, symbol: row.symbol ?? view.entry.spec.symbol, kind: kind)
                 entry.appIcon = row.appIcon
                 entry.fileIcon = row.fileIcon
-                table[entry.id] = (view, primary, row.actions)
+                table[entry.id] = (view, row.key, primary, row.actions)
                 return entry
             }
             return entries.isEmpty ? nil : PaletteSection(title: view.entry.spec.rootSection ?? view.entry.spec.title, entries: entries,
@@ -404,7 +411,7 @@ final class PaletteSession {
     func activate(_ entry: PaletteIndex.Entry) {
         problem = nil
         if let row = rootRows[entry.id] {
-            perform(row.action, in: row.view)
+            activateRootRow(row.view, key: row.key, action: row.action)
             return
         }
         switch entry.kind {
@@ -538,6 +545,36 @@ final class PaletteSession {
     func rows(of view: CommandViewModel) -> [RowNode] {
         guard let root = view.root, let items = RowFilter.items(in: root, query: view.query) else { return [] }
         return items.compactMap { if case .row(let row) = $0 { return row } else { return nil } }
+    }
+
+    /// Return on a plugin's row in the root. While its view is still
+    /// answering newer text, the row on screen comes from the older answer,
+    /// and the plugin drops actions of rows it no longer shows: Return then
+    /// closed the palette and nothing happened. So wait for the answer (a
+    /// second at most) and run the same row from it; if the row is gone, say
+    /// so and keep the palette open.
+    private func activateRootRow(_ view: CommandViewModel, key: String, action: ActionRef) {
+        guard view.isSearching else {
+            perform(action, in: view)
+            return
+        }
+        let shown = shownCount
+        Task { @MainActor [weak self] in
+            let deadline = Date().addingTimeInterval(1)
+            while view.isSearching, !view.isClosed, Date() < deadline {
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+            guard let self, self.shownCount == shown, !view.isClosed else { return }
+            let fresh = self.rows(of: view).first { $0.key == key }
+            if let ref = fresh?.actions.first(where: { $0.title == action.title }) ?? fresh?.actions.first {
+                self.perform(ref, in: view)
+            } else if view.isSearching {
+                // Still no answer: the row as shown is the best there is.
+                self.perform(action, in: view)
+            } else {
+                self.problem = "That result went away as you typed. Press Return again."
+            }
+        }
     }
 
     /// A row action in a list view: navigate within the plugin, or send it
