@@ -54,6 +54,12 @@ extension HostCall {
         case .pressMenuItem(_, let path): return "choosing \(path.joined(separator: " > "))"
         case .pickColor: return "picking a color from the screen"
         case .define(let word): return "looking up \(word.prefix(40))"
+        case .saveCalendarEvent(let draft): return draft.id.isEmpty ? "adding \"\(draft.title)\" to a calendar" : "changing \"\(draft.title)\""
+        case .writableCalendars: return "listing the calendars it can add to"
+        case .openInTerminal(let command, _): return "opening \(command.first ?? "a command") in the terminal"
+        case .recognizeText: return "reading the text in an image"
+        case .captureScreenText: return "reading text on the screen"
+        case .sensors: return "reading temperatures and fans"
         }
     }
 
@@ -87,6 +93,12 @@ extension HostCall {
         case .focusWindow: return (.windows, "switch to a window")
         case .menuItems: return (.menus, "read the front app's menus")
         case .pressMenuItem: return (.menus, "choose a menu item")
+        case .saveCalendarEvent: return (.calendarWrite, "add calendar events")
+        case .writableCalendars: return (.calendarWrite, "list your calendars")
+        case .openInTerminal: return (.terminal, "open a command in the terminal")
+        case .recognizeText: return (.clipboard, "read text in a clipboard image")
+        case .captureScreenText: return (.screenText, "read text on the screen")
+        case .sensors: return (.sensors, "read temperatures and fans")
         case .reminderAccess, .reminderLists, .reminders: return (.reminders, "read your reminders")
         case .createReminderList, .saveReminder, .deleteReminder: return (.reminders, "change your reminders")
         case .storageSet, .secret, .http, .oauthToken, .publish, .notify, .alert, .playSound,

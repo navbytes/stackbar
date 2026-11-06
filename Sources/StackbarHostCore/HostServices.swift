@@ -96,6 +96,9 @@ public final class HostServices: Sendable {
     private let appSwitches = RateLimiter(limit: 120, per: 60)
     private let huds = RateLimiter(limit: 30, per: 60)
     private let systemActions = RateLimiter(limit: 10, per: 60)
+    private let calendarWrites = RateLimiter(limit: 30, per: 60)
+    private let terminals = RateLimiter(limit: 5, per: 60)
+    private let textReads = RateLimiter(limit: 30, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
     private let calls = RateLimiter(limit: 1200, per: 60)
@@ -446,6 +449,55 @@ public final class HostServices: Sendable {
         case .expansionStatus:
             return .value(SystemCodec.encode(platform.system.expansionStatus(pluginID: granted.id)))
 
+        case .saveCalendarEvent(let draft):
+            if let problem = draft.problem { return .failure(problem) }
+            guard calendarWrites.allow(granted.id) else { return .failure("too many calendar changes; at most 30 a minute") }
+            do {
+                return .value(SystemCodec.encode(try await platform.system.saveCalendarEvent(draft)))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .writableCalendars:
+            do {
+                return .value(SystemCodec.encode(try await platform.system.writableCalendars()))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .openInTerminal(let command, let title):
+            if let problem = Self.terminalProblem(command) { return .failure(problem) }
+            guard terminals.allow(granted.id) else { return .failure("too many terminals; at most 5 a minute") }
+            do {
+                try await platform.system.openInTerminal(command, title: title.map { String($0.prefix(80)) })
+                return .ok
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .recognizeText(let imageID, let languages):
+            guard textReads.allow(granted.id) else { return .failure("too many text reads; at most 30 a minute") }
+            do {
+                return .value(SystemCodec.encode(try await platform.system.recognizeText(imageID: imageID, languages: languages.map { Array($0.prefix(8)) })))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .captureScreenText(let languages):
+            guard textReads.allow(granted.id) else { return .failure("too many text reads; at most 30 a minute") }
+            do {
+                return .value(try await platform.system.captureScreenText(languages: languages.map { Array($0.prefix(8)) }).map(SystemCodec.encode))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .sensors:
+            do {
+                return .value(SystemCodec.encode(try await platform.system.sensors()))
+            } catch {
+                return .failure("\(error)")
+            }
+
         case .focusWindow(let target):
             guard appSwitches.allow(granted.id) else { return .failure("too many app switches; at most 120 a minute") }
             do {
@@ -592,12 +644,34 @@ public final class HostServices: Sendable {
     static func checked(_ actions: [NotificationAction]) -> CheckedButtons {
         var buttons: [NotificationAction] = []
         for action in actions.prefix(3) {
+            // A button that runs one of the plugin's own commands; the host
+            // looks the command up when it is clicked.
+            if let command = action.command {
+                guard CommandSpec.isValidID(command) else { return .failure("button \"\(action.title)\" runs \(command), which is not a command id") }
+                let arguments = action.arguments ?? [:]
+                guard arguments.count <= 3, arguments.allSatisfy({ $0.key.count <= 40 && $0.value.count <= 500 }) else {
+                    return .failure("button \"\(action.title)\" passes at most 3 arguments of up to 500 characters")
+                }
+                buttons.append(NotificationAction(String(action.title.prefix(40)), command: command, arguments: arguments))
+                continue
+            }
             guard let url = URL(string: action.url), let scheme = url.scheme?.lowercased(), openableSchemes.contains(scheme) else {
                 return .failure("button \"\(action.title)\" opens \(action.url); only https, http, mailto, tel and meeting app URLs can be opened")
             }
             buttons.append(NotificationAction(String(action.title.prefix(40)), url: action.url))
         }
         return .success(buttons)
+    }
+
+    /// A terminal command is a program and its arguments, never a shell line
+    /// the plugin wrote: the host quotes every word itself.
+    static func terminalProblem(_ command: [String]) -> String? {
+        guard let program = command.first, !program.trimmingCharacters(in: .whitespaces).isEmpty else { return "openInTerminal needs a program to run" }
+        if command.count > 64 { return "openInTerminal takes at most 64 words" }
+        if command.contains(where: { $0.count > 4096 || $0.contains("\0") || $0.contains("\n") || $0.contains("\r") }) {
+            return "a terminal command's words are at most 4096 characters, without newlines"
+        }
+        return nil
     }
 
     enum CheckedButtons {

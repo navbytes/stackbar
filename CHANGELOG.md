@@ -10,6 +10,8 @@ window. Write for people who use Stackbar, not for the code.
 - **VoiceOver reads every button** in plugin panels, the palette and the Store, including the ones that show only an icon.
 - **Community plugins in the Store.** Plugins people publish under their own name get a Community section, and their page says who wrote them with a link to their GitHub.
 - For plugin authors: `Stackbar.pickColor()` shows the system magnifier and returns the color the user clicks, and `Stackbar.define(_:)` looks a word up in the Mac's own Dictionary, offline (protocol 21). Neither needs a capability. Color Picker and Dictionary in the Store use them.
+- **Notification buttons that do something.** A plugin's notification can now carry buttons that run its own commands: snooze a meeting, start a break, add five minutes. A command that needs more opens in the palette.
+- For plugin authors (protocol 21): `Stackbar.saveCalendarEvent` and `writableCalendars` add and change calendar events (`.calendarWrite`); `Stackbar.openInTerminal` opens your terminal app running a command, every word quoted by Stackbar (`.terminal`); `Stackbar.recognizeText` reads the text in a copied image and `Stackbar.captureScreenText` in a part of the screen you drag over (`.screenText`), both on your Mac with Vision; `Stackbar.sensors` reads temperatures and fan speeds (`.sensors`); and `NotificationAction(title, command:, arguments:)`.
 
 ## 0.25.1
 

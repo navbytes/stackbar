@@ -14,7 +14,7 @@ public enum SandboxEntitlements {
             switch capability {
             case .network, .oauth, .userServer:
                 result["com.apple.security.network.client"] = true
-            case .files, .run, .secret, .clipboard, .power, .calendar, .reminders, .context, .openURLs, .storage, .windows, .apps, .keyLayer, .fileSearch, .systemActions, .textExpansion, .menus:
+            case .files, .run, .secret, .clipboard, .power, .calendar, .reminders, .context, .openURLs, .storage, .windows, .apps, .keyLayer, .fileSearch, .systemActions, .textExpansion, .menus, .calendarWrite, .terminal, .screenText, .sensors:
                 // Files are opened up path by path (`fileExceptions`).
                 // Children inherit the sandbox; secrets, the clipboard, power
                 // assertions and calendar events all go through the host.
@@ -104,6 +104,10 @@ extension Capability {
         case .systemActions: return "Locks, sleeps, restarts, shuts down or logs out the Mac, empties the Trash, toggles dark mode, hides or quits other apps and ejects disks"
         case .textExpansion: return "Replaces keywords it sets up as you type them, in any app (it never sees what you type)"
         case .menus: return "Reads the menus of the app you were in and chooses items from them"
+        case .calendarWrite: return "Adds events to your calendars"
+        case .terminal: return "Opens your terminal app running a command it names, where you see it run"
+        case .screenText: return "Reads the text in a part of the screen you choose"
+        case .sensors: return "Reads your Mac's temperatures and fan speeds"
         }
     }
 
@@ -130,6 +134,10 @@ extension Capability {
         case .systemActions: return "systemActions"
         case .textExpansion: return "textExpansion"
         case .menus: return "menus"
+        case .calendarWrite: return "calendarWrite"
+        case .terminal: return "terminal"
+        case .screenText: return "screenText"
+        case .sensors: return "sensors"
         }
     }
 }
