@@ -69,43 +69,58 @@ public enum SettingsPresentation {
             }
         }
 
-        /// The kind behind a capability as an index lists it: the words
-        /// `Capability.summary` wrote when the index was built.
+        /// The kind behind a capability summary from an index built before
+        /// indexes carried `capabilityKinds`: the words `Capability.summary`
+        /// starts with. Longer prefixes come first so "Opens your terminal"
+        /// is not read as "Opens" a link.
         public init?(summary: String) {
-            let prefixes: [(String, Access)] = [
-                ("Connects to the server you enter", .server), ("Connects to", .network), ("Reads and writes", .files),
-                ("Runs", .run), ("Reads the secret", .secret), ("Signs in to", .account), ("Reads everything you copy", .clipboard),
-                ("Keeps the Mac awake", .power), ("Reads your calendar", .calendar), ("Reads and changes your reminders", .reminders), ("Reads the text you select", .context),
-                ("Opens", .links), ("Stores up to", .storage), ("Sees which windows", .windows),
-                ("Sees which apps", .windows), ("Listens for a key", .keyboard), ("Finds files", .files),
+            let prefixes: [(String, Capability.Kind)] = [
+                ("Connects to the server you enter", .userServer), ("Connects to", .network), ("Reads and writes", .files),
+                ("Runs", .run), ("Reads the secret", .secret), ("Signs in to", .oauth), ("Reads everything you copy", .clipboard),
+                ("Keeps the Mac awake", .power), ("Reads your calendar", .calendar), ("Adds events to your calendars", .calendarWrite),
+                ("Reads and changes your reminders", .reminders), ("Reads the text you select", .context),
+                ("Opens your terminal", .terminal), ("Opens", .openURLs), ("Stores up to", .storage), ("Sees which windows", .windows),
+                ("Sees which apps", .apps), ("Listens for a key", .keyLayer), ("Finds files", .fileSearch),
+                ("Locks, sleeps", .systemActions), ("Replaces keywords", .textExpansion), ("Reads the menus", .menus),
+                ("Reads the text in a part of the screen", .screenText), ("Reads your Mac's temperatures", .sensors),
             ]
             guard let match = prefixes.first(where: { summary.hasPrefix($0.0) }) else { return nil }
-            self = match.1
+            self.init(kind: match.1)
         }
 
         public init(_ capability: Capability) {
-            switch capability {
+            self.init(kind: capability.kind)
+        }
+
+        public init(kind: Capability.Kind) {
+            switch kind {
             case .network: self = .network
-            case .files: self = .files
-            case .run: self = .run
+            case .files, .fileSearch: self = .files
+            case .run, .terminal: self = .run
             case .secret: self = .secret
             case .oauth: self = .account
             case .clipboard: self = .clipboard
-            case .power: self = .power
+            case .power, .systemActions, .sensors: self = .power
             case .calendar, .calendarWrite: self = .calendar
             case .reminders: self = .reminders
-            case .context: self = .context
+            case .context, .screenText: self = .context
             case .openURLs: self = .links
             case .storage: self = .storage
             case .userServer: self = .server
             case .windows, .apps, .menus: self = .windows
-            case .fileSearch: self = .files
-            case .systemActions: self = .power
             case .keyLayer, .textExpansion: self = .keyboard
-            case .terminal: self = .run
-            case .screenText: self = .context
-            case .sensors: self = .power
             }
+        }
+    }
+
+    /// A Store entry's capabilities as the plugin page lists them: each
+    /// summary with its kind of access. Reads the kinds the index carries,
+    /// and for an index built before they were added, the summary's words.
+    public static func storePermissions(_ entry: PluginIndex.Entry) -> [(summary: String, access: Access?)] {
+        let kinds = entry.capabilityKinds.flatMap { $0.count == entry.capabilities.count ? $0 : nil }
+        return entry.capabilities.enumerated().map { index, summary in
+            let kind = kinds.flatMap { Capability.Kind(rawValue: $0[index]) }
+            return (summary, kind.map { Access(kind: $0) } ?? Access(summary: summary))
         }
     }
 

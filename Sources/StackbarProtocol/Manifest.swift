@@ -342,6 +342,43 @@ public enum Capability: Codable, Hashable, Sendable {
     case sensors
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
+
+    /// Which capability this is, without its details. The raw value is the
+    /// case's name as a manifest writes it, which the plugin index stores so
+    /// the Store can show a capability without reading its summary.
+    public enum Kind: String, CaseIterable, Codable, Sendable {
+        case network, files, run, secret, oauth, clipboard, power, calendar, context, openURLs, storage, userServer
+        case windows, apps, keyLayer, reminders, fileSearch, systemActions, textExpansion, menus, calendarWrite, terminal, screenText, sensors
+    }
+
+    public var kind: Kind {
+        switch self {
+        case .network: return .network
+        case .files: return .files
+        case .run: return .run
+        case .secret: return .secret
+        case .oauth: return .oauth
+        case .clipboard: return .clipboard
+        case .power: return .power
+        case .calendar: return .calendar
+        case .context: return .context
+        case .openURLs: return .openURLs
+        case .storage: return .storage
+        case .userServer: return .userServer
+        case .windows: return .windows
+        case .apps: return .apps
+        case .keyLayer: return .keyLayer
+        case .reminders: return .reminders
+        case .fileSearch: return .fileSearch
+        case .systemActions: return .systemActions
+        case .textExpansion: return .textExpansion
+        case .menus: return .menus
+        case .calendarWrite: return .calendarWrite
+        case .terminal: return .terminal
+        case .screenText: return .screenText
+        case .sensors: return .sensors
+        }
+    }
 }
 
 /// An OAuth 2.0 authorization-code provider (with PKCE). The host runs the

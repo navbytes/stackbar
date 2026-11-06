@@ -110,34 +110,4 @@ extension Capability {
         case .sensors: return "Reads your Mac's temperatures and fan speeds"
         }
     }
-
-    /// The case's name as written in a manifest, for error messages.
-    public var caseName: String {
-        switch self {
-        case .network: return "network"
-        case .files: return "files"
-        case .run: return "run"
-        case .secret: return "secret"
-        case .oauth: return "oauth"
-        case .clipboard: return "clipboard"
-        case .power: return "power"
-        case .calendar: return "calendar"
-        case .context: return "context"
-        case .openURLs: return "openURLs"
-        case .storage: return "storage"
-        case .userServer: return "userServer"
-        case .windows: return "windows"
-        case .apps: return "apps"
-        case .keyLayer: return "keyLayer"
-        case .reminders: return "reminders"
-        case .fileSearch: return "fileSearch"
-        case .systemActions: return "systemActions"
-        case .textExpansion: return "textExpansion"
-        case .menus: return "menus"
-        case .calendarWrite: return "calendarWrite"
-        case .terminal: return "terminal"
-        case .screenText: return "screenText"
-        case .sensors: return "sensors"
-        }
-    }
 }

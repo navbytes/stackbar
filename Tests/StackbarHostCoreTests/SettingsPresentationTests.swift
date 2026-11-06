@@ -62,15 +62,68 @@ final class SettingsPresentationTests: XCTestCase {
         XCTAssertEqual(secrets[0].plugins, ["GitHub", "PR Cockpit"])
     }
 
+    /// One capability of each kind. The switch has no default, so a new
+    /// capability does not compile until it is sampled here.
+    private func sample(_ kind: Capability.Kind) -> Capability {
+        switch kind {
+        case .network: return .network(hosts: ["api.github.com"])
+        case .files: return .files(paths: ["~/Notes"])
+        case .run: return .run(commands: ["docker"])
+        case .secret: return .secret(name: "T")
+        case .oauth: return .oauth(OAuthProvider(name: "github", authorizeURL: "https://github.com/login/oauth/authorize", tokenURL: "https://github.com/login/oauth/access_token", clientID: "x"))
+        case .clipboard: return .clipboard
+        case .power: return .power
+        case .calendar: return .calendar
+        case .context: return .context
+        case .openURLs: return .openURLs(schemes: ["https"])
+        case .storage: return .storage(megabytes: 50)
+        case .userServer: return .userServer(secret: "LiteLLM")
+        case .windows: return .windows
+        case .apps: return .apps
+        case .keyLayer: return .keyLayer
+        case .reminders: return .reminders
+        case .fileSearch: return .fileSearch
+        case .systemActions: return .systemActions
+        case .textExpansion: return .textExpansion
+        case .menus: return .menus
+        case .calendarWrite: return .calendarWrite
+        case .terminal: return .terminal
+        case .screenText: return .screenText
+        case .sensors: return .sensors
+        }
+    }
+
+    func testEveryKindRoundTrips() {
+        for kind in Capability.Kind.allCases {
+            XCTAssertEqual(sample(kind).kind, kind)
+        }
+    }
+
     func testIndexSummariesMapBackToTheirKind() {
-        let samples: [Capability] = [
-            .network(hosts: ["api.github.com"]), .files(paths: ["~/Notes"]), .run(commands: ["docker"]), .secret(name: "T"),
-            .oauth(OAuthProvider(name: "github", authorizeURL: "https://github.com/login/oauth/authorize", tokenURL: "https://github.com/login/oauth/access_token", clientID: "x")),
-            .clipboard, .power, .calendar, .context, .openURLs(schemes: ["https"]), .storage(megabytes: 50), .userServer(secret: "LiteLLM"), .windows, .apps, .keyLayer,
-        ]
-        for capability in samples {
+        for kind in Capability.Kind.allCases {
+            let capability = sample(kind)
             XCTAssertEqual(SettingsPresentation.Access(summary: capability.summary(resolver: resolver)), SettingsPresentation.Access(capability), capability.summary)
         }
+        XCTAssertEqual(SettingsPresentation.Access(summary: Capability.terminal.summary), .run)
         XCTAssertNil(SettingsPresentation.Access(summary: "Something new"))
+    }
+
+    func testStorePermissionsReadTheIndexKinds() {
+        let capabilities: [Capability] = [.terminal, .sensors, .menus, .openURLs(schemes: ["https"])]
+        var entry = PluginIndex.Entry(id: "x", name: "X", version: "1.0.0", publisher: "p", bundle: "b", sha256: "s",
+                                      capabilities: capabilities.map(\.summary), capabilityKinds: capabilities.map(\.kind.rawValue))
+        XCTAssertEqual(SettingsPresentation.storePermissions(entry).map(\.access), [.run, .power, .windows, .links])
+        XCTAssertEqual(SettingsPresentation.storePermissions(entry).map(\.summary), entry.capabilities)
+
+        // A summary reworded later still shows its kind, because the index says it.
+        entry.capabilities[0] = "Starts a command in Terminal"
+        XCTAssertEqual(SettingsPresentation.storePermissions(entry).first?.access, .run)
+
+        // An index from before kinds, or with a kind this app doesn't know, falls back to the words.
+        entry.capabilityKinds = nil
+        XCTAssertNil(SettingsPresentation.storePermissions(entry).first?.access)
+        entry.capabilities[0] = Capability.terminal.summary
+        entry.capabilityKinds = ["somethingNew", "sensors", "menus", "openURLs"]
+        XCTAssertEqual(SettingsPresentation.storePermissions(entry).first?.access, .run)
     }
 }
