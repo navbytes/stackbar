@@ -5,7 +5,8 @@ import StackbarHostCore
 import StackbarProtocol
 
 /// Posts plugin notifications with their buttons and handles the clicks: a
-/// button opens its URL, the notification itself opens the plugin's panel.
+/// button opens its URL or runs the plugin's own command, the notification
+/// itself opens the plugin's panel.
 /// Buttons work after the plugin has moved on, because the host holds the
 /// URLs, not the plugin.
 @MainActor
@@ -30,6 +31,8 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
             }
             content.categoryIdentifier = id
             info["urls"] = note.actions.map(\.url)
+            info["commands"] = note.actions.map { $0.command ?? "" }
+            info["arguments"] = note.actions.map { $0.arguments ?? [:] }
         }
         content.userInfo = info
         let center = UNUserNotificationCenter.current()
@@ -44,15 +47,19 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
         let action = response.actionIdentifier
         let pluginID = info["pluginID"] as? String
         let urls = info["urls"] as? [String] ?? []
-        await MainActor.run { Self.handle(action: action, pluginID: pluginID, urls: urls) }
+        let commands = info["commands"] as? [String] ?? []
+        let arguments = info["arguments"] as? [[String: String]] ?? []
+        await MainActor.run { Self.handle(action: action, pluginID: pluginID, urls: urls, commands: commands, arguments: arguments) }
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .sound]
     }
 
-    private static func handle(action: String, pluginID: String?, urls: [String]) {
-        if action.hasPrefix("action-"), let index = Int(action.dropFirst("action-".count)), urls.indices.contains(index) {
+    private static func handle(action: String, pluginID: String?, urls: [String], commands: [String], arguments: [[String: String]]) {
+        if action.hasPrefix("action-"), let index = Int(action.dropFirst("action-".count)), commands.indices.contains(index), !commands[index].isEmpty, let pluginID {
+            AppDelegate.shared?.runNotificationCommand(pluginID: pluginID, command: commands[index], arguments: arguments.indices.contains(index) ? arguments[index] : [:])
+        } else if action.hasPrefix("action-"), let index = Int(action.dropFirst("action-".count)), urls.indices.contains(index) {
             guard let url = URL(string: urls[index]), let scheme = url.scheme?.lowercased(), HostServices.openableSchemes.contains(scheme) else { return }
             NSWorkspace.shared.open(url)
         } else if action == UNNotificationDefaultActionIdentifier, let pluginID {

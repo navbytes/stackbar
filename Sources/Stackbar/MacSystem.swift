@@ -15,7 +15,7 @@ import UniformTypeIdentifiers
 final class MacSystem: SystemServices, @unchecked Sendable {
     private let lock = NSLock()
     private var assertions: [String: [IOPMAssertionID]] = [:]
-    private let images: ClipboardImageStore
+    let images: ClipboardImageStore
     private let store = EKEventStore()
     /// The last app the user was in that wasn't Stackbar: where a paste goes,
     /// and what a copy came from when Stackbar itself is frontmost.
@@ -297,6 +297,12 @@ final class MacSystem: SystemServices, @unchecked Sendable {
     // MARK: Calendar
 
     func calendarEvents(from: Date, to: Date) async throws -> [CalendarEvent] {
+        try await requireCalendar()
+        let predicate = store.predicateForEvents(withStart: from, end: to, calendars: nil)
+        return store.events(matching: predicate).map(Self.event).sorted { $0.start < $1.start }
+    }
+
+    private func requireCalendar() async throws {
         guard Bundle.main.object(forInfoDictionaryKey: "NSCalendarsFullAccessUsageDescription") != nil else {
             throw SystemServiceError("calendar access needs Stackbar.app (scripts/bundle.sh); an unbundled build has no Info.plist to ask with")
         }
@@ -310,8 +316,74 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         default:
             throw SystemServiceError("Stackbar has no full access to your calendars; allow it in System Settings > Privacy & Security > Calendars")
         }
-        let predicate = store.predicateForEvents(withStart: from, end: to, calendars: nil)
-        return store.events(matching: predicate).map(Self.event).sorted { $0.start < $1.start }
+    }
+
+    func writableCalendars() async throws -> [CalendarInfo] {
+        try await requireCalendar()
+        let defaultID = store.defaultCalendarForNewEvents?.calendarIdentifier
+        return store.calendars(for: .event)
+            .filter(\.allowsContentModifications)
+            .map { calendar in
+                CalendarInfo(id: calendar.calendarIdentifier, title: calendar.title, color: calendar.cgColor.flatMap(Self.hex),
+                             account: calendar.source?.title, isDefault: calendar.calendarIdentifier == defaultID)
+            }
+            .sorted { ($0.isDefault ? 0 : 1, $0.title) < ($1.isDefault ? 0 : 1, $1.title) }
+    }
+
+    func saveCalendarEvent(_ draft: CalendarEventDraft) async throws -> CalendarEvent {
+        try await requireCalendar()
+        let event: EKEvent
+        if draft.id.isEmpty {
+            event = EKEvent(eventStore: store)
+            guard let calendar = try draft.calendarID.map(calendar(id:)) ?? store.defaultCalendarForNewEvents else {
+                throw SystemServiceError("there is no calendar to add the event to; pick one with writableCalendars()")
+            }
+            event.calendar = calendar
+        } else {
+            event = try existingEvent(draft.id)
+            if let id = draft.calendarID, id != event.calendar?.calendarIdentifier { event.calendar = try calendar(id: id) }
+        }
+        event.title = draft.title
+        event.startDate = draft.start
+        event.endDate = draft.end
+        event.isAllDay = draft.isAllDay
+        event.location = draft.location
+        event.notes = draft.notes
+        event.url = draft.url.flatMap(URL.init(string:))
+        if let minutes = draft.alertMinutes {
+            event.alarms = [EKAlarm(relativeOffset: -Double(minutes) * 60)]
+        } else if draft.id.isEmpty {
+            event.alarms = nil
+        }
+        try store.save(event, span: .thisEvent, commit: true)
+        return Self.event(event)
+    }
+
+    private func calendar(id: String) throws -> EKCalendar {
+        guard let calendar = store.calendar(withIdentifier: id), calendar.allowsContentModifications else {
+            throw SystemServiceError("no calendar \(id) that events can be added to")
+        }
+        return calendar
+    }
+
+    /// The event a `CalendarEvent.id` names: its identifier, then `@` and the
+    /// start of the occurrence, so a repeating event changes on that day only.
+    private func existingEvent(_ id: String) throws -> EKEvent {
+        let parts = id.split(separator: "@", omittingEmptySubsequences: false)
+        let identifier = String(parts.first ?? "")
+        if parts.count > 1, let seconds = Double(parts[parts.count - 1]) {
+            let start = Date(timeIntervalSince1970: seconds)
+            let predicate = store.predicateForEvents(withStart: start.addingTimeInterval(-1), end: start.addingTimeInterval(86400), calendars: nil)
+            if let match = store.events(matching: predicate).first(where: {
+                ($0.eventIdentifier ?? $0.calendarItemIdentifier) == identifier && Int($0.startDate.timeIntervalSince1970) == Int(seconds)
+            }) {
+                return match
+            }
+        }
+        guard let event = store.event(withIdentifier: identifier) ?? store.calendarItem(withIdentifier: identifier) as? EKEvent else {
+            throw SystemServiceError("no event \(id); it may have been deleted")
+        }
+        return event
     }
 
     private static func event(_ event: EKEvent) -> CalendarEvent {

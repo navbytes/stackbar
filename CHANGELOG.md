@@ -5,6 +5,10 @@ window. Write for people who use Stackbar, not for the code.
 
 ## Unreleased
 
+### New
+- **Notification buttons that do something.** A plugin's notification can now carry buttons that run its own commands: snooze a meeting, start a break, add five minutes. A command that needs more opens in the palette.
+- For plugin authors (protocol 21): `Stackbar.saveCalendarEvent` and `writableCalendars` add and change calendar events (`.calendarWrite`); `Stackbar.openInTerminal` opens your terminal app running a command, every word quoted by Stackbar (`.terminal`); `Stackbar.recognizeText` reads the text in a copied image and `Stackbar.captureScreenText` in a part of the screen you drag over (`.screenText`), both on your Mac with Vision; `Stackbar.sensors` reads temperatures and fan speeds (`.sensors`); and `NotificationAction(title, command:, arguments:)`.
+
 ### Fixed
 - **Return on the palette's first result works while you type.** If a plugin was still answering your latest letters, Return could act on a result from the earlier answer that the plugin had already dropped, close the palette and do nothing. The palette now waits for the answer and runs the same result, or says it went away.
 - In ⌘K, a shortcut such as ⌘⇧C now runs the action shown in the list, not something on the row behind it. ⌘⌫ clears an open command's search field too.

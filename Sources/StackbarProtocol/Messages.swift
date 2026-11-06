@@ -25,7 +25,10 @@ public enum StackbarProtocolVersion {
     /// 18 added the HUD call and system actions.
     /// 19 added text expansion: keywords the host expands as you type.
     /// 20 added focusing a window and the front app's menu items.
-    public static let current = 20
+    /// 21 added notification buttons that run the plugin's own commands,
+    /// adding calendar events, opening a command in a terminal, reading text
+    /// in images and on screen, and temperature and fan sensors.
+    public static let current = 21
 }
 
 /// Host → plugin.
@@ -124,13 +127,27 @@ public struct MenuBarClick: Codable, Equatable, Sendable {
 
 /// A button on a notification. The host opens `url` when it is clicked
 /// (the same URLs `openURL` allows), so it works after the plugin moved on.
+/// With `command` set instead (protocol 21), the click runs that command of
+/// the plugin that posted it, with `arguments`, as if picked in the palette:
+/// Snooze, +5 min, Start Break.
 public struct NotificationAction: Codable, Equatable, Sendable {
     public var title: String
     public var url: String
+    /// One of the posting plugin's own command ids. Protocol 21.
+    public var command: String?
+    public var arguments: [String: String]?
 
     public init(_ title: String, url: String) {
         self.title = title
         self.url = url
+    }
+
+    /// A button that runs one of the plugin's own commands. Protocol 21.
+    public init(_ title: String, command: String, arguments: [String: String] = [:]) {
+        self.title = title
+        self.url = ""
+        self.command = command
+        self.arguments = arguments.isEmpty ? nil : arguments
     }
 }
 
@@ -280,6 +297,27 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// Chooses a menu item of a running app by its path of titles, after
     /// bringing the app to the front. Needs `.menus`. Protocol 20.
     case pressMenuItem(appID: String, path: [String])
+    /// Adds an event to a calendar (or changes one, with an id), answering
+    /// the saved `CalendarEvent` as JSON. Needs `.calendarWrite`. Protocol 21.
+    case saveCalendarEvent(CalendarEventDraft)
+    /// The calendars events can be added to (`[CalendarInfo]` as JSON).
+    /// Needs `.calendarWrite`. Protocol 21.
+    case writableCalendars
+    /// Opens the user's terminal app running `command` (a program and its
+    /// arguments, never through the plugin's shell). Needs `.terminal`.
+    /// Protocol 21.
+    case openInTerminal(command: [String], title: String?)
+    /// The text in a kept image (a clipboard image id), read on the Mac
+    /// with Vision (`RecognizedText` as JSON). Needs `.clipboard`.
+    /// Protocol 21.
+    case recognizeText(imageID: String, languages: [String]?)
+    /// Lets the user drag over part of the screen and answers the text in
+    /// it (`RecognizedText` as JSON, or nil when they press Esc). Needs
+    /// `.screenText`. Protocol 21.
+    case captureScreenText(languages: [String]?)
+    /// Temperatures and fan speeds (`[SensorReading]` as JSON). Needs
+    /// `.sensors`. Protocol 21.
+    case sensors
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

@@ -316,6 +316,21 @@ public enum Capability: Codable, Hashable, Sendable {
     /// (`Stackbar.menuItems()`, `Stackbar.pressMenuItem`). The host needs
     /// Accessibility access. Stackbar 0.25.0 and later.
     case menus
+    /// Adds events to your calendars (`Stackbar.saveCalendarEvent`) and lists
+    /// the calendars it can add to. Reading events stays `.calendar`.
+    /// Stackbar 0.26.0 and later.
+    case calendarWrite
+    /// Opens your terminal app running a command the plugin names
+    /// (`Stackbar.openInTerminal`), such as `docker exec -it web sh`. You see
+    /// it run. Stackbar 0.26.0 and later.
+    case terminal
+    /// Reads the text in a part of the screen you drag over
+    /// (`Stackbar.captureScreenText()`). The host needs Screen Recording
+    /// access. Stackbar 0.26.0 and later.
+    case screenText
+    /// Reads temperatures and fan speeds (`Stackbar.sensors()`). Stackbar
+    /// 0.26.0 and later.
+    case sensors
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 }

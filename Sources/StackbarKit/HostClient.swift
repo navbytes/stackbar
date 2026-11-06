@@ -359,6 +359,61 @@ public enum Stackbar {
         return try SystemCodec.decode([CalendarEvent].self, from: json)
     }
 
+    /// Adds an event to a calendar, or changes the one `draft.id` names (an
+    /// id this call returned), and answers it as saved. `calendarID` comes
+    /// from `writableCalendars()`; nil is the user's default calendar.
+    /// Needs `.calendarWrite`; the host asks for calendar access the first
+    /// time. Stackbar 0.26.0.
+    @discardableResult
+    public static func saveCalendarEvent(_ draft: CalendarEventDraft) async throws -> CalendarEvent {
+        guard let json = try await value(.saveCalendarEvent(draft)) else { throw HostError("the event wasn't saved") }
+        return try SystemCodec.decode(CalendarEvent.self, from: json)
+    }
+
+    /// The calendars events can be added to, the default one marked. Needs
+    /// `.calendarWrite`. Stackbar 0.26.0.
+    public static func writableCalendars() async throws -> [CalendarInfo] {
+        guard let json = try await value(.writableCalendars) else { return [] }
+        return try SystemCodec.decode([CalendarInfo].self, from: json)
+    }
+
+    // MARK: Terminal, text and sensors
+
+    /// Opens the user's terminal app (whatever opens `.command` files:
+    /// Terminal, iTerm, Ghostty…) running `command`, a program and its
+    /// arguments: `["docker", "exec", "-it", "web", "sh"]`. The host quotes
+    /// every word, so nothing is read as shell. Needs `.terminal`; at most
+    /// 5 a minute. Stackbar 0.26.0.
+    public static func openInTerminal(_ command: [String], title: String? = nil) async throws {
+        try await ok(.openInTerminal(command: command, title: title))
+    }
+
+    /// The text in a kept clipboard image (a `ClipboardItem.imageID`), read
+    /// on the Mac with Vision. `languages` are BCP 47 codes to prefer
+    /// (`["ja", "en"]`); nil lets Vision pick. Needs `.clipboard`.
+    /// Stackbar 0.26.0.
+    public static func recognizeText(imageID: String, languages: [String]? = nil) async throws -> RecognizedText {
+        guard let json = try await value(.recognizeText(imageID: imageID, languages: languages)) else { return RecognizedText(lines: []) }
+        return try SystemCodec.decode(RecognizedText.self, from: json)
+    }
+
+    /// Lets the user drag over part of the screen, like ⇧⌘4, and answers the
+    /// text in it; nil when they press Esc. Needs `.screenText`; the host
+    /// asks for Screen Recording access the first time. Stackbar 0.26.0.
+    public static func captureScreenText(languages: [String]? = nil) async throws -> RecognizedText? {
+        guard let json = try await value(.captureScreenText(languages: languages)) else { return nil }
+        return try SystemCodec.decode(RecognizedText.self, from: json)
+    }
+
+    /// The Mac's temperatures (°C: CPU, GPU, battery, SSD as it reports
+    /// them) and fan speeds (rpm). A Mac without fans has none, and a
+    /// sensor the Mac doesn't expose is left out. Needs `.sensors`.
+    /// Stackbar 0.26.0.
+    public static func sensors() async throws -> [SensorReading] {
+        guard let json = try await value(.sensors) else { return [] }
+        return try SystemCodec.decode([SensorReading].self, from: json)
+    }
+
     // MARK: Reminders
 
     /// Whether Stackbar may use the user's reminders. With `ask`, macOS asks

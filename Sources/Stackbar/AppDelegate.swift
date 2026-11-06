@@ -297,6 +297,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// A notification button that runs one of the posting plugin's own
+    /// commands (Snooze, Start Break). The plugin asked for it on its own
+    /// notification, so no link prompt: a view opens in the palette, a run
+    /// command runs and shows its result.
+    func runNotificationCommand(pluginID: String, command: String, arguments: [String: String]) {
+        let key = CommandKey(pluginID: pluginID, commandID: command)
+        guard let entry = model.commands.registry.entry(key) else {
+            HUD.shared.show("That button's command is no longer installed", isError: true)
+            return
+        }
+        let context = model.commands.captureContext(for: pluginID)
+        if entry.spec.kind == .view || !entry.spec.requiredArguments.allSatisfy({ !(arguments[$0.name] ?? "").isEmpty }) {
+            palette.open(entry, arguments: arguments, source: .panel, context: context)
+            return
+        }
+        Task { await model.commands.run(key, arguments: arguments, source: .panel, context: context) }
+    }
+
     /// Settings → Commands, on one command.
     func showCommandSettings(_ key: CommandKey? = nil) {
         model.settingsTab = .commands

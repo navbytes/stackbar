@@ -196,6 +196,117 @@ public struct CalendarEvent: Codable, Equatable, Sendable {
     }
 }
 
+/// An event to add to a calendar, or the changes to one (`id` set).
+/// Protocol 21.
+public struct CalendarEventDraft: Codable, Equatable, Sendable {
+    /// Empty adds an event; an id from `saveCalendarEvent` changes it.
+    public var id: String
+    public var title: String
+    public var start: Date
+    public var end: Date
+    public var isAllDay: Bool
+    public var location: String?
+    public var notes: String?
+    public var url: String?
+    /// A calendar's id from `writableCalendars()`; nil is the default one.
+    public var calendarID: String?
+    /// Minutes before the start for an alert; nil adds none.
+    public var alertMinutes: Int?
+
+    public init(id: String = "", title: String, start: Date, end: Date, isAllDay: Bool = false, location: String? = nil, notes: String? = nil, url: String? = nil, calendarID: String? = nil, alertMinutes: Int? = nil) {
+        self.id = id
+        self.title = title
+        self.start = start
+        self.end = end
+        self.isAllDay = isAllDay
+        self.location = location
+        self.notes = notes
+        self.url = url
+        self.calendarID = calendarID
+        self.alertMinutes = alertMinutes
+    }
+
+    /// What the host refuses before touching the calendar.
+    public var problem: String? {
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "an event needs a title" }
+        if title.count > 500 { return "an event's title is at most 500 characters" }
+        if end < start { return "an event can't end before it starts" }
+        if end.timeIntervalSince(start) > 31 * 86400 { return "an event lasts at most 31 days" }
+        if (notes?.count ?? 0) > 10_000 { return "an event's notes are at most 10,000 characters" }
+        if let alertMinutes, !(0...40_320).contains(alertMinutes) { return "an alert is 0 to 40,320 minutes before" }
+        return nil
+    }
+}
+
+/// A calendar events can be added to. Protocol 21.
+public struct CalendarInfo: Codable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+    /// `#RRGGBB`.
+    public var color: String?
+    /// iCloud, Google, On My Mac…
+    public var account: String?
+    public var isDefault: Bool
+
+    public init(id: String, title: String, color: String? = nil, account: String? = nil, isDefault: Bool = false) {
+        self.id = id
+        self.title = title
+        self.color = color
+        self.account = account
+        self.isDefault = isDefault
+    }
+}
+
+/// Text read from an image or the screen. Protocol 21.
+public struct RecognizedText: Codable, Equatable, Sendable {
+    /// Every line, top to bottom, joined with newlines.
+    public var text: String
+    /// Each line on its own, with how sure Vision was (0 to 1).
+    public var lines: [Line]
+
+    public struct Line: Codable, Equatable, Sendable {
+        public var text: String
+        public var confidence: Double
+
+        public init(text: String, confidence: Double) {
+            self.text = text
+            self.confidence = confidence
+        }
+    }
+
+    public init(lines: [Line]) {
+        self.lines = lines
+        self.text = lines.map(\.text).joined(separator: "\n")
+    }
+}
+
+/// One temperature or fan reading. Protocol 21.
+public struct SensorReading: Codable, Equatable, Sendable {
+    public enum Kind: String, Codable, Sendable {
+        /// Degrees Celsius.
+        case temperature
+        /// Revolutions a minute.
+        case fan
+    }
+
+    /// Stable across readings: `cpu`, `gpu`, `battery`, `fan-0`.
+    public var id: String
+    /// What the user sees: "CPU", "GPU", "Battery", "Fan 1".
+    public var name: String
+    public var kind: Kind
+    public var value: Double
+    /// A fan's top speed, when the Mac reports it.
+    public var maximum: Double?
+
+    public init(id: String, name: String, kind: Kind, value: Double, maximum: Double? = nil) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.value = value
+        self.maximum = maximum
+    }
+}
+
 /// How system values are encoded inside `HostResult.value`: JSON with ISO
 /// 8601 dates, the same on both sides.
 public enum SystemCodec {

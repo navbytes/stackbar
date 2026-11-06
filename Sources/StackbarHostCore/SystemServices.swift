@@ -72,6 +72,18 @@ public protocol SystemServices: Sendable {
     func findFiles(_ query: FileQuery) async throws -> [FoundFile]
     /// Locks, sleeps, restarts the Mac and the like.
     func perform(_ action: SystemAction) async throws
+    /// Adds an event, or changes the one `draft.id` names.
+    func saveCalendarEvent(_ draft: CalendarEventDraft) async throws -> CalendarEvent
+    /// The calendars events can be added to.
+    func writableCalendars() async throws -> [CalendarInfo]
+    /// Opens the user's terminal app running a program and its arguments.
+    func openInTerminal(_ command: [String], title: String?) async throws
+    /// The text in a kept clipboard image.
+    func recognizeText(imageID: String, languages: [String]?) async throws -> RecognizedText
+    /// The text in a part of the screen the user drags over; nil on Esc.
+    func captureScreenText(languages: [String]?) async throws -> RecognizedText?
+    /// Temperatures and fan speeds.
+    func sensors() async throws -> [SensorReading]
 }
 
 extension SystemServices {
@@ -101,6 +113,12 @@ extension SystemServices {
     public func installedApps() async throws -> [InstalledApp] { throw SystemServiceError("apps are not available on this platform") }
     public func findFiles(_ query: FileQuery) async throws -> [FoundFile] { throw SystemServiceError("finding files is not available on this platform") }
     public func perform(_ action: SystemAction) async throws { throw SystemServiceError("system actions are not available on this platform") }
+    public func saveCalendarEvent(_ draft: CalendarEventDraft) async throws -> CalendarEvent { throw SystemServiceError("adding calendar events is not available on this platform") }
+    public func writableCalendars() async throws -> [CalendarInfo] { throw SystemServiceError("calendars are not available on this platform") }
+    public func openInTerminal(_ command: [String], title: String?) async throws { throw SystemServiceError("opening a terminal is not available on this platform") }
+    public func recognizeText(imageID: String, languages: [String]?) async throws -> RecognizedText { throw SystemServiceError("reading text in images is not available on this platform") }
+    public func captureScreenText(languages: [String]?) async throws -> RecognizedText? { throw SystemServiceError("reading text on screen is not available on this platform") }
+    public func sensors() async throws -> [SensorReading] { throw SystemServiceError("sensors are not available on this platform") }
     public func reminderAccess(ask: Bool) async -> ReminderAccess { .unavailable }
     public func reminderLists() async throws -> [ReminderList] { throw SystemServiceError("Reminders is not available on this platform") }
     public func createReminderList(title: String, color: String?) async throws -> ReminderList { throw SystemServiceError("Reminders is not available on this platform") }
@@ -639,6 +657,62 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     public func calendarEvents(from: Date, to: Date) async throws -> [CalendarEvent] {
         lock.withLock { events.filter { $0.end > from && $0.start < to }.sorted { $0.start < $1.start } }
     }
+
+    // MARK: Calendar writes, terminal, text and sensors (protocol 21)
+
+    /// The calendars `writableCalendars()` lists; the first is the default.
+    public var simulatedCalendars = [CalendarInfo(id: "work", title: "Work", color: "#1BADF8", account: "iCloud", isDefault: true), CalendarInfo(id: "home", title: "Home", color: "#63DA38", account: "iCloud")]
+    /// Every command opened in the terminal, in order (for tests).
+    public private(set) var terminalCommands: [[String]] = []
+    private var recognized: [String: RecognizedText] = [:]
+    private var screenText: RecognizedText? = RecognizedText(lines: [.init(text: "Bonjour tout le monde", confidence: 0.98)])
+    private var simulatedSensors: [SensorReading] = [
+        SensorReading(id: "cpu", name: "CPU", kind: .temperature, value: 52.5),
+        SensorReading(id: "gpu", name: "GPU", kind: .temperature, value: 44),
+        SensorReading(id: "battery", name: "Battery", kind: .temperature, value: 31),
+        SensorReading(id: "fan-0", name: "Fan", kind: .fan, value: 1850, maximum: 4900),
+    ]
+
+    /// What `recognizeText` reads in a kept image.
+    public func simulate(text: RecognizedText, inImage id: String) { lock.withLock { recognized[id] = text } }
+    /// What `captureScreenText` answers; nil is the user pressing Esc.
+    public func simulate(screenText: RecognizedText?) { lock.withLock { self.screenText = screenText } }
+    public func simulate(sensors: [SensorReading]) { lock.withLock { simulatedSensors = sensors } }
+
+    public func saveCalendarEvent(_ draft: CalendarEventDraft) async throws -> CalendarEvent {
+        try lock.withLock {
+            let calendar = draft.calendarID.flatMap { id in simulatedCalendars.first { $0.id == id } } ?? simulatedCalendars.first { $0.isDefault } ?? simulatedCalendars[0]
+            if draft.calendarID != nil, !simulatedCalendars.contains(where: { $0.id == draft.calendarID }) { throw SystemServiceError("no calendar \(draft.calendarID ?? "")") }
+            var event = CalendarEvent(id: draft.id.isEmpty ? "event-\(UUID().uuidString.prefix(8))" : draft.id, title: draft.title, start: draft.start, end: draft.end,
+                                      isAllDay: draft.isAllDay, location: draft.location, notes: draft.notes, url: draft.url, calendar: calendar.title, calendarColor: calendar.color)
+            if let index = events.firstIndex(where: { $0.id == draft.id }), !draft.id.isEmpty {
+                event.participation = events[index].participation
+                event.attendees = events[index].attendees
+                events[index] = event
+            } else {
+                guard draft.id.isEmpty else { throw SystemServiceError("no event \(draft.id)") }
+                events.append(event)
+            }
+            return event
+        }
+    }
+
+    public func writableCalendars() async throws -> [CalendarInfo] { lock.withLock { simulatedCalendars } }
+
+    public func openInTerminal(_ command: [String], title: String?) async throws {
+        lock.withLock { terminalCommands.append(command) }
+    }
+
+    public func recognizeText(imageID: String, languages: [String]?) async throws -> RecognizedText {
+        try lock.withLock {
+            guard let text = recognized[imageID] else { throw SystemServiceError("no kept image \(imageID)") }
+            return text
+        }
+    }
+
+    public func captureScreenText(languages: [String]?) async throws -> RecognizedText? { lock.withLock { screenText } }
+
+    public func sensors() async throws -> [SensorReading] { lock.withLock { simulatedSensors } }
 
     /// A believable day: a stand-up that started, a call with a Meet link
     /// soon, an all-day event, a declined one and a Zoom call this afternoon.

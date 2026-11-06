@@ -92,7 +92,7 @@ public enum SettingsPresentation {
             case .oauth: self = .account
             case .clipboard: self = .clipboard
             case .power: self = .power
-            case .calendar: self = .calendar
+            case .calendar, .calendarWrite: self = .calendar
             case .reminders: self = .reminders
             case .context: self = .context
             case .openURLs: self = .links
@@ -102,6 +102,9 @@ public enum SettingsPresentation {
             case .fileSearch: self = .files
             case .systemActions: self = .power
             case .keyLayer, .textExpansion: self = .keyboard
+            case .terminal: self = .run
+            case .screenText: self = .context
+            case .sensors: self = .power
             }
         }
     }
@@ -152,6 +155,10 @@ public enum SettingsPresentation {
         case .systemActions: return "Locks, sleeps and restarts the Mac"
         case .textExpansion: return "Expands keywords as you type"
         case .menus: return "Menu items of the app you're in"
+        case .calendarWrite: return "Adds calendar events"
+        case .terminal: return "Opens commands in the terminal"
+        case .screenText: return "Reads text on screen"
+        case .sensors: return "Temperatures and fans"
         }
     }
 
