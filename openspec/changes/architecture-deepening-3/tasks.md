@@ -9,4 +9,6 @@ Order agreed with Naveen 2026-11-07: 1, 2, 3, then explore 4 and 5. One PR each.
 - [x] 3.1 `RootSearch` in HostCore with a view seam and tests (open race, closing, answer timing, fresh-answer rerun)
 - [x] 3.2 `PaletteSession` uses it
 - [x] 4.1 Explore one command-view lifecycle for the app and headless runs; report to Naveen
+- [ ] 4.2 Build it: `CommandView` in HostCore; `CommandViewModel` and `PluginSession` drive it
 - [x] 5.1 Explore rate budgets declared on `HostCall`; report to Naveen
+- [x] 5.2 Build it (Naveen 2026-11-07: 5 then 4): `HostCall.budget`, one check in `HostServices`, the guide's limits table made from the pools

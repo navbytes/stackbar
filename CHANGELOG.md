@@ -6,6 +6,7 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Fixed
+- For plugin authors: the authoring guide (`stackbarctl docs`, llms.txt) now lists every rate limit a plugin can run into, including the ones calls share: switching, hiding and focusing apps and pressing menu items share 120 a minute.
 - **Removing a plugin removes all of it, from anywhere.** Removing a plugin from the Store window, or when its publisher withdraws it, now also clears what you approved it to do, as removing it in Settings already did. Install it again and Stackbar asks again. Deleting its data from the Store window now signs it out too.
 - **The palette keeps what it learned when a plugin is replaced.** When one plugin takes over from another (like Windows from Window Layouts), what you taught the palette by picking its results now moves over with your shortcuts and pins, including rows its searches show.
 - **Clear Search History takes effect at once.** A palette reopened within a minute of clearing it in Settings no longer shows the old order.

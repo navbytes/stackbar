@@ -108,3 +108,104 @@ extension HostCall {
         }
     }
 }
+
+/// A call's share of a per-plugin rate limit: the pool it draws from, and
+/// what it is called in the refusal ("too many sounds; at most 10 a
+/// minute"). Calls in one pool share its limit: hiding an app uses up the
+/// same 120 a minute as switching to one.
+public struct RateBudget: Equatable, Sendable {
+    public enum Pool: String, CaseIterable, Sendable {
+        case requests, notifications, alerts, sounds, huds, systemActions, filePanels,
+             appSwitching, calendarWrites, terminals, textReads, windowArrangements
+
+        /// Calls allowed per plugin in `window` seconds.
+        public var limit: Int {
+            switch self {
+            case .requests: return 300
+            case .notifications: return 10
+            case .alerts: return 1
+            case .sounds: return 10
+            case .huds: return 30
+            case .systemActions: return 10
+            case .filePanels: return 10
+            case .appSwitching: return 120
+            case .calendarWrites: return 30
+            case .terminals: return 5
+            case .textReads: return 30
+            case .windowArrangements: return 10
+            }
+        }
+
+        public var window: Double { 60 }
+
+        /// The calls that share the pool, as the authoring guide lists them.
+        public var calls: String {
+            switch self {
+            case .requests: return "`getJSON`, `postJSON`, `get`, `http`"
+            case .notifications: return "`notify`"
+            case .alerts: return "`alert`"
+            case .sounds: return "`play`"
+            case .huds: return "`hud`"
+            case .systemActions: return "`system`"
+            case .filePanels: return "`chooseFile`, `saveFile`, `pickColor`"
+            case .appSwitching: return "`activateApp`, `hideApp`, `focusWindow`, `pressMenuItem`"
+            case .calendarWrites: return "`saveCalendarEvent`"
+            case .terminals: return "`openInTerminal`"
+            case .textReads: return "`recognizeText`, `captureScreenText`"
+            case .windowArrangements: return "`arrangeWindows`"
+            }
+        }
+    }
+
+    public var pool: Pool
+    /// The calls, in the plural, for the refusal.
+    public var what: String
+
+    public init(_ pool: Pool, _ what: String) {
+        self.pool = pool
+        self.what = what
+    }
+
+    /// Every call a plugin makes counts here too, so a loop that hammers the
+    /// host is cut off instead of starving the others.
+    public static let allCalls = (limit: 1200, window: 60.0)
+
+    /// The guide's table of limits, made from the pools.
+    public static var guideTable: String {
+        var lines = ["| Calls | At most, per plugin |", "| --- | --- |"]
+        for pool in Pool.allCases {
+            lines.append("| \(pool.calls) | \(pool.limit == 1 ? "one" : "\(pool.limit)") a minute |")
+        }
+        lines.append("| every host call together | \(allCalls.limit) a minute |")
+        return lines.joined(separator: "\n")
+    }
+}
+
+extension HostCall {
+    /// The rate limit the call draws from, if any. The host checks it once,
+    /// before running the call.
+    public var budget: RateBudget? {
+        switch self {
+        case .http: return RateBudget(.requests, "HTTP requests")
+        case .notify: return RateBudget(.notifications, "notifications")
+        case .alert: return RateBudget(.alerts, "alerts")
+        case .playSound: return RateBudget(.sounds, "sounds")
+        case .hud: return RateBudget(.huds, "HUD messages")
+        case .system: return RateBudget(.systemActions, "system actions")
+        case .chooseFile, .saveFile: return RateBudget(.filePanels, "file panels")
+        case .pickColor: return RateBudget(.filePanels, "color pickers")
+        case .activateApp, .hideApp, .focusWindow: return RateBudget(.appSwitching, "app switches")
+        case .pressMenuItem: return RateBudget(.appSwitching, "menu presses")
+        case .saveCalendarEvent: return RateBudget(.calendarWrites, "calendar changes")
+        case .openInTerminal: return RateBudget(.terminals, "terminals")
+        case .recognizeText, .captureScreenText: return RateBudget(.textReads, "text reads")
+        case .arrangeWindows: return RateBudget(.windowArrangements, "window arrangements")
+        case .storageSet, .secret, .oauthToken, .publish, .openURL, .open, .copy, .clipboardRead, .clipboardWrite,
+             .paste, .keepAwake, .systemStatus, .calendarEvents, .run, .cancelRun, .context, .finderSelection,
+             .resolveApplication, .windows, .runningApps, .setKeyLayer, .keyLayerStatus, .reminderAccess,
+             .reminderLists, .createReminderList, .reminders, .saveReminder, .deleteReminder, .installedApps,
+             .findFiles, .setExpansions, .expansionStatus, .menuItems, .define, .writableCalendars, .sensors:
+            return nil
+        }
+    }
+}

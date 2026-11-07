@@ -88,21 +88,11 @@ public final class HostServices: Sendable {
     /// (the capability ledger's). `nil`: every granted name runs what it
     /// resolves to now, as in `stackbarctl` and tests.
     private let approvedCommands: (@Sendable (String) -> [String: String])?
-    private let notifications = RateLimiter(limit: 10, per: 60)
-    private let alerts = RateLimiter(limit: 1, per: 60)
-    private let sounds = RateLimiter(limit: 10, per: 60)
-    private let panels = RateLimiter(limit: 10, per: 60)
-    private let arrangements = RateLimiter(limit: 10, per: 60)
-    private let appSwitches = RateLimiter(limit: 120, per: 60)
-    private let huds = RateLimiter(limit: 30, per: 60)
-    private let systemActions = RateLimiter(limit: 10, per: 60)
-    private let calendarWrites = RateLimiter(limit: 30, per: 60)
-    private let terminals = RateLimiter(limit: 5, per: 60)
-    private let textReads = RateLimiter(limit: 30, per: 60)
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
-    private let calls = RateLimiter(limit: 1200, per: 60)
-    private let requests = RateLimiter(limit: 300, per: 60)
+    private let calls = RateLimiter(limit: RateBudget.allCalls.limit, per: RateBudget.allCalls.window)
+    /// One limiter per pool in `HostCall.budget`.
+    private let pools = Dictionary(uniqueKeysWithValues: RateBudget.Pool.allCases.map { ($0, RateLimiter(limit: $0.limit, per: $0.window)) })
 
     public init(storage: StorageStore, secrets: any SecretStore, platform: Platform = Platform(), audit: NetworkAudit = NetworkAudit(), bus: PluginBus = PluginBus(), oauthTimeout: Double = 300, runs: CommandRunGate? = nil, approvedCommands: (@Sendable (String) -> [String: String])? = nil) {
         self.runs = runs ?? CommandRunGate(root: FileManager.default.temporaryDirectory.appendingPathComponent("stackbar-run", isDirectory: true))
@@ -141,6 +131,9 @@ public final class HostServices: Sendable {
                 ? Self.awaitingApproval(granted, "to \(need.purpose)")
                 : Self.missing(need.capability, need.purpose)
         }
+        // A call the host would turn down anyway doesn't use up its budget.
+        if let problem = Self.argumentProblem(call) { return .failure(problem) }
+        if let budget = call.budget, let refused = pools[budget.pool]?.refusal(granted.id, budget.what) { return refused }
         switch call {
         case .storageSet(let key, let value):
             return await perform { try await self.storage.set(key, value, for: granted.id, quota: granted.storageQuotaBytes) }
@@ -162,7 +155,6 @@ public final class HostServices: Sendable {
             }
 
         case .http(let request):
-            if let refused = requests.refusal(granted.id, "HTTP requests") { return refused }
             let allowed = granted.networkHosts + userServerHosts(granted)
             let result = await http.perform(request, pluginID: granted.id, allowedHosts: allowed)
             if case .failure = result, let host = URLParts.host(of: request.url),
@@ -186,7 +178,6 @@ public final class HostServices: Sendable {
             return await perform { try await self.bus.publish(topic, payload: payload, from: granted.id) }
 
         case .notify(let title, let body, let actions):
-            if let refused = notifications.refusal(granted.id, "notifications") { return refused }
             switch Self.checked(actions ?? []) {
             case .failure(let message): return .failure(message)
             case .success(let buttons):
@@ -195,23 +186,19 @@ public final class HostServices: Sendable {
             }
 
         case .hud(let message, let isError):
-            if let refused = huds.refusal(granted.id, "HUD messages") { return refused }
             let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return .failure("a HUD message needs text") }
             platform.hud(String(text.prefix(200)), isError)
             return .ok
 
         case .system(let action):
-            if let refused = systemActions.refusal(granted.id, "system actions") { return refused }
             return await perform { try await self.platform.system.perform(action) }
 
         case .playSound(let sound):
-            if let refused = sounds.refusal(granted.id, "sounds") { return refused }
             platform.playSound(sound)
             return .ok
 
         case .alert(let title, let body, let actions):
-            if let refused = alerts.refusal(granted.id, "alerts") { return refused }
             switch Self.checked(actions) {
             case .failure(let message): return .failure(message)
             case .success(let buttons):
@@ -318,7 +305,6 @@ public final class HostServices: Sendable {
             return await answer(HostReplies.finderSelection) { try await self.platform.system.finderSelection() }
 
         case .chooseFile(let types):
-            if let refused = panels.refusal(granted.id, "file panels") { return refused }
             do {
                 guard let file = try await platform.system.chooseFile(types: types, for: granted.name) else { return .value(nil) }
                 guard file.data.count <= ChosenFile.maxBytes else { return .failure("\(file.name) is larger than 5 MB") }
@@ -328,7 +314,6 @@ public final class HostServices: Sendable {
             }
 
         case .saveFile(let name, let data):
-            if let refused = panels.refusal(granted.id, "file panels") { return refused }
             guard data.count <= ChosenFile.maxBytes else { return .failure("files saved this way are at most 5 MB") }
             let safe = (name as NSString).lastPathComponent
             do {
@@ -355,11 +340,9 @@ public final class HostServices: Sendable {
             return await answer(HostReplies.runningApps) { try await self.platform.system.runningApps() }
 
         case .activateApp(let id, let launch):
-            if let refused = appSwitches.refusal(granted.id, "app switches") { return refused }
             return await perform { try await self.platform.system.activateApp(id, launch: launch) }
 
         case .hideApp(let id):
-            if let refused = appSwitches.refusal(granted.id, "app switches") { return refused }
             return await perform { try await self.platform.system.hideApp(id) }
 
         case .setKeyLayer(let layer):
@@ -375,43 +358,33 @@ public final class HostServices: Sendable {
             return HostReplies.expansions.result(platform.system.expansionStatus(pluginID: granted.id))
 
         case .saveCalendarEvent(let draft):
-            if let problem = draft.problem { return .failure(problem) }
-            if let refused = calendarWrites.refusal(granted.id, "calendar changes") { return refused }
             return await answer(HostReplies.saveCalendarEvent) { try await self.platform.system.saveCalendarEvent(draft) }
 
         case .writableCalendars:
             return await answer(HostReplies.writableCalendars) { try await self.platform.system.writableCalendars() }
 
         case .openInTerminal(let command, let title):
-            if let problem = Self.terminalProblem(command) { return .failure(problem) }
-            if let refused = terminals.refusal(granted.id, "terminals") { return refused }
             return await perform { try await self.platform.system.openInTerminal(command, title: title.map { String($0.prefix(80)) }) }
 
         case .recognizeText(let imageID, let languages):
-            if let refused = textReads.refusal(granted.id, "text reads") { return refused }
             return await answer(HostReplies.recognizedText) { try await self.platform.system.recognizeText(imageID: imageID, languages: languages.map { Array($0.prefix(8)) }) }
 
         case .captureScreenText(let languages):
-            if let refused = textReads.refusal(granted.id, "text reads") { return refused }
             return await answer(HostReplies.recognizedText) { try await self.platform.system.captureScreenText(languages: languages.map { Array($0.prefix(8)) }) }
 
         case .sensors:
             return await answer(HostReplies.sensors) { try await self.platform.system.sensors() }
 
         case .focusWindow(let target):
-            if let refused = appSwitches.refusal(granted.id, "app switches") { return refused }
             return await perform { try await self.platform.system.focusWindow(target) }
 
         case .menuItems:
             return await answer(HostReplies.menuItems) { try await self.platform.system.menuItems() }
 
         case .pressMenuItem(let appID, let path):
-            guard !path.isEmpty, path.count <= MenuSnapshot.maxDepth + 1 else { return .failure("a menu path has 1 to \(MenuSnapshot.maxDepth + 1) titles") }
-            if let refused = appSwitches.refusal(granted.id, "menu presses") { return refused }
             return await perform { try await self.platform.system.pressMenuItem(appID: appID, path: path) }
 
         case .pickColor:
-            if let refused = panels.refusal(granted.id, "color pickers") { return refused }
             return await answer(HostReplies.pickColor) { try await self.platform.system.pickColor() }
 
         case .define(let word):
@@ -420,8 +393,6 @@ public final class HostServices: Sendable {
             return HostReplies.define.result(ifAny: await platform.system.define(query))
 
         case .arrangeWindows(let placements, let launch):
-            guard placements.count <= WindowPlacement.maxPerCall else { return .failure("at most \(WindowPlacement.maxPerCall) windows at a time") }
-            if let refused = arrangements.refusal(granted.id, "window arrangements") { return refused }
             return await answer(HostReplies.arrangeWindows) { try await self.platform.system.arrangeWindows(placements, launch: launch) }
         }
     }
@@ -596,6 +567,22 @@ public final class HostServices: Sendable {
 }
 
 /// At most `limit` events per key in a sliding window of `per` seconds.
+extension HostServices {
+    /// What is wrong with a rate-limited call's arguments, checked before
+    /// its budget.
+    static func argumentProblem(_ call: HostCall) -> String? {
+        switch call {
+        case .saveCalendarEvent(let draft): return draft.problem
+        case .openInTerminal(let command, _): return terminalProblem(command)
+        case .pressMenuItem(_, let path):
+            return !path.isEmpty && path.count <= MenuSnapshot.maxDepth + 1 ? nil : "a menu path has 1 to \(MenuSnapshot.maxDepth + 1) titles"
+        case .arrangeWindows(let placements, _):
+            return placements.count <= WindowPlacement.maxPerCall ? nil : "at most \(WindowPlacement.maxPerCall) windows at a time"
+        default: return nil
+        }
+    }
+}
+
 final class RateLimiter: @unchecked Sendable {
     private let limit: Int
     private let window: Double
