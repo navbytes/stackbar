@@ -81,6 +81,11 @@ public actor PluginSupervisor {
     private var toolCalls: [Int: CheckedContinuation<(text: String, isError: Bool), Never>] = [:]
     private var nextCommandCall = 1
     private var commandCalls: [Int: CheckedContinuation<CommandResult, Never>] = [:]
+    /// Each waiting tool or command call's timeout, cancelled when it ends.
+    private var toolTimeouts: [Int: Task<Void, Never>] = [:]
+    private var commandTimeouts: [Int: Task<Void, Never>] = [:]
+    /// Timeouts still running (for tests).
+    var openCallTimeouts: Int { toolTimeouts.count + commandTimeouts.count }
 
     public init(executable: URL, manifest: Manifest, grantedCapabilities: [Capability]? = nil, policy: BackoffPolicy = .standard, environment: [String: String]? = nil, services: HostServices? = nil, onUpdate: @escaping @Sendable (Update) -> Void = { _ in }) {
         self.executable = executable
@@ -188,8 +193,9 @@ public actor PluginSupervisor {
         let id = nextToolCall
         nextToolCall += 1
         let currentGeneration = generation
-        Task { [weak self] in
+        toolTimeouts[id] = Task { [weak self] in
             try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled else { return }
             await self?.finishToolCall(id, text: "\(name) timed out after \(Int(timeout))s", isError: true, generation: currentGeneration)
         }
         return await withCheckedContinuation { continuation in
@@ -207,8 +213,9 @@ public actor PluginSupervisor {
         nextCommandCall += 1
         let currentGeneration = generation
         let context = granted.capabilities.contains(.context) ? context : nil
-        Task { [weak self] in
+        commandTimeouts[id] = Task { [weak self] in
             try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled else { return }
             await self?.finishCommandCall(id, .failure("\(command) did not answer within \(Int(timeout)) seconds"), generation: currentGeneration)
         }
         return await withCheckedContinuation { continuation in
@@ -434,23 +441,29 @@ public actor PluginSupervisor {
 
     private func finishToolCall(_ id: Int, text: String, isError: Bool, generation callGeneration: Int) {
         guard callGeneration == generation, let continuation = toolCalls.removeValue(forKey: id) else { return }
+        toolTimeouts.removeValue(forKey: id)?.cancel()
         continuation.resume(returning: (text, isError))
     }
 
     private func finishCommandCall(_ id: Int, _ result: CommandResult, generation callGeneration: Int) {
         guard callGeneration == generation, let continuation = commandCalls.removeValue(forKey: id) else { return }
+        commandTimeouts.removeValue(forKey: id)?.cancel()
         continuation.resume(returning: result)
     }
 
     private func failCommandCalls(_ reason: String) {
         let calls = commandCalls
         commandCalls = [:]
+        for timeout in commandTimeouts.values { timeout.cancel() }
+        commandTimeouts = [:]
         for continuation in calls.values { continuation.resume(returning: .failure(reason)) }
     }
 
     private func failToolCalls(_ reason: String) {
         let calls = toolCalls
         toolCalls = [:]
+        for timeout in toolTimeouts.values { timeout.cancel() }
+        toolTimeouts = [:]
         for continuation in calls.values { continuation.resume(returning: (reason, true)) }
     }
 
