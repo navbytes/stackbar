@@ -175,6 +175,31 @@ final class BundleTests: XCTestCase {
         }
     }
 
+    func testABundleThatIsNotTheListedPluginIsRefused() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bundleFile = directory.appendingPathComponent("b.stackbarplugin")
+        try fakeBundle().encoded().write(to: bundleFile)
+        let index = try PluginIndex.build(name: "Test", bundles: [bundleFile])
+        var other = index.plugins[0]
+        other.id = "dev.t.someone-else"
+        do {
+            _ = try await PluginIndex.bundle(for: other, indexURL: bundleFile)
+            XCTFail("the entry names another plugin")
+        } catch {
+            XCTAssertEqual(error as? PluginIndex.IndexError, .entryMismatch("dev.t.someone-else"))
+        }
+        var older = index.plugins[0]
+        older.version = "0.0.1"
+        do {
+            _ = try await PluginIndex.bundle(for: older, indexURL: bundleFile)
+            XCTFail("the entry names another version")
+        } catch {
+            XCTAssertEqual(error as? PluginIndex.IndexError, .entryMismatch("dev.t.bundle"))
+        }
+    }
+
     #if canImport(CryptoKit)
     func testSignVerifyAndInstall() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

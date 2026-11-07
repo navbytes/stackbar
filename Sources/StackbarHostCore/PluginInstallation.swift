@@ -27,17 +27,17 @@ public final class PluginInstallation: @unchecked Sendable {
     private let storage: StorageStore?
     private let secrets: (any SecretStore)?
     private let helpers: Helpers?
-    private let trash: @Sendable (URL) -> Void
+    private let trash: @Sendable (URL) throws -> Void
     private let lock = NSLock()
     /// Signed manifests of bundles just installed, by file, until the built
     /// plugin is checked against them.
     private var expected: [String: Manifest] = [:]
 
     /// - `trash` moves a removed plugin's file away (the app uses the Trash;
-    ///   the default deletes it).
+    ///   the default deletes it). It throws when it cannot.
     public init(installer: PluginInstaller, ledger: CapabilityLedger, switches: PluginSwitches, storage: StorageStore? = nil,
                 secrets: (any SecretStore)? = nil, helpers: Helpers? = nil,
-                trash: @escaping @Sendable (URL) -> Void = { try? FileManager.default.removeItem(at: $0) }) {
+                trash: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) {
         self.installer = installer
         self.ledger = ledger
         self.switches = switches
@@ -106,19 +106,31 @@ public final class PluginInstallation: @unchecked Sendable {
     ///
     /// `providers` are the sign-ins its manifest declares, when it is
     /// loaded; the ones it was approved for are added from the ledger.
-    public func uninstall(_ pluginID: String, loaded: [URL] = [], deleteData: Bool = false, providers: [OAuthProvider] = []) async {
+    ///
+    /// Returns the files that could not be moved away. While any is left,
+    /// the install record stays, so the plugin is still known as installed
+    /// (and a withdrawal is still tracked) instead of coming back as an
+    /// unknown local plugin at the next launch.
+    @discardableResult
+    public func uninstall(_ pluginID: String, loaded: [URL] = [], deleteData: Bool = false, providers: [OAuthProvider] = []) async -> [URL] {
         let files = files(of: pluginID, loaded: loaded)
         let approved = ledger.approval(for: pluginID)?.capabilities.compactMap { capability -> OAuthProvider? in
             if case .oauth(let provider) = capability { return provider }
             return nil
         } ?? []
-        for file in files where FileManager.default.fileExists(atPath: file.path) { trash(file) }
+        var stuck: [URL] = []
+        for file in files where FileManager.default.fileExists(atPath: file.path) {
+            do { try trash(file) } catch {
+                stuck.append(file)
+                HostLog.shared.write(.warning, "could not move \(file.lastPathComponent) out of the plugins folder: \(error)", plugin: pluginID)
+            }
+        }
         lock.withLock { for file in files { expected[Self.key(file)] = nil } }
-        try? installer.forget(pluginID)
+        if stuck.isEmpty { try? installer.forget(pluginID) }
         try? ledger.revoke(pluginID)
         switches.set(pluginID, on: true)
         for file in files { switches.forget(file: file) }
-        guard deleteData else { return }
+        guard deleteData else { return stuck }
         await storage?.erase(pluginID)
         if let secrets {
             var all = providers
@@ -128,11 +140,13 @@ public final class PluginInstallation: @unchecked Sendable {
                 HostLog.shared.write(.warning, "could not remove the saved sign-in for \(kept.joined(separator: ", ")); the Keychain refused", plugin: pluginID)
             }
         }
+        return stuck
     }
 
     /// Removes a plugin its publisher withdrew from the store. Its data
     /// stays, as for an uninstall without deleting data.
-    public func withdraw(_ plugin: PluginInstaller.Installed, loaded: [URL] = []) async {
+    @discardableResult
+    public func withdraw(_ plugin: PluginInstaller.Installed, loaded: [URL] = []) async -> [URL] {
         await uninstall(plugin.id, loaded: loaded)
     }
 

@@ -271,7 +271,11 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         guard let url = URL(string: entry.bundle, relativeTo: indexURL)?.absoluteURL else { throw IndexError.badURL(entry.bundle) }
         let data = try await download(url)
         guard SHA256.hex(data) == entry.sha256.lowercased() else { throw IndexError.digestMismatch(entry.id) }
-        return try PluginBundle.decode(data)
+        let bundle = try PluginBundle.decode(data)
+        // The entry is what was checked (revocation, Stackbar version) and
+        // what the user was shown, so the bundle must be that plugin.
+        guard bundle.manifest.id == entry.id, bundle.manifest.version == entry.version else { throw IndexError.entryMismatch(entry.id) }
+        return bundle
     }
 
     /// An index for a folder of bundles, with paths relative to the index.
@@ -359,6 +363,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         case insecure(String)
         case status(String, Int)
         case tooLarge(String)
+        case entryMismatch(String)
         case digestMismatch(String)
         case unsigned
         case badSignature
@@ -373,6 +378,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
             case .insecure(let url): return "\(url) is not https"
             case .status(let url, let status): return "\(url) answered \(status)"
             case .tooLarge(let url): return "\(url) is too large"
+            case .entryMismatch(let id): return "the bundle for \(id) is not the plugin and version the index lists"
             case .digestMismatch(let id): return "the bundle for \(id) does not match the index's digest"
             case .unsigned: return "the index is not signed, and this index must be"
             case .badSignature: return "the index's signature is not valid for its publisher's key"
@@ -421,7 +427,7 @@ public final class PluginInstaller: @unchecked Sendable {
         return try lock.withLock {
             var records = load()
             let existing = records.first { $0.id == bundle.manifest.id }
-            let file = existing.map { URL(fileURLWithPath: $0.file) } ?? pluginsDirectory.appendingPathComponent(PluginBuilder.sanitizedName(bundle.manifest.id) + ".swift")
+            let file = existing.map { URL(fileURLWithPath: $0.file) } ?? newFile(for: bundle.manifest.id, among: records)
             try FileManager.default.createDirectory(at: pluginsDirectory, withIntermediateDirectories: true)
             try bundle.source.write(to: file, atomically: true, encoding: .utf8)
             records.removeAll { $0.id == bundle.manifest.id }
@@ -429,6 +435,16 @@ public final class PluginInstaller: @unchecked Sendable {
             try save(records)
             return file
         }
+    }
+
+    /// `<sanitized id>.swift`, unless another installed plugin's id sanitizes
+    /// to the same name (`dev.a-b.c` and `dev-a.b.c`): then the name carries a
+    /// short digest of the id, so one never overwrites the other's source.
+    func newFile(for id: String, among records: [Installed]) -> URL {
+        let name = PluginBuilder.sanitizedName(id)
+        let plain = pluginsDirectory.appendingPathComponent(name + ".swift")
+        guard records.contains(where: { $0.id != id && URL(fileURLWithPath: $0.file).standardizedFileURL == plain.standardizedFileURL }) else { return plain }
+        return pluginsDirectory.appendingPathComponent("\(name)-\(SHA256.hex(Data(id.utf8)).prefix(8)).swift")
     }
 
     /// Drops the record of where a plugin came from, leaving its file alone

@@ -109,7 +109,7 @@ final class AppModel {
         secretRouter.model = self
         installation = PluginInstallation(installer: installer, ledger: ledger, switches: switches, storage: services.storage, secrets: services.secrets,
                                           helpers: .init(directory: builder.downloadedHelpers, stackbarKit: builder.stackbarKit),
-                                          trash: { try? FileManager.default.trashItem(at: $0, resultingItemURL: nil) })
+                                          trash: { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) })
         commands = CommandCenter(model: self, services: services)
         // A key layer's assign chord (Right ⌘ ⌥ + a letter) runs the
         // plugin's assign command, as a hotkey would.
@@ -168,8 +168,9 @@ final class AppModel {
         for withdrawn in review.withdrawn {
             let running = controllers.filter { $0.pluginID == withdrawn.installed.id }
             for controller in running { await remove(controller) }
-            await installation.withdraw(withdrawn.installed, loaded: running.map(\.source))
-            Platform.notify(HostNotification(pluginID: withdrawn.installed.id, pluginName: "Stackbar", title: "Removed a withdrawn plugin", body: "\(withdrawn.installed.id) \(withdrawn.installed.version) was withdrawn by its publisher and is in the Trash: \(withdrawn.reason)"))
+            let stuck = await installation.withdraw(withdrawn.installed, loaded: running.map(\.source))
+            let outcome = stuck.isEmpty ? "is in the Trash" : "could not be moved to the Trash and is still in the plugins folder"
+            Platform.notify(HostNotification(pluginID: withdrawn.installed.id, pluginName: "Stackbar", title: "Removed a withdrawn plugin", body: "\(withdrawn.installed.id) \(withdrawn.installed.version) was withdrawn by its publisher and \(outcome): \(withdrawn.reason)"))
         }
         guard autoUpdatePlugins else {
             pendingUpdates = review.updates
@@ -187,6 +188,8 @@ final class AppModel {
     func installUpdate(_ update: PluginStore.Update) async throws {
         let bundle = try await PluginIndex.bundle(for: update.entry, indexURL: update.indexURL)
         guard bundle.manifest.id == update.entry.id else { throw PluginBundle.BundleError.manifestMismatch }
+        // Verified before the helper, which can be up to 64 MB, is fetched.
+        try bundle.verify()
         let helper = try await prebuiltHelper(for: bundle, indexURL: update.indexURL)
         let file = try installation.install(bundle, helper: helper)
         if let controller = controller(for: update.entry.id) { controller.reload() } else { add(file) }
@@ -254,7 +257,9 @@ final class AppModel {
     /// loaded under the same id stops first, so nothing of it is left
     /// running. Its saved data stays unless `deleteData`, so installing it
     /// again picks up where it left off.
-    func uninstall(_ controller: PluginController, deleteData: Bool = false) async {
+    /// Returns the files that could not be moved to the Trash.
+    @discardableResult
+    func uninstall(_ controller: PluginController, deleteData: Bool = false) async -> [URL] {
         let id = controller.pluginID
         let providers = controller.manifest?.capabilities.compactMap { capability -> OAuthProvider? in
             if case .oauth(let provider) = capability { return provider }
@@ -263,17 +268,20 @@ final class AppModel {
         let files = installation.files(of: id, loaded: [controller.source])
         let doomed = controllers.filter { $0 === controller || $0.pluginID == id || files.contains($0.source.standardizedFileURL) }
         for other in doomed { await remove(other) }
-        await installation.uninstall(id, loaded: doomed.map(\.source), deleteData: deleteData, providers: providers)
+        let stuck = await installation.uninstall(id, loaded: doomed.map(\.source), deleteData: deleteData, providers: providers)
         refreshInstalled()
+        return stuck
     }
 
     /// Removes an installed plugin by id, whether or not it is loaded.
-    func uninstall(pluginID: String, deleteData: Bool = false) async {
+    @discardableResult
+    func uninstall(pluginID: String, deleteData: Bool = false) async -> [URL] {
         if let controller = controller(for: pluginID) {
-            await uninstall(controller, deleteData: deleteData)
+            return await uninstall(controller, deleteData: deleteData)
         } else {
-            await installation.uninstall(pluginID, deleteData: deleteData)
+            let stuck = await installation.uninstall(pluginID, deleteData: deleteData)
             refreshInstalled()
+            return stuck
         }
     }
 
