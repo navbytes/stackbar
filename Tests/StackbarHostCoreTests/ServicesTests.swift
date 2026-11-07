@@ -485,3 +485,50 @@ final class ProcessTableTests: XCTestCase {
         #endif
     }
 }
+
+final class DirectoryWatcherTests: XCTestCase {
+    func testStartedWatcherReportsAddedChangedAndRemovedPlugins() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let changes = Locked([DirectoryWatcher.Change]())
+        let watcher = DirectoryWatcher(directory: directory)
+        watcher.start(every: 0.05) { change in changes.mutate { $0.append(change) } }
+        defer { watcher.stop() }
+        let file = directory.appendingPathComponent("A.swift")
+
+        func waitFor(_ check: @escaping (DirectoryWatcher.Change) -> Bool) async throws -> Bool {
+            for _ in 0..<200 {
+                if changes.value.contains(where: check) { return true }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            return false
+        }
+        try Data("one".utf8).write(to: file)
+        let added = try await waitFor { $0.added == [file] }
+        XCTAssertTrue(added)
+        // In place, as editors and agents save.
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(" more".utf8))
+        try handle.close()
+        let modified = try await waitFor { $0.modified == [file] }
+        XCTAssertTrue(modified)
+        try FileManager.default.removeItem(at: file)
+        let removed = try await waitFor { $0.removed == [file] }
+        XCTAssertTrue(removed)
+    }
+
+    func testPathWatchStopsTicking() async throws {
+        let ticks = Locked(0)
+        let watch = PathWatch(pollEvery: 0.02, paths: { [] }, onTick: { ticks.mutate { $0 += 1 } })
+        watch.start()
+        for _ in 0..<200 where ticks.value < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertGreaterThanOrEqual(ticks.value, 2)
+        watch.stop()
+        try await Task.sleep(for: .milliseconds(50))
+        let stopped = ticks.value
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(ticks.value, stopped)
+    }
+}

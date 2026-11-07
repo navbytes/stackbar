@@ -74,7 +74,7 @@ public actor PluginSupervisor {
     private var stopping = false
     private var consumer: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
-    private var watcher: Task<Void, Never>?
+    private var watcher: PathWatch?
     private var clipboardWatcher: UUID?
     private var pendingRestart: Task<Void, Never>?
     private var nextToolCall = 1
@@ -116,7 +116,7 @@ public actor PluginSupervisor {
         stopping = true
         pendingRestart?.cancel()
         ticker?.cancel()
-        watcher?.cancel()
+        watcher?.stop()
         stopClipboardWatcher()
         process?.terminate()
         process = nil
@@ -302,24 +302,22 @@ public actor PluginSupervisor {
         }
     }
 
-    /// Polls the manifest's watched files every two seconds. Polling is dumb
-    /// but works the same on every platform and inside the sandbox.
+    /// Watches the manifest's watched files (and a folder's direct
+    /// children) through `PathWatch`: file events on macOS, a two-second
+    /// poll elsewhere, and the stat calls on the watch's queue rather than
+    /// on this actor.
     private func startWatcher() {
-        watcher?.cancel()
+        watcher?.stop()
+        watcher = nil
         let paths = manifest.watchedFiles.map { NSString(string: $0).expandingTildeInPath }
         guard !paths.isEmpty else { return }
-        watcher = Task { [weak self] in
-            var last = FileStamp.stamps(paths)
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled else { return }
-                let now = FileStamp.stamps(paths)
-                if now != last {
-                    last = now
-                    await self?.sendCoalesced(.file)
-                }
-            }
-        }
+        let last = FileStamp.Box(FileStamp.stamps(paths))
+        let watcher = PathWatch(pollEvery: 2, paths: { last.paths }, onTick: { [weak self] in
+            guard last.update(FileStamp.stamps(paths)) else { return }
+            Task { await self?.sendCoalesced(.file) }
+        })
+        self.watcher = watcher
+        watcher.start()
     }
 
     /// Listens to the shared clipboard poll (`HostServices.clipboard`) for a
@@ -468,7 +466,7 @@ public actor PluginSupervisor {
     private func handleExit(status: Int32, generation exitGeneration: Int) {
         guard exitGeneration == generation else { return }
         ticker?.cancel()
-        watcher?.cancel()
+        watcher?.stop()
         stopClipboardWatcher()
         process = nil
         // A crashed plugin must not keep the Mac awake; a restarted one asks again.
@@ -526,6 +524,25 @@ enum FileStamp {
             }
         }
         return result
+    }
+
+    /// The last stamps, shared with the watch's queue.
+    final class Box: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stamps: [String: String]
+
+        init(_ stamps: [String: String]) { self.stamps = stamps }
+
+        /// Every stamped path, for file events.
+        var paths: [String] { lock.withLock { stamps.keys.sorted() } }
+
+        /// Keeps `new`; true when it differs from what was kept.
+        func update(_ new: [String: String]) -> Bool {
+            lock.withLock {
+                defer { stamps = new }
+                return stamps != new
+            }
+        }
     }
 
     private static func stamp(_ path: String) -> String {
