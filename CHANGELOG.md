@@ -3,6 +3,12 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Removing a plugin removes all of it, from anywhere.** Removing a plugin from the Store window, or when its publisher withdraws it, now also clears what you approved it to do, as removing it in Settings already did. Install it again and Stackbar asks again. Deleting its data from the Store window now signs it out too.
+- A plugin installed or updated from the Store is checked once it is built: if its code asks for different permissions than its publisher signed for, the install is undone.
+
 ## 0.28.0
 
 ### Fixed

@@ -400,8 +400,8 @@ public final class PluginInstaller: @unchecked Sendable {
     }
 
     /// Verifies the bundle, pins or checks its publisher, and writes its
-    /// source. Returns the plugin file; the host then builds it and checks
-    /// that the built manifest matches `bundle.manifest` with `confirm`.
+    /// source. Returns the plugin file; `PluginInstallation` then checks
+    /// that the built manifest matches `bundle.manifest`.
     @discardableResult
     public func install(_ bundle: PluginBundle) throws -> URL {
         try bundle.verify()
@@ -416,15 +416,6 @@ public final class PluginInstaller: @unchecked Sendable {
             records.append(Installed(id: bundle.manifest.id, file: file.path, version: bundle.manifest.version, publisher: bundle.publisher.name, installedAt: Date()))
             try save(records)
             return file
-        }
-    }
-
-    /// After building an installed plugin: the manifest the code declares
-    /// must be the one that was signed, or the install is undone.
-    public func confirm(_ built: Manifest, matches bundle: PluginBundle, file: URL) throws {
-        guard built == bundle.manifest else {
-            try? uninstall(bundle.manifest.id)
-            throw PluginBundle.BundleError.manifestMismatch
         }
     }
 
