@@ -46,3 +46,24 @@ final class NetworkAuditTests: XCTestCase {
         XCTAssertTrue(entries.contains { $0.host == "api.example.com" })
     }
 }
+
+final class UserServerLookupTests: XCTestCase {
+    final class CountingSecrets: SecretStore, @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var reads: Int { lock.withLock { count } }
+        func secret(_ name: String) throws -> String? { lock.withLock { count += 1 }; return "https://server.example.com/api" }
+        func setSecret(_ value: String?, for name: String) throws {}
+    }
+
+    func testAFailingCallReadsEachUserServerSecretOnce() async {
+        let secrets = CountingSecrets()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let services = HostServices.local(directory: directory, secrets: secrets)
+        let manifest = Manifest(id: "dev.test.p", name: "P", capabilities: [.userServer(secret: "PROXY_URL")])
+        let result = await services.handle(.http(HTTPRequest(url: "https://other.example.com/")), for: manifest)
+        guard case .failure = result else { return XCTFail("\(result)") }
+        XCTAssertEqual(secrets.reads, 1)
+    }
+}

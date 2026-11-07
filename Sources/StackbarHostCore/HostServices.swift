@@ -155,10 +155,13 @@ public final class HostServices: Sendable {
             }
 
         case .http(let request):
-            let allowed = granted.networkHosts + userServerHosts(granted)
+            // Each Keychain read is a round trip to securityd, so the user's
+            // servers are read once per call, not again on the failure path.
+            let grantedUserHosts = userServerHosts(granted)
+            let allowed = granted.networkHosts + grantedUserHosts
             let result = await http.perform(request, pluginID: granted.id, allowedHosts: allowed)
             if case .failure = result, let host = URLParts.host(of: request.url),
-               !URLParts.host(host, matches: allowed), URLParts.host(host, matches: declared.networkHosts + userServerHosts(declared)) {
+               !URLParts.host(host, matches: allowed), URLParts.host(host, matches: declared.networkHosts + (declared.userServerSecrets == granted.userServerSecrets ? grantedUserHosts : userServerHosts(declared))) {
                 return Self.awaitingApproval(granted, "to reach \(host)")
             }
             return result
