@@ -11,4 +11,4 @@ Order agreed with Naveen 2026-11-06: 2, 1, 3, 4, 5. One PR each.
 - [x] 4.2 Shared rate-limit wrapper with the limit in its message
 - [x] 5.1 `KeyCombo` in StackbarProtocol with tests (StackbarUI already has a `KeyShortcut` matcher)
 - [x] 5.2 Manifest hotkey (`HotKeySpec`), row action shortcuts (`KeyShortcut`), palette and Settings keycaps use it; `render` flags a row shortcut it can't read (manifest hotkeys were already a manifest problem)
-- [ ] 6.1 stackbar-plugins raises `stackbarRevision` so the index carries kinds
+- [x] 6.1 stackbar-plugins raises `stackbarRevision` so the index carries kinds (stackbar-plugins #53)
