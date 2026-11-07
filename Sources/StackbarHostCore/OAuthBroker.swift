@@ -64,11 +64,11 @@ public actor OAuthBroker {
                 let refreshed = try await exchange(provider, ["grant_type": "refresh_token", "refresh_token": refreshToken], keepRefresh: refreshToken)
                 try save(refreshed, key)
                 return refreshed
-            } catch OAuthError.grantRejected {
-                // The provider says this refresh token is dead (revoked or
-                // expired), so only now is a new sign-in the answer. A network
-                // outage or a 5xx is reported as it is: opening the browser
-                // would not fix it.
+            } catch let error as OAuthError where error.meansSignInAgain {
+                // The provider turned this refresh token down (invalid_grant,
+                // bad_refresh_token, a bare 400/401...), so a new sign-in is the
+                // answer. A network outage, a timeout or a 5xx is reported as it
+                // is: opening the browser would not fix it.
             }
         }
         let token = try await signIn(provider)
@@ -185,6 +185,17 @@ public actor OAuthBroker {
         case stateMismatch
         case timedOut(String)
         case tokenEndpoint(Int, String)
+
+        /// Whether a failed refresh should fall back to an interactive sign-in:
+        /// any OAuth error answer, and any 4xx from the token endpoint except
+        /// the retryable 408 and 429.
+        var meansSignInAgain: Bool {
+            switch self {
+            case .denied, .grantRejected: return true
+            case .tokenEndpoint(let status, _): return (400..<500).contains(status) && status != 408 && status != 429
+            case .badProvider, .stateMismatch, .timedOut: return false
+            }
+        }
 
         public var description: String {
             switch self {
