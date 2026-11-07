@@ -15,6 +15,8 @@ import Darwin
 final class StdioTransport: Sendable {
     private let output: FileHandle
     private let lock = NSLock()
+    /// Set once a message had a NaN or infinite number, which is said once.
+    private nonisolated(unsafe) var warnedNonFinite = false
 
     init() {
         let protocolFD = dup(STDOUT_FILENO)
@@ -24,14 +26,31 @@ final class StdioTransport: Sendable {
 
     var send: PluginRuntime.Send {
         { [self] message in
-            guard let data = try? LineCodec.encode(message) else { return }
+            guard let (data, warning) = Self.encoded(message) else { return }
             // Flush C stdio (where `print` buffers, now pointed at stderr) so a
             // stray print reaches the log alongside the message it preceded.
             fflush(nil)
             lock.lock()
             defer { lock.unlock() }
             output.write(data)
+            if let warning, !warnedNonFinite, let line = try? LineCodec.encode(warning) {
+                warnedNonFinite = true
+                output.write(line)
+            }
         }
+    }
+
+    /// The message as a line. A NaN or infinite number (a progress of
+    /// `done / total` with no total, say) would make the encoder throw and
+    /// the whole render vanish, leaving the old one on screen; it is sent
+    /// as 0 instead, with a warning for the log.
+    static func encoded(_ message: PluginMessage) -> (Data, warning: PluginMessage?)? {
+        if let data = try? LineCodec.encode(message) { return (data, nil) }
+        guard let (data, replaced) = try? LineCodec.encodeReplacingNonFinite(message) else { return nil }
+        let warning: PluginMessage? = replaced
+            ? .log(level: .warning, message: "a view or value had a NaN or infinite number (a division by zero?); it is shown as 0")
+            : nil
+        return (data, warning)
     }
 
     /// Host messages, read on a dedicated thread so a blocking read never

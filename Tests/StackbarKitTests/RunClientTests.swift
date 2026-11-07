@@ -125,3 +125,17 @@ final class RunClientTests: XCTestCase {
         }
     }
 }
+
+final class TransportEncodingTests: XCTestCase {
+    func testANonFiniteNumberIsSentAsZeroWithAWarning() throws {
+        let render = PluginMessage.render(surface: .panel, root: .stack(axis: .vertical, children: [.progress(value: .nan, total: .infinity), .text("NaN")]))
+        let (data, warning) = try XCTUnwrap(StdioTransport.encoded(render))
+        XCTAssertEqual(try LineCodec.decode(PluginMessage.self, from: data.dropLast()),
+                       .render(surface: .panel, root: .stack(axis: .vertical, children: [.progress(value: 0, total: 0), .text("NaN")])))
+        guard case .log(.warning, _) = warning else { return XCTFail("expected a warning, got \(String(describing: warning))") }
+
+        let plain = PluginMessage.render(surface: .panel, root: .progress(value: 0.5))
+        let (_, none) = try XCTUnwrap(StdioTransport.encoded(plain))
+        XCTAssertNil(none)
+    }
+}
