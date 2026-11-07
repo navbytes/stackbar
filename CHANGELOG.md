@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **A plugin dragged out of the menu bar can come back.** ⌘-dragging an item off the menu bar hid it for good: macOS remembered it, so turning "Show in menu bar" back on in Settings, or a plugin like Clipboard turning its own icon on, made an item you couldn't see. Dragging one out now turns "Show in menu bar" off for that plugin, and turning it on brings the item back.
+
 ## 0.29.0
 
 ### Fixed
