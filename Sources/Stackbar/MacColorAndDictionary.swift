@@ -19,17 +19,26 @@ extension MacSystem {
 enum MacColorPicker {
     /// Held while it shows: the sampler goes away when nothing keeps it.
     private static var sampler: NSColorSampler?
+    private static var shownAt: Date?
+    /// After this long a sampler still held is taken as lost (its handler
+    /// never came back), so a later pick isn't refused for good.
+    private static let abandonedAfter: TimeInterval = 120
 
     static func pick() async -> PickedColor? {
-        guard sampler == nil else { return nil }
+        if sampler != nil, let shownAt, Date().timeIntervalSince(shownAt) < abandonedAfter { return nil }
         let sampler = NSColorSampler()
         self.sampler = sampler
+        shownAt = Date()
         // The magnifier needs Stackbar in front to take the click.
         NSApp.activate()
         let color: NSColor? = await withCheckedContinuation { continuation in
             sampler.show { picked in continuation.resume(returning: picked) }
         }
-        self.sampler = nil
+        // A newer pick may have replaced a lost one meanwhile.
+        if self.sampler === sampler {
+            self.sampler = nil
+            shownAt = nil
+        }
         guard let srgb = color?.usingColorSpace(.sRGB) else { return nil }
         return PickedColor(red: Double(srgb.redComponent), green: Double(srgb.greenComponent), blue: Double(srgb.blueComponent), alpha: Double(srgb.alphaComponent))
     }

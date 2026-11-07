@@ -78,6 +78,66 @@ public struct WidgetSnapshotStore: Sendable {
     }
 }
 
+/// What the app has yet to hand the widget extension, and when. A plugin on
+/// a short interval renders its widget every few seconds; writing each
+/// render and reloading WidgetKit's timelines every time spends WidgetKit's
+/// reload budget and the main thread. So a render that matches what was
+/// last written is dropped, renders that arrive close together are written
+/// together, and reloads come at most once per `minimumInterval`.
+public struct WidgetPublishQueue: Sendable {
+    /// How long a change waits, so a burst of renders lands as one write.
+    public var debounce: TimeInterval
+    /// The shortest time between two reloads.
+    public var minimumInterval: TimeInterval
+    private var pending: [String: WidgetSnapshot] = [:]
+    private var written: [String: WidgetSnapshot] = [:]
+    private var lastFlush: Date?
+
+    public init(debounce: TimeInterval = 0.5, minimumInterval: TimeInterval = 5) {
+        self.debounce = debounce
+        self.minimumInterval = minimumInterval
+    }
+
+    public var isEmpty: Bool { pending.isEmpty }
+
+    /// Queues the plugin's widget. False when it shows the same as what was
+    /// last written: there is nothing to write.
+    @discardableResult
+    public mutating func change(_ snapshot: WidgetSnapshot) -> Bool {
+        if let last = written[snapshot.pluginID], last.name == snapshot.name, last.node == snapshot.node {
+            pending[snapshot.pluginID] = nil
+            return false
+        }
+        pending[snapshot.pluginID] = snapshot
+        return true
+    }
+
+    /// The plugin's widget went away (removed or turned off).
+    public mutating func forget(_ pluginID: String) {
+        pending[pluginID] = nil
+        written[pluginID] = nil
+    }
+
+    /// Whether the plugin's widget was written and not forgotten since.
+    public func remembers(_ pluginID: String) -> Bool { written[pluginID] != nil }
+
+    /// How long to wait, from `now`, before taking what is queued.
+    public func delay(now: Date) -> TimeInterval {
+        guard let lastFlush else { return debounce }
+        return max(debounce, lastFlush.addingTimeInterval(minimumInterval).timeIntervalSince(now))
+    }
+
+    /// The queued snapshots, by plugin id, now counted as written.
+    public mutating func take(now: Date) -> [WidgetSnapshot] {
+        let taken = pending.values.sorted { $0.pluginID < $1.pluginID }
+        pending = [:]
+        guard !taken.isEmpty else { return [] }
+        for snapshot in taken { written[snapshot.pluginID] = snapshot }
+        lastFlush = now
+        return taken
+    }
+}
+
 /// A press on a widget's button, row or toggle, left by the widget extension
 /// for the app to send to the plugin (protocol 17). The extension can't
 /// reach plugins, so it writes one file per press in the shared directory and

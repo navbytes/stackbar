@@ -115,6 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Helpers exit on their own when their stdin closes with the app.
         model.prepareForTermination()
+        // Usage and picks are saved off the main thread: let the last land.
+        model.commands.memory.flush()
     }
 
     /// One status item per plugin that draws in the menu bar, in plugin

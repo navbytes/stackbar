@@ -111,6 +111,9 @@ public struct BundledStore {
     @discardableResult
     public func installCore(offered: URL) -> [URL] {
         var done = Set((try? JSONDecoder().decode([String].self, from: Data(contentsOf: offered))) ?? [])
+        // Every launch after the first: nothing to offer, so don't decode
+        // and verify every carried bundle to find that out.
+        guard !Self.corePluginIDs.isSubset(of: done) else { return [] }
         let installed = Set(installer.installed.map(\.id))
         var result: [URL] = []
         for bundle in bundles() where Self.corePluginIDs.contains(bundle.manifest.id) && !done.contains(bundle.manifest.id) {
