@@ -71,7 +71,7 @@ struct RemoteImageView: View {
     var body: some View {
         Color.clear
             .overlay {
-                if let data = remoteImage?(url), let image = Self.image(data) {
+                if let image = Self.image(url: url, data: remoteImage?(url)) {
                     image.resizable().scaledToFill()
                 } else if let placeholder {
                     ZStack {
@@ -84,9 +84,12 @@ struct RemoteImageView: View {
             .accessibilityHidden(true)
     }
 
-    private static func image(_ data: Data) -> Image? {
+    /// Decoded once per URL and size of data (a refetch that changed the
+    /// bytes decodes again), not on every body pass.
+    @MainActor private static func image(url: String, data: Data?) -> Image? {
         #if canImport(AppKit)
-        return NSImage(data: data).map { Image(nsImage: $0) }
+        guard let data else { return nil }
+        return DecodedImages.image(key: "\(data.count)|\(url)") { data }.map { Image(nsImage: $0) }
         #else
         return nil
         #endif
