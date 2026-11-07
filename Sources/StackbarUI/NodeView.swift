@@ -1045,7 +1045,9 @@ public enum AppIcons {
 
     /// The icon if it was looked up before; nothing is fetched.
     public static func cached(appIcon: String?, fileIcon path: String?) -> NSImage? {
-        if let appIcon, let known = cache[appIcon] { return known }
+        // A remembered miss (`.some(nil)`) is not an answer: the file icon
+        // is still tried.
+        if let appIcon, let known = cache[appIcon], let image = known { return image }
         if let path, let known = files[path] { return known }
         return nil
     }
@@ -1054,10 +1056,16 @@ public enum AppIcons {
     /// An app wins when both are named, as in a row. Nil when there is none.
     public static func load(appIcon: String?, fileIcon path: String?) async -> NSImage? {
         if let appIcon {
-            if let known = cache[appIcon] { return known }
-            let drawn = await Task.detached(priority: .userInitiated) { Drawn(image: renderApp(appIcon)) }.value
-            cache[appIcon] = drawn.image
-            if let image = drawn.image { return image }
+            // A remembered miss (`.some(nil)`) falls through to the file icon.
+            var image: NSImage?
+            if let known = cache[appIcon] {
+                image = known
+            } else {
+                let drawn = await Task.detached(priority: .userInitiated) { Drawn(image: renderApp(appIcon)) }.value
+                cache[appIcon] = drawn.image
+                image = drawn.image
+            }
+            if let image { return image }
         }
         guard let path else { return nil }
         if let known = files[path] { return known }
