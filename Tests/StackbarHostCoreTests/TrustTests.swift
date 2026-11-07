@@ -25,6 +25,18 @@ final class CapabilityLedgerTests: XCTestCase {
         XCTAssertEqual(reopened.approval(for: "dev.t.p")?.version, "1")
     }
 
+    func testAFailedSaveDoesNotGrantOrRevoke() throws {
+        let blocker = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try "not a directory".write(to: blocker, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: blocker) }
+        // The ledger's folder cannot be created under a regular file.
+        let ledger = CapabilityLedger(file: blocker.appendingPathComponent("ledger.json"))
+        let manifest = Manifest(id: "dev.t.p", name: "P", version: "1", capabilities: [.network("api.example.com")])
+        XCTAssertThrowsError(try ledger.approve(manifest))
+        XCTAssertNil(ledger.approval(for: "dev.t.p"), "an approval that was not saved is not in force")
+        XCTAssertEqual(ledger.review(manifest), .needsApproval(added: [.network("api.example.com")], removed: [], granted: [], isNew: true))
+    }
+
     func testAnUnapprovedCapabilityIsRefusedByTheHost() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

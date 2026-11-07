@@ -224,6 +224,32 @@ final class CommandRunGateTests: XCTestCase {
         XCTAssertNil(exit.reason)
     }
 
+    func testABlockedOutputWriteDoesNotStopCancel() async throws {
+        let messages = Messages()
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let gate = gate()
+        let grant = self.grant
+        // The plugin's stdin is wedged: the first output write never returns
+        // until released.
+        XCTAssertNil(gate.stream(RunRequest(command: "sh", arguments: ["-c", "echo a; sleep 30"]), id: 1, grant: grant) { message in
+            if case .runOutput = message {
+                entered.signal()
+                release.wait()
+            }
+            messages.add(message)
+        })
+        XCTAssertEqual(entered.wait(timeout: .now() + 5), .success)
+        let started = Date()
+        let cancelled = await Task.detached { gate.cancel(pluginID: grant.pluginID, id: 1) }.value
+        XCTAssertTrue(cancelled)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 1, "cancel does not wait for the blocked write")
+        release.signal()
+        let stopped = await waitUntil(8) { messages.exit != nil }
+        XCTAssertTrue(stopped)
+        guard case .runExit = messages.all.last else { return XCTFail("nothing may follow the exit") }
+    }
+
     func testCancelAndConcurrencyLimit() async throws {
         var limits = CommandRunGate.Limits()
         limits.maxConcurrent = 1

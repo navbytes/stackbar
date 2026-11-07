@@ -92,15 +92,23 @@ public final class CapabilityLedger: @unchecked Sendable {
     public func approve(_ manifest: Manifest, at date: Date = Date()) throws {
         let paths = resolver.resolve(all: manifest.runCommands)
         try lock.withLock {
-            approvals[manifest.id] = Approval(version: manifest.version, capabilities: manifest.capabilities, approvedAt: date, commandPaths: paths.isEmpty ? nil : paths)
-            try save()
+            try change(manifest.id, to: Approval(version: manifest.version, capabilities: manifest.capabilities, approvedAt: date, commandPaths: paths.isEmpty ? nil : paths))
         }
     }
 
     public func revoke(_ pluginID: String) throws {
-        try lock.withLock {
-            approvals[pluginID] = nil
-            try save()
+        try lock.withLock { try change(pluginID, to: nil) }
+    }
+
+    /// Sets (or removes) one approval and saves; if the save fails the
+    /// in-memory ledger goes back as it was, so what runs matches what the
+    /// file says. Call with the lock held.
+    private func change(_ pluginID: String, to approval: Approval?) throws {
+        let previous = approvals[pluginID]
+        approvals[pluginID] = approval
+        do { try save() } catch {
+            approvals[pluginID] = previous
+            throw error
         }
     }
 
