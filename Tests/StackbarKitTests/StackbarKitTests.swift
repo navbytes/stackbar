@@ -195,6 +195,24 @@ final class StackbarKitTests: XCTestCase {
         XCTAssertTrue(HostClient.shared.resolve(id: id, result: .ok))
     }
 
+    @MainActor
+    func testStoredReadsReuseTheDecodedValueUntilTheKeyChanges() {
+        let storage = PluginStorage()
+        storage.isScratch = true
+        storage.load(["list": "[1,2,3]"])
+        XCTAssertEqual(storage.value("list", as: [Int].self), [1, 2, 3])
+        XCTAssertEqual(storage.value("list", as: [Int].self), [1, 2, 3])
+        // Another type at the same key decodes on its own.
+        XCTAssertEqual(storage.value("list", as: [Double].self), [1, 2, 3])
+        XCTAssertNil(storage.value("list", as: String.self))
+        storage.set("list", [4])
+        XCTAssertEqual(storage.value("list", as: [Int].self), [4])
+        storage.remove("list")
+        XCTAssertNil(storage.value("list", as: [Int].self))
+        storage.load(["list": "[5]"])
+        XCTAssertEqual(storage.value("list", as: [Int].self), [5])
+    }
+
     func testHostCallsResolveOutOfBandAndToolsAreListed() async {
         final class Caller: StackbarPlugin {
             static let manifest = Manifest(id: "test.caller", name: "Caller", surfaces: [.menuBar])
