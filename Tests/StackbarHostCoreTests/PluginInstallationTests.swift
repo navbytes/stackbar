@@ -41,7 +41,7 @@ final class PluginInstallationTests: XCTestCase {
 
     /// An installed, approved plugin that was turned off, with saved data
     /// and a sign-in.
-    private func world() async throws -> World {
+    private func world(trash failing: (@Sendable (URL) throws -> Void)? = nil) async throws -> World {
         let file = directory.appendingPathComponent("Plugins/\(id).swift")
         try "// plugin".write(to: file, atomically: true, encoding: .utf8)
         let record = #"[{"id":"\#(id)","file":"\#(file.path)","version":"1.0.0","publisher":"Pub","installedAt":"2026-11-07T00:00:00Z"}]"#
@@ -56,7 +56,7 @@ final class PluginInstallationTests: XCTestCase {
         try await storage.set("k", "v", for: id)
         let secrets = MemorySecretStore(["oauth/\(id)/gh": "token", "SHARED": "s"])
         let trash = Trash()
-        let installation = PluginInstallation(installer: installer, ledger: ledger, switches: switches, storage: storage, secrets: secrets, trash: { trash.add($0) })
+        let installation = PluginInstallation(installer: installer, ledger: ledger, switches: switches, storage: storage, secrets: secrets, trash: failing ?? { trash.add($0) })
         return World(installation: installation, file: file, storage: storage, secrets: secrets, trashed: trash)
     }
 
@@ -71,6 +71,26 @@ final class PluginInstallationTests: XCTestCase {
         let saved = await world.storage.snapshot(for: id)
         XCTAssertEqual(saved, ["k": "v"], "data stays unless asked")
         XCTAssertEqual(world.secrets.secret("oauth/\(id)/gh"), "token")
+    }
+
+    func testAFailedTrashMoveKeepsTheRecordAndSaysSo() async throws {
+        let world = try await world(trash: { _ in throw CocoaError(.fileWriteNoPermission) })
+        let stuck = await world.installation.uninstall(id)
+        XCTAssertEqual(stuck.map(\.path), [world.file.standardizedFileURL.path])
+        XCTAssertEqual(world.installation.installed.map(\.id), [id], "still known as installed while its file is in the plugins folder")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: world.file.path))
+    }
+
+    func testTwoIdsThatSanitizeAlikeGetDifferentFiles() {
+        let installer = PluginInstaller(pluginsDirectory: directory.appendingPathComponent("Plugins"), publishers: PublisherStore(file: directory.appendingPathComponent("p.json")), recordFile: directory.appendingPathComponent("i.json"))
+        XCTAssertEqual(PluginBuilder.sanitizedName("dev.a-b.c"), PluginBuilder.sanitizedName("dev-a.b.c"))
+        let plain = installer.pluginsDirectory.appendingPathComponent(PluginBuilder.sanitizedName("dev.a-b.c") + ".swift")
+        let first = PluginInstaller.Installed(id: "dev.a-b.c", file: plain.path, version: "1", publisher: "P", installedAt: Date())
+        XCTAssertEqual(installer.newFile(for: "dev.a-b.c", among: []), plain)
+        let second = installer.newFile(for: "dev-a.b.c", among: [first])
+        XCTAssertNotEqual(second, plain)
+        XCTAssertEqual(second.pathExtension, "swift")
+        XCTAssertEqual(installer.newFile(for: "dev-a.b.c", among: [first]), second, "stable for the same id")
     }
 
     func testUninstallWithDataDeletesItsSignInsFromTheLedgerToo() async throws {

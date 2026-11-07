@@ -37,6 +37,11 @@ public final class ChildProcess: @unchecked Sendable {
     /// `discardStderr` sends stderr to /dev/null. `workingDirectory` nil
     /// keeps the host's.
     public init(executable: String, arguments: [String] = [], environment: [String: String]? = nil, discardStderr: Bool = false, workingDirectory: String? = nil) throws {
+        // Pipes are created and handed to the child under one lock, so a spawn
+        // on another thread cannot fork while these ends are still inheritable
+        // (macOS has no pipe2 to make that atomic).
+        Self.spawnLock.lock()
+        defer { Self.spawnLock.unlock() }
         let input = try Self.pipe()
         let output = try Self.pipe()
         let errors = try Self.pipe()
@@ -227,6 +232,8 @@ public final class ChildProcess: @unchecked Sendable {
         lock.unlock()
         timer.resume()
     }
+
+    private static let spawnLock = NSLock()
 
     private static func pipe() throws -> (read: Int32, write: Int32) {
         var fds: [Int32] = [0, 0]

@@ -12,9 +12,12 @@ import StackbarProtocol
 /// tell which plugin's request is being redirected.
 public final class HTTPService: Sendable {
     public static let maxResponseBytes = 16 * 1024 * 1024
+    /// Longest a call may take from start to last byte.
+    static let maxCallSeconds: TimeInterval = 300
 
     public let audit: NetworkAudit
     private let session: URLSession
+    private let delegate: RedirectDelegate
     private let redirectPolicy = RedirectPolicy()
 
     public init(audit: NetworkAudit, configuration: URLSessionConfiguration = .ephemeral) {
@@ -23,7 +26,12 @@ public final class HTTPService: Sendable {
         configuration.urlCache = nil
         configuration.httpAdditionalHeaders = ["User-Agent": "Stackbar"]
         let policy = redirectPolicy
-        self.session = URLSession(configuration: configuration, delegate: RedirectDelegate(policy: policy), delegateQueue: nil)
+        // The request timeout only measures silence; this bounds the whole call,
+        // so a server that trickles a byte a minute cannot hold it open for days.
+        configuration.timeoutIntervalForResource = min(configuration.timeoutIntervalForResource, Self.maxCallSeconds)
+        let delegate = RedirectDelegate(policy: policy)
+        self.delegate = delegate
+        self.session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
     }
 
     /// Performs `request` if its host is covered by `allowedHosts`.
@@ -47,16 +55,15 @@ public final class HTTPService: Sendable {
         urlRequest.setValue(taskID, forHTTPHeaderField: RedirectPolicy.header)
         defer { redirectPolicy.unregister(taskID) }
         do {
-            let (data, response) = try await session.data(for: urlRequest)
+            let (data, response) = try await delegate.fetch(urlRequest, on: session, limit: Self.maxResponseBytes)
             guard let http = response as? HTTPURLResponse else { return .failure("no HTTP response from \(host)") }
-            if data.count > Self.maxResponseBytes {
-                return .failure("response from \(host) is \(data.count) bytes; the limit is \(Self.maxResponseBytes)")
-            }
             var headers: [String: String] = [:]
             for (name, value) in http.allHeaderFields {
                 if let name = name as? String, let value = value as? String { headers[name.lowercased()] = value }
             }
             return .http(HTTPResponse(status: http.statusCode, headers: headers, body: data))
+        } catch is BodyTooLarge {
+            return .failure("response from \(host) is larger than the limit of \(Self.maxResponseBytes) bytes")
         } catch {
             if let blocked = redirectPolicy.blockedHost(taskID) {
                 audit.record(pluginID: pluginID, host: blocked, allowed: false)
@@ -112,10 +119,13 @@ final class RedirectPolicy: @unchecked Sendable {
     }
 }
 
-final class RedirectDelegate: NSObject, URLSessionTaskDelegate, Sendable {
+final class RedirectDelegate: BoundedBodyDelegate, @unchecked Sendable {
     let policy: RedirectPolicy
 
-    init(policy: RedirectPolicy) { self.policy = policy }
+    init(policy: RedirectPolicy) {
+        self.policy = policy
+        super.init()
+    }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
         // A redirect may not downgrade to plain http, which the first request

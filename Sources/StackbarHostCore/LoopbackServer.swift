@@ -53,6 +53,7 @@ public final class LoopbackServer: @unchecked Sendable {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         #endif
         guard fd >= 0 else { throw LoopbackError.socket(errno) }
+        UnixSocket.setCloseOnExec(fd)
         var reuse: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
 
@@ -101,11 +102,7 @@ public final class LoopbackServer: @unchecked Sendable {
 
     private func acceptLoop() {
         while !isStopped {
-            let client = accept(socketFD, nil, nil)
-            if client < 0 {
-                if isStopped { return }
-                continue
-            }
+            guard let client = UnixSocket.acceptClient(on: socketFD, isStopped: { isStopped }) else { continue }
             var timeout = timeval(tv_sec: 5, tv_usec: 0)
             setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
             serve(client)
@@ -144,7 +141,7 @@ public final class LoopbackServer: @unchecked Sendable {
             headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         }
         var body = Data(data[headerEnd.upperBound...])
-        let expected = min(Int(headers["content-length"] ?? "") ?? 0, 1024 * 1024)
+        let expected = min(max(Int(headers["content-length"] ?? "") ?? 0, 0), 1024 * 1024)
         while body.count < expected {
             let count = recv(client, &buffer, buffer.count, 0)
             guard count > 0 else { break }

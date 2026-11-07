@@ -305,6 +305,13 @@ final class PluginController: Identifiable {
         }
     }
 
+    /// `hasSecret` read off the main thread: a Keychain read can block (or
+    /// prompt), which would freeze a page that is only opening.
+    func hasSecretOffMain(_ secret: String) async -> Bool {
+        guard let secrets = model?.services.secrets else { return false }
+        return await Task.detached { ((try? secrets.secret(secret)) ?? nil)?.isEmpty == false }.value
+    }
+
     /// Whether a value is saved for `secret`. The Keychain is the only store
     /// the app reads (environment variables are for the CLI), so this is what
     /// plugins get.

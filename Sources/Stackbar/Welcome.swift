@@ -183,7 +183,12 @@ extension AppDelegate {
             window?.close()
             guard let self else { return }
             if !picked.isEmpty { self.model.installStarters(picked) }
-            if openAtLogin { try? SMAppService.mainApp.register() }
+            if openAtLogin {
+                do { try SMAppService.mainApp.register() } catch {
+                    // Settings says why when its toggle fails; so does this.
+                    Platform.notify(HostNotification(pluginID: "stackbar", pluginName: "Stackbar", title: "Couldn't turn on Open at Login", body: "Only an installed Stackbar.app can open at login: \(error.localizedDescription)"))
+                }
+            }
             if openPalette { self.palette.toggle() }
         }
         let host = NSHostingController(rootView: view)

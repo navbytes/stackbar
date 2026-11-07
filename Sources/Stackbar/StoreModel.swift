@@ -76,6 +76,8 @@ final class StoreModel {
         do {
             try item.catalog.index.checkInstallable(entry)
             let bundle = try await PluginIndex.bundle(for: entry, indexURL: item.catalog.source.url)
+            // Verified before the helper, which can be up to 64 MB, is fetched.
+            try bundle.verify()
             // Fetched first: on a Mac that can't build plugins, a plugin with
             // no prebuilt helper yet is not installed (or updated) at all.
             let helper = try await model.prebuiltHelper(for: bundle, indexURL: item.catalog.source.url)
@@ -108,8 +110,12 @@ final class StoreModel {
     }
 
     func uninstall(_ entry: PluginIndex.Entry, deleteData: Bool) async {
-        await model.uninstall(pluginID: entry.id, deleteData: deleteData)
-        toast = StoreToast(entry: entry, text: "Moved to the Trash" + (deleteData ? " with its data" : ""), isError: false)
+        let stuck = await model.uninstall(pluginID: entry.id, deleteData: deleteData)
+        if stuck.isEmpty {
+            toast = StoreToast(entry: entry, text: "Moved to the Trash" + (deleteData ? " with its data" : ""), isError: false)
+        } else {
+            toast = StoreToast(entry: entry, text: "Couldn't move \(entry.name) to the Trash; it is still in the plugins folder", isError: true)
+        }
     }
 
     /// Opens an installed plugin: its panel when it has one, otherwise its

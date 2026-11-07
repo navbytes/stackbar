@@ -69,14 +69,29 @@ public enum PluginStore {
     /// With `site`, also each store's `site.json` (renders and READMEs), which
     /// only the store's pages need, not the background update check.
     public static func load(_ sources: [Source], site: Bool = false) async -> (catalogs: [Catalog], problems: [String]) {
+        // All sources at once, so one slow host costs its own timeout and
+        // not the sum of everyone's. Results keep the order of `sources`.
+        let results = await withTaskGroup(of: (Int, Result<Catalog, Error>).self) { group in
+            for (position, source) in sources.enumerated() {
+                group.addTask {
+                    do {
+                        let index = try await PluginIndex.fetch(source.url, publicKey: source.publicKey)
+                        return (position, .success(Catalog(source: source, index: index, site: site ? await StoreSite.fetch(beside: source.url) : nil)))
+                    } catch {
+                        return (position, .failure(error))
+                    }
+                }
+            }
+            var collected: [(Int, Result<Catalog, Error>)] = []
+            for await result in group { collected.append(result) }
+            return collected.sorted { $0.0 < $1.0 }
+        }
         var catalogs: [Catalog] = []
         var problems: [String] = []
-        for source in sources {
-            do {
-                let index = try await PluginIndex.fetch(source.url, publicKey: source.publicKey)
-                catalogs.append(Catalog(source: source, index: index, site: site ? await StoreSite.fetch(beside: source.url) : nil))
-            } catch {
-                problems.append("\(source.url.absoluteString): \(error)")
+        for (position, result) in results {
+            switch result {
+            case .success(let catalog): catalogs.append(catalog)
+            case .failure(let error): problems.append("\(sources[position].url.absoluteString): \(error)")
             }
         }
         return (catalogs, problems)
@@ -95,7 +110,14 @@ public enum PluginStore {
     /// from the same publisher (the installer's key pin refuses others
     /// anyway), and withdrawals. Only a signed index can withdraw a plugin,
     /// so an index anyone can host can't take someone else's plugin away.
-    public static func review(_ catalogs: [Catalog], installed: [PluginInstaller.Installed], running: String = StackbarVersion.current) -> Review {
+    ///
+    /// `isPinned` says whether the installer holds a publisher key for the
+    /// plugin id. A record without one (it came in with an imported settings
+    /// file, not from an install here) is matched to entries by publisher
+    /// name alone, and the first key seen would be pinned; so it gets no
+    /// automatic update. Installing it again from the Store, which the user
+    /// does knowingly, pins it.
+    public static func review(_ catalogs: [Catalog], installed: [PluginInstaller.Installed], running: String = StackbarVersion.current, isPinned: (String) -> Bool = { _ in true }) -> Review {
         var review = Review()
         for record in installed {
             if let withdrawal = catalogs.lazy.compactMap({ catalog -> PluginIndex.Revocation? in
@@ -105,6 +127,7 @@ public enum PluginStore {
                 review.withdrawn.append(Withdrawn(installed: record, reason: withdrawal.reason))
                 continue
             }
+            guard isPinned(record.id) else { continue }
             var best: Update?
             for catalog in catalogs {
                 let offered = PluginIndex(name: catalog.index.name, plugins: catalog.index.plugins.filter { $0.publisher == record.publisher }, revoked: catalog.index.revoked)

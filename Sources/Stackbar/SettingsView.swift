@@ -698,7 +698,7 @@ struct SecretRow: View {
                 }
             }
         }
-        .onAppear { isSaved = controller.hasSecret(name) }
+        .task { isSaved = await controller.hasSecretOffMain(name) }
         .confirmationDialog("Clear \(name)?", isPresented: $confirmingClear) {
             Button("Clear", role: .destructive) {
                 controller.clearSecret(name)

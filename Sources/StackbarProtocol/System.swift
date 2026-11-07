@@ -77,7 +77,17 @@ public struct PasteOptions: Codable, Equatable, Sendable {
 
     public init(restoreClipboard: Bool = false, cursorFromEnd: Int = 0) {
         self.restoreClipboard = restoreClipboard
-        self.cursorFromEnd = max(0, cursorFromEnd)
+        self.cursorFromEnd = min(max(0, cursorFromEnd), Self.maxCursorFromEnd)
+    }
+
+    /// A plugin's JSON never skips the clamp: a negative or huge count from the
+    /// wire lands inside `0...maxCursorFromEnd`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            restoreClipboard: try container.decode(Bool.self, forKey: .restoreClipboard),
+            cursorFromEnd: try container.decode(Int.self, forKey: .cursorFromEnd)
+        )
     }
 
     /// At most this many ← presses.
