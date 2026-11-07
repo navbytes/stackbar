@@ -87,11 +87,12 @@ final class WindowsTests: XCTestCase {
 
         let tooMany = Array(repeating: WindowPlacement(appID: "x", frame: WindowRect(x: 0, y: 0, width: 1, height: 1)), count: WindowPlacement.maxPerCall + 1)
         guard case .failure = await services.handle(.arrangeWindows(tooMany, launch: false), for: granted) else { return XCTFail("placements are capped") }
-        for _ in 0..<10 {
+        // A day of snapping: one move per keypress.
+        for _ in 0..<120 {
             guard case .value = await services.handle(.arrangeWindows(WindowPlacement.capture(snapshot), launch: false), for: granted) else { return XCTFail("arrange failed") }
         }
         guard case .failure(let limited) = await services.handle(.arrangeWindows([], launch: false), for: granted) else { return XCTFail("arranging is rate limited") }
-        XCTAssertTrue(limited.contains("10 a minute"), limited)
+        XCTAssertTrue(limited.contains("120 a minute"), limited)
         XCTAssertEqual(Capability.windows.summary, "Sees which windows you have open and where, moves them, and opens apps")
     }
 }

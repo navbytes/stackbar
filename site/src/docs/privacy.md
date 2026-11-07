@@ -2,7 +2,7 @@
 title: Privacy and safety
 description: What Stackbar and its plugins can reach, what it sends, and how to report a problem.
 group: Use Stackbar
-order: 5
+order: 6
 ---
 
 Stackbar has no account and no analytics.

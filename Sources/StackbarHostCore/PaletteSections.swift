@@ -287,7 +287,9 @@ public extension StoreListing {
 public enum FileSearchFilter {
     /// Nothing anyone means to open from a launcher: apps (Applications
     /// lists them), anything inside a bundle, hidden files and folders,
-    /// Library internals and node_modules.
+    /// Library internals and node_modules. Two folders in Library hold the
+    /// user's own files and are kept: `Mobile Documents` (iCloud Drive) and
+    /// `CloudStorage` (Dropbox, OneDrive, Google Drive, Box).
     public static func keeps(_ path: String) -> Bool {
         let url = URL(fileURLWithPath: path)
         let components = url.pathComponents
@@ -296,11 +298,14 @@ public enum FileSearchFilter {
         for (index, component) in components.enumerated() {
             if component.hasPrefix("."), index > 0 { return false }
             if index < components.count - 1, bundles.contains((component as NSString).pathExtension.lowercased()) { return false }
-            if component == "Library", index < components.count - 1 { return false }
+            if component == "Library", index < components.count - 1, !userFolders.contains(components[index + 1]) { return false }
             if component == "node_modules" { return false }
         }
         return true
     }
+
+    /// The folders inside Library that hold the user's own files.
+    static let userFolders: Set<String> = ["Mobile Documents", "CloudStorage"]
 
     /// The file found at `path`, its folder written from `~`.
     public static func found(path: String, home: String, isFolder: Bool = false, lastUsed: Date? = nil) -> FoundFile? {
@@ -324,9 +329,21 @@ public enum FileSearchFilter {
         }.joined(separator: " && ")
     }
 
-    /// `/Users/n/Documents/x` → `~/Documents/x`.
+    /// `/Users/n/Documents/x` → `~/Documents/x`; iCloud Drive and cloud
+    /// storage folders by the name Finder gives them (`iCloud Drive/x`,
+    /// `Dropbox/x`).
     public static func abbreviate(_ path: String, home: String) -> String {
         guard !home.isEmpty else { return path }
+        let iCloud = home + "/Library/Mobile Documents/com~apple~CloudDocs"
+        if path == iCloud || path.hasPrefix(iCloud + "/") { return "iCloud Drive" + path.dropFirst(iCloud.count) }
+        let cloud = home + "/Library/CloudStorage/"
+        if path.hasPrefix(cloud) {
+            // `Dropbox`, or `GoogleDrive-name@example.com` → `GoogleDrive`.
+            let rest = path.dropFirst(cloud.count)
+            let folder = rest.prefix { $0 != "/" }
+            let name = folder.split(separator: "-", maxSplits: 1).first.map(String.init) ?? String(folder)
+            return name + rest.dropFirst(folder.count)
+        }
         if path == home { return "~" }
         let prefix = home.hasSuffix("/") ? home : home + "/"
         return path.hasPrefix(prefix) ? "~/" + path.dropFirst(prefix.count) : path

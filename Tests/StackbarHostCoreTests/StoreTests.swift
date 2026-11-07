@@ -321,6 +321,22 @@ final class BundledStoreTests: XCTestCase {
         XCTAssertEqual(store.installMissing(), [], "running it again changes nothing")
     }
 
+    func testCorePluginsAreApprovedAsTheyAreInstalled() throws {
+        let key = try Signing.generateKey()
+        let core = Manifest(id: "io.navbytes.stackbar.plugins.applications", name: "Applications", version: "1.0.0", capabilities: [.apps])
+        let other = Manifest(id: "io.navbytes.stackbar.clipboard", name: "Clipboard", version: "1.0.0", capabilities: [.clipboard])
+        for manifest in [core, other] {
+            let bundle = try Signing.bundle(source: "// \(manifest.id)", manifest: manifest, publisherName: "navbytes", privateKey: key.privateKey)
+            try bundle.encoded().write(to: root.appendingPathComponent("Bundles/\(manifest.id).stackbarplugin"))
+        }
+        let (store, _) = store(publicKey: key.publicKey.base64EncodedString())
+        let ledger = CapabilityLedger(file: root.appendingPathComponent("ledger.json"))
+        XCTAssertEqual(store.installCore(offered: root.appendingPathComponent("core-plugins.json"), approvingIn: ledger).count, 1)
+        guard case .approved(let granted) = ledger.review(core) else { return XCTFail("a core plugin answers on the first search") }
+        XCTAssertEqual(granted, [.apps])
+        XCTAssertNil(ledger.approval(for: other.id), "only core plugins skip the approval")
+    }
+
     func testCarriedBundlesAreCheckedOnceButNoticeAChangedFolder() throws {
         let key = try Signing.generateKey()
         func sign(_ id: String) throws {

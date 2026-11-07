@@ -130,6 +130,20 @@ final class PaletteSectionsTests: XCTestCase {
         XCTAssertEqual(FileSearchFilter.abbreviate("/Volumes/Data/plan", home: home), "/Volumes/Data/plan")
     }
 
+    func testFoundFilesKeepICloudDriveAndCloudStorage() {
+        let home = "/Users/n"
+        let iCloud = FileSearchFilter.found(path: "/Users/n/Library/Mobile Documents/com~apple~CloudDocs/Taxes/2026.pdf", home: home)
+        XCTAssertEqual(iCloud?.folder, "iCloud Drive/Taxes")
+        XCTAssertEqual(FileSearchFilter.found(path: "/Users/n/Library/Mobile Documents/com~apple~CloudDocs/plan.key", home: home)?.folder, "iCloud Drive")
+        XCTAssertNotNil(FileSearchFilter.found(path: "/Users/n/Library/Mobile Documents/iCloud~md~obsidian/Documents/Notes/a.md", home: home))
+        XCTAssertEqual(FileSearchFilter.found(path: "/Users/n/Library/CloudStorage/Dropbox/Work/plan.pdf", home: home)?.folder, "Dropbox/Work")
+        XCTAssertEqual(FileSearchFilter.found(path: "/Users/n/Library/CloudStorage/GoogleDrive-n@example.com/My Drive/a.doc", home: home)?.folder,
+                       "GoogleDrive/My Drive")
+        // Still hidden: the rest of Library, and dot folders inside the kept ones.
+        XCTAssertNil(FileSearchFilter.found(path: "/Users/n/Library/Containers/x/plan.pdf", home: home))
+        XCTAssertNil(FileSearchFilter.found(path: "/Users/n/Library/CloudStorage/Dropbox/.dropbox.cache/plan.pdf", home: home))
+    }
+
     func testPluginRowsFollowResultsAndFallbacksComeLast() {
         let clipboard = PaletteSection(title: "Clipboard History", entries: [action("clip")])
         let store = [PaletteIndex.Entry(pluginID: "s", pluginName: "Store", title: "Hello", kind: .open("stackbar://store/s"))]

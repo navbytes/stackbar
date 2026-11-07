@@ -382,7 +382,7 @@ many app switches; at most 120 a minute".
 | `saveCalendarEvent` | 30 a minute |
 | `openInTerminal` | 5 a minute |
 | `recognizeText`, `captureScreenText` | 30 a minute |
-| `arrangeWindows` | 10 a minute |
+| `arrangeWindows` | 120 a minute |
 | every host call together | 1200 a minute |
 
 A host call that gets no answer fails instead of waiting for good: after two

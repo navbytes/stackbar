@@ -14,7 +14,11 @@ extension MacSystem {
     func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult {
         guard await MainActor.run(body: { MacWindows.isTrusted() }) else { throw MacWindows.untrusted }
         let opened = launch ? await MacWindows.launchMissing(placements) : []
-        let scene = await MainActor.run { MacWindows.Scene.current() }
+        // Only the apps being placed are read: matching is per app, and a
+        // one-window snap shouldn't ask every running app for its windows.
+        let wanted = Set(placements.map(\.appID))
+        var scene = await MainActor.run { MacWindows.Scene.current() }
+        scene.apps = scene.apps.filter { wanted.contains($0.bundleID) }
         let (arranged, front) = await AXWorker.run { MacWindows.arrange(placements, in: scene) }
         if let front { await MainActor.run { MacWindows.activate(front) } }
         var result = arranged

@@ -3,6 +3,21 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Safari shows up in Applications search.** Safari and a few other Apple apps live in a part of the system the app scan didn't look in; /Applications only holds a link to them. Any browser macOS knows about is now listed too.
+- **The palette finds apps, files and sums on a new Mac's first search.** Applications, Calculator and File Search come with Stackbar and are now approved as they are installed, instead of waiting for an approval in Settings that most people never found. Their page in Settings still lists what they can do.
+- **File Search finds iCloud Drive, Dropbox, OneDrive and Google Drive files.** They live in your Library folder, which File Search skipped. Their folders read as "iCloud Drive/…" and "Dropbox/…".
+- **Window snaps no longer run out.** A plugin could move windows only 10 times a minute, so a busy morning of ⌃⌥← and ⌃⌥→ stopped working. It is now 120 a minute, and a snap reads only the windows of the app it moves.
+
+### Added
+- **Hotkeys can use the arrows, Return, Tab, Escape, Delete and punctuation keys**, so a Rectangle-style keymap such as ⌃⌥← for the left half works. ⌘Tab stays the app switcher's. For plugin authors: manifest hotkeys accept these keys from 0.32.0.
+- **New docs:** a [Permissions](https://stackbar.app/docs/permissions/) page listing what macOS asks for and why, a Hyper key section (Karabiner-Elements works with every Stackbar hotkey), and "Coming from Spotlight" in Getting started.
+
+### Changed
+- **Agent tools are off on a new Mac** until you turn them on in Settings › Agents. A Mac that already ran Stackbar keeps its setting.
+
 ## 0.31.0
 
 ### Fixed

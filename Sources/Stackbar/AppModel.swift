@@ -83,7 +83,13 @@ final class AppModel {
     init() {
         indexURLs = UserDefaults.standard.stringArray(forKey: "indexURLs") ?? []
         autoUpdatePlugins = UserDefaults.standard.object(forKey: "autoUpdatePlugins") as? Bool ?? true
-        agentGatewayEnabled = UserDefaults.standard.object(forKey: "agentGateway") as? Bool ?? true
+        // Off for a new Mac until the user turns it on in Settings › Agents;
+        // a Mac that already ran Stackbar keeps the gateway it had (it was on
+        // by default before 0.32.0).
+        if UserDefaults.standard.object(forKey: "agentGateway") == nil {
+            UserDefaults.standard.set(UserDefaults.standard.bool(forKey: WelcomeView.seenKey), forKey: "agentGateway")
+        }
+        agentGatewayEnabled = UserDefaults.standard.bool(forKey: "agentGateway")
         let secretRouter = SecretRouter()
         let ledger = CapabilityLedger(file: StackbarPaths.ledgerFile)
         self.ledger = ledger
@@ -137,7 +143,7 @@ final class AppModel {
         refreshInstalled()
         bundledStore.syncExamples()
         // Apps, sums and files in the palette come from plugins.
-        if !bundledStore.installCore(offered: StackbarPaths.dataDirectory.appendingPathComponent("core-plugins.json")).isEmpty {
+        if !bundledStore.installCore(offered: StackbarPaths.dataDirectory.appendingPathComponent("core-plugins.json"), approvingIn: ledger).isEmpty {
             refreshInstalled()
         }
         commands.start()

@@ -205,9 +205,14 @@ struct HotKeyRecorder: View {
         if flags.contains(.option) { parts.append("option") }
         if flags.contains(.shift) { parts.append("shift") }
         if flags.contains(.command) { parts.append("cmd") }
+        let named: [Int: String] = [
+            kVK_Space: "space", kVK_Return: "return", kVK_ANSI_KeypadEnter: "return", kVK_Tab: "tab", kVK_Escape: "escape",
+            kVK_Delete: "delete", kVK_ForwardDelete: "forwarddelete",
+            kVK_UpArrow: "up", kVK_DownArrow: "down", kVK_LeftArrow: "left", kVK_RightArrow: "right",
+        ]
         let key: String?
-        if event.keyCode == UInt16(kVK_Space) {
-            key = "space"
+        if let name = named[Int(event.keyCode)] {
+            key = name
         } else if let index = [kVK_F1, kVK_F2, kVK_F3, kVK_F4, kVK_F5, kVK_F6, kVK_F7, kVK_F8, kVK_F9, kVK_F10, kVK_F11, kVK_F12].firstIndex(of: Int(event.keyCode)) {
             key = "f\(index + 1)"
         } else {

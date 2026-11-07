@@ -132,7 +132,7 @@ public struct RateBudget: Equatable, Sendable {
             case .calendarWrites: return 30
             case .terminals: return 5
             case .textReads: return 30
-            case .windowArrangements: return 10
+            case .windowArrangements: return 120
             }
         }
 

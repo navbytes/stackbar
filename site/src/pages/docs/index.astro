@@ -8,7 +8,7 @@ import { breadcrumbs } from '../../lib/seo';
 const docs = (await getCollection('docs')).sort((a, b) => a.data.order - b.data.order);
 const glyphs: Record<string, string> = {
   'getting-started': 'download', palette: 'palette', plugins: 'widget', 'updates-and-moving': 'arrows',
-  privacy: 'shield', 'first-plugin': 'swift', authoring: 'book', agents: 'agent',
+  permissions: 'shield', privacy: 'shield', 'first-plugin': 'swift', authoring: 'book', agents: 'agent',
 };
 const groups = [
   { group: 'Use Stackbar', text: 'Install it, make the palette yours and pick your plugins.' },

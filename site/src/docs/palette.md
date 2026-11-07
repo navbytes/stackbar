@@ -54,3 +54,18 @@ command, press ⌘K on it and choose **Disable Command**.
 
 Plugin commands also show in Spotlight's results, and Shortcuts has a **Run
 Stackbar Command** action that takes any of them.
+
+## A Hyper key
+
+Many Raycast and Hammerspoon users turn Caps Lock into a Hyper key that
+presses ⌃⌥⇧⌘ at once, so every shortcut on it is free. Stackbar doesn't remap
+Caps Lock itself, but its hotkeys take all four modifiers, so a Hyper key
+from [Karabiner-Elements](https://karabiner-elements.pqrs.org) works with
+every command hotkey and the palette's own. In Karabiner, add the
+"Change caps_lock to command+control+option+shift" rule from its complex
+modifications, then press Caps Lock with a key in Settings › Commands when
+you record a hotkey.
+
+Hotkeys can use letters, digits, punctuation (`-`, `.`, `/` and the rest of a
+US keyboard's), space, F1 to F12, the arrows, Return, Tab, Escape and Delete.
+That covers a Rectangle-style window keymap such as ⌃⌥← and ⌃⌥→ for halves.

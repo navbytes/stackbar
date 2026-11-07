@@ -35,8 +35,22 @@ The Welcome window asks two things:
   System Settings. Until then, ⌃⌥Space keeps working.
 - **Crash reports.** Off unless you turn them on. See [Privacy](/docs/privacy/).
 
-Applications, Calculator and File Search are already installed, so the
-palette finds apps, files and sums straight away.
+Applications, Calculator and File Search are already installed and
+approved, so the palette finds apps, files and sums straight away. Other
+features ask macOS for a permission the first time you use them;
+[Permissions](/docs/permissions/) lists which and why.
+
+## Coming from Spotlight
+
+If Stackbar takes ⌘Space, Spotlight is still there: give it another shortcut
+instead of turning it off, such as ⌥⌘Space (System Settings › Keyboard ›
+Keyboard Shortcuts › Spotlight). That keeps what only Spotlight does: Mail,
+Messages and Notes content, live answers like flights and sports, and its
+⌘3 Actions and ⌘4 Clipboard views.
+
+What carries over without setup: apps, files (including iCloud Drive and
+Dropbox), sums and unit conversions. Clipboard History (⌘⇧V), Snippets and
+Windows are in the Store and do more than Spotlight's versions.
 
 ## Where things are
 

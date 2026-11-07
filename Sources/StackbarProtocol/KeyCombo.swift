@@ -113,15 +113,25 @@ public struct KeyCombo: Hashable, Sendable {
     }
 
     /// Whether it can be a system-wide hotkey: ⌘, ⌃ or ⌥ with a letter,
-    /// digit, space or F1 to F12.
+    /// digit, punctuation key on a US layout (`-=[];',./\``), space, F1 to
+    /// F12, an arrow, Return, Tab, Escape or Delete (Stackbar 0.32.0; before
+    /// that only letters, digits, space and F keys). ⌘Tab and ⌘⇧Tab stay
+    /// the app switcher's.
     public var isHotKey: Bool {
         guard !modifiers.isDisjoint(with: [.command, .control, .option]) else { return false }
         switch key {
-        case .character(let character): return character.isASCII && (character.isLetter || character.isNumber)
-        case .space, .function: return true
-        default: return false
+        case .character(let character):
+            return character.isASCII && (character.isLetter || character.isNumber || Self.hotKeyPunctuation.contains(character))
+        case .tab:
+            return !(modifiers.subtracting([.shift]) == [.command])
+        case .space, .function, .return, .escape, .delete, .forwardDelete, .up, .down, .left, .right:
+            return true
         }
     }
+
+    /// The punctuation keys a hotkey can use, unshifted, as a US keyboard
+    /// labels them.
+    public static let hotKeyPunctuation: Set<Character> = ["-", "=", "[", "]", ";", "'", ",", ".", "/", "\\", "`"]
 
     private static let modifierNames: [String: Modifier] = [
         "cmd": .command, "command": .command, "ctrl": .control, "control": .control,
