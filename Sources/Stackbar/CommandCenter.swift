@@ -33,9 +33,6 @@ final class CommandCenter {
     /// How quickly each root search answers; a slow one sits out a while.
     @ObservationIgnored let rootBudget = RootSearchBudget()
 
-    /// The palette's own shortcut, which no command may take.
-    static let paletteHotKey = "ctrl+option+space"
-
     init(model: AppModel, services: HostServices) {
         let directory = StackbarPaths.dataDirectory
         registry = CommandRegistry(file: directory.appendingPathComponent("commands.json"))
@@ -82,7 +79,12 @@ final class CommandCenter {
 
     /// Saves one command's preference, checking its alias and hotkey.
     func set(_ preference: CommandPreference, for key: CommandKey) throws {
-        var others = [Self.paletteHotKey: "the command palette"]
+        // The shortcut the user chose for the palette (and ⌃⌥Space beside it
+        // while Spotlight holds ⌘Space), which no command may take.
+        var others: [String: String] = [:]
+        for spec in PaletteHotKey.registered(PaletteController.chosenHotKey, spotlightHoldsCommandSpace: PaletteController.spotlightHoldsCommandSpace) {
+            others[spec] = "the command palette"
+        }
         for controller in model?.controllers ?? [] {
             if let hotkey = controller.manifest?.hotkey { others[hotkey] = controller.name }
         }
@@ -126,7 +128,7 @@ final class CommandCenter {
         hotKeyProblems = hotKeyProblems.filter { wanted[$0.key] != nil }
         for (key, spec) in wanted where hotKeys[key] == nil {
             guard let parsed = HotKeySpec(spec), let hotKey = HotKey(spec: parsed, action: { [weak self] in self?.hotKeyPressed(key) }) else {
-                hotKeyProblems[key] = "\(spec) can't be used as a shortcut"
+                hotKeyProblems[key] = "\(spec) can't be used as a shortcut: macOS or another app may already use it"
                 continue
             }
             hotKeys[key] = (spec, hotKey)
@@ -291,8 +293,10 @@ final class CommandCenter {
     func lookup(_ pluginID: String) -> Lookup {
         guard let model else { return .missing }
         guard let controller = model.controller(for: pluginID) else {
-            // At launch, plugins are found by file and only then by id.
-            return model.controllers.contains(where: \.building) ? .starting : .missing
+            // At launch, plugins are found by file and only then by id. Only a
+            // plugin still building for the first time can turn out to be this
+            // one; one that is rebuilding already has its id, which isn't it.
+            return model.controllers.contains { $0.building && $0.manifest == nil } ? .starting : .missing
         }
         if controller.isWaitingForApproval {
             return .ready(.unavailable("\(controller.name) is waiting for you to approve what it asks for. Open its page in Settings."))
