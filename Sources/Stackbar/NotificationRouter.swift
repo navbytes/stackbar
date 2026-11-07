@@ -61,7 +61,7 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
             AppDelegate.shared?.runNotificationCommand(pluginID: pluginID, command: commands[index], arguments: arguments.indices.contains(index) ? arguments[index] : [:])
         } else if action.hasPrefix("action-"), let index = Int(action.dropFirst("action-".count)), urls.indices.contains(index) {
             guard let url = URL(string: urls[index]), let scheme = url.scheme?.lowercased(), HostServices.openableSchemes.contains(scheme) else { return }
-            NSWorkspace.shared.open(url)
+            AppDelegate.shared?.route(url)
         } else if action == UNNotificationDefaultActionIdentifier, let pluginID {
             AppDelegate.shared?.showPanel(pluginID: pluginID)
         }

@@ -92,7 +92,11 @@ final class AppModel {
                 alert: { note in Task { @MainActor in AlertPresenter.shared.show(note) } },
                 playSound: { sound in Task { @MainActor in NSSound(named: NSSound.Name(sound.rawValue))?.play() } },
                 hud: { message, isError in Task { @MainActor in HUD.shared.show(message, isError: isError) } },
-                open: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },
+                open: { url in
+                    Task { @MainActor in
+                        if let app = AppDelegate.shared { app.route(url) } else { NSWorkspace.shared.open(url) }
+                    }
+                },
                 openWith: { url, bundleID in try await Platform.open(url, with: bundleID) },
                 copy: { text in Task { @MainActor in Platform.copy(text) } },
                 secretMissing: { pluginID, name in secretRouter.route(pluginID, name) },
