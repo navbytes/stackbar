@@ -80,7 +80,7 @@ struct AlertView: View {
 
     private func open(_ action: NotificationAction) {
         guard let url = URL(string: action.url), let scheme = url.scheme?.lowercased(), HostServices.openableSchemes.contains(scheme) else { return }
-        NSWorkspace.shared.open(url)
+        AppDelegate.shared?.route(url)
     }
 }
 #endif

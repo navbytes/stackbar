@@ -320,28 +320,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Links
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls { openLink(url) }
+        for url in urls { route(url) }
+    }
+
+    /// Opens any link, wherever it came from: macOS, the palette, a
+    /// plugin's `open`, a notification or alert button. Stackbar's own links
+    /// are handled here, by this copy of the app; others go to their app.
+    ///
+    /// `stackbar://store/<plugin>` opens the plugin's page in the Store
+    /// window; installing still takes the user's click there.
+    func route(_ url: URL) {
+        switch StackbarLink(url) {
+        case .storePage(let link):
+            model.storeFocus = link.pluginID
+            showStore()
+        case .place(let link):
+            open(link)
+        case .command(let link):
+            run(link)
+        case .unknown:
+            HUD.shared.show("Stackbar doesn't know the link \(url.absoluteString)", isError: true)
+        case .external:
+            NSWorkspace.shared.open(url)
+        }
     }
 
     /// `stackbar://commands/<plugin>/<command>?name=value`. A view opens in
     /// the palette, where the user sees it before anything happens. A run
     /// command runs only once the user allowed links to run it.
-    /// `stackbar://store/<plugin>` opens the plugin's page in the Store
-    /// window; installing still takes the user's click there.
-    private func openLink(_ url: URL) {
-        if let link = StoreLink(url) {
-            model.storeFocus = link.pluginID
-            showStore()
-            return
-        }
-        if let link = AppLink(url) {
-            open(link)
-            return
-        }
-        guard let link = CommandLink(url.absoluteString) else {
-            HUD.shared.show("Stackbar doesn't know the link \(url.absoluteString)", isError: true)
-            return
-        }
+    private func run(_ link: CommandLink) {
         guard let entry = model.commands.registry.entry(link.key) else {
             HUD.shared.show("\(link.key) is not an installed command", isError: true)
             return

@@ -12,3 +12,4 @@ Order agreed with Naveen 2026-11-07: 1, 2, 3, then explore 4 and 5. One PR each.
 - [x] 4.2 Build it: `CommandView` in HostCore; `CommandViewModel` and `PluginSession` drive it
 - [x] 5.1 Explore rate budgets declared on `HostCall`; report to Naveen
 - [x] 5.2 Build it (Naveen 2026-11-07: 5 then 4): `HostCall.budget`, one check in `HostServices`, the guide's limits table made from the pools
+- [x] 6.1 Build the link router (Naveen 2026-11-07): `StackbarLink` in HostCore; one `AppDelegate.route` for macOS, the palette, plugins' `open`, notification and alert buttons

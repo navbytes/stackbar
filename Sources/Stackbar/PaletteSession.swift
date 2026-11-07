@@ -338,23 +338,11 @@ final class PaletteSession {
             finish()
         case .open(let url):
             guard let url = URL(string: url) else { return }
-            // A Store suggestion goes to this app's own Store window: through
-            // Launch Services it could open another Stackbar copy (a dev
-            // build). Not counted as a use: it isn't a palette entry.
-            if let link = StoreLink(url) {
-                finish()
-                model.storeFocus = link.pluginID
-                AppDelegate.shared?.showStore()
-                return
-            }
-            // Stackbar's own places (Settings, the Store) open here too.
-            if let link = AppLink(url) {
-                finish()
-                AppDelegate.shared?.open(link)
-                return
-            }
-            NSWorkspace.shared.open(url)
+            // Stackbar's own links (a Store suggestion, Settings, a command)
+            // open in this copy of the app; through Launch Services they
+            // could reach another one (a dev build).
             finish()
+            AppDelegate.shared?.route(url)
         case .showPanel:
             finish()
             AppDelegate.shared?.showPanel(pluginID: entry.pluginID)

@@ -491,7 +491,7 @@ public final class HostServices: Sendable {
         }
         // Stackbar's own Settings and Store pages only show something; a
         // command link (`stackbar://commands/...`) still needs the scheme.
-        if scheme == "stackbar", AppLink(url) != nil || StoreLink(url) != nil {
+        if StackbarLink(url).isPage {
             return .success(url)
         }
         guard openableSchemes.contains(scheme) || anything || extra.contains(scheme) else {

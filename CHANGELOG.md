@@ -6,6 +6,7 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Fixed
+- **Stackbar links open in Stackbar.** A `stackbar://` link from the palette or a plugin is now handled by the running app directly. Before, it went out through macOS, which could hand it to another copy of Stackbar, such as an old build. Command links still ask before running a command, as before.
 - For plugin authors: `stackbarctl render --event` and the authoring MCP tools now treat a command view the way the palette does. They say when a submitted form finished (where the palette closes), reopen the view with what was typed after a plugin restarts, and say when the plugin stopped instead of waiting.
 - For plugin authors: the authoring guide (`stackbarctl docs`, llms.txt) now lists every rate limit a plugin can run into, including the ones calls share: switching, hiding and focusing apps and pressing menu items share 120 a minute.
 - **Removing a plugin removes all of it, from anywhere.** Removing a plugin from the Store window, or when its publisher withdraws it, now also clears what you approved it to do, as removing it in Settings already did. Install it again and Stackbar asks again. Deleting its data from the Store window now signs it out too.
