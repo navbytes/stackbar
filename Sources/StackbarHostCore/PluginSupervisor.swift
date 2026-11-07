@@ -74,13 +74,18 @@ public actor PluginSupervisor {
     private var stopping = false
     private var consumer: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
-    private var watcher: Task<Void, Never>?
-    private var clipboardWatcher: Task<Void, Never>?
+    private var watcher: PathWatch?
+    private var clipboardWatcher: UUID?
     private var pendingRestart: Task<Void, Never>?
     private var nextToolCall = 1
     private var toolCalls: [Int: CheckedContinuation<(text: String, isError: Bool), Never>] = [:]
     private var nextCommandCall = 1
     private var commandCalls: [Int: CheckedContinuation<CommandResult, Never>] = [:]
+    /// Each waiting tool or command call's timeout, cancelled when it ends.
+    private var toolTimeouts: [Int: Task<Void, Never>] = [:]
+    private var commandTimeouts: [Int: Task<Void, Never>] = [:]
+    /// Timeouts still running (for tests).
+    var openCallTimeouts: Int { toolTimeouts.count + commandTimeouts.count }
 
     public init(executable: URL, manifest: Manifest, grantedCapabilities: [Capability]? = nil, policy: BackoffPolicy = .standard, environment: [String: String]? = nil, services: HostServices? = nil, onUpdate: @escaping @Sendable (Update) -> Void = { _ in }) {
         self.executable = executable
@@ -111,11 +116,12 @@ public actor PluginSupervisor {
         stopping = true
         pendingRestart?.cancel()
         ticker?.cancel()
-        watcher?.cancel()
-        clipboardWatcher?.cancel()
+        watcher?.stop()
+        stopClipboardWatcher()
         process?.terminate()
         process = nil
         services?.release(pluginID: manifest.id)
+        services?.storage.flush(manifest.id)
         failToolCalls("the plugin stopped")
         failCommandCalls("\(manifest.name) stopped")
         await services?.bus.unsubscribe(manifest.id)
@@ -187,8 +193,9 @@ public actor PluginSupervisor {
         let id = nextToolCall
         nextToolCall += 1
         let currentGeneration = generation
-        Task { [weak self] in
+        toolTimeouts[id] = Task { [weak self] in
             try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled else { return }
             await self?.finishToolCall(id, text: "\(name) timed out after \(Int(timeout))s", isError: true, generation: currentGeneration)
         }
         return await withCheckedContinuation { continuation in
@@ -206,8 +213,9 @@ public actor PluginSupervisor {
         nextCommandCall += 1
         let currentGeneration = generation
         let context = granted.capabilities.contains(.context) ? context : nil
-        Task { [weak self] in
+        commandTimeouts[id] = Task { [weak self] in
             try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled else { return }
             await self?.finishCommandCall(id, .failure("\(command) did not answer within \(Int(timeout)) seconds"), generation: currentGeneration)
         }
         return await withCheckedContinuation { continuation in
@@ -245,6 +253,11 @@ public actor PluginSupervisor {
         setState(.starting)
         let storage = await services?.storage.snapshot(for: manifest.id) ?? [:]
         guard current == generation, !stopping else { return }
+        let storedBytes = storage.reduce(0) { $0 + $1.key.utf8.count + $1.value.utf8.count }
+        if storedBytes > LineBuffer.defaultMaxLineBytes * 3 / 4 {
+            // Older StackbarKit drops a line over 8 MB, and hello carries every saved value.
+            onUpdate(.log(.warning, "saved values are \(storedBytes / 1024 / 1024) MB; a plugin built with an older StackbarKit can't read a start message that large and won't start until it is rebuilt"))
+        }
         let helper = PluginProcess(executable: executable, environment: environment)
         let (events, continuation) = AsyncStream.makeStream(of: PluginProcess.Event.self)
         do {
@@ -294,43 +307,38 @@ public actor PluginSupervisor {
         }
     }
 
-    /// Polls the manifest's watched files every two seconds. Polling is dumb
-    /// but works the same on every platform and inside the sandbox.
+    /// Watches the manifest's watched files (and a folder's direct
+    /// children) through `PathWatch`: a two-second poll, with the stat
+    /// calls on the watch's queue rather than on this actor.
     private func startWatcher() {
-        watcher?.cancel()
+        watcher?.stop()
+        watcher = nil
         let paths = manifest.watchedFiles.map { NSString(string: $0).expandingTildeInPath }
         guard !paths.isEmpty else { return }
-        watcher = Task { [weak self] in
-            var last = FileStamp.stamps(paths)
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled else { return }
-                let now = FileStamp.stamps(paths)
-                if now != last {
-                    last = now
-                    await self?.sendCoalesced(.file)
-                }
-            }
+        let last = FileStamp.Box(FileStamp.stamps(paths))
+        let watcher = PathWatch(pollEvery: 2, paths: { last.paths }, onTick: { [weak self] in
+            guard last.update(FileStamp.stamps(paths)) else { return }
+            Task { await self?.sendCoalesced(.file) }
+        })
+        self.watcher = watcher
+        watcher.start()
+    }
+
+    /// Listens to the shared clipboard poll (`HostServices.clipboard`) for a
+    /// plugin with a `.clipboard` trigger; `clipboardChanged` checks the
+    /// approved `.clipboard` capability.
+    private func startClipboardWatcher() {
+        stopClipboardWatcher()
+        guard manifest.triggers.contains(.clipboard), let services else { return }
+        clipboardWatcher = services.clipboard.add { [weak self] in
+            Task { await self?.clipboardChanged() }
         }
     }
 
-    /// Polls the clipboard's change count twice a second for a plugin with a
-    /// `.clipboard` trigger and the approved `.clipboard` capability. The
-    /// count is one integer, so polling costs next to nothing.
-    private func startClipboardWatcher() {
-        clipboardWatcher?.cancel()
-        guard manifest.triggers.contains(.clipboard), let system = services?.platform.system else { return }
-        clipboardWatcher = Task { [weak self] in
-            var last = system.clipboardChangeCount()
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
-                guard !Task.isCancelled else { return }
-                let now = system.clipboardChangeCount()
-                guard now != last else { continue }
-                last = now
-                await self?.clipboardChanged()
-            }
-        }
+    private func stopClipboardWatcher() {
+        guard let clipboardWatcher else { return }
+        services?.clipboard.remove(clipboardWatcher)
+        self.clipboardWatcher = nil
     }
 
     private func clipboardChanged() {
@@ -433,31 +441,37 @@ public actor PluginSupervisor {
 
     private func finishToolCall(_ id: Int, text: String, isError: Bool, generation callGeneration: Int) {
         guard callGeneration == generation, let continuation = toolCalls.removeValue(forKey: id) else { return }
+        toolTimeouts.removeValue(forKey: id)?.cancel()
         continuation.resume(returning: (text, isError))
     }
 
     private func finishCommandCall(_ id: Int, _ result: CommandResult, generation callGeneration: Int) {
         guard callGeneration == generation, let continuation = commandCalls.removeValue(forKey: id) else { return }
+        commandTimeouts.removeValue(forKey: id)?.cancel()
         continuation.resume(returning: result)
     }
 
     private func failCommandCalls(_ reason: String) {
         let calls = commandCalls
         commandCalls = [:]
+        for timeout in commandTimeouts.values { timeout.cancel() }
+        commandTimeouts = [:]
         for continuation in calls.values { continuation.resume(returning: .failure(reason)) }
     }
 
     private func failToolCalls(_ reason: String) {
         let calls = toolCalls
         toolCalls = [:]
+        for timeout in toolTimeouts.values { timeout.cancel() }
+        toolTimeouts = [:]
         for continuation in calls.values { continuation.resume(returning: (reason, true)) }
     }
 
     private func handleExit(status: Int32, generation exitGeneration: Int) {
         guard exitGeneration == generation else { return }
         ticker?.cancel()
-        watcher?.cancel()
-        clipboardWatcher?.cancel()
+        watcher?.stop()
+        stopClipboardWatcher()
         process = nil
         // A crashed plugin must not keep the Mac awake; a restarted one asks again.
         services?.release(pluginID: manifest.id)
@@ -514,6 +528,25 @@ enum FileStamp {
             }
         }
         return result
+    }
+
+    /// The last stamps, shared with the watch's queue.
+    final class Box: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stamps: [String: String]
+
+        init(_ stamps: [String: String]) { self.stamps = stamps }
+
+        /// Every stamped path, for file events.
+        var paths: [String] { lock.withLock { stamps.keys.sorted() } }
+
+        /// Keeps `new`; true when it differs from what was kept.
+        func update(_ new: [String: String]) -> Bool {
+            lock.withLock {
+                defer { stamps = new }
+                return stamps != new
+            }
+        }
     }
 
     private static func stamp(_ path: String) -> String {

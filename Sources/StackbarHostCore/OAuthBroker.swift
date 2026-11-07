@@ -59,10 +59,17 @@ public actor OAuthBroker {
     }
 
     private func obtain(key: String, provider: OAuthProvider) async throws -> Token {
-        if let refreshToken = try loadToken(key)?.refreshToken,
-           let refreshed = try? await exchange(provider, ["grant_type": "refresh_token", "refresh_token": refreshToken], keepRefresh: refreshToken) {
-            try save(refreshed, key)
-            return refreshed
+        if let refreshToken = try loadToken(key)?.refreshToken {
+            do {
+                let refreshed = try await exchange(provider, ["grant_type": "refresh_token", "refresh_token": refreshToken], keepRefresh: refreshToken)
+                try save(refreshed, key)
+                return refreshed
+            } catch let error as OAuthError where error.meansSignInAgain {
+                // The provider turned this refresh token down (invalid_grant,
+                // bad_refresh_token, a bare 400/401...), so a new sign-in is the
+                // answer. A network outage, a timeout or a 5xx is reported as it
+                // is: opening the browser would not fix it.
+            }
         }
         let token = try await signIn(provider)
         try save(token, key)
@@ -127,6 +134,7 @@ public actor OAuthBroker {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         if let error = json["error"] as? String {
+            if error == "invalid_grant" { throw OAuthError.grantRejected((json["error_description"] as? String) ?? error) }
             throw OAuthError.denied((json["error_description"] as? String) ?? error)
         }
         guard (200..<300).contains(status), let access = json["access_token"] as? String else {
@@ -149,8 +157,15 @@ public actor OAuthBroker {
 
     /// Deletes the tokens a plugin signed in with (when its data is deleted).
     /// Named secrets are shared between plugins, so they stay.
-    public static func forgetTokens(of pluginID: String, providers: [OAuthProvider], in secrets: any SecretStore) {
-        for provider in providers { try? secrets.setSecret(nil, for: key(pluginID, provider)) }
+    /// Returns the providers whose tokens could not be removed (the Keychain
+    /// refused), so the caller can say the sign-ins remain.
+    @discardableResult
+    public static func forgetTokens(of pluginID: String, providers: [OAuthProvider], in secrets: any SecretStore) -> [String] {
+        var failed: [String] = []
+        for provider in providers {
+            do { try secrets.setSecret(nil, for: key(pluginID, provider)) } catch { failed.append(provider.name) }
+        }
+        return failed
     }
 
     static func form(_ fields: [String: String]) -> String {
@@ -164,14 +179,28 @@ public actor OAuthBroker {
     public enum OAuthError: Error, CustomStringConvertible, Equatable {
         case badProvider(String)
         case denied(String)
+        /// The token endpoint answered `invalid_grant`: the code or refresh
+        /// token it was given is no longer good.
+        case grantRejected(String)
         case stateMismatch
         case timedOut(String)
         case tokenEndpoint(Int, String)
 
+        /// Whether a failed refresh should fall back to an interactive sign-in:
+        /// any OAuth error answer, and any 4xx from the token endpoint except
+        /// the retryable 408 and 429.
+        var meansSignInAgain: Bool {
+            switch self {
+            case .denied, .grantRejected: return true
+            case .tokenEndpoint(let status, _): return (400..<500).contains(status) && status != 408 && status != 429
+            case .badProvider, .stateMismatch, .timedOut: return false
+            }
+        }
+
         public var description: String {
             switch self {
             case .badProvider(let name): return "the \(name) provider's URLs are invalid"
-            case .denied(let reason): return "sign-in was refused: \(reason)"
+            case .denied(let reason), .grantRejected(let reason): return "sign-in was refused: \(reason)"
             case .stateMismatch: return "sign-in answer did not match the request (state mismatch)"
             case .timedOut(let name): return "sign-in to \(name) was not finished in time"
             case .tokenEndpoint(let status, let body): return "token endpoint answered \(status): \(body)"

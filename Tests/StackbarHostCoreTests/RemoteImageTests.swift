@@ -28,6 +28,25 @@ final class RemoteImageTests: XCTestCase {
         XCTAssertEqual(audit.report(for: Manifest(id: "io.test.images", name: "Images")).undeclared, ["images.example.com"])
     }
 
+    func testImageFetchesSpendThePluginsRequestBudget() async {
+        let audit = NetworkAudit()
+        let store = RemoteImageStore(http: HTTPService(audit: audit), budget: RateLimiter(limit: 2, per: 60))
+        let urls = (0..<5).map { "https://images.example.com/\($0).png" }
+        await store.load(urls, pluginID: "io.test.images", allowedHosts: [])
+        XCTAssertEqual(audit.entries(for: "io.test.images").first?.refused, 2, "only two got as far as the network")
+        // The three the budget turned away are not marked failed, so a later render tries them.
+        XCTAssertEqual(store.failedCount, 2)
+    }
+
+    func testOldFailuresAreForgotten() async {
+        let store = RemoteImageStore(http: HTTPService(audit: NetworkAudit()))
+        let start = Date()
+        await store.load(["https://a.example.com/1.png", "https://a.example.com/2.png"], pluginID: "io.test.images", allowedHosts: [], now: start)
+        XCTAssertEqual(store.failedCount, 2)
+        await store.load(["https://a.example.com/3.png"], pluginID: "io.test.images", allowedHosts: [], now: start.addingTimeInterval(RemoteImageStore.retryAfter + 1))
+        XCTAssertEqual(store.failedCount, 1)
+    }
+
     func testKeptImagesAreServedAndTheOldestDropped() {
         let store = RemoteImageStore(http: HTTPService(audit: NetworkAudit()))
         for index in 0...RemoteImageStore.capacity {

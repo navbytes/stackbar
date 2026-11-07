@@ -44,11 +44,18 @@ public struct PaletteRoot: Equatable, Sendable {
     /// Rows from each plugin, at most.
     public static let pluginRowLimit = 3
 
-    public private(set) var sections: [PaletteSection]
-    private var roles: [String: Role]
+    public let sections: [PaletteSection]
+    private let roles: [String: Role]
 
-    /// Every row in the order drawn, which the arrows walk.
-    public var entries: [PaletteIndex.Entry] { sections.flatMap(\.entries) }
+    /// Every row in the order drawn, which the arrows walk. Flattened once:
+    /// each arrow press and redraw reads it several times.
+    public let entries: [PaletteIndex.Entry]
+
+    init(sections: [PaletteSection], roles: [String: Role]) {
+        self.sections = sections
+        self.roles = roles
+        entries = sections.flatMap(\.entries)
+    }
 
     public func role(of entry: PaletteIndex.Entry) -> Role {
         roles[entry.id] ?? .result
@@ -110,7 +117,9 @@ public struct PaletteRoot: Equatable, Sendable {
                              store: [PaletteIndex.Entry] = [], plugins: [PluginRows] = [], fallbacks: [CommandRegistry.Entry] = [],
                              isRecent: (PaletteIndex.Entry) -> Bool = { _ in false }) -> PaletteRoot {
         let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
-        let scored = index.scored(query, limit: typed.isEmpty ? 500 : 30, ranker: ranker, usage: usage)
+        // `all` rebuilds every entry's id and filters duplicates: once per build.
+        let all = index.all
+        let scored = index.scored(query, limit: typed.isEmpty ? 500 : 30, ranker: ranker, usage: usage, in: all)
         var found = scored.map(\.entry)
         var resultScore = scored.first?.score
         if let match = index.aliasMatch(query), found.first?.isExactMatch(typed) != true {
@@ -148,7 +157,7 @@ public struct PaletteRoot: Equatable, Sendable {
             PaletteIndex.Entry(pluginID: entry.pluginID, pluginName: entry.pluginName, title: entry.spec.title,
                                subtitle: entry.pluginName, symbol: entry.spec.symbol, kind: .command(entry.spec))
         }
-        let pinned = PaletteFavorites.entries(favorites, in: index.all)
+        let pinned = PaletteFavorites.entries(favorites, in: all)
         let sections = PaletteSection.group(found, query: query, favorites: pinned, store: store, plugins: pluginSections,
                                             fallbacks: offered, ranker: ranker, resultScore: resultScore, isRecent: isRecent)
         for section in sections {
@@ -162,4 +171,46 @@ public struct PaletteRoot: Equatable, Sendable {
         }
         return PaletteRoot(sections: sections, roles: roles)
     }
+}
+
+/// Keeps the root built for the inputs it was built from, so the palette's
+/// body (which reads the root many times a pass) and every arrow press reuse
+/// it, and only a change in what the root is made of builds it again.
+///
+/// The key is a handful of counters, not the data: comparing a plugin's
+/// rows to know whether they changed cost a pass over every row, per read.
+public struct PaletteRootCache {
+    public struct Key: Equatable, Sendable {
+        public var query: String
+        /// `PaletteIndex.revision`.
+        public var index: Int
+        /// `PaletteMemory.revision`.
+        public var memory: Int
+        /// How many Store catalogs have arrived.
+        public var store: Int
+        /// `RootSearchSession.rowsStamp`.
+        public var rows: Int
+
+        public init(query: String, index: Int, memory: Int, store: Int, rows: Int) {
+            self.query = query
+            self.index = index
+            self.memory = memory
+            self.store = store
+            self.rows = rows
+        }
+    }
+
+    private var kept: (key: Key, root: PaletteRoot)?
+
+    public init() {}
+
+    /// The root kept for `key`, or the one `build` makes, which is kept.
+    public mutating func root(for key: Key, build: () -> PaletteRoot) -> PaletteRoot {
+        if let kept, kept.key == key { return kept.root }
+        let root = build()
+        kept = (key, root)
+        return root
+    }
+
+    public mutating func clear() { kept = nil }
 }

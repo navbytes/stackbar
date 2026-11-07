@@ -298,6 +298,11 @@ private final class Run: @unchecked Sendable {
     private var cancelled = false
     private var finished = false
     private var status: Int32?
+    /// Serializes what goes out to the plugin (output chunks, then the exit),
+    /// apart from `lock`: a write that blocks must not stop the timeout and
+    /// cancel paths, which only need `lock`.
+    private let emitLock = NSLock()
+    private var exitSent = false
     private let group = DispatchGroup()
 
     init(child: ChildProcess, id: Int, limits: CommandRunGate.Limits, emit: (@Sendable (HostMessage) -> Void)?, done: @escaping @Sendable (Run, RunResult) -> Void) {
@@ -371,21 +376,31 @@ private final class Run: @unchecked Sendable {
 
     private func append(_ chunk: Data, _ channel: RunChannel) {
         lock.lock()
-        defer { lock.unlock() }
-        guard !finished else { return }
+        guard !finished else {
+            lock.unlock()
+            return
+        }
         let held = channel == .stdout ? counts.stdout : counts.stderr
         let room = max(0, limits.maxOutput - held)
         let kept = chunk.prefix(room)
         if kept.count < chunk.count { truncated = true }
-        guard !kept.isEmpty else { return }
-        if channel == .stdout { counts.stdout += kept.count } else { counts.stderr += kept.count }
-        if let emit {
-            emit(.runOutput(id: id, channel: channel, data: Data(kept)))
-        } else if channel == .stdout {
-            output.append(kept)
-        } else {
-            errors.append(kept)
+        guard !kept.isEmpty else {
+            lock.unlock()
+            return
         }
+        if channel == .stdout { counts.stdout += kept.count } else { counts.stderr += kept.count }
+        guard let emit else {
+            if channel == .stdout { output.append(kept) } else { errors.append(kept) }
+            lock.unlock()
+            return
+        }
+        lock.unlock()
+        // The write to the plugin can block; `lock` is not held for it. Output
+        // that loses the race with the exit message is dropped, so nothing
+        // follows `runExit`.
+        emitLock.lock()
+        if !exitSent { emit(.runOutput(id: id, channel: channel, data: Data(kept))) }
+        emitLock.unlock()
     }
 
     private func complete(reason: String?) {
@@ -397,8 +412,12 @@ private final class Run: @unchecked Sendable {
         finished = true
         let result = RunResult(status: status, stdout: output, stderr: errors, truncated: truncated, timedOut: timedOut, duration: Date().timeIntervalSince(started))
         let why = cancelled ? "cancelled" : (timedOut ? "timed out" : reason)
-        emit?(.runExit(id: id, exit: RunExit(status: status, truncated: truncated, timedOut: timedOut, reason: why)))
+        let exit = RunExit(status: status, truncated: truncated, timedOut: timedOut, reason: why)
         lock.unlock()
+        emitLock.lock()
+        exitSent = true
+        emit?(.runExit(id: id, exit: exit))
+        emitLock.unlock()
         done(self, result)
     }
 }

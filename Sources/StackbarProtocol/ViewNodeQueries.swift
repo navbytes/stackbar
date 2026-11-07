@@ -282,13 +282,20 @@ public enum RowFilter {
     /// doesn't flip the layout either.
     public static func detail(for selected: RowNode?, in root: ViewNode) -> RowPreview? {
         if let preview = selected?.preview { return preview }
-        guard hasPreviews(root) else { return nil }
+        return detail(for: selected, hasPreviews: hasPreviews(root))
+    }
+
+    /// `detail` when whether the list has previews is already known
+    /// (`hasPreviews(_:)`, which walks the whole list).
+    public static func detail(for selected: RowNode?, hasPreviews: Bool) -> RowPreview? {
+        if let preview = selected?.preview { return preview }
+        guard hasPreviews else { return nil }
         guard let selected else { return RowPreview() }
         return RowPreview(text: selected.title, caption: selected.subtitle)
     }
 
     /// Whether any row of a list has a preview.
-    static func hasPreviews(_ root: ViewNode) -> Bool {
+    public static func hasPreviews(_ root: ViewNode) -> Bool {
         (items(in: root, query: "") ?? []).contains { item in
             if case .row(let row) = item { return row.preview != nil }
             return false

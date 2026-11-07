@@ -173,7 +173,7 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
     private func build(_ url: URL) async throws -> MCPToolResult {
         guard url.pathExtension == "swift" else { return .text("the path must end in .swift", isError: true) }
         let loader = loader
-        let output = try await Task.detached { try loader.helper(for: url) }.value
+        let output = try await PluginLoader.inBackground { try loader.helper(for: url) }
         let manifest = try PluginProcess.readManifest(executable: output.binary)
         var lines = ["Built \(manifest.name) \(manifest.version) (\(manifest.id))" + (output.cached ? ", unchanged since the last build" : "")]
         lines.append("surfaces: " + manifest.surfaces.map(\.rawValue).joined(separator: ", "))

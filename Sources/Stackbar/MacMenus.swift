@@ -6,22 +6,25 @@ import StackbarProtocol
 
 extension MacSystem {
     func menuItems() async throws -> MenuSnapshot {
-        try await MainActor.run {
+        let target = try await MainActor.run {
             guard MacWindows.isTrusted() else { throw MacMenus.untrusted }
             guard let app = userApp() else { throw SystemServiceError("there is no app in front to read menus from") }
-            return MacMenus.read(app)
+            return MacMenus.Target(app)
         }
+        // Thousands of messages in a big app: off the main thread.
+        return await AXWorker.run { MacMenus.read(target) }
     }
 
     func pressMenuItem(appID: String, path: [String]) async throws {
-        try await MainActor.run {
+        let target = try await MainActor.run {
             guard MacWindows.isTrusted() else { throw MacMenus.untrusted }
             guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: appID).first(where: { !$0.isTerminated }) else {
                 throw SystemServiceError("\(appID) isn't running")
             }
             app.activate()
-            try MacMenus.press(path, in: app)
+            return MacMenus.Target(app)
         }
+        try await AXWorker.runThrowing { try MacMenus.press(path, in: target) }
     }
 
     /// The app the user is working in: the front one, or the one before
@@ -38,10 +41,26 @@ extension MacSystem {
 @MainActor
 enum MacMenus {
     nonisolated static let untrusted = SystemServiceError("Stackbar needs Accessibility access to read menus: System Settings > Privacy & Security > Accessibility")
+    /// Per message; a menu item's press can take a moment to answer.
+    nonisolated static let timeout: Float = 0.5
 
-    static func read(_ app: NSRunningApplication) -> MenuSnapshot {
-        let element = AXUIElementCreateApplication(app.processIdentifier)
-        AXUIElementSetMessagingTimeout(element, 0.5)
+    /// The app whose menus are read, by process, so the reading can run on
+    /// `AXWorker`.
+    struct Target: Sendable {
+        var pid: pid_t
+        var id: String
+        var name: String
+
+        @MainActor init(_ app: NSRunningApplication) {
+            let id = app.bundleIdentifier ?? ""
+            self.pid = app.processIdentifier
+            self.id = id
+            self.name = app.localizedName ?? id
+        }
+    }
+
+    nonisolated static func read(_ app: Target) -> MenuSnapshot {
+        let element = AXWorker.timed(AXUIElementCreateApplication(app.pid), timeout)
         var items: [MenuItemInfo] = []
         // The first menu bar item is the Apple menu, the same in every app.
         for top in topMenus(of: element).dropFirst() {
@@ -49,15 +68,13 @@ enum MacMenus {
             walk(top, path: [title], depth: 1, into: &items)
             if items.count >= MenuSnapshot.maxItems { break }
         }
-        let id = app.bundleIdentifier ?? ""
-        return MenuSnapshot(appID: id, appName: app.localizedName ?? id, items: items)
+        return MenuSnapshot(appID: app.id, appName: app.name, items: items)
     }
 
-    static func press(_ path: [String], in app: NSRunningApplication) throws {
-        let element = AXUIElementCreateApplication(app.processIdentifier)
-        AXUIElementSetMessagingTimeout(element, 0.5)
+    nonisolated static func press(_ path: [String], in app: Target) throws {
+        let element = AXWorker.timed(AXUIElementCreateApplication(app.pid), timeout)
         guard let first = path.first, var current = topMenus(of: element).dropFirst().first(where: { string($0, kAXTitleAttribute) == first }) else {
-            throw SystemServiceError("\(app.localizedName ?? "The app") has no \(path.first ?? "") menu")
+            throw SystemServiceError("\(app.name.isEmpty ? "The app" : app.name) has no \(path.first ?? "") menu")
         }
         for title in path.dropFirst() {
             guard let next = children(of: current).first(where: { string($0, kAXTitleAttribute) == title }) else {
@@ -71,20 +88,20 @@ enum MacMenus {
         }
     }
 
-    private static func topMenus(of app: AXUIElement) -> [AXUIElement] {
+    private nonisolated static func topMenus(of app: AXUIElement) -> [AXUIElement] {
         guard let bar = copy(app, kAXMenuBarAttribute), CFGetTypeID(bar) == AXUIElementGetTypeID() else { return [] }
         // swiftlint:disable:next force_cast
-        return elements(bar as! AXUIElement, kAXChildrenAttribute)
+        return elements(AXWorker.timed(bar as! AXUIElement, timeout), kAXChildrenAttribute)
     }
 
     /// A menu bar item or a menu item holds one menu, which holds the items.
-    private static func children(of item: AXUIElement) -> [AXUIElement] {
+    private nonisolated static func children(of item: AXUIElement) -> [AXUIElement] {
         elements(item, kAXChildrenAttribute).flatMap { child in
             string(child, kAXRoleAttribute) == kAXMenuRole ? elements(child, kAXChildrenAttribute) : [child]
         }
     }
 
-    private static func walk(_ item: AXUIElement, path: [String], depth: Int, into items: inout [MenuItemInfo]) {
+    private nonisolated static func walk(_ item: AXUIElement, path: [String], depth: Int, into items: inout [MenuItemInfo]) {
         for child in children(of: item) {
             guard items.count < MenuSnapshot.maxItems else { return }
             guard let title = string(child, kAXTitleAttribute), !title.isEmpty else { continue }
@@ -102,21 +119,22 @@ enum MacMenus {
         }
     }
 
-    private static func copy(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+    private nonisolated static func copy(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
         return value
     }
 
-    private static func elements(_ element: AXUIElement, _ attribute: String) -> [AXUIElement] {
-        (copy(element, attribute) as? [AXUIElement]) ?? []
+    private nonisolated static func elements(_ element: AXUIElement, _ attribute: String) -> [AXUIElement] {
+        // The timeout isn't passed on to the elements read from one.
+        ((copy(element, attribute) as? [AXUIElement]) ?? []).map { AXWorker.timed($0, timeout) }
     }
 
-    private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
+    private nonisolated static func string(_ element: AXUIElement, _ attribute: String) -> String? {
         copy(element, attribute) as? String
     }
 
-    private static func bool(_ element: AXUIElement, _ attribute: String) -> Bool {
+    private nonisolated static func bool(_ element: AXUIElement, _ attribute: String) -> Bool {
         (copy(element, attribute) as? Bool) ?? false
     }
 }

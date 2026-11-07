@@ -260,14 +260,48 @@ public struct NodeView: View {
     }
 }
 
+/// A child node with the identity SwiftUI keeps its state under.
+struct IdentifiedNode: Identifiable {
+    let id: String
+    let node: ViewNode
+
+    /// The children, each with an id from what it says about itself, not from
+    /// where it stands. A row is its key, a section its title, a field or a
+    /// slider its action: they hold state (a draft, a position) that must
+    /// stay with them when a sibling above comes or goes, as a conditional
+    /// field does. A node that says nothing like that, and holds no state of
+    /// its own to lose, is its place. A repeat gets `#2`, `#3`.
+    static func list(_ children: [ViewNode]) -> [IdentifiedNode] {
+        var seen: [String: Int] = [:]
+        return children.enumerated().map { index, child in
+            guard var base = name(of: child) else { return IdentifiedNode(id: "at|\(index)", node: child) }
+            let count = seen[base, default: 0] + 1
+            seen[base] = count
+            if count > 1 { base += "#\(count)" }
+            return IdentifiedNode(id: base, node: child)
+        }
+    }
+
+    private static func name(of node: ViewNode) -> String? {
+        switch node {
+        case .row(let row): return "row|\(row.key)"
+        case .section(let title, _): return "section|\(title ?? "")"
+        case .textField(_, _, let action): return "field|\(action.rawValue)"
+        case .slider(_, _, _, _, _, let action): return "slider|\(action.rawValue)"
+        case .styled(let child, _): return name(of: child).map { "styled|" + $0 }
+        default: return nil
+        }
+    }
+}
+
 /// Children of a stack or section, in order.
 struct NodeList: View {
     let children: [ViewNode]
     let send: SendAction
 
     var body: some View {
-        ForEach(Array(children.enumerated()), id: \.offset) { _, child in
-            NodeView(node: child, send: send)
+        ForEach(IdentifiedNode.list(children)) { child in
+            NodeView(node: child.node, send: send)
         }
     }
 }
@@ -295,6 +329,11 @@ struct ListNodeView: View {
     @Environment(\.stackbarSnapshot) private var snapshot
 
     var body: some View {
+        // Filtered and flattened once for this pass; the filter scores every
+        // row, and the list, the selection and the numbers all need it.
+        let visible = RowFilter.filter(children, query: query)
+        let rows = visible.flatMap(\.rows)
+        let selected = Self.selected(in: rows, key: selectedKey)
         VStack(alignment: .leading, spacing: 2) {
             if searchable && snapshot {
                 SnapshotField(placeholder: "Filter", text: "").padding(.bottom, 4)
@@ -305,10 +344,10 @@ struct ListNodeView: View {
                     .focused($focused)
                     .onSubmit { runSelected() }
                     .onKeyPress(phases: [.down, .repeat]) { press in handle(press) }
-                    .onChange(of: query) { _, _ in select(rows.first?.key) }
+                    .onChange(of: query) { _, _ in select(self.rows.first?.key) }
             }
-            ForEach(Array(visible.enumerated()), id: \.offset) { _, child in
-                NodeView(node: child, send: send)
+            ForEach(IdentifiedNode.list(visible)) { child in
+                NodeView(node: child.node, send: send)
             }
             if visible.isEmpty && !query.isEmpty {
                 Text("No matches").foregroundStyle(.secondary)
@@ -318,27 +357,23 @@ struct ListNodeView: View {
             }
         }
         .environment(\.stackbarSelectedRow, searchable && !readOnly ? selected?.key : nil)
-        .environment(\.stackbarRowNumbers, searchable && !readOnly ? numbers : [:])
+        .environment(\.stackbarRowNumbers, searchable && !readOnly ? Self.numbers(of: rows) : [:])
         .onAppear { reset() }
         .onChange(of: shownCount) { _, _ in reset() }
     }
 
-    private var visible: [ViewNode] {
-        RowFilter.filter(children, query: query)
-    }
-
-    private var rows: [RowNode] { visible.flatMap(\.rows) }
+    /// What is shown now, for the key handlers, which run outside a pass.
+    private var rows: [RowNode] { RowFilter.filter(children, query: query).flatMap(\.rows) }
 
     /// The first nine rows that do something, numbered from 1.
-    private var numbers: [String: Int] {
+    private static func numbers(of rows: [RowNode]) -> [String: Int] {
         let actionable = rows.filter { !$0.actions.isEmpty }.prefix(9)
         return Dictionary(actionable.enumerated().map { ($1.key, $0 + 1) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// The chosen row, or the first one when nothing (still visible) is.
-    private var selected: RowNode? {
-        let rows = rows
-        return rows.first { $0.key == selectedKey } ?? rows.first
+    private static func selected(in rows: [RowNode], key: String?) -> RowNode? {
+        rows.first { $0.key == key } ?? rows.first
     }
 
     private func reset() {
@@ -357,12 +392,12 @@ struct ListNodeView: View {
     private func move(_ delta: Int) {
         let rows = rows
         guard !rows.isEmpty else { return }
-        let current = rows.firstIndex { $0.key == selected?.key } ?? 0
+        let current = rows.firstIndex { $0.key == Self.selected(in: rows, key: selectedKey)?.key } ?? 0
         select(rows[min(max(current + delta, 0), rows.count - 1)].key)
     }
 
     private func runSelected() {
-        guard !readOnly, let action = selected?.actions.first else { return }
+        guard !readOnly, let action = Self.selected(in: rows, key: selectedKey)?.actions.first else { return }
         send(action.id, nil)
     }
 
@@ -379,7 +414,8 @@ struct ListNodeView: View {
             break
         }
         // A shortcut on the selected row wins, then any row's (⌘1 is "this row").
-        let candidates = (selected.map { [$0] } ?? []) + rows
+        let rows = rows
+        let candidates = (Self.selected(in: rows, key: selectedKey).map { [$0] } ?? []) + rows
         for row in candidates {
             if let action = row.actions.first(where: { $0.shortcut.map { KeyShortcut($0)?.matches(press) ?? false } ?? false }) {
                 select(row.key)
@@ -408,7 +444,8 @@ struct PreviewPane: View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
             #if canImport(AppKit)
-            if let id = preview.imageID, let data = imageData?(id), let image = NSImage(data: data) {
+            // Kept images are named by their content, so the id keys the decode.
+            if let id = preview.imageID, let image = DecodedImages.image(key: "kept|\(id)", data: { imageData?(id) }) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
@@ -520,8 +557,16 @@ public struct RowView: View {
 
     private var content: some View {
         HStack(spacing: 8) {
-            if let icon = row.appIcon.flatMap(AppIcons.icon) ?? row.fileIcon.map(AppIcons.fileIcon) {
-                Image(nsImage: icon).resizable().frame(width: 18, height: 18)
+            if row.appIcon != nil || row.fileIcon != nil {
+                LookupIcon(appIcon: row.appIcon, fileIcon: row.fileIcon) { icon in
+                    Image(nsImage: icon).resizable().frame(width: 18, height: 18)
+                } placeholder: {
+                    if let symbol = row.symbol {
+                        Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 18)
+                    } else {
+                        Color.clear.frame(width: 18, height: 18)
+                    }
+                }
             } else if let symbol = row.symbol {
                 Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 18)
             }
@@ -967,10 +1012,20 @@ struct BarView: View {
 
 #if canImport(AppKit)
 /// Apps' icons by bundle id, for rows that name an app. Looked up once.
+///
+/// `icon` and `fileIcon` look up at once, on the caller's thread, for
+/// snapshots (which can't wait). A row on screen uses `cached` and `load`
+/// (see `LookupIcon`): the Workspace lookup and the bitmap are done off the
+/// main thread, so the first draw of a list of many apps doesn't stall.
 @MainActor
 public enum AppIcons {
     private static var cache: [String: NSImage?] = [:]
     private static var files: [String: NSImage] = [:]
+
+    /// A picture handed from the task that drew it; it is not touched again there.
+    private struct Drawn: @unchecked Sendable {
+        let image: NSImage?
+    }
 
     /// A file or folder's Finder icon, kept for the next draw.
     public static func fileIcon(_ path: String) -> NSImage {
@@ -983,17 +1038,57 @@ public enum AppIcons {
 
     public static func icon(_ bundleID: String) -> NSImage? {
         if let cached = cache[bundleID] { return cached }
-        let image = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { url in
-            flattened(NSWorkspace.shared.icon(forFile: url.path))
-        }
+        let image = renderApp(bundleID)
         cache[bundleID] = image
         return image
+    }
+
+    /// The icon if it was looked up before; nothing is fetched.
+    public static func cached(appIcon: String?, fileIcon path: String?) -> NSImage? {
+        // A remembered miss (`.some(nil)`) is not an answer: the file icon
+        // is still tried.
+        if let appIcon, let known = cache[appIcon], let image = known { return image }
+        if let path, let known = files[path] { return known }
+        return nil
+    }
+
+    /// The icon of the app or file, looked up off the main thread and kept.
+    /// An app wins when both are named, as in a row. Nil when there is none.
+    public static func load(appIcon: String?, fileIcon path: String?) async -> NSImage? {
+        if let appIcon {
+            // A remembered miss (`.some(nil)`) falls through to the file icon.
+            var image: NSImage?
+            if let known = cache[appIcon] {
+                image = known
+            } else {
+                let drawn = await Task.detached(priority: .userInitiated) { Drawn(image: renderApp(appIcon)) }.value
+                cache[appIcon] = drawn.image
+                image = drawn.image
+            }
+            if let image { return image }
+        }
+        guard let path else { return nil }
+        if let known = files[path] { return known }
+        let drawn = await Task.detached(priority: .userInitiated) { Drawn(image: renderFile(path)) }.value
+        if files.count > 500 { files = [:] }
+        files[path] = drawn.image
+        return drawn.image
+    }
+
+    private nonisolated static func renderApp(_ bundleID: String) -> NSImage? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { url in
+            flattened(NSWorkspace.shared.icon(forFile: url.path))
+        }
+    }
+
+    private nonisolated static func renderFile(_ path: String) -> NSImage {
+        flattened(NSWorkspace.shared.icon(forFile: path))
     }
 
     /// The icon drawn once into a plain bitmap. Workspace icons are lazy,
     /// many-sized images that `ImageRenderer` draws as a grey veil over the
     /// whole snapshot; a bitmap draws like any other picture.
-    private static func flattened(_ icon: NSImage) -> NSImage {
+    private nonisolated static func flattened(_ icon: NSImage) -> NSImage {
         let points = NSSize(width: 32, height: 32)
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
                                             hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
@@ -1009,6 +1104,44 @@ public enum AppIcons {
         let image = NSImage(size: points)
         image.addRepresentation(bitmap)
         return image
+    }
+}
+
+/// A row's app or file icon, drawn when it is known and `placeholder` until
+/// then, so a list of many apps appears at once and the icons fill in. A
+/// snapshot looks the icon up at once: it draws a single frame.
+public struct LookupIcon<Icon: View, Placeholder: View>: View {
+    let appIcon: String?
+    let fileIcon: String?
+    let icon: (NSImage) -> Icon
+    let placeholder: Placeholder
+    @State private var loaded: NSImage?
+    @Environment(\.stackbarSnapshot) private var snapshot
+
+    public init(appIcon: String?, fileIcon: String?, @ViewBuilder icon: @escaping (NSImage) -> Icon, @ViewBuilder placeholder: () -> Placeholder) {
+        self.appIcon = appIcon
+        self.fileIcon = fileIcon
+        self.icon = icon
+        self.placeholder = placeholder()
+    }
+
+    public var body: some View {
+        Group {
+            if let image = known {
+                icon(image)
+            } else {
+                placeholder
+            }
+        }
+        .task(id: "\(appIcon ?? "")|\(fileIcon ?? "")") {
+            guard !snapshot, AppIcons.cached(appIcon: appIcon, fileIcon: fileIcon) == nil else { return }
+            loaded = await AppIcons.load(appIcon: appIcon, fileIcon: fileIcon)
+        }
+    }
+
+    private var known: NSImage? {
+        if snapshot { return appIcon.flatMap(AppIcons.icon) ?? fileIcon.map(AppIcons.fileIcon) }
+        return AppIcons.cached(appIcon: appIcon, fileIcon: fileIcon) ?? loaded
     }
 }
 #endif

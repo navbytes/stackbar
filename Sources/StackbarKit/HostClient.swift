@@ -14,6 +14,8 @@ public final class HostClient: @unchecked Sendable {
     private let lock = NSLock()
     private var nextID = 1
     private var pending: [Int: @Sendable (HostResult) -> Void] = [:]
+    /// The timeout of each waiting call that has one (`HostCall.replyTimeout`).
+    private var deadlines: [Int: DispatchWorkItem] = [:]
     /// Streamed runs still going, by the id of the request that started them.
     private var streams: [Int: AsyncThrowingStream<RunEvent, any Error>.Continuation] = [:]
     private var sendMessage: (@Sendable (PluginMessage) -> Void)?
@@ -27,17 +29,23 @@ public final class HostClient: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// Sends a call and waits for its answer.
+    /// Sends a call and waits for its answer, or fails it after
+    /// `HostCall.replyTimeout`.
     public func call(_ call: HostCall) async -> HostResult {
+        await self.call(call, timeout: call.replyTimeout)
+    }
+
+    /// Sends a call and waits at most `timeout` seconds (`nil`: for good).
+    func call(_ call: HostCall, timeout: Double?) async -> HostResult {
         await withCheckedContinuation { continuation in
-            send(call) { continuation.resume(returning: $0) }
+            send(call, timeout: timeout) { continuation.resume(returning: $0) }
         }
     }
 
     /// Sends a call without waiting. A failure is reported to the host's log.
     public func fire(_ call: HostCall) {
         let label = call.label
-        send(call) { [weak self] result in
+        send(call, timeout: call.replyTimeout) { [weak self] result in
             if case .failure(let message) = result {
                 self?.deliver(.log(level: .warning, message: "\(label) failed: \(message)"))
             }
@@ -49,7 +57,9 @@ public final class HostClient: @unchecked Sendable {
     public func resolve(id: Int, result: HostResult) -> Bool {
         lock.lock()
         let handler = pending.removeValue(forKey: id)
+        let deadline = deadlines.removeValue(forKey: id)
         lock.unlock()
+        deadline?.cancel()
         handler?(result)
         return handler != nil
     }
@@ -59,10 +69,13 @@ public final class HostClient: @unchecked Sendable {
         lock.lock()
         let handlers = pending
         let running = streams
+        let timers = deadlines.values
         pending.removeAll()
         streams.removeAll()
+        deadlines.removeAll()
         sendMessage = nil
         lock.unlock()
+        for timer in timers { timer.cancel() }
         for handler in handlers.values { handler(.failure(reason)) }
         for stream in running.values { stream.finish(throwing: HostError(reason)) }
     }
@@ -126,7 +139,7 @@ public final class HostClient: @unchecked Sendable {
         return pending.count
     }
 
-    private func send(_ call: HostCall, onResult: @escaping @Sendable (HostResult) -> Void) {
+    private func send(_ call: HostCall, timeout: Double?, onResult: @escaping @Sendable (HostResult) -> Void) {
         lock.lock()
         guard let sendMessage else {
             lock.unlock()
@@ -136,6 +149,14 @@ public final class HostClient: @unchecked Sendable {
         let id = nextID
         nextID += 1
         pending[id] = onResult
+        if let timeout {
+            let label = call.label
+            let deadline = DispatchWorkItem { [weak self] in
+                self?.resolve(id: id, result: .failure("\(label) got no answer from Stackbar within \(Int(timeout)) seconds"))
+            }
+            deadlines[id] = deadline
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: deadline)
+        }
         lock.unlock()
         sendMessage(.request(id: id, call: call))
     }

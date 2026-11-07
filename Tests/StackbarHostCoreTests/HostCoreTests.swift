@@ -325,6 +325,8 @@ final class PluginSupervisorTests: XCTestCase {
         XCTAssertTrue(missing.isError, "required arguments are checked")
         let unknown = await supervisor.callTool("nope")
         XCTAssertTrue(unknown.isError)
+        let waiting = await supervisor.openCallTimeouts
+        XCTAssertEqual(waiting, 0, "answered calls cancel their timeouts")
 
         try await services.bus.publish("fixture.inbox", payload: "hello", from: "dev.test.sender")
         let topic = await waitForPanel("status topic fixture.inbox hello from dev.test.sender")

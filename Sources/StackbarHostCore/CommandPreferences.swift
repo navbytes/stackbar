@@ -191,13 +191,13 @@ public final class PaletteUsage: @unchecked Sendable {
     }
 
     public static let halfLife: Double = 14 * 24 * 3600
-    private let file: URL?
+    private let writer: DeferredFileWriter?
     private let lock = NSLock()
     private var uses: [String: Use] = [:]
     private let now: @Sendable () -> Date
 
     public init(file: URL?, now: @escaping @Sendable () -> Date = Date.init) {
-        self.file = file
+        writer = file.map(DeferredFileWriter.init)
         self.now = now
         if let file, let data = try? Data(contentsOf: file), let decoded = try? JSONDecoder().decode([String: Use].self, from: data) {
             uses = decoded
@@ -215,8 +215,11 @@ public final class PaletteUsage: @unchecked Sendable {
                 for key in oldest { uses[key] = nil }
             }
         }
-        save()
+        save(wait: false)
     }
+
+    /// Returns once every change so far is written to the file.
+    public func flush() { writer?.flush() }
 
     /// Carries the use of plugin `from`'s commands and root rows over to
     /// plugin `to` (see `PaletteMemory.carried`), adding to what is there.
@@ -267,12 +270,12 @@ public final class PaletteUsage: @unchecked Sendable {
         pow(0.5, max(0, to.timeIntervalSince(from)) / halfLife)
     }
 
-    private func save() {
-        guard let file else { return }
+    /// Writes the file off this thread; `wait` holds the caller until it is
+    /// written. A use on Return doesn't wait.
+    private func save(wait: Bool = true) {
+        guard let writer else { return }
         let snapshot = lock.withLock { uses }
-        if let data = try? JSONEncoder().encode(snapshot) {
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: file, options: .atomic)
-        }
+        writer.write { try? JSONEncoder().encode(snapshot) }
+        if wait { writer.flush() }
     }
 }

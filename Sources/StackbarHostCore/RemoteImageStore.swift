@@ -14,14 +14,26 @@ public final class RemoteImageStore: @unchecked Sendable {
     public static let capacity = 400
     public static let retryAfter: TimeInterval = 300
 
+    /// Failed URLs remembered at most; the oldest go first.
+    static let failedCapacity = 1_000
+
     private let http: HTTPService
+    /// The plugin's HTTP request budget (`RateBudget.Pool.requests`), so a
+    /// tree full of changing image URLs cannot download without limit. Nil
+    /// for stores made outside `HostServices`.
+    private let budget: RateLimiter?
     private let lock = NSLock()
     private var images: [String: Data] = [:]
     private var order: [String] = []
     private var failed: [String: Date] = [:]
     private var loading: Set<String> = []
 
-    public init(http: HTTPService) { self.http = http }
+    public init(http: HTTPService) { self.http = http; self.budget = nil }
+
+    init(http: HTTPService, budget: RateLimiter?) {
+        self.http = http
+        self.budget = budget
+    }
 
     /// The image's bytes when they've been fetched.
     public func data(for url: String) -> Data? {
@@ -45,28 +57,45 @@ public final class RemoteImageStore: @unchecked Sendable {
             return fresh
         }
         guard !wanted.isEmpty else { return [] }
-        let results = await withTaskGroup(of: (String, Data?).self) { group in
+        let results = await withTaskGroup(of: (String, Fetch).self) { group in
             for url in wanted {
                 group.addTask { (url, await self.fetch(url, pluginID: pluginID, allowedHosts: allowedHosts)) }
             }
-            var collected: [(String, Data?)] = []
+            var collected: [(String, Fetch)] = []
             for await result in group { collected.append(result) }
             return collected
         }
         return lock.withLock {
             var loaded: [String] = []
-            for (url, data) in results {
+            for (url, result) in results {
                 loading.remove(url)
-                if let data {
+                switch result {
+                case .image(let data):
                     store(url, data)
                     loaded.append(url)
-                } else {
+                case .failed:
                     failed[url] = now
+                case .overBudget:
+                    // Not the image's fault: tried again on a later render.
+                    break
                 }
             }
+            pruneFailed(now: now)
             return urls.filter(loaded.contains)
         }
     }
+
+    /// Forgets failures older than `retryAfter` (they would be retried anyway)
+    /// and keeps the newest `failedCapacity`. Call with the lock held.
+    private func pruneFailed(now: Date) {
+        failed = failed.filter { now.timeIntervalSince($0.value) < Self.retryAfter }
+        if failed.count > Self.failedCapacity {
+            let keep = failed.sorted { $0.value > $1.value }.prefix(Self.failedCapacity)
+            failed = Dictionary(uniqueKeysWithValues: keep.map { ($0.key, $0.value) })
+        }
+    }
+
+    var failedCount: Int { lock.withLock { failed.count } }
 
     /// Keeps `data` for `url` without fetching: for tests and previews.
     public func insert(_ data: Data, for url: String) {
@@ -82,13 +111,16 @@ public final class RemoteImageStore: @unchecked Sendable {
         }
     }
 
-    private func fetch(_ url: String, pluginID: String, allowedHosts: [String]) async -> Data? {
-        guard Self.isFetchable(url) else { return nil }
+    private enum Fetch { case image(Data), failed, overBudget }
+
+    private func fetch(_ url: String, pluginID: String, allowedHosts: [String]) async -> Fetch {
+        guard Self.isFetchable(url) else { return .failed }
+        if let budget, !budget.allow(pluginID) { return .overBudget }
         let result = await http.perform(HTTPRequest(url: url, headers: ["Accept": "image/*"], timeout: 20), pluginID: pluginID, allowedHosts: allowedHosts)
         guard case .http(let response) = result, (200..<300).contains(response.status),
               !response.body.isEmpty, response.body.count <= RemoteImageLimits.maxBytes,
-              Self.isImage(contentType: response.headers["content-type"], body: response.body) else { return nil }
-        return response.body
+              Self.isImage(contentType: response.headers["content-type"], body: response.body) else { return .failed }
+        return .image(response.body)
     }
 
     /// An https URL with a host.

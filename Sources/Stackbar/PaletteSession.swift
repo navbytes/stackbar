@@ -117,7 +117,7 @@ final class PaletteSession {
         query = ""
         closeRootSearch()
         selection.reset()
-        cache = nil
+        cache.clear()
         argumentValues = [:]
         showingActions = false
         actionQuery = ""
@@ -156,7 +156,10 @@ final class PaletteSession {
 
     /// The root's search, kept until the query or the index changes: the
     /// view, the footer, ⌘K and every arrow press ask for it.
-    @ObservationIgnored private var cache: (query: String, revision: Int, memory: Int, store: Int, plugins: [PaletteRoot.PluginRows], root: PaletteRoot)?
+    @ObservationIgnored private var cache = PaletteRootCache()
+    /// The Store's suggestions for a query, so a plugin answering (which
+    /// rebuilds the root) doesn't scan every catalog again.
+    @ObservationIgnored private var storeSuggestions: (query: String, catalogs: Int, installed: StoreListing.Installed, entries: [PaletteIndex.Entry])?
     /// The Store's indexes were asked for once, for its suggestions.
     @ObservationIgnored private var storeRequested = false
 
@@ -176,24 +179,35 @@ final class PaletteSession {
         // Read every time, so the list redraws once the Store's indexes arrive.
         let storeCount = model.store?.catalogs.count ?? 0
         // Plugins' rows arrive after the query does, so they are read every
-        // time and are part of the cache's key: whole rows, not just ids. A
-        // row's id stays put while its title changes (a sum's answer is
-        // always the row `answer`), so keying on ids kept the answer to the
-        // text before the last keystroke on screen.
+        // time and their stamp is part of the cache's key. It moves with each
+        // answer, not with each row's id: a row's id stays put while its title
+        // changes (a sum's answer is always the row `answer`), so keying on
+        // ids kept the answer to the text before the last keystroke on screen.
+        // Comparing the rows themselves cost a pass over every row, each read.
         let plugins = rootSearchRows()
+        let rowsStamp = rootSearch.rowsStamp
         // What the palette learned is part of the key too: a reset, a pin or
         // Settings' Clear Search History reorders the root.
         let memory = model.commands.memory
-        let learned = memory.revision
-        if let cache, cache.query == query, cache.revision == palette.revision, cache.memory == learned, cache.store == storeCount, cache.plugins == plugins {
-            return cache.root
+        let key = PaletteRootCache.Key(query: query, index: palette.revision, memory: memory.revision, store: storeCount, rows: rowsStamp)
+        return cache.root(for: key) {
+            PaletteRoot.build(query: query, index: palette, ranker: memory.ranker(for: query),
+                              usage: memory.usage, favorites: memory.favorites.ids, store: storeEntries(), plugins: plugins,
+                              fallbacks: fallbackCommands()) { memory.isRecent($0) }
         }
-        let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
-        let root = PaletteRoot.build(query: query, index: palette, ranker: memory.ranker(for: query),
-                                     usage: memory.usage, favorites: memory.favorites.ids, store: store, plugins: plugins,
-                                     fallbacks: fallbackCommands()) { memory.isRecent($0) }
-        cache = (query, palette.revision, learned, storeCount, plugins, root)
-        return root
+    }
+
+    /// The Store's suggestions for the query, scanned again only when the
+    /// query, the catalogs or what is installed change.
+    private func storeEntries() -> [PaletteIndex.Entry] {
+        guard let store = model.store else { return [] }
+        let installed = store.installed
+        if let known = storeSuggestions, known.query == query, known.catalogs == store.catalogs.count, known.installed == installed {
+            return known.entries
+        }
+        let entries = StoreListing.paletteSuggestions(store.catalogs, query: query, installed: installed)
+        storeSuggestions = (query, store.catalogs.count, installed, entries)
+        return entries
     }
 
     /// A plugin's manifest, for its icon and colour.
@@ -309,8 +323,11 @@ final class PaletteSession {
     }
 
     /// The root entry Return runs: the one the arrows chose, or the first.
-    var selectedEntry: PaletteIndex.Entry? {
-        let results = results
+    var selectedEntry: PaletteIndex.Entry? { selectedEntry(in: root) }
+
+    /// `selectedEntry` in a root already read, for a view that reads it once.
+    func selectedEntry(in root: PaletteRoot) -> PaletteIndex.Entry? {
+        let results = root.entries
         return selection.index(in: results.map(\.id), query: query).map { results[$0] }
     }
 
@@ -427,8 +444,8 @@ final class PaletteSession {
 
     /// The columns of the open view's grid list, when it is one.
     var gridColumns: Int? {
-        guard case .view(let view) = top, let root = view.root else { return nil }
-        return RowFilter.columns(in: root)
+        guard case .view(let view) = top else { return nil }
+        return list(of: view).columns
     }
 
     /// Kept clipboard images, for a row preview's image.
@@ -436,9 +453,36 @@ final class PaletteSession {
         model.controller(for: pluginID).flatMap(AppModel.previewImages(for:))
     }
 
-    func rows(of view: CommandViewModel) -> [RowNode] {
-        RootSearchSession<CommandViewModel>.rows(in: view.root, query: view.query)
+    /// A list view's tree after the filter, which the body, the arrows and
+    /// Return all read: worked out once per answer and text, not on each read.
+    struct ListState {
+        var items: [RowFilter.Item]?
+        var rows: [RowNode]
+        var columns: Int?
+        var hasPreviews: Bool
     }
+
+    @ObservationIgnored private var listCache: (view: ObjectIdentifier, answers: Int, query: String, state: ListState)?
+
+    func list(of view: CommandViewModel) -> ListState {
+        let id = ObjectIdentifier(view)
+        let answers = view.answers
+        let query = view.query
+        if let listCache, listCache.view == id, listCache.answers == answers, listCache.query == query { return listCache.state }
+        let state: ListState
+        if let root = view.root {
+            let items = RowFilter.items(in: root, query: query)
+            state = ListState(items: items,
+                              rows: (items ?? []).compactMap { if case .row(let row) = $0 { return row } else { return nil } },
+                              columns: RowFilter.columns(in: root), hasPreviews: RowFilter.hasPreviews(root))
+        } else {
+            state = ListState(items: nil, rows: [], columns: nil, hasPreviews: false)
+        }
+        listCache = (id, answers, query, state)
+        return state
+    }
+
+    func rows(of view: CommandViewModel) -> [RowNode] { list(of: view).rows }
 
     /// Return on a plugin's row in the root. While its view is still
     /// answering newer text, the row on screen comes from the older answer:
@@ -528,8 +572,14 @@ final class PaletteSession {
                     guard let self else { return }
                     var preference = model.commands.preferences[key]
                     preference.enabled = false
-                    try? model.commands.set(preference, for: key)
-                    showingActions = false
+                    do {
+                        try model.commands.set(preference, for: key)
+                        showingActions = false
+                    } catch {
+                        // Say why it stays on, rather than closing the menu on a command that didn't change.
+                        showingActions = false
+                        problem = "Couldn't disable \(entry.title): \(error)"
+                    }
                 })
             }
             if root.learns(entry) { actions.append(resetRanking(entry)) }

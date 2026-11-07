@@ -1,8 +1,9 @@
 import Foundation
 
-/// Polls a folder for `.swift` files being added, removed or changed. The app
-/// uses it to pick up plugins as they are saved, which is what makes editing a
-/// plugin (by hand or by an agent) feel live.
+/// Watches a folder for `.swift` files being added, removed or changed. The
+/// app uses it to pick up plugins as they are saved, which is what makes
+/// editing a plugin (by hand or by an agent) feel live. It polls through
+/// `PathWatch`, off the caller's actor.
 public final class DirectoryWatcher: @unchecked Sendable {
     public struct Change: Equatable, Sendable {
         public var added: [URL]
@@ -13,7 +14,7 @@ public final class DirectoryWatcher: @unchecked Sendable {
 
     public let directory: URL
     public let fileExtension: String
-    private var task: Task<Void, Never>?
+    private var watch: PathWatch?
     private let lock = NSLock()
     private var last: [String: String] = [:]
 
@@ -23,24 +24,32 @@ public final class DirectoryWatcher: @unchecked Sendable {
         self.last = scan()
     }
 
-    deinit { task?.cancel() }
+    deinit { watch?.stop() }
 
-    /// Calls `onChange` (on an arbitrary thread) whenever a poll finds a change.
+    /// Calls `onChange` (on an arbitrary thread) whenever a look finds a
+    /// change, polling every `interval` seconds.
     public func start(every interval: Double = 1.5, onChange: @escaping @Sendable (Change) -> Void) {
-        task?.cancel()
-        task = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(interval))
-                guard let self, !Task.isCancelled else { return }
-                let change = self.poll()
-                if !change.isEmpty { onChange(change) }
-            }
+        let watch = PathWatch(pollEvery: interval, paths: { [weak self] in
+            guard let self else { return [] }
+            return [self.directory.path] + self.lock.withLock { self.last.keys.sorted() }
+        }, onTick: { [weak self] in
+            guard let self else { return }
+            let change = self.poll()
+            if !change.isEmpty { onChange(change) }
+        })
+        lock.withLock {
+            self.watch?.stop()
+            self.watch = watch
         }
+        watch.start()
     }
 
     public func stop() {
-        task?.cancel()
-        task = nil
+        let watch = lock.withLock { () -> PathWatch? in
+            defer { self.watch = nil }
+            return self.watch
+        }
+        watch?.stop()
     }
 
     /// One poll, also usable directly (tests).

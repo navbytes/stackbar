@@ -53,6 +53,7 @@ public struct BundledStore {
     public let installer: PluginInstaller
     /// The key bundles must be signed with; nil accepts none.
     public let publicKey: String?
+    private let carried = CarriedBundles()
 
     public init(bundlesDirectory: URL, examplesDirectory: URL, pluginsDirectory: URL, record: URL, installer: PluginInstaller, publicKey: String? = OfficialIndex.publicKey) {
         self.bundlesDirectory = bundlesDirectory
@@ -68,6 +69,13 @@ public struct BundledStore {
     public func bundles() -> [PluginBundle] {
         guard let publicKey else { return [] }
         let files = (try? FileManager.default.contentsOfDirectory(at: bundlesDirectory, includingPropertiesForKeys: nil)) ?? []
+        // Reading and checking every carried bundle is the expensive part, and
+        // they only change when the folder does (a new app version, a test).
+        let signature = files.sorted { $0.path < $1.path }.map { file -> String in
+            let attributes = try? FileManager.default.attributesOfItem(atPath: file.path)
+            return "\(file.lastPathComponent)|\((attributes?[.size] as? NSNumber)?.intValue ?? -1)|\((attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)"
+        }.joined(separator: "\n") + "\n" + publicKey
+        if let cached = carried.value(for: signature) { return cached }
         var newest: [String: PluginBundle] = [:]
         for file in files where file.pathExtension == PluginBundle.fileExtension {
             guard let data = try? Data(contentsOf: file), let bundle = try? PluginBundle.decode(data),
@@ -76,7 +84,9 @@ public struct BundledStore {
                let have = VersionNumber(current.manifest.version), let offered = VersionNumber(bundle.manifest.version), !(have < offered) { continue }
             newest[bundle.manifest.id] = bundle
         }
-        return newest.values.sorted { $0.manifest.id < $1.manifest.id }
+        let result = newest.values.sorted { $0.manifest.id < $1.manifest.id }
+        carried.store(result, for: signature)
+        return result
     }
 
     /// Installs every carried plugin that isn't installed yet and copies
@@ -111,6 +121,9 @@ public struct BundledStore {
     @discardableResult
     public func installCore(offered: URL) -> [URL] {
         var done = Set((try? JSONDecoder().decode([String].self, from: Data(contentsOf: offered))) ?? [])
+        // Every launch after the first: nothing to offer, so don't decode
+        // and verify every carried bundle to find that out.
+        guard !Self.corePluginIDs.isSubset(of: done) else { return [] }
         let installed = Set(installer.installed.map(\.id))
         var result: [URL] = []
         for bundle in bundles() where Self.corePluginIDs.contains(bundle.manifest.id) && !done.contains(bundle.manifest.id) {
@@ -173,5 +186,24 @@ public struct BundledStore {
     private func exampleSources() -> [URL] {
         let files = FileManager.default.enumerator(at: examplesDirectory, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? []
         return files.filter { $0.pathExtension == "swift" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+}
+
+/// The verified bundles `BundledStore.bundles()` last found, and the folder
+/// listing they came from.
+private final class CarriedBundles: @unchecked Sendable {
+    private let lock = NSLock()
+    private var signature: String?
+    private var bundles: [PluginBundle] = []
+
+    func value(for signature: String) -> [PluginBundle]? {
+        lock.withLock { self.signature == signature ? bundles : nil }
+    }
+
+    func store(_ bundles: [PluginBundle], for signature: String) {
+        lock.withLock {
+            self.signature = signature
+            self.bundles = bundles
+        }
     }
 }

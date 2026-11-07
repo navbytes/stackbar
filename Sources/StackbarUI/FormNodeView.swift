@@ -180,10 +180,16 @@ public struct InstalledApp: Identifiable, Sendable {
 
     #if canImport(AppKit)
     @MainActor var icon: NSImage {
+        if let known = Self.icons[url.path] { return known }
         let image = NSWorkspace.shared.icon(forFile: url.path)
         image.size = NSSize(width: 16, height: 16)
+        Self.icons[url.path] = image
         return image
     }
+
+    /// Each app's menu icon, fetched once: the menu is built again each time
+    /// the picker is shown.
+    @MainActor private static var icons: [String: NSImage] = [:]
     #endif
 
     @MainActor static var cached: [InstalledApp]?

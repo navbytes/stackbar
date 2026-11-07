@@ -18,7 +18,8 @@ final class MacSystem: SystemServices, @unchecked Sendable {
     let images: ClipboardImageStore
     private let store = EKEventStore()
     /// The last app the user was in that wasn't Stackbar: where a paste goes,
-    /// and what a copy came from when Stackbar itself is frontmost.
+    /// and whose menus and context are read when Stackbar itself is
+    /// frontmost. (A copy made then came from Stackbar, and says so.)
     @MainActor private(set) var previousApp: NSRunningApplication?
     @MainActor private var observer: NSObjectProtocol?
 
@@ -45,44 +46,73 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         onMain { NSPasteboard.general.changeCount }
     }
 
+    /// What `readClipboard` takes off the pasteboard on the main thread; the
+    /// encoding, hashing and saving happen after, on the caller's thread.
+    private enum Copied: Sendable {
+        case done(ClipboardItem?)
+        /// Text with formatting, kept as every type of every item.
+        case formatted(ClipboardItem, [[String: Data]])
+        /// An image, as the pasteboard holds it (PNG or TIFF).
+        case image(ClipboardItem, Data)
+    }
+
     func readClipboard() -> ClipboardItem? {
-        onMain { () -> ClipboardItem? in
+        let copied = onMain { () -> Copied in
             let board = NSPasteboard.general
             let types = Set(board.types ?? [])
-            guard !types.isEmpty else { return nil }
+            guard !types.isEmpty else { return .done(nil) }
             let frontmost = NSWorkspace.shared.frontmostApplication
             let source = frontmost?.processIdentifier == getpid() ? nil : frontmost
             var item = ClipboardItem(changeCount: board.changeCount, kind: .text, sourceAppID: source?.bundleIdentifier ?? (frontmost == nil ? nil : "io.navbytes.stackbar"), sourceAppName: source?.localizedName ?? (frontmost == nil ? nil : "Stackbar"))
             if !types.isDisjoint(with: Self.concealedTypes) {
                 item.concealed = true
-                return item
+                return .done(item)
             }
             if let urls = board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
                 item.kind = .files
                 item.files = urls.map(\.path)
                 item.text = item.files.joined(separator: "\n")
-                return item
+                return .done(item)
             }
             if let string = board.string(forType: .string) {
-                let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-                let isURL = !trimmed.contains(where: \.isWhitespace) && (trimmed.hasPrefix("https://") || trimmed.hasPrefix("http://"))
-                item.kind = isURL ? .url : .text
                 item.text = String(string.prefix(200_000))
                 // Keep formatting (rich text, HTML, an app's own types) so a
                 // paste puts back exactly what was copied.
-                if !types.subtracting(Self.plainTypes).isEmpty, let snapshot = Self.snapshot(board) {
-                    item.contentID = try? images.save(snapshot)
+                if !types.subtracting(Self.plainTypes).isEmpty, let items = Self.items(board, upTo: 20 * 1024 * 1024), !items.isEmpty {
+                    return .formatted(item, items)
                 }
-                return item
+                return .done(item)
             }
-            if let data = board.data(forType: .png) ?? board.data(forType: .tiff), data.count < 32 * 1024 * 1024, let bitmap = NSBitmapImageRep(data: data), let png = bitmap.representation(using: .png, properties: [:]) {
+            if let data = board.data(forType: .png) ?? board.data(forType: .tiff), data.count < 32 * 1024 * 1024 {
                 item.kind = .image
-                item.imageID = try? images.save(png)
-                item.imageSize = [bitmap.pixelsWide, bitmap.pixelsHigh]
-                return item.imageID == nil ? nil : item
+                return .image(item, data)
             }
-            return nil
+            return .done(nil)
         }
+        switch copied {
+        case .done(let item):
+            return item.map(Self.classified)
+        case .formatted(let copy, let items):
+            var item = Self.classified(copy)
+            item.contentID = (try? PropertyListEncoder().encode(items)).flatMap { try? images.save($0) }
+            return item
+        case .image(var item, let data):
+            guard let bitmap = NSBitmapImageRep(data: data), let png = bitmap.representation(using: .png, properties: [:]) else { return nil }
+            item.imageID = try? images.save(png)
+            item.imageSize = [bitmap.pixelsWide, bitmap.pixelsHigh]
+            return item.imageID == nil ? nil : item
+        }
+    }
+
+    /// Text that is one web address, and nothing else, is a URL copy. Read
+    /// from the kept prefix, off the main thread.
+    private static func classified(_ item: ClipboardItem) -> ClipboardItem {
+        guard item.kind == .text, let text = item.text else { return item }
+        var item = item
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isURL = !trimmed.contains(where: \.isWhitespace) && (trimmed.hasPrefix("https://") || trimmed.hasPrefix("http://"))
+        if isURL { item.kind = .url }
+        return item
     }
 
     /// Types that carry nothing beyond the plain string itself.
@@ -90,23 +120,6 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         .string, .init("NSStringPboardType"), .init("public.utf16-external-plain-text"), .init("public.utf16-plain-text"),
         .init("org.nspasteboard.source"), .URL, .init("public.url-name"), .init("NSURLPboardType"),
     ]
-
-    /// Every type of every pasteboard item, as a property list, up to 20 MB.
-    private static func snapshot(_ board: NSPasteboard) -> Data? {
-        var items: [[String: Data]] = []
-        var total = 0
-        for pasteboardItem in board.pasteboardItems ?? [] {
-            var entry: [String: Data] = [:]
-            for type in pasteboardItem.types {
-                guard let data = pasteboardItem.data(forType: type) else { continue }
-                total += data.count
-                guard total <= 20 * 1024 * 1024 else { return nil }
-                entry[type.rawValue] = data
-            }
-            items.append(entry)
-        }
-        return items.isEmpty ? nil : try? PropertyListEncoder().encode(items)
-    }
 
     func writeClipboard(_ content: ClipboardContent) throws {
         var imageData: Data?
@@ -142,6 +155,16 @@ final class MacSystem: SystemServices, @unchecked Sendable {
     }
 
     func paste(_ content: ClipboardContent, options: PasteOptions) async throws {
+        let trusted = await MainActor.run { AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary) }
+        guard trusted else {
+            // Asked to put the user's copy back: leave the clipboard alone
+            // rather than lose it to a paste that can't happen.
+            if options.restoreClipboard {
+                throw SystemServiceError("Stackbar needs Accessibility access to paste: System Settings > Privacy & Security > Accessibility")
+            }
+            try writeClipboard(content)
+            throw SystemServiceError("copied, but Stackbar needs Accessibility access to paste: System Settings > Privacy & Security > Accessibility")
+        }
         // What the user had copied, to put back afterwards.
         let saved = options.restoreClipboard ? onMain { Self.items(NSPasteboard.general) } : nil
         try writeClipboard(content)
@@ -155,10 +178,6 @@ final class MacSystem: SystemServices, @unchecked Sendable {
             }
             return board.changeCount
         }
-        let trusted = await MainActor.run { AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary) }
-        guard trusted else {
-            throw SystemServiceError("copied, but Stackbar needs Accessibility access to paste: System Settings > Privacy & Security > Accessibility")
-        }
         await MainActor.run {
             NSApp.hide(nil)
             previousApp?.activate()
@@ -168,7 +187,7 @@ final class MacSystem: SystemServices, @unchecked Sendable {
             let source = CGEventSource(stateID: .combinedSessionState)
             Self.press(9, flags: .maskCommand, source: source) // kVK_ANSI_V
             // One ← per grapheme cluster: that is what one press moves over.
-            for _ in 0..<options.cursorFromEnd { Self.press(123, flags: [], source: source) } // kVK_LeftArrow
+            for _ in 0..<max(0, options.cursorFromEnd) { Self.press(123, flags: [], source: source) } // kVK_LeftArrow
         }
         guard let saved else { return }
         try? await Task.sleep(for: .milliseconds(500))
@@ -194,9 +213,9 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         }
     }
 
-    /// Every type of every item on the pasteboard, up to 32 MB in all; nil
-    /// when there is more (then the clipboard is not restored).
-    private static func items(_ board: NSPasteboard) -> [[String: Data]]? {
+    /// Every type of every item on the pasteboard, up to `limit` bytes in
+    /// all; nil when there is more.
+    private static func items(_ board: NSPasteboard, upTo limit: Int = 32 * 1024 * 1024) -> [[String: Data]]? {
         var items: [[String: Data]] = []
         var total = 0
         for pasteboardItem in board.pasteboardItems ?? [] {
@@ -204,7 +223,7 @@ final class MacSystem: SystemServices, @unchecked Sendable {
             for type in pasteboardItem.types {
                 guard let data = pasteboardItem.data(forType: type) else { continue }
                 total += data.count
-                guard total <= 32 * 1024 * 1024 else { return nil }
+                guard total <= limit else { return nil }
                 entry[type.rawValue] = data
             }
             items.append(entry)
@@ -369,9 +388,8 @@ final class MacSystem: SystemServices, @unchecked Sendable {
     /// The event a `CalendarEvent.id` names: its identifier, then `@` and the
     /// start of the occurrence, so a repeating event changes on that day only.
     private func existingEvent(_ id: String) throws -> EKEvent {
-        let parts = id.split(separator: "@", omittingEmptySubsequences: false)
-        let identifier = String(parts.first ?? "")
-        if parts.count > 1, let seconds = Double(parts[parts.count - 1]) {
+        let (identifier, startSeconds) = CalendarEventID.split(id)
+        if let seconds = startSeconds {
             let start = Date(timeIntervalSince1970: seconds)
             let predicate = store.predicateForEvents(withStart: start.addingTimeInterval(-1), end: start.addingTimeInterval(86400), calendars: nil)
             if let match = store.events(matching: predicate).first(where: {
@@ -401,7 +419,7 @@ final class MacSystem: SystemServices, @unchecked Sendable {
             }
         }
         return CalendarEvent(
-            id: (event.eventIdentifier ?? event.calendarItemIdentifier) + "@" + String(Int(start.timeIntervalSince1970)),
+            id: CalendarEventID.make(identifier: event.eventIdentifier ?? event.calendarItemIdentifier, start: start),
             title: title.isEmpty ? "(No title)" : title,
             start: start,
             end: event.endDate ?? start,
@@ -654,13 +672,16 @@ final class MacSystem: SystemServices, @unchecked Sendable {
     // MARK: Context
 
     func context() async -> InvocationContext {
-        await MainActor.run {
+        let target = await MainActor.run { () -> (context: InvocationContext, pid: pid_t)? in
             let frontmost = NSWorkspace.shared.frontmostApplication
             // Stackbar's own palette or panel is in front: the user's app is
             // the one before it.
-            let app = frontmost?.processIdentifier == getpid() ? previousApp : frontmost
-            return MacContext.read(app)
+            guard let app = frontmost?.processIdentifier == getpid() ? previousApp : frontmost else { return nil }
+            return (MacContext.app(app), app.processIdentifier)
         }
+        guard let target else { return InvocationContext() }
+        // The title and selection are messages to that app: off the main thread.
+        return await AXWorker.run { MacContext.accessibility(target.context, pid: target.pid) }
     }
 
     func finderSelection() async throws -> [String] {
@@ -705,8 +726,13 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         }
         if NSWorkspace.shared.urlForApplication(withBundleIdentifier: nameOrPath) != nil { return nameOrPath }
         let name = nameOrPath.hasSuffix(".app") ? String(nameOrPath.dropLast(4)) : nameOrPath
-        let apps = await InstalledApp.load()
-        return apps.first { $0.name.caseInsensitiveCompare(name) == .orderedSame || $0.url.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(name) == .orderedSame }?.id
+        // The finding calls' list, rescanned every few minutes, so an app
+        // installed since launch is found too.
+        let apps = await InstalledApps.shared.list().filter { $0.kind == .app }
+        return apps.first { app in
+            app.name.caseInsensitiveCompare(name) == .orderedSame
+                || URL(fileURLWithPath: app.path).deletingPathExtension().lastPathComponent.caseInsensitiveCompare(name) == .orderedSame
+        }?.id
     }
 
     private func onMain<T: Sendable>(_ body: @MainActor () -> T) -> T {
@@ -726,13 +752,27 @@ enum MacContext {
         return read(frontmost?.processIdentifier == getpid() ? nil : frontmost)
     }
 
+    /// Synchronous, on the main thread: the palette and hotkeys read it
+    /// before Stackbar takes focus. Each message waits at most
+    /// `AXWorker.timeout` for an app that doesn't answer.
     static func read(_ app: NSRunningApplication?) -> InvocationContext {
         guard let app else { return InvocationContext() }
-        var context = InvocationContext(frontmostApp: .init(bundleID: app.bundleIdentifier ?? "", name: app.localizedName ?? ""))
+        return accessibility(Self.app(app), pid: app.processIdentifier)
+    }
+
+    /// The app alone, without what Accessibility reads.
+    static func app(_ app: NSRunningApplication) -> InvocationContext {
+        InvocationContext(frontmostApp: .init(bundleID: app.bundleIdentifier ?? "", name: app.localizedName ?? ""))
+    }
+
+    /// Adds the focused window's title and the selected text of the app
+    /// `pid`. Without Accessibility access they stay nil.
+    nonisolated static func accessibility(_ context: InvocationContext, pid: pid_t) -> InvocationContext {
+        var context = context
         guard AXIsProcessTrusted() else { return context }
-        let element = AXUIElementCreateApplication(app.processIdentifier)
-        // An app that doesn't answer must not hold up the hotkey.
-        AXUIElementSetMessagingTimeout(element, 0.25)
+        // An app that doesn't answer must not hold up the hotkey. The
+        // timeout is per element, so each one read gets it too.
+        let element = AXWorker.timed(AXUIElementCreateApplication(pid))
         if let window = Self.element(element, kAXFocusedWindowAttribute) {
             context.windowTitle = Self.string(window, kAXTitleAttribute).flatMap { $0.isEmpty ? nil : $0 }
         }
@@ -743,14 +783,14 @@ enum MacContext {
         return context
     }
 
-    private static func element(_ parent: AXUIElement, _ attribute: String) -> AXUIElement? {
+    private nonisolated static func element(_ parent: AXUIElement, _ attribute: String) -> AXUIElement? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(parent, attribute as CFString, &value) == .success,
               let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        return (value as! AXUIElement) // swiftlint:disable:this force_cast
+        return AXWorker.timed(value as! AXUIElement) // swiftlint:disable:this force_cast
     }
 
-    private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
+    private nonisolated static func string(_ element: AXUIElement, _ attribute: String) -> String? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
         return value as? String

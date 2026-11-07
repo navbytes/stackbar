@@ -13,6 +13,10 @@ import StackbarProtocol
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationRouter()
     private var categories: [String: UNNotificationCategory] = [:]
+    /// Category ids, oldest first. A plugin can put changing text in its
+    /// button titles, and each set is a category, so only the newest are kept.
+    private var categoryOrder: [String] = []
+    private static let maxCategories = 64
 
     func post(_ note: HostNotification) {
         let content = UNMutableNotificationContent()
@@ -27,6 +31,8 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
                     UNNotificationAction(identifier: "action-\(index)", title: action.title, options: [.foreground])
                 }
                 categories[id] = UNNotificationCategory(identifier: id, actions: actions, intentIdentifiers: [])
+                categoryOrder.append(id)
+                while categoryOrder.count > Self.maxCategories { categories[categoryOrder.removeFirst()] = nil }
                 UNUserNotificationCenter.current().setNotificationCategories(Set(categories.values))
             }
             content.categoryIdentifier = id

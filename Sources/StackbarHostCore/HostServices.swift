@@ -82,6 +82,8 @@ public final class HostServices: Sendable {
     public let oauth: OAuthBroker
     public let bus: PluginBus
     public let platform: Platform
+    /// The clipboard poll that plugins with a `.clipboard` trigger share.
+    public let clipboard: ClipboardWatch
     /// Runs declared commands, and keeps the audit of what ran.
     public let runs: CommandRunGate
     /// The programs the user approved each plugin to run, by declared name
@@ -101,10 +103,12 @@ public final class HostServices: Sendable {
         self.secrets = secrets
         self.audit = audit
         self.http = HTTPService(audit: audit)
-        self.images = RemoteImageStore(http: http)
+        self.images = RemoteImageStore(http: http, budget: pools[.requests])
         self.oauth = OAuthBroker(secrets: secrets, timeout: oauthTimeout, openURL: platform.open)
         self.bus = bus
         self.platform = platform
+        let system = platform.system
+        self.clipboard = ClipboardWatch { system.clipboardChangeCount() }
     }
 
     /// Services rooted in one directory, with the given secret store. For
@@ -155,10 +159,13 @@ public final class HostServices: Sendable {
             }
 
         case .http(let request):
-            let allowed = granted.networkHosts + userServerHosts(granted)
+            // Each Keychain read is a round trip to securityd, so the user's
+            // servers are read once per call, not again on the failure path.
+            let grantedUserHosts = userServerHosts(granted)
+            let allowed = granted.networkHosts + grantedUserHosts
             let result = await http.perform(request, pluginID: granted.id, allowedHosts: allowed)
             if case .failure = result, let host = URLParts.host(of: request.url),
-               !URLParts.host(host, matches: allowed), URLParts.host(host, matches: declared.networkHosts + userServerHosts(declared)) {
+               !URLParts.host(host, matches: allowed), URLParts.host(host, matches: declared.networkHosts + (declared.userServerSecrets == granted.userServerSecrets ? grantedUserHosts : userServerHosts(declared))) {
                 return Self.awaitingApproval(granted, "to reach \(host)")
             }
             return result
@@ -238,7 +245,7 @@ public final class HostServices: Sendable {
             if case .text(let text) = content, text.utf8.count > 1024 * 1024 { return .failure("text is too large to copy") }
             if case .paste(_, let options) = call {
                 var options = options ?? PasteOptions()
-                options.cursorFromEnd = min(options.cursorFromEnd, PasteOptions.maxCursorFromEnd)
+                options.cursorFromEnd = min(max(options.cursorFromEnd, 0), PasteOptions.maxCursorFromEnd)
                 return await perform { try await self.platform.system.paste(content, options: options) }
             }
             return await perform { try self.platform.system.writeClipboard(content) }

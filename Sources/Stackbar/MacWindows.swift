@@ -7,20 +7,26 @@ import StackbarProtocol
 extension MacSystem {
     func windows() async throws -> WindowSnapshot {
         guard await MainActor.run(body: { MacWindows.isTrusted() }) else { throw MacWindows.untrusted }
-        return await MainActor.run { MacWindows.live().snapshot }
+        let scene = await MainActor.run { MacWindows.Scene.current() }
+        return await AXWorker.run { MacWindows.live(scene).snapshot }
     }
 
     func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult {
         guard await MainActor.run(body: { MacWindows.isTrusted() }) else { throw MacWindows.untrusted }
         let opened = launch ? await MacWindows.launchMissing(placements) : []
-        var result = await MainActor.run { MacWindows.arrange(placements) }
+        let scene = await MainActor.run { MacWindows.Scene.current() }
+        let (arranged, front) = await AXWorker.run { MacWindows.arrange(placements, in: scene) }
+        if let front { await MainActor.run { MacWindows.activate(front) } }
+        var result = arranged
         result.opened = opened
         return result
     }
 
     func focusWindow(_ target: WindowTarget) async throws {
         guard await MainActor.run(body: { MacWindows.isTrusted() }) else { throw MacWindows.untrusted }
-        try await MainActor.run { try MacWindows.focus(target) }
+        let scene = await MainActor.run { MacWindows.Scene.current() }
+        let pid = try await AXWorker.runThrowing { try MacWindows.focus(target, in: scene) }
+        await MainActor.run { MacWindows.activate(pid) }
     }
 }
 
@@ -41,30 +47,57 @@ enum MacWindows {
         var pids: [pid_t]
     }
 
+    /// The displays and the regular apps, read on the main thread, for the
+    /// Accessibility reads that follow on `AXWorker`.
+    struct Scene: Sendable {
+        struct App: Sendable {
+            var pid: pid_t
+            var bundleID: String
+            var name: String
+        }
+
+        var displays: [DisplayInfo]
+        var apps: [App]
+
+        @MainActor static func current() -> Scene {
+            let apps = NSWorkspace.shared.runningApplications.compactMap { app -> App? in
+                guard app.activationPolicy == .regular, !app.isTerminated, app.processIdentifier != getpid(), let bundleID = app.bundleIdentifier else { return nil }
+                return App(pid: app.processIdentifier, bundleID: bundleID, name: app.localizedName ?? bundleID)
+            }
+            return Scene(displays: MacWindows.displays(), apps: apps)
+        }
+    }
+
     static func isTrusted() -> Bool {
         AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }
 
+    /// Brings the app forward, so a raised window lands in front of every
+    /// other app's windows.
+    static func activate(_ pid: pid_t) {
+        NSRunningApplication(processIdentifier: pid)?.activate()
+    }
+
     // MARK: Reading
 
-    static func live() -> Live {
-        let displays = displays()
+    /// Every standard window of the scene's apps. Runs on `AXWorker`: about
+    /// six messages a window, each waiting on its app.
+    nonisolated static func live(_ scene: Scene) -> Live {
+        let displays = scene.displays
         let base = WindowSnapshot(displays: displays)
         let stack = onScreenStack()
         var entries: [(info: WindowInfo, element: AXUIElement, pid: pid_t)] = []
-        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular && !app.isTerminated && app.processIdentifier != getpid() {
-            guard let bundleID = app.bundleIdentifier else { continue }
-            let element = AXUIElementCreateApplication(app.processIdentifier)
-            AXUIElementSetMessagingTimeout(element, 0.25)
+        for app in scene.apps {
+            let element = AXWorker.timed(AXUIElementCreateApplication(app.pid))
             for window in elements(element, kAXWindowsAttribute) {
                 if let subrole = string(window, kAXSubroleAttribute), subrole != kAXStandardWindowSubrole { continue }
                 if bool(window, "AXFullScreen") { continue }
                 guard let frame = frame(window), frame.width > 1, frame.height > 1 else { continue }
                 let minimized = bool(window, kAXMinimizedAttribute)
-                let onScreen = stack.firstIndex(where: { $0.pid == app.processIdentifier && close($0.frame, frame) })
+                let onScreen = stack.firstIndex(where: { $0.pid == app.pid && close($0.frame, frame) })
                 let rank = minimized ? Int.max : (onScreen ?? Int.max - 1)
-                let info = WindowInfo(appID: bundleID, appName: app.localizedName ?? bundleID, title: string(window, kAXTitleAttribute) ?? "", frame: frame, displayID: base.display(for: frame)?.id, order: rank, isMinimized: minimized)
-                entries.append((info, window, app.processIdentifier))
+                let info = WindowInfo(appID: app.bundleID, appName: app.name, title: string(window, kAXTitleAttribute) ?? "", frame: frame, displayID: base.display(for: frame)?.id, order: rank, isMinimized: minimized)
+                entries.append((info, window, app.pid))
             }
         }
         // Stable: windows Core Graphics didn't list keep their app's order.
@@ -105,7 +138,7 @@ enum MacWindows {
     }
 
     /// Normal-layer windows on screen, front to back, by process and bounds.
-    private static func onScreenStack() -> [(pid: pid_t, frame: WindowRect)] {
+    private nonisolated static func onScreenStack() -> [(pid: pid_t, frame: WindowRect)] {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return [] }
         return list.compactMap { entry in
             guard (entry[kCGWindowLayer as String] as? Int) == 0,
@@ -116,14 +149,16 @@ enum MacWindows {
         }
     }
 
-    private static func close(_ lhs: WindowRect, _ rhs: WindowRect) -> Bool {
+    private nonisolated static func close(_ lhs: WindowRect, _ rhs: WindowRect) -> Bool {
         abs(lhs.x - rhs.x) < 2 && abs(lhs.y - rhs.y) < 2 && abs(lhs.width - rhs.width) < 2 && abs(lhs.height - rhs.height) < 2
     }
 
     // MARK: Moving
 
-    static func arrange(_ placements: [WindowPlacement]) -> ArrangeResult {
-        let live = live()
+    /// Moves the matched windows; answers what happened and the process to
+    /// bring forward on the main thread afterwards. Runs on `AXWorker`.
+    nonisolated static func arrange(_ placements: [WindowPlacement], in scene: Scene) -> (ArrangeResult, front: pid_t?) {
+        let live = live(scene)
         let match = WindowMatcher.match(placements, to: live.snapshot.windows)
         var result = ArrangeResult(missing: match.missing.map { placements[$0].appName })
         // Back to front, so each raise lands the saved frontmost window on top.
@@ -149,18 +184,17 @@ enum MacWindows {
             }
             if changed { result.moved += 1 }
         }
-        // A raise orders windows within their app; bring the app of the
-        // saved frontmost window forward too.
-        if let front = match.assignments.first(where: { !placements[$0.placement].isMinimized }) {
-            NSRunningApplication(processIdentifier: live.pids[front.window])?.activate()
-        }
-        return result
+        // A raise orders windows within their app; the app of the saved
+        // frontmost window comes forward too.
+        let front = match.assignments.first(where: { !placements[$0.placement].isMinimized }).map { live.pids[$0.window] }
+        return (result, front)
     }
 
-    /// Unminimizes and raises the window, then activates its app so the
-    /// raise lands it in front of every other app's windows.
-    static func focus(_ target: WindowTarget) throws {
-        let live = live()
+    /// Unminimizes and raises the window; answers its process, to activate
+    /// so the raise lands it in front of every other app's windows. Runs on
+    /// `AXWorker`.
+    nonisolated static func focus(_ target: WindowTarget, in scene: Scene) throws -> pid_t {
+        let live = live(scene)
         guard let index = target.index(in: live.snapshot.windows) else { throw SystemServiceError("\(target.appID) has no window like that open") }
         let element = live.elements[index]
         if live.snapshot.windows[index].isMinimized {
@@ -168,12 +202,12 @@ enum MacWindows {
         }
         AXUIElementSetAttributeValue(element, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(element, kAXRaiseAction as CFString)
-        NSRunningApplication(processIdentifier: live.pids[index])?.activate()
+        return live.pids[index]
     }
 
     /// Position, size, then position again: moving a big window onto a
     /// smaller display first clamps it, and the second move puts it right.
-    private static func setFrame(_ element: AXUIElement, _ frame: WindowRect) -> Bool {
+    private nonisolated static func setFrame(_ element: AXUIElement, _ frame: WindowRect) -> Bool {
         var point = CGPoint(x: frame.x, y: frame.y)
         var size = CGSize(width: frame.width, height: frame.height)
         guard let position = AXValueCreate(.cgPoint, &point), let extent = AXValueCreate(.cgSize, &size) else { return false }
@@ -205,7 +239,8 @@ enum MacWindows {
         for _ in 0..<16 {
             try? await Task.sleep(for: .milliseconds(500))
             var counts: [String: Int] = [:]
-            for window in live().snapshot.windows { counts[window.appID, default: 0] += 1 }
+            let scene = Scene.current()
+            for window in await AXWorker.run({ MacWindows.live(scene).snapshot.windows }) { counts[window.appID, default: 0] += 1 }
             if wanted.allSatisfy({ counts[$0.key, default: 0] >= $0.value }) { break }
         }
         return opened
@@ -223,25 +258,26 @@ enum MacWindows {
 
     // MARK: Accessibility values
 
-    private static func copy(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+    private nonisolated static func copy(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
         return value
     }
 
-    private static func elements(_ element: AXUIElement, _ attribute: String) -> [AXUIElement] {
-        (copy(element, attribute) as? [AXUIElement]) ?? []
+    private nonisolated static func elements(_ element: AXUIElement, _ attribute: String) -> [AXUIElement] {
+        // The timeout isn't passed on to the elements read from one.
+        ((copy(element, attribute) as? [AXUIElement]) ?? []).map { AXWorker.timed($0) }
     }
 
-    private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
+    private nonisolated static func string(_ element: AXUIElement, _ attribute: String) -> String? {
         copy(element, attribute) as? String
     }
 
-    private static func bool(_ element: AXUIElement, _ attribute: String) -> Bool {
+    private nonisolated static func bool(_ element: AXUIElement, _ attribute: String) -> Bool {
         (copy(element, attribute) as? Bool) ?? false
     }
 
-    private static func frame(_ window: AXUIElement) -> WindowRect? {
+    private nonisolated static func frame(_ window: AXUIElement) -> WindowRect? {
         guard let position = copy(window, kAXPositionAttribute), let extent = copy(window, kAXSizeAttribute),
               CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(extent) == AXValueGetTypeID() else { return nil }
         var point = CGPoint.zero

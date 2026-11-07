@@ -80,6 +80,8 @@ final class PluginController: Identifiable {
     @ObservationIgnored private weak var model: AppModel?
     @ObservationIgnored private var updatesTask: Task<Void, Never>?
     @ObservationIgnored private var loadGeneration = 0
+    /// The newest load's build, cancelled when a newer load or a stop comes.
+    @ObservationIgnored private var buildTicket: BuildTicket?
 
     init(source: URL, model: AppModel) {
         self.id = source.path
@@ -136,6 +138,10 @@ final class PluginController: Identifiable {
         }
         loadGeneration += 1
         let generation = loadGeneration
+        // A build of an older version still waiting its turn is skipped.
+        buildTicket?.cancel()
+        let ticket = BuildTicket()
+        buildTicket = ticket
         building = true
         problem = nil
         state = .starting
@@ -143,7 +149,7 @@ final class PluginController: Identifiable {
         let source = source
         let loader = PluginLoader(builder: model.builder, sandbox: model.sandbox)
         do {
-            let loaded = try await Task.detached { try loader.load(source) }.value
+            let loaded = try await loader.loadInBackground(source, ticket: ticket)
             guard generation == loadGeneration else { return }
             let manifest = loaded.manifest
             // Just installed from the Store: what was built must be what
@@ -191,8 +197,15 @@ final class PluginController: Identifiable {
             await next.start()
         } catch {
             guard generation == loadGeneration else { return }
+            // The helper from the last good build is still running: stop it,
+            // or its updates would flip the state back from failed.
+            updatesTask?.cancel()
+            updatesTask = nil
+            let previous = supervisor
+            supervisor = nil
             state = .failed("could not start")
             problem = "\(error)"
+            await previous?.stop()
         }
     }
 
@@ -221,6 +234,8 @@ final class PluginController: Identifiable {
     func stop() async {
         // A build still running for this plugin must not start it afterwards.
         loadGeneration += 1
+        buildTicket?.cancel()
+        buildTicket = nil
         building = false
         updatesTask?.cancel()
         await supervisor?.stop()
@@ -303,6 +318,13 @@ final class PluginController: Identifiable {
         } catch {
             problem = "could not save \(secret): \(error)"
         }
+    }
+
+    /// `hasSecret` read off the main thread: a Keychain read can block (or
+    /// prompt), which would freeze a page that is only opening.
+    func hasSecretOffMain(_ secret: String) async -> Bool {
+        guard let secrets = model?.services.secrets else { return false }
+        return await Task.detached { ((try? secrets.secret(secret)) ?? nil)?.isEmpty == false }.value
     }
 
     /// Whether a value is saved for `secret`. The Keychain is the only store

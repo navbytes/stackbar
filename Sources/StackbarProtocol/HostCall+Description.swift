@@ -209,3 +209,40 @@ extension HostCall {
         }
     }
 }
+
+extension HostCall {
+    /// Seconds an ordinary call waits for the host's answer.
+    public static let defaultReplyTimeout: Double = 120
+    /// Seconds a call that may raise a macOS permission prompt waits.
+    public static let promptReplyTimeout: Double = 600
+
+    /// How long the plugin waits for the host's answer before the call
+    /// fails, so one call that is never answered can't hold up the plugin
+    /// for good. `nil` for calls that wait on the user for as long as they
+    /// take (a sign-in, which the host ends itself, a file panel, the color
+    /// picker, a screen selection).
+    public var replyTimeout: Double? {
+        switch self {
+        case .oauthToken, .chooseFile, .saveFile, .pickColor, .captureScreenText:
+            return nil
+        case .http(let request):
+            // The host may let a call run up to its whole-call maximum (redirects
+            // and a slow trickle keep the idle timeout from firing), so wait
+            // for that, not just for the request's own timeout.
+            return HTTPRequest.maxCallSeconds + 30
+        case .run(let request):
+            // The host reads a timeout of 0 or less as the default.
+            let timeout = request.timeout > 0 ? request.timeout : RunRequest.defaultTimeout
+            return min(timeout, RunRequest.maxTimeout) + 30
+        case .reminderAccess, .reminderLists, .createReminderList, .reminders, .saveReminder, .deleteReminder,
+             .calendarEvents, .saveCalendarEvent, .writableCalendars, .system, .arrangeWindows:
+            return Self.promptReplyTimeout
+        case .storageSet, .secret, .publish, .notify, .alert, .playSound, .openURL, .open, .copy, .clipboardRead,
+             .clipboardWrite, .paste, .keepAwake, .systemStatus, .cancelRun, .context, .finderSelection,
+             .resolveApplication, .windows, .runningApps, .activateApp, .hideApp, .setKeyLayer, .keyLayerStatus,
+             .installedApps, .findFiles, .hud, .setExpansions, .expansionStatus, .focusWindow, .menuItems,
+             .pressMenuItem, .define, .openInTerminal, .recognizeText, .sensors:
+            return Self.defaultReplyTimeout
+        }
+    }
+}

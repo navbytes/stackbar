@@ -136,6 +136,15 @@ final class PluginStoreTests: XCTestCase {
         XCTAssertEqual(review.withdrawn.map(\.installed.id), ["dev.t.w"], "only a signed index can withdraw a plugin")
     }
 
+    func testAnImportedRecordWithoutAPinnedPublisherGetsNoAutomaticUpdate() {
+        let official = PluginStore.Source(url: URL(string: "https://example.com/official.json")!, publicKey: "KEY", isOfficial: true)
+        let catalogs = [PluginStore.Catalog(source: official, index: PluginIndex(name: "O", plugins: [entry("dev.t.a", "1.3.0"), entry("dev.t.b", "2.0.0")], revoked: [.init(id: "dev.t.w", reason: "malware")]))]
+        let installed = [record("dev.t.a", "1.0.0"), record("dev.t.b", "1.0.0"), record("dev.t.w", "1.0.0")]
+        let review = PluginStore.review(catalogs, installed: installed, running: "0.10.0", isPinned: { $0 == "dev.t.b" })
+        XCTAssertEqual(review.updates.map(\.entry.id), ["dev.t.b"])
+        XCTAssertEqual(review.withdrawn.map(\.installed.id), ["dev.t.w"], "a signed withdrawal still removes it")
+    }
+
     func testForgetDropsTheRecordAndKeepsTheFile() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -277,6 +286,17 @@ final class BundledStoreTests: XCTestCase {
         XCTAssertEqual(installed("Todo.swift"), "import StackbarKit // mine\n")
     }
 
+    func testCoreInstallStopsEarlyOnceEveryCorePluginWasOffered() throws {
+        let (store, installer) = store(publicKey: nil)
+        let offered = root.appendingPathComponent("core-plugins.json")
+        // Unsorted on purpose: a pass over the bundles would write it back sorted.
+        let written = try JSONEncoder().encode(Array(BundledStore.corePluginIDs.sorted().reversed()))
+        try written.write(to: offered)
+        XCTAssertEqual(store.installCore(offered: offered), [])
+        XCTAssertEqual(try Data(contentsOf: offered), written, "the record is left as it was")
+        XCTAssertTrue(installer.installed.isEmpty)
+    }
+
     #if canImport(CryptoKit)
     func testInstallsTheNewestOfficiallySignedBundles() throws {
         let key = try Signing.generateKey()
@@ -301,6 +321,22 @@ final class BundledStoreTests: XCTestCase {
         XCTAssertEqual(store.installMissing(), [], "running it again changes nothing")
     }
 
+    func testCarriedBundlesAreCheckedOnceButNoticeAChangedFolder() throws {
+        let key = try Signing.generateKey()
+        func sign(_ id: String) throws {
+            let bundle = try Signing.bundle(source: "// \(id)", manifest: Manifest(id: id, name: id, version: "1.0.0"), publisherName: "navbytes", privateKey: key.privateKey)
+            try bundle.encoded().write(to: root.appendingPathComponent("Bundles/\(id).stackbarplugin"))
+        }
+        try sign("io.navbytes.stackbar.clipboard")
+        let (store, _) = store(publicKey: key.publicKey.base64EncodedString())
+        XCTAssertEqual(store.bundles().map(\.manifest.id), ["io.navbytes.stackbar.clipboard"])
+        XCTAssertEqual(store.bundles().map(\.manifest.id), ["io.navbytes.stackbar.clipboard"])
+        try sign("io.navbytes.stackbar.stay-awake")
+        XCTAssertEqual(store.bundles().map(\.manifest.id), ["io.navbytes.stackbar.clipboard", "io.navbytes.stackbar.stay-awake"])
+        try FileManager.default.removeItem(at: root.appendingPathComponent("Bundles/io.navbytes.stackbar.clipboard.stackbarplugin"))
+        XCTAssertEqual(store.bundles().map(\.manifest.id), ["io.navbytes.stackbar.stay-awake"])
+    }
+
     func testWelcomeInstallsOnlyThePickedStarters() throws {
         let key = try Signing.generateKey()
         for (id, name) in [("io.navbytes.stackbar.clipboard", "Clipboard History"), ("io.navbytes.stackbar.stay-awake", "Stay Awake"), ("io.navbytes.stackbar.plugins.calculator", "Calculator")] {
@@ -321,5 +357,40 @@ private extension Data {
         let text = String(decoding: self, as: UTF8.self)
         guard let range = text.range(of: target) else { return self }
         return Data(text.replacingCharacters(in: range, with: replacement).utf8)
+    }
+}
+
+final class StoreLoadingTests: XCTestCase {
+    func testSourcesLoadTogetherAndKeepTheirOrder() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var sources: [PluginStore.Source] = []
+        for name in ["one", "two", "three"] {
+            let file = directory.appendingPathComponent("\(name).json")
+            try PluginIndex(name: name, plugins: []).encoded().write(to: file)
+            sources.append(PluginStore.Source(url: file))
+        }
+        sources.insert(PluginStore.Source(url: directory.appendingPathComponent("missing.json")), at: 1)
+        let result = await PluginStore.load(sources)
+        XCTAssertEqual(result.catalogs.map(\.index.name), ["one", "two", "three"])
+        XCTAssertEqual(result.problems.count, 1)
+        XCTAssertTrue(result.problems[0].contains("missing.json"))
+    }
+
+    func testAStoresHelperListIsFetchedOncePerPass() async throws {
+        let hits = Log()
+        let server = try LoopbackServer { _ in
+            hits.add(.log(.info, "hit"))
+            return .text("none", status: 404)
+        }
+        defer { server.stop() }
+        let cache = HelperIndexCache()
+        let indexURL = try XCTUnwrap(URL(string: "\(server.baseURL)/index.json"))
+        let first = await cache.fetch(beside: indexURL)
+        let second = await cache.fetch(beside: indexURL)
+        XCTAssertNil(first)
+        XCTAssertNil(second)
+        XCTAssertEqual(hits.all.count, 1)
     }
 }

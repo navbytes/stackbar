@@ -54,6 +54,9 @@ final class AppModel {
     /// Store, Settings and the update check.
     @ObservationIgnored private(set) var installation: PluginInstallation!
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
+    /// Widget renders waiting to be written, and when the next write may go.
+    @ObservationIgnored private var widgetQueue = WidgetPublishQueue()
+    @ObservationIgnored private var widgetFlush: Task<Void, Never>?
     /// Presses on widget buttons, left by the widget extension.
     @ObservationIgnored private let widgetActions = WidgetActionInbox.shared()
     /// Which plugin tools agents may use (Settings → Agents).
@@ -85,7 +88,9 @@ final class AppModel {
         let ledger = CapabilityLedger(file: StackbarPaths.ledgerFile)
         self.ledger = ledger
         services = HostServices(
-            storage: StorageStore(directory: StackbarPaths.storageDirectory),
+            // Saves are written a second after a plugin's last one; quitting
+            // and stopping a plugin write what is waiting.
+            storage: StorageStore(directory: StackbarPaths.storageDirectory, writeDelay: 1),
             secrets: StackbarPaths.defaultSecrets(includeEnvironment: false),
             platform: HostServices.Platform(
                 notify: { note in Task { @MainActor in Platform.notify(note) } },
@@ -109,7 +114,7 @@ final class AppModel {
         secretRouter.model = self
         installation = PluginInstallation(installer: installer, ledger: ledger, switches: switches, storage: services.storage, secrets: services.secrets,
                                           helpers: .init(directory: builder.downloadedHelpers, stackbarKit: builder.stackbarKit),
-                                          trash: { try? FileManager.default.trashItem(at: $0, resultingItemURL: nil) })
+                                          trash: { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) })
         commands = CommandCenter(model: self, services: services)
         // A key layer's assign chord (Right ⌘ ⌥ + a letter) runs the
         // plugin's assign command, as a hotkey would.
@@ -164,12 +169,14 @@ final class AppModel {
         guard !installed.isEmpty else { return }
         let (catalogs, _) = await PluginStore.load(storeSources)
         await refreshHelpers(installed: installed, catalogs: catalogs)
-        let review = PluginStore.review(catalogs, installed: installed)
+        let publishers = installer.publishers
+        let review = PluginStore.review(catalogs, installed: installed, isPinned: { publishers.publisher(for: $0) != nil })
         for withdrawn in review.withdrawn {
             let running = controllers.filter { $0.pluginID == withdrawn.installed.id }
             for controller in running { await remove(controller) }
-            await installation.withdraw(withdrawn.installed, loaded: running.map(\.source))
-            Platform.notify(HostNotification(pluginID: withdrawn.installed.id, pluginName: "Stackbar", title: "Removed a withdrawn plugin", body: "\(withdrawn.installed.id) \(withdrawn.installed.version) was withdrawn by its publisher and is in the Trash: \(withdrawn.reason)"))
+            let stuck = await installation.withdraw(withdrawn.installed, loaded: running.map(\.source))
+            let outcome = stuck.isEmpty ? "is in the Trash" : "could not be moved to the Trash and is still in the plugins folder"
+            Platform.notify(HostNotification(pluginID: withdrawn.installed.id, pluginName: "Stackbar", title: "Removed a withdrawn plugin", body: "\(withdrawn.installed.id) \(withdrawn.installed.version) was withdrawn by its publisher and \(outcome): \(withdrawn.reason)"))
         }
         guard autoUpdatePlugins else {
             pendingUpdates = review.updates
@@ -187,6 +194,8 @@ final class AppModel {
     func installUpdate(_ update: PluginStore.Update) async throws {
         let bundle = try await PluginIndex.bundle(for: update.entry, indexURL: update.indexURL)
         guard bundle.manifest.id == update.entry.id else { throw PluginBundle.BundleError.manifestMismatch }
+        // Verified before the helper, which can be up to 64 MB, is fetched.
+        try bundle.verify()
         let helper = try await prebuiltHelper(for: bundle, indexURL: update.indexURL)
         let file = try installation.install(bundle, helper: helper)
         if let controller = controller(for: update.entry.id) { controller.reload() } else { add(file) }
@@ -230,6 +239,7 @@ final class AppModel {
         watcher?.stop()
         agentServer?.stop()
         agentServer = nil
+        services.storage.flushAll()
     }
 
     func add(_ source: URL) {
@@ -246,7 +256,7 @@ final class AppModel {
         controllers.removeAll { $0 === controller }
         palette.remove(pluginID: controller.pluginID)
         commands.forget(pluginID: controller.pluginID)
-        widgets.remove(controller.pluginID)
+        forgetWidget(controller.pluginID)
         onPluginsChanged?()
     }
 
@@ -254,7 +264,9 @@ final class AppModel {
     /// loaded under the same id stops first, so nothing of it is left
     /// running. Its saved data stays unless `deleteData`, so installing it
     /// again picks up where it left off.
-    func uninstall(_ controller: PluginController, deleteData: Bool = false) async {
+    /// Returns the files that could not be moved to the Trash.
+    @discardableResult
+    func uninstall(_ controller: PluginController, deleteData: Bool = false) async -> [URL] {
         let id = controller.pluginID
         let providers = controller.manifest?.capabilities.compactMap { capability -> OAuthProvider? in
             if case .oauth(let provider) = capability { return provider }
@@ -263,17 +275,20 @@ final class AppModel {
         let files = installation.files(of: id, loaded: [controller.source])
         let doomed = controllers.filter { $0 === controller || $0.pluginID == id || files.contains($0.source.standardizedFileURL) }
         for other in doomed { await remove(other) }
-        await installation.uninstall(id, loaded: doomed.map(\.source), deleteData: deleteData, providers: providers)
+        let stuck = await installation.uninstall(id, loaded: doomed.map(\.source), deleteData: deleteData, providers: providers)
         refreshInstalled()
+        return stuck
     }
 
     /// Removes an installed plugin by id, whether or not it is loaded.
-    func uninstall(pluginID: String, deleteData: Bool = false) async {
+    @discardableResult
+    func uninstall(pluginID: String, deleteData: Bool = false) async -> [URL] {
         if let controller = controller(for: pluginID) {
-            await uninstall(controller, deleteData: deleteData)
+            return await uninstall(controller, deleteData: deleteData)
         } else {
-            await installation.uninstall(pluginID, deleteData: deleteData)
+            let stuck = await installation.uninstall(pluginID, deleteData: deleteData)
             refreshInstalled()
+            return stuck
         }
     }
 
@@ -289,7 +304,7 @@ final class AppModel {
     func pluginTurnedOff(_ controller: PluginController) {
         palette.remove(pluginID: controller.pluginID)
         commands.forget(pluginID: controller.pluginID)
-        widgets.remove(controller.pluginID)
+        forgetWidget(controller.pluginID)
         onPluginsChanged?()
     }
 
@@ -425,10 +440,46 @@ final class AppModel {
         }
     }
 
+    /// A plugin rendered its widget. Renders are coalesced: one that matches
+    /// what was last written is dropped, the rest are written together off
+    /// the main thread, and WidgetKit is asked to reload at most every few
+    /// seconds (it budgets reloads).
     func widgetChanged(_ controller: PluginController) {
         guard let node = controller.widget else { return }
-        try? widgets.write(WidgetSnapshot(pluginID: controller.pluginID, name: controller.name, node: node))
+        guard widgetQueue.change(WidgetSnapshot(pluginID: controller.pluginID, name: controller.name, node: node)), widgetFlush == nil else { return }
+        let delay = widgetQueue.delay(now: Date())
+        widgetFlush = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            await self?.flushWidgets()
+        }
+    }
+
+    private func flushWidgets() async {
+        widgetFlush = nil
+        let snapshots = widgetQueue.take(now: Date())
+        guard !snapshots.isEmpty else { return }
+        let store = widgets
+        let failures = await Task.detached { () -> [(String, String)] in
+            snapshots.compactMap { snapshot -> (String, String)? in
+                do {
+                    try store.write(snapshot)
+                    return nil
+                } catch {
+                    return (snapshot.pluginID, "\(error)")
+                }
+            }
+        }.value
+        for (pluginID, error) in failures {
+            HostLog.shared.write(.warning, "widget: could not write the snapshot the widget shows: \(error)", plugin: pluginID)
+        }
+        // Removed or turned off while it was being written.
+        for snapshot in snapshots where !widgetQueue.remembers(snapshot.pluginID) { widgets.remove(snapshot.pluginID) }
         Platform.reloadWidgets()
+    }
+
+    private func forgetWidget(_ pluginID: String) {
+        widgetQueue.forget(pluginID)
+        widgets.remove(pluginID)
     }
 
     func secretMissing(pluginID: String, name: String) {

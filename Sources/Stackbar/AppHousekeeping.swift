@@ -39,12 +39,17 @@ enum AppHousekeeping {
     private static func move(_ bundle: URL) {
         let destination = URL(fileURLWithPath: "/Applications").appendingPathComponent(bundle.lastPathComponent)
         let files = FileManager.default
+        // Copy beside it first, so a failed copy leaves the old one in place.
+        let staged = destination.deletingLastPathComponent().appendingPathComponent(".\(bundle.lastPathComponent).moving")
         do {
+            try? files.removeItem(at: staged)
+            try files.copyItem(at: bundle, to: staged)
             if files.fileExists(atPath: destination.path) {
                 try files.trashItem(at: destination, resultingItemURL: nil)
             }
-            try files.copyItem(at: bundle, to: destination)
+            try files.moveItem(at: staged, to: destination)
         } catch {
+            try? files.removeItem(at: staged)
             let alert = NSAlert()
             alert.messageText = "Stackbar couldn't move itself"
             alert.informativeText = "Drag Stackbar into the Applications folder in Finder, then open it from there. (\(error.localizedDescription))"
@@ -102,12 +107,30 @@ enum AppHousekeeping {
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         Task { @MainActor in
             await model.stop()
+            // A save still waiting on its delay (or the flush at quit) must not
+            // recreate Storage/<id>.json once the folder is in the Trash.
+            model.services.storage.setWritesPaused(true)
             let files = FileManager.default
+            var left: [String] = []
             for folder in [StackbarPaths.dataDirectory, StackbarPaths.cacheDirectory, StackbarPaths.logFile.deletingLastPathComponent()] where files.fileExists(atPath: folder.path) {
-                try? files.trashItem(at: folder, resultingItemURL: nil)
+                do {
+                    try files.trashItem(at: folder, resultingItemURL: nil)
+                } catch {
+                    left.append(folder.path)
+                }
             }
             let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: KeychainSecretStore().service]
-            SecItemDelete(query as CFDictionary)
+            let deleted = SecItemDelete(query as CFDictionary)
+            if deleted != errSecSuccess, deleted != errSecItemNotFound { left.append("the secrets in your Keychain (error \(deleted))") }
+            if !left.isEmpty {
+                // Say what is still there before quitting, so nobody thinks
+                // it is all gone.
+                let failed = NSAlert()
+                failed.alertStyle = .warning
+                failed.messageText = "Some of Stackbar's data couldn't be removed"
+                failed.informativeText = "Remove these yourself:\n\n" + left.joined(separator: "\n") + "\n\nEverything else was removed. Stackbar quits now."
+                failed.runModal()
+            }
             try? await SMAppService.mainApp.unregister()
             if let domain = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: domain) }
             NSApp.terminate(nil)

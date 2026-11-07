@@ -62,6 +62,8 @@ final class MacKeyLayer {
     private var source: CFRunLoopSource?
     private var trustPoll: Timer?
     private var promptedForAccess = false
+    /// The listener couldn't be made: said once in the log, not on every retry.
+    private var reportedTapFailure = false
     private var held: Set<KeyLayerTrigger> = []
     /// Key codes whose key-down was ours, so their key-up is ours too.
     private var swallowed: Set<Int64> = []
@@ -113,10 +115,14 @@ final class MacKeyLayer {
     private func createTap() {
         let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: CGEventMask(mask), callback: keyLayerTapCallback, userInfo: nil) else {
-            HostLog.shared.write(.warning, "key layer: could not create the keyboard listener; check Accessibility access")
+            if !reportedTapFailure {
+                reportedTapFailure = true
+                HostLog.shared.write(.warning, "key layer: could not create the keyboard listener; check Accessibility access")
+            }
             pollForAccess()
             return
         }
+        reportedTapFailure = false
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
@@ -145,6 +151,11 @@ final class MacKeyLayer {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             HostLog.shared.write(.warning, "key layer: macOS paused the keyboard listener; turning it back on")
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            // Presses and releases in the gap never reached us: start from
+            // the modifiers held now, and forget swallowed keys.
+            held = Self.rightModifiers(CGEventSource.flagsState(.combinedSessionState))
+            swallowed = []
+            hideOverlay()
             return false
         case .flagsChanged:
             held = Self.rightModifiers(event.flags)
@@ -212,7 +223,13 @@ final class MacKeyLayer {
             return nil
         case .cycleWindows(let id):
             guard let app = Self.app(id) else { return "\(id) isn't running" }
-            Self.raiseBackmostWindow(of: app)
+            // This runs inside the keyboard tap: the messages to the app go
+            // to the worker, so a slow app can't stall typing everywhere.
+            let pid = app.processIdentifier
+            AXWorker.send {
+                guard MacKeyLayer.raiseBackmostWindow(of: pid) else { return }
+                Task { @MainActor in NSRunningApplication(processIdentifier: pid)?.activate() }
+            }
             return nil
         }
     }
@@ -280,23 +297,25 @@ final class MacKeyLayer {
         return "an app"
     }
 
-    /// Brings the app forward with its backmost standard window on top.
-    private static func raiseBackmostWindow(of app: NSRunningApplication) {
-        let element = AXUIElementCreateApplication(app.processIdentifier)
+    /// Raises the app's backmost standard window; false when it has fewer
+    /// than two. Runs on `AXWorker`; the caller then brings the app forward.
+    private nonisolated static func raiseBackmostWindow(of pid: pid_t) -> Bool {
+        let element = AXWorker.timed(AXUIElementCreateApplication(pid))
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value) == .success,
-              let windows = value as? [AXUIElement] else { return }
+              let windows = value as? [AXUIElement] else { return false }
         let standard = windows.filter { window in
+            AXWorker.timed(window)
             var subrole: CFTypeRef?
             var minimized: CFTypeRef?
             AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subrole)
             AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized)
             return (subrole as? String) == kAXStandardWindowSubrole as String && (minimized as? Bool) != true
         }
-        guard standard.count > 1, let back = standard.last else { return }
+        guard standard.count > 1, let back = standard.last else { return false }
         AXUIElementPerformAction(back, kAXRaiseAction as CFString)
         AXUIElementSetAttributeValue(back, kAXMainAttribute as CFString, kCFBooleanTrue)
-        app.activate()
+        return true
     }
 }
 

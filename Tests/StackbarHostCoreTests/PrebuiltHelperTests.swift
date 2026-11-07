@@ -203,4 +203,10 @@ final class PrebuiltHelperTests: XCTestCase {
         XCTAssertEqual(again, [], "already there")
     }
     #endif
+
+    func testBigDownloadsGetALongerWholeCallTimeoutThanIndexes() {
+        XCTAssertEqual(PluginIndex.downloadResourceSeconds(limit: PluginIndex.defaultDownloadLimit), 300)
+        XCTAssertGreaterThanOrEqual(PluginIndex.downloadResourceSeconds(limit: 64 * 1024 * 1024), 1800)
+        XCTAssertLessThan(PluginIndex.downloadIdleSeconds, 300)
+    }
 }
