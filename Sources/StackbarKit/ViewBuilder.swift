@@ -43,6 +43,9 @@ public final class RenderContext {
     public typealias Handler = @MainActor (EventValue?) async throws -> Void
 
     public private(set) var handlers: [ActionID: Handler] = [:]
+    /// The next suffix to try per base, so many same-titled controls don't
+    /// probe from `#2` up each time.
+    private var nextSuffix: [String: Int] = [:]
     /// Put in front of every id: a command view's handlers live under
     /// `view/<session>/` so they never collide with the panel's.
     public let prefix: String
@@ -54,10 +57,13 @@ public final class RenderContext {
     public func register(_ base: String, _ handler: @escaping Handler) -> ActionID {
         let base = prefix + base
         var id = ActionID(base)
-        var suffix = 2
-        while handlers[id] != nil {
-            id = ActionID("\(base)#\(suffix)")
-            suffix += 1
+        if handlers[id] != nil {
+            var suffix = nextSuffix[base] ?? 2
+            repeat {
+                id = ActionID("\(base)#\(suffix)")
+                suffix += 1
+            } while handlers[id] != nil
+            nextSuffix[base] = suffix
         }
         handlers[id] = handler
         return id

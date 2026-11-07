@@ -6,7 +6,8 @@ import Foundation
 /// Messages that only ask for the plugin's current state collapse while they
 /// wait: a refresh trigger already queued for the same reason absorbs the
 /// next one, and a queued visibility change for a surface takes the newest
-/// value. Everything else (clicks, commands, tool calls) queues in order.
+/// value, moving to the back of the line so it still follows what queued
+/// in between. Everything else (clicks, commands, tool calls) queues in order.
 /// Without this, a host that triggers faster than `refresh()` finishes (a
 /// soak at a 5-second tick, a burst of `.apps` triggers) grew the queue
 /// without bound and pushed the user's clicks further behind each time.
@@ -36,8 +37,12 @@ final class Mailbox: @unchecked Sendable {
             return
         }
         if let index = entries.firstIndex(where: { Self.covers($0.message, message) }) {
-            entries[index].message = message
-            entries[index].absorbed += 1
+            // The folded entry takes the newer one's place in line, so it
+            // still runs after the clicks queued since the older one.
+            var entry = entries.remove(at: index)
+            entry.message = message
+            entry.absorbed += 1
+            entries.append(entry)
         } else {
             entries.append(Entry(message: message))
         }

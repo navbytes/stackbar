@@ -263,14 +263,24 @@ final class MailboxTests: XCTestCase {
         mailbox.finish()
         while let entry = await mailbox.next() { got.append((entry.message, entry.absorbed)) }
         XCTAssertEqual(got.map(\.0), [
-            .trigger(reason: .manual),
             .event(action: "button/A", value: nil),
+            .trigger(reason: .manual),
             .trigger(reason: .wake),
             .visibility(surface: .panel, visible: true),
             .event(action: "button/A", value: nil),
-        ], "clicks keep their order and count; the newest visibility wins")
-        XCTAssertEqual(got.map(\.1), [1, 0, 0, 1, 0], "each folded message is still owed a settled")
+        ], "clicks keep their order and count; a folded trigger runs after the click queued before it; the newest visibility wins")
+        XCTAssertEqual(got.map(\.1), [0, 1, 0, 1, 0], "each folded message is still owed a settled")
         XCTAssertEqual(got.map(\.1).reduce(0, +) + got.count, 7)
+    }
+
+    @MainActor
+    func testSameTitledHandlersGetSuffixesInOrder() {
+        let context = RenderContext()
+        let ids = (0..<5).map { _ in context.register("button/", { _ in }) }
+        XCTAssertEqual(ids, ["button/", "button/#2", "button/#3", "button/#4", "button/#5"].map { ActionID($0) })
+        // An id taken directly is still skipped.
+        _ = context.register("x#2", { _ in })
+        XCTAssertEqual([context.register("x", { _ in }), context.register("x", { _ in })], [ActionID("x"), ActionID("x#3")])
     }
 
     func testAWaitingReaderGetsTheNextMessageAndNilAtTheEnd() async {
