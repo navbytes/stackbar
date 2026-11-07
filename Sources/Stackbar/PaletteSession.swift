@@ -154,7 +154,7 @@ final class PaletteSession {
 
     /// The root's search, kept until the query or the index changes: the
     /// view, the footer, ⌘K and every arrow press ask for it.
-    @ObservationIgnored private var cache: (query: String, revision: Int, store: Int, plugins: [PaletteRoot.PluginRows], root: PaletteRoot)?
+    @ObservationIgnored private var cache: (query: String, revision: Int, memory: Int, store: Int, plugins: [PaletteRoot.PluginRows], root: PaletteRoot)?
     /// The Store's indexes were asked for once, for its suggestions.
     @ObservationIgnored private var storeRequested = false
 
@@ -179,15 +179,18 @@ final class PaletteSession {
         // always the row `answer`), so keying on ids kept the answer to the
         // text before the last keystroke on screen.
         let plugins = rootSearchRows()
-        if let cache, cache.query == query, cache.revision == palette.revision, cache.store == storeCount, cache.plugins == plugins {
+        // What the palette learned is part of the key too: a reset, a pin or
+        // Settings' Clear Search History reorders the root.
+        let memory = model.commands.memory
+        let learned = memory.revision
+        if let cache, cache.query == query, cache.revision == palette.revision, cache.memory == learned, cache.store == storeCount, cache.plugins == plugins {
             return cache.root
         }
-        let usage = model.commands.usage
         let store = model.store.map { StoreListing.paletteSuggestions($0.catalogs, query: query, installed: $0.installed) } ?? []
-        let root = PaletteRoot.build(query: query, index: palette, ranker: PaletteRanker(query: query, usage: usage, picks: model.commands.picks),
-                                     usage: usage, favorites: model.commands.favorites.ids, store: store, plugins: plugins,
-                                     fallbacks: fallbackCommands()) { usage.isRecent($0.learnID) }
-        cache = (query, palette.revision, storeCount, plugins, root)
+        let root = PaletteRoot.build(query: query, index: palette, ranker: memory.ranker(for: query),
+                                     usage: memory.usage, favorites: memory.favorites.ids, store: store, plugins: plugins,
+                                     fallbacks: fallbackCommands()) { memory.isRecent($0) }
+        cache = (query, palette.revision, learned, storeCount, plugins, root)
         return root
     }
 
@@ -306,13 +309,12 @@ final class PaletteSession {
     // MARK: - Favourites
 
     func isFavorite(_ entry: PaletteIndex.Entry) -> Bool {
-        model.commands.favorites.contains(entry.id)
+        model.commands.memory.isFavorite(entry)
     }
 
     /// ⌘⇧F: pins the selected root entry to the top, or unpins it.
     func toggleFavorite(_ entry: PaletteIndex.Entry) {
-        model.commands.favorites.toggle(entry.id)
-        cache = nil
+        model.commands.memory.toggleFavorite(entry)
         revision += 1
     }
 
@@ -371,19 +373,18 @@ final class PaletteSession {
 
     func activate(_ entry: PaletteIndex.Entry) {
         problem = nil
-        // What was picked for this text, so it ranks higher for it next time.
+        // What was picked for this text, so it ranks higher for it next time,
+        // and its use. A Store suggestion teaches nothing.
         let root = self.root
-        if stack.isEmpty, root.learns(entry) {
-            model.commands.picks.record(query: query, id: entry.learnID)
+        if root.learns(entry) {
+            model.commands.memory.chose(entry, query: stack.isEmpty ? query : nil)
         }
         if let found = rootRow(entry), let primary = found.row.actions.first {
-            model.commands.usage.record(entry.learnID)
             activateRootRow(found.view, key: found.row.rowKey, action: primary)
             return
         }
         switch entry.kind {
         case .action(let action, let value):
-            model.commands.usage.record(entry.id)
             model.controller(for: entry.pluginID)?.send(action, value)
             finish()
         case .open(let url):
@@ -399,16 +400,13 @@ final class PaletteSession {
             }
             // Stackbar's own places (Settings, the Store) open here too.
             if let link = AppLink(url) {
-                model.commands.usage.record(entry.id)
                 finish()
                 AppDelegate.shared?.open(link)
                 return
             }
-            model.commands.usage.record(entry.id)
             NSWorkspace.shared.open(url)
             finish()
         case .showPanel:
-            model.commands.usage.record(entry.id)
             finish()
             AppDelegate.shared?.showPanel(pluginID: entry.pluginID)
         case .copy(let text):
@@ -416,7 +414,6 @@ final class PaletteSession {
             HUD.shared.show("Copied \(text)")
             finish()
         case .navigate(let target):
-            model.commands.usage.record(entry.id)
             guard let command = model.commands.registry.entry(CommandKey(pluginID: entry.pluginID, commandID: target.command)) else {
                 problem = "\(target.command) is not a command of \(entry.pluginName)"
                 return
@@ -626,9 +623,7 @@ final class PaletteSession {
     private func resetRanking(_ entry: PaletteIndex.Entry) -> Action {
         Action(title: "Reset Ranking", section: "Ranking") { [weak self] in
             guard let self else { return }
-            model.commands.usage.forget(entry.learnID)
-            model.commands.picks.forget(entry.learnID)
-            cache = nil
+            model.commands.memory.forget(entry)
             revision += 1
             showingActions = false
             HUD.shared.show("Ranking reset")

@@ -213,8 +213,7 @@ struct GeneralSettings: View {
             }
             .confirmationDialog("Clear the palette's search history?", isPresented: $confirmingClearHistory) {
                 Button("Clear", role: .destructive) {
-                    model.commands.usage.clear()
-                    model.commands.picks.clear()
+                    model.commands.memory.clear()
                 }
             } message: {
                 Text("Results go back to their default order. Recent and frecency start over; favorites and aliases stay.")

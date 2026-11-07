@@ -56,7 +56,7 @@ public final class PluginHandover: @unchecked Sendable {
     /// a "restore"), so that one stays behind.
     @discardableResult
     public func hand(from: String, to: String, commands: [String: String], oldTitles: [String: String] = [:],
-                     preferences: CommandPreferences, usage: PaletteUsage? = nil, favorites: PaletteFavorites? = nil,
+                     preferences: CommandPreferences, memory: PaletteMemory? = nil,
                      now: Date = Date()) -> [CommandKey] {
         let carries = { (id: String) -> Bool in
             guard let title = commands[id] else { return false }
@@ -64,8 +64,7 @@ public final class PluginHandover: @unchecked Sendable {
             return old.caseInsensitiveCompare(title) == .orderedSame
         }
         let moved = preferences.move(pluginID: from, to: to, carries: carries)
-        usage?.move(pluginID: from, to: to, carries: carries)
-        favorites?.move(pluginID: from, to: to, carries: carries)
+        memory?.handOver(from: from, to: to, carries: carries)
         lock.withLock {
             records.removeAll { $0.from == from && $0.to == to }
             records.append(Record(from: from, to: to, at: now))

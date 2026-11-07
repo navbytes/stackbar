@@ -66,12 +66,16 @@ public struct PaletteIndex: Sendable {
             return nil
         }
 
+        /// A command's id, as its palette row and its use are kept under,
+        /// whether it ran from the palette or from a hotkey.
+        public static func commandID(_ key: CommandKey) -> String { key.description }
+
         public var id: String {
             switch kind {
             case .action(let action, _): return "\(pluginID)|\(action.rawValue)"
             case .open(let url): return "\(pluginID)|open|\(url)"
             case .navigate(let target): return "\(pluginID)|navigate|\(target.command)|\(target.arguments.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&"))"
-            case .command(let spec): return "\(pluginID)/\(spec.id)"
+            case .command(let spec): return Self.commandID(CommandKey(pluginID: pluginID, commandID: spec.id))
             case .showPanel: return "\(pluginID)|panel"
             case .copy(let text): return "\(pluginID)|copy|\(text)"
             }

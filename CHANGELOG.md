@@ -7,6 +7,8 @@ window. Write for people who use Stackbar, not for the code.
 
 ### Fixed
 - **Removing a plugin removes all of it, from anywhere.** Removing a plugin from the Store window, or when its publisher withdraws it, now also clears what you approved it to do, as removing it in Settings already did. Install it again and Stackbar asks again. Deleting its data from the Store window now signs it out too.
+- **The palette keeps what it learned when a plugin is replaced.** When one plugin takes over from another (like Windows from Window Layouts), what you taught the palette by picking its results now moves over with your shortcuts and pins, including rows its searches show.
+- **Clear Search History takes effect at once.** A palette reopened within a minute of clearing it in Settings no longer shows the old order.
 - A plugin installed or updated from the Store is checked once it is built: if its code asks for different permissions than its publisher signed for, the install is undone.
 
 ## 0.28.0

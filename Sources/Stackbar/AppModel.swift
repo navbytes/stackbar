@@ -299,7 +299,7 @@ final class AppModel {
             let wasInstalled = old != nil || installer.installed.contains { $0.id == oldID }
             let oldTitles = Dictionary(commands.registry.commands(for: oldID).map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
             let moved = handover.hand(from: oldID, to: manifest.id, commands: Dictionary(specs.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }),
-                                      oldTitles: oldTitles, preferences: commands.preferences, usage: commands.usage, favorites: commands.favorites)
+                                      oldTitles: oldTitles, preferences: commands.preferences, memory: commands.memory)
             guard wasInstalled else { continue }
             if let old, old.isEnabled {
                 old.isEnabled = false
