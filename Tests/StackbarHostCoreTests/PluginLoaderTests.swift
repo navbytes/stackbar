@@ -52,6 +52,19 @@ final class PluginLoaderTests: XCTestCase {
         }
     }
 
+    func testFrameworkDigestFollowsTheSources() throws {
+        let package = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let kit = package.appendingPathComponent("Sources/StackbarKit", isDirectory: true)
+        try FileManager.default.createDirectory(at: kit, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: package) }
+        let file = kit.appendingPathComponent("A.swift")
+        try Data("let a = 1".utf8).write(to: file)
+        let first = PluginBuilder.frameworkDigest(package)
+        XCTAssertEqual(PluginBuilder.frameworkDigest(package), first)
+        try Data("let a = 22".utf8).write(to: file)
+        XCTAssertNotEqual(PluginBuilder.frameworkDigest(package), first)
+    }
+
     func testASourceNeedsABuilder() {
         XCTAssertThrowsError(try PluginLoader(builder: nil, sandbox: false).load(URL(fileURLWithPath: "/tmp/Plugin.swift"))) { error in
             XCTAssertEqual(error as? PluginLoader.LoadError, .noBuilder)

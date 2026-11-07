@@ -330,19 +330,44 @@ public struct PluginBuilder: Sendable {
 
     /// A digest of the StackbarKit and StackbarProtocol sources plugins compile
     /// against (the package's `Sources/StackbarKit` and `Sources/StackbarProtocol`).
+    /// The digest is kept per package while its files' names, sizes and
+    /// dates stay the same, so asking again (per plugin, per refresh) stats
+    /// the sources instead of hashing all of them.
     static func frameworkDigest(_ stackbarPackage: URL) -> String {
-        var data = Data()
+        var files: [URL] = []
+        var fingerprint = stackbarPackage.path
         for module in ["StackbarKit", "StackbarProtocol"] {
             let folder = stackbarPackage.appendingPathComponent("Sources/\(module)", isDirectory: true)
-            let files = (FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? [])
+            let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+            let found = (FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys)?.compactMap { $0 as? URL } ?? [])
                 .filter { $0.pathExtension == "swift" }
                 .sorted { $0.path < $1.path }
-            for file in files {
-                data.append(Data(file.lastPathComponent.utf8))
-                data.append((try? Data(contentsOf: file)) ?? Data())
+            for file in found {
+                let values = try? file.resourceValues(forKeys: Set(keys))
+                fingerprint += "|\(file.path)|\(values?.fileSize ?? -1)|\(values?.contentModificationDate?.timeIntervalSince1970 ?? 0)"
             }
+            files += found
         }
-        return SHA256.hex(data)
+        if let cached = digestCache.get(stackbarPackage.path), cached.fingerprint == fingerprint {
+            return cached.digest
+        }
+        var data = Data()
+        for file in files {
+            data.append(Data(file.lastPathComponent.utf8))
+            data.append((try? Data(contentsOf: file)) ?? Data())
+        }
+        let digest = SHA256.hex(data)
+        digestCache.set(stackbarPackage.path, (fingerprint, digest))
+        return digest
+    }
+
+    private static let digestCache = DigestCache()
+
+    private final class DigestCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var entries: [String: (fingerprint: String, digest: String)] = [:]
+        func get(_ key: String) -> (fingerprint: String, digest: String)? { lock.withLock { entries[key] } }
+        func set(_ key: String, _ value: (fingerprint: String, digest: String)) { lock.withLock { entries[key] = value } }
     }
 
     public static func sanitizedName(_ name: String) -> String {
@@ -436,9 +461,18 @@ public struct PluginBuilder: Sendable {
     #endif
 }
 
+/// A build's output, written by the reader thread and read after it
+/// finished or timed out; the lock keeps a timed-out read from racing the
+/// write.
 final class OutputCollector: @unchecked Sendable {
-    var data = Data()
+    private let lock = NSLock()
+    private var stored = Data()
     let done = DispatchSemaphore(value: 0)
+
+    var data: Data {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
 }
 
 /// An exclusive advisory lock on a file, held until `unlock()`.
