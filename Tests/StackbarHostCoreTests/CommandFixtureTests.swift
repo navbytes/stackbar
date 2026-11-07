@@ -116,9 +116,13 @@ final class CommandFixtureTests: XCTestCase {
         }
         let shown = await errors()
         XCTAssertEqual(shown, ["name": "Give it a name", "url": "Needs a scheme"], "the plugin's errors reach the form")
+        let stillOpen = await session.formFinished(form.session)
+        XCTAssertFalse(stillOpen, "a form with errors stays open, as in the palette")
         try await session.event(submit, value: .fields(["name": .text("Docs"), "url": .text("https://docs.example.com")]))
         let cleared = await errors()
         XCTAssertEqual(cleared, [:])
+        let finished = await session.formFinished(form.session)
+        XCTAssertTrue(finished, "headless runs say a form finished where the palette would close")
         let created = await session.commands().contains { $0.id == "link-0" && $0.title == "Docs" }
         XCTAssertTrue(created, "a submitted form can add a command")
         await session.closeView(form.session)

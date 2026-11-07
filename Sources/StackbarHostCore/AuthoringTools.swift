@@ -232,7 +232,11 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             return .text((try? encoder.encode(root)).map { String(decoding: $0, as: UTF8.self) } ?? "{}")
         }
-        let text = "== command view ==\n" + TreeTextRenderer.render(root) + (await Self.problems(session, views: [root]))
+        var text = "== command view ==\n" + TreeTextRenderer.render(root)
+        // What the palette would do or say now.
+        if let problem = await session.commandViewState(id)?.problem { text += "\n(\(problem))" }
+        if await session.formFinished(id) { text += "\n(the form was submitted without errors: the palette closes here)" }
+        text += await Self.problems(session, views: [root])
         return .text(text)
     }
 
