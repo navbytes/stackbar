@@ -17,8 +17,11 @@ extension MacSystem {
         // Only the apps being placed are read: matching is per app, and a
         // one-window snap shouldn't ask every running app for its windows.
         let wanted = Set(placements.map(\.appID))
-        var scene = await MainActor.run { MacWindows.Scene.current() }
-        scene.apps = scene.apps.filter { wanted.contains($0.bundleID) }
+        let scene = await MainActor.run {
+            var scene = MacWindows.Scene.current()
+            scene.apps = scene.apps.filter { wanted.contains($0.bundleID) }
+            return scene
+        }
         let (arranged, front) = await AXWorker.run { MacWindows.arrange(placements, in: scene) }
         if let front { await MainActor.run { MacWindows.activate(front) } }
         var result = arranged
