@@ -310,6 +310,22 @@ final class BundledStoreTests: XCTestCase {
         XCTAssertEqual(store.installMissing(), [], "running it again changes nothing")
     }
 
+    func testCarriedBundlesAreCheckedOnceButNoticeAChangedFolder() throws {
+        let key = try Signing.generateKey()
+        func sign(_ id: String) throws {
+            let bundle = try Signing.bundle(source: "// \(id)", manifest: Manifest(id: id, name: id, version: "1.0.0"), publisherName: "navbytes", privateKey: key.privateKey)
+            try bundle.encoded().write(to: root.appendingPathComponent("Bundles/\(id).stackbarplugin"))
+        }
+        try sign("io.navbytes.stackbar.clipboard")
+        let (store, _) = store(publicKey: key.publicKey.base64EncodedString())
+        XCTAssertEqual(store.bundles().map(\.manifest.id), ["io.navbytes.stackbar.clipboard"])
+        XCTAssertEqual(store.bundles().map(\.manifest.id), ["io.navbytes.stackbar.clipboard"])
+        try sign("io.navbytes.stackbar.stay-awake")
+        XCTAssertEqual(store.bundles().map(\.manifest.id), ["io.navbytes.stackbar.clipboard", "io.navbytes.stackbar.stay-awake"])
+        try FileManager.default.removeItem(at: root.appendingPathComponent("Bundles/io.navbytes.stackbar.clipboard.stackbarplugin"))
+        XCTAssertEqual(store.bundles().map(\.manifest.id), ["io.navbytes.stackbar.stay-awake"])
+    }
+
     func testWelcomeInstallsOnlyThePickedStarters() throws {
         let key = try Signing.generateKey()
         for (id, name) in [("io.navbytes.stackbar.clipboard", "Clipboard History"), ("io.navbytes.stackbar.stay-awake", "Stay Awake"), ("io.navbytes.stackbar.plugins.calculator", "Calculator")] {

@@ -59,13 +59,19 @@ struct SettingsTransferGroup: View {
         panel.nameFieldStringValue = "Stackbar \(Date().formatted(.iso8601.year().month().day())).\(SettingsArchive.fileExtension)"
         NSApp.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let data = try SettingsArchive.export(dataDirectory: StackbarPaths.dataDirectory).encoded()
-            try data.write(to: url, options: .atomic)
-            problem = nil
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        } catch {
-            problem = "Couldn't export: \(error.localizedDescription)"
+        // Reading and encoding every plugin's files can take a while; not on the main thread.
+        let directory = StackbarPaths.dataDirectory
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                Result { try SettingsArchive.export(dataDirectory: directory).encoded().write(to: url, options: .atomic) }
+            }.value
+            switch outcome {
+            case .success:
+                problem = nil
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            case .failure(let error):
+                problem = "Couldn't export: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -75,31 +81,40 @@ struct SettingsTransferGroup: View {
         panel.allowsMultipleSelection = false
         NSApp.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let archive: SettingsArchive
-        do {
-            archive = try SettingsArchive.decode(Data(contentsOf: url))
-        } catch {
-            problem = "Couldn't import \(url.lastPathComponent): \(error)"
-            return
-        }
-        let summary = archive.summary
-        let alert = NSAlert()
-        alert.messageText = "Import \(url.lastPathComponent)?"
-        var lines = ["\(summary.pluginFiles.count) plugins, \(summary.savedValues) saved values and \(summary.preferences) preferences, from Stackbar \(archive.stackbarVersion)."]
-        if !summary.pluginFiles.isEmpty {
-            lines.append("Plugins: " + summary.pluginFiles.map { ($0 as NSString).deletingPathExtension }.joined(separator: ", ") + ".")
-        }
-        lines.append("Plugins with the same name are replaced. Each plugin asks for its permissions again. Stackbar restarts to load them.")
-        alert.informativeText = lines.joined(separator: "\n\n")
-        alert.addButton(withTitle: "Import and Restart")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        do {
-            try archive.apply(to: StackbarPaths.dataDirectory)
-            UserDefaults.standard.set(true, forKey: WelcomeView.seenKey)
-            Self.relaunch()
-        } catch {
-            problem = "Couldn't import: \(error.localizedDescription)"
+        Task {
+            let decoded = await Task.detached(priority: .userInitiated) {
+                Result { try SettingsArchive.decode(Data(contentsOf: url)) }
+            }.value
+            let archive: SettingsArchive
+            switch decoded {
+            case .success(let value): archive = value
+            case .failure(let error):
+                problem = "Couldn't import \(url.lastPathComponent): \(error)"
+                return
+            }
+            let summary = archive.summary
+            let alert = NSAlert()
+            alert.messageText = "Import \(url.lastPathComponent)?"
+            var lines = ["\(summary.pluginFiles.count) plugins, \(summary.savedValues) saved values and \(summary.preferences) preferences, from Stackbar \(archive.stackbarVersion)."]
+            if !summary.pluginFiles.isEmpty {
+                lines.append("Plugins: " + summary.pluginFiles.map { ($0 as NSString).deletingPathExtension }.joined(separator: ", ") + ".")
+            }
+            lines.append("Plugins with the same name are replaced. Each plugin asks for its permissions again. Stackbar restarts to load them.")
+            alert.informativeText = lines.joined(separator: "\n\n")
+            alert.addButton(withTitle: "Import and Restart")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            let directory = StackbarPaths.dataDirectory
+            let applied = await Task.detached(priority: .userInitiated) {
+                Result { try archive.apply(to: directory) }
+            }.value
+            switch applied {
+            case .success:
+                UserDefaults.standard.set(true, forKey: WelcomeView.seenKey)
+                Self.relaunch()
+            case .failure(let error):
+                problem = "Couldn't import: \(error.localizedDescription)"
+            }
         }
     }
 
