@@ -13,10 +13,9 @@ public actor PluginSession {
     private var expected = 0
     private var logLines: [String] = []
     private let maxLogLines = 500
-    /// The latest tree of each open command view.
-    private var commandViews: [Int: ViewNode] = [:]
+    /// Each open command view, kept by the same rules as the palette's.
+    private var commandViews: [Int: CommandView] = [:]
     private var nextSession = 1
-    private var nextSeq = 1
 
     public init(source: URL, loader: PluginLoader, services: HostServices?) {
         self.source = source
@@ -83,34 +82,72 @@ public actor PluginSession {
         guard let supervisor else { throw SessionError.notRunning }
         let session = nextSession
         nextSession += 1
-        let seq = nextSeq
-        nextSeq += 1
-        await supervisor.openView(session: session, command: command, query: query, seq: seq, context: context)
-        expected += 1
+        var view = CommandView(session: session, pluginName: supervisor.manifest.name, query: query)
+        let sends = view.open()
+        commandViews[session] = view
+        await deliver(sends, session: session, command: command, context: context)
         try await settle()
-        return (session, commandViews[session])
+        return (session, commandViews[session]?.root)
     }
 
     /// Changes an open view's query and returns its new tree.
     public func updateView(_ session: Int, query: CommandQuery) async throws -> ViewNode? {
-        guard let supervisor else { throw SessionError.notRunning }
-        let seq = nextSeq
-        nextSeq += 1
-        await supervisor.updateView(session: session, query: query, seq: seq)
-        expected += 1
+        guard supervisor != nil else { throw SessionError.notRunning }
+        guard let sends = commandViews[session]?.change(query) else { return nil }
+        await deliver(sends, session: session)
         try await settle()
-        return commandViews[session]
+        return commandViews[session]?.root
     }
 
     public func commandView(_ session: Int) -> ViewNode? {
+        commandViews[session]?.root
+    }
+
+    /// An open view as the palette would see it: its tree, its problem
+    /// (a restart, a stop), and whether a submitted form finished.
+    public func commandViewState(_ session: Int) -> CommandView? {
         commandViews[session]
     }
 
+    /// Whether the last form submitted in the view came back without
+    /// errors, which closes the palette.
+    public func formFinished(_ session: Int) -> Bool {
+        finishedForms.contains(session)
+    }
+
     public func closeView(_ session: Int) async {
-        await supervisor?.closeView(session: session)
+        let sends = commandViews[session]?.close() ?? []
         commandViews[session] = nil
-        expected += 1
+        finishedForms.remove(session)
+        await deliver(sends, session: session)
         try? await settle()
+    }
+
+    /// Views whose submitted form came back without errors.
+    private var finishedForms: Set<Int> = []
+    /// Each view's command and context, to open it again after a restart.
+    private var openedAs: [Int: (command: String, context: InvocationContext?)] = [:]
+
+    /// Sends a view's messages in order; each one the plugin answers counts
+    /// toward `settle`.
+    private func deliver(_ sends: [CommandView.Send], session: Int, command: String? = nil, context: InvocationContext? = nil) async {
+        guard let supervisor else { return }
+        if let command { openedAs[session] = (command, context) }
+        for send in sends {
+            switch send {
+            case .open(let seq, let query):
+                guard let opened = openedAs[session] else { continue }
+                await supervisor.openView(session: session, command: opened.command, query: query, seq: seq, context: opened.context)
+            case .update(let seq, let query):
+                await supervisor.updateView(session: session, query: query, seq: seq)
+            case .event(let action, let value):
+                await supervisor.event(action, value: value)
+            case .close:
+                await supervisor.closeView(session: session)
+                openedAs[session] = nil
+            }
+            expected += 1
+        }
     }
 
     /// The plugin's left-click action on its menu-bar item, if any.
@@ -125,12 +162,22 @@ public actor PluginSession {
     /// Sends an event and waits until the plugin has handled it.
     public func event(_ action: ActionID, value: EventValue? = nil) async throws {
         guard let supervisor else { throw SessionError.notRunning }
-        let actions = await supervisor.views.values.flatMap(\.actions) + commandViews.values.flatMap(\.actions)
+        let actions = await supervisor.views.values.flatMap(\.actions) + commandViews.values.flatMap { $0.root?.actions ?? [] }
         guard actions.contains(action) else {
             throw SessionError.unknownAction(action, available: actions)
         }
-        await supervisor.event(action, value: value)
-        expected += 1
+        // An action inside a command view goes through the view, as in the
+        // palette: a stopped view takes none, and a submitted form is
+        // watched for whether it finished.
+        if let session = commandViews.first(where: { $0.value.root?.actions.contains(action) == true })?.key {
+            finishedForms.remove(session)
+            let sends = commandViews[session]?.perform(action, value) ?? []
+            guard !sends.isEmpty else { throw SessionError.viewCannotAct(commandViews[session]?.problem) }
+            await deliver(sends, session: session)
+        } else {
+            await supervisor.event(action, value: value)
+            expected += 1
+        }
         try await settle()
     }
 
@@ -170,8 +217,17 @@ public actor PluginSession {
     private func record(_ update: PluginSupervisor.Update) {
         switch update {
         case .log(let level, let message): logLines.append("[\(level.rawValue)] \(message)")
-        case .state(let state): logLines.append("[state] \(state)")
-        case .view(let session, _, let root): commandViews[session] = root; return
+        case .state(let state):
+            logLines.append("[state] \(state)")
+            for session in commandViews.keys {
+                let sends = commandViews[session]?.pluginState(state) ?? []
+                if !sends.isEmpty { Task { await self.deliver(sends, session: session) } }
+            }
+        case .view(let session, let seq, let root):
+            guard let result = commandViews[session]?.received(seq: seq, root: root) else { return }
+            if result.finished { finishedForms.insert(session) }
+            if !result.sends.isEmpty { Task { await self.deliver(result.sends, session: session) } }
+            return
         case .render, .tools, .menuBarClick, .commands: return
         }
         if logLines.count > maxLogLines { logLines.removeFirst(logLines.count - maxLogLines) }
@@ -196,6 +252,7 @@ public actor PluginSession {
     public enum SessionError: Error, CustomStringConvertible {
         case notRunning
         case unknownAction(ActionID, available: [ActionID])
+        case viewCannotAct(String?)
         case failed(String, logs: [String])
         case timedOut(logs: [String])
 
@@ -204,6 +261,7 @@ public actor PluginSession {
             case .notRunning: return "the plugin is not running"
             case .unknownAction(let action, let available):
                 return "no control has the action id \(action). Available: " + (available.isEmpty ? "none" : available.map(\.rawValue).joined(separator: ", "))
+            case .viewCannotAct(let problem): return "the command view can't take actions now" + (problem.map { ": \($0)" } ?? "")
             case .failed(let reason, let logs): return "the plugin failed (\(reason)). Recent log:\n" + logs.joined(separator: "\n")
             case .timedOut(let logs): return "the plugin did not finish in time. Recent log:\n" + logs.joined(separator: "\n")
             }

@@ -276,20 +276,8 @@ final class CommandCenter {
     /// with the old process, so they wait and open again once it runs.
     /// Failed or stopped: they say so, instead of spinning forever.
     func pluginStateChanged(_ pluginID: String, _ state: PluginSupervisor.State) {
-        let affected = views.values.filter { $0.entry.pluginID == pluginID }
-        switch state {
-        case .restarting:
-            rootBudget.forget(pluginID: pluginID)
-            affected.forEach { $0.pluginRestarted() }
-        case .running:
-            affected.forEach { $0.pluginRunning() }
-        case .failed(let reason):
-            affected.forEach { $0.pluginStopped("\($0.entry.pluginName) stopped: \(reason)") }
-        case .stopped:
-            affected.forEach { $0.pluginStopped("\($0.entry.pluginName) is turned off") }
-        case .starting:
-            break
-        }
+        if case .restarting = state { rootBudget.forget(pluginID: pluginID) }
+        for view in views.values where view.entry.pluginID == pluginID { view.pluginState(state) }
     }
 
     // MARK: - Looking plugins up
@@ -337,7 +325,9 @@ final class CommandLookup: @unchecked Sendable {
 }
 
 /// One open command view in the palette: its query and arguments, the
-/// newest tree, and whether a search is still running.
+/// newest tree, and whether a search is still running. The rules live in
+/// HostCore's `CommandView`, which headless runs share; this is the
+/// observable shell that sends its messages in order.
 @MainActor
 @Observable
 final class CommandViewModel: Identifiable {
@@ -360,15 +350,17 @@ final class CommandViewModel: Identifiable {
 
     /// Runs when a submitted form comes back without errors.
     @ObservationIgnored var onFinished: (() -> Void)?
-    @ObservationIgnored private var state: ViewSessionState
+    @ObservationIgnored private var view: CommandView
     @ObservationIgnored private let supervisor: PluginSupervisor
     /// What the user was in when the view was opened.
     @ObservationIgnored private let context: InvocationContext?
     @ObservationIgnored private let onClose: () -> Void
-    @ObservationIgnored private var submitting = false
-    @ObservationIgnored private var closed = false
     /// Closed: the plugin has dropped the view, so nothing more goes to it.
-    var isClosed: Bool { closed }
+    var isClosed: Bool { view.isClosed }
+    /// Whether an action can reach the plugin now.
+    var canAct: Bool { view.canAct }
+    /// Stopped or failed: nothing will answer.
+    var isStopped: Bool { view.isStopped }
     /// Messages to the plugin go out in order: an action before the close
     /// that follows it.
     @ObservationIgnored private var chain: Task<Void, Never>?
@@ -382,114 +374,70 @@ final class CommandViewModel: Identifiable {
         self.query = query.text
         let arguments = CommandStart.filled(entry.spec, query.arguments)
         self.arguments = arguments
-        state = ViewSessionState(session: session, query: CommandQuery(text: query.text, arguments: arguments))
+        view = CommandView(session: session, pluginName: entry.pluginName, query: CommandQuery(text: query.text, arguments: arguments))
     }
 
     func start() {
-        deliver(state.open())
+        deliver(view.open())
     }
 
     private func changed() {
-        // Waiting for a restart or stopped: the newest text goes out when
-        // the session opens again.
-        guard !waitingForPlugin, !stopped else { return }
-        guard !closed, let next = state.change(CommandQuery(text: query, arguments: arguments)) else {
-            isSearching = state.isSearching
-            return
-        }
-        deliver(next)
-    }
-
-    private func deliver(_ send: ViewSessionState.Send) {
-        isSearching = true
-        let session = id
-        let command = entry.spec.id
-        let supervisor = supervisor
-        let context = context
-        enqueue {
-            switch send {
-            case .open(let seq, let query):
-                await supervisor.openView(session: session, command: command, query: query, seq: seq, context: context)
-            case .update(let seq, let query):
-                await supervisor.updateView(session: session, query: query, seq: seq)
-            }
-        }
+        deliver(view.change(CommandQuery(text: query, arguments: arguments)))
     }
 
     func received(seq: Int, root: ViewNode) {
-        guard !closed else { return }
-        let (show, next) = state.received(seq: seq, root: root)
-        if show {
+        let result = view.received(seq: seq, root: root)
+        if result.shown {
             self.root = root
-            answers += 1
+            answers = view.answers
             answeredAt = Date()
-            problem = nil
         }
-        if let next { deliver(next) }
-        isSearching = state.isSearching
-        if submitting, show {
-            submitting = false
-            if !root.hasFormErrors { onFinished?() }
-        }
+        deliver(result.sends)
+        if result.finished { onFinished?() }
     }
 
     /// Sends an action inside the view to the plugin. A submitted form waits
     /// for its answer: the palette closes once it comes back without errors.
     func perform(_ action: ActionID, _ value: EventValue? = nil) {
-        // After closeView the plugin has no handler for the view's actions.
-        guard canAct else { return }
-        if case .fields = value { submitting = true }
-        let supervisor = supervisor
-        enqueue { await supervisor.event(action, value: value) }
+        deliver(view.perform(action, value))
     }
 
-    /// Whether an action can reach the plugin now.
-    var canAct: Bool { !closed && !waitingForPlugin && !stopped }
-    /// Stopped or failed: nothing will answer.
-    var isStopped: Bool { stopped }
-    @ObservationIgnored private var waitingForPlugin = false
-    @ObservationIgnored private var stopped = false
-
-    func pluginRestarted() {
-        guard !closed else { return }
-        waitingForPlugin = true
-        stopped = false
-        problem = "\(entry.pluginName) restarted; reconnecting…"
-        isSearching = true
-    }
-
-    /// Running again after a restart: the session opens again with what is
-    /// typed now, so the list comes back without reopening the command.
-    func pluginRunning() {
-        guard !closed, waitingForPlugin || stopped else { return }
-        waitingForPlugin = false
-        stopped = false
-        problem = nil
-        deliver(state.reopen(CommandQuery(text: query, arguments: arguments)))
-    }
-
-    func pluginStopped(_ message: String) {
-        guard !closed else { return }
-        waitingForPlugin = false
-        stopped = true
-        problem = message
-        isSearching = false
+    /// The plugin's process changed state (restarting, running again,
+    /// failed or turned off).
+    func pluginState(_ state: PluginSupervisor.State) {
+        deliver(view.pluginState(state))
     }
 
     func close() {
-        guard !closed else { return }
-        closed = true
-        let session = id
-        let supervisor = supervisor
-        enqueue { await supervisor.closeView(session: session) }
+        guard !view.isClosed else { return }
+        deliver(view.close())
         onClose()
     }
 
-    private func enqueue(_ operation: @escaping @Sendable () async -> Void) {
+    /// Sends the view's messages in order and mirrors its state for SwiftUI.
+    private func deliver(_ sends: [CommandView.Send]) {
+        problem = view.problem
+        isSearching = view.isSearching
+        guard !sends.isEmpty else { return }
+        let session = id
+        let command = entry.spec.id
+        let supervisor = supervisor
+        let context = context
         let previous = chain
         chain = Task {
             await previous?.value
-            await operation()
+            for send in sends {
+                switch send {
+                case .open(let seq, let query):
+                    await supervisor.openView(session: session, command: command, query: query, seq: seq, context: context)
+                case .update(let seq, let query):
+                    await supervisor.updateView(session: session, query: query, seq: seq)
+                case .event(let action, let value):
+                    await supervisor.event(action, value: value)
+                case .close:
+                    await supervisor.closeView(session: session)
+                }
+            }
         }
     }
 }
