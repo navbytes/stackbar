@@ -335,11 +335,23 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), capabilityKinds: manifest.capabilities.map(\.kind.rawValue), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, accent: manifest.accent?.rawValue, symbol: manifest.symbol, updated: day, replaces: manifest.replaces)
     }
 
-    public static func download(_ url: URL, limit: Int = 8 * 1024 * 1024) async throws -> Data {
+    static let defaultDownloadLimit = 8 * 1024 * 1024
+    /// Longest a download may go without a byte arriving.
+    static let downloadIdleSeconds: TimeInterval = 60
+
+    /// Longest a whole download may take. An index or bundle is small and
+    /// gets five minutes; a larger body (a prebuilt helper, up to 64 MB) gets
+    /// half an hour so a slow link can still finish, as long as bytes keep
+    /// arriving within `downloadIdleSeconds`.
+    static func downloadResourceSeconds(limit: Int) -> TimeInterval {
+        limit > defaultDownloadLimit ? 1800 : 300
+    }
+
+    public static func download(_ url: URL, limit: Int = PluginIndex.defaultDownloadLimit) async throws -> Data {
         if url.isFileURL { return try Data(contentsOf: url) }
         guard url.scheme == "https" || (url.scheme == "http" && url.host == "127.0.0.1") else { throw IndexError.insecure(url.absoluteString) }
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForResource = 300
+        configuration.timeoutIntervalForResource = downloadResourceSeconds(limit: limit)
         let delegate = BoundedBodyDelegate()
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         // The session holds its delegate until invalidated.
@@ -347,7 +359,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await delegate.fetch(URLRequest(url: url), on: session, limit: limit)
+            (data, response) = try await delegate.fetch(URLRequest(url: url, timeoutInterval: downloadIdleSeconds), on: session, limit: limit)
         } catch is BodyTooLarge {
             throw IndexError.tooLarge(url.absoluteString)
         }
