@@ -335,7 +335,7 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         return Entry(id: manifest.id, name: manifest.name, summary: manifest.summary, version: manifest.version, publisher: bundle.publisher.name, bundle: path, sha256: SHA256.hex(data), capabilities: manifest.capabilities.map(\.summary), capabilityKinds: manifest.capabilities.map(\.kind.rawValue), surfaces: manifest.surfaces.map(\.rawValue), minimumStackbar: manifest.minimumStackbar, homepage: manifest.homepage, accent: manifest.accent?.rawValue, symbol: manifest.symbol, updated: day, replaces: manifest.replaces)
     }
 
-    static let defaultDownloadLimit = 8 * 1024 * 1024
+    public static let defaultDownloadLimit = 8 * 1024 * 1024
     /// Longest a download may go without a byte arriving.
     static let downloadIdleSeconds: TimeInterval = 60
 
