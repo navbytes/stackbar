@@ -33,6 +33,12 @@ public final class PaletteMemory: @unchecked Sendable {
     /// closes on it, and the next query ranks with it.
     public var revision: Int { lock.withLock { changes } }
 
+    /// Returns once every use and pick is written, for quitting.
+    public func flush() {
+        usage.flush()
+        picks.flush()
+    }
+
     private func changed() { lock.withLock { changes += 1 } }
 
     // MARK: - Learning

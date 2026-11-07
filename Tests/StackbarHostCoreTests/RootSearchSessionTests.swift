@@ -172,3 +172,21 @@ final class RootSearchSessionTests: XCTestCase {
         XCTAssertNil(closed)
     }
 }
+
+final class RootPatternTests: XCTestCase {
+    private func spec(_ pattern: String) -> CommandSpec {
+        CommandSpec(id: "c", title: "c", kind: .view, rootSearch: true, rootPattern: pattern)
+    }
+
+    func testTheWholeTextMatchesEvenWhenAnEarlierAlternativeMatchesAPrefix() {
+        let numbers = spec("\\d+|\\d+-\\d+")
+        XCTAssertTrue(RootSearchGate.matches(numbers, text: "12-3"), "ICU's first alternative is `12`, but the whole text matches the second")
+        XCTAssertTrue(RootSearchGate.matches(numbers, text: "12"))
+        XCTAssertFalse(RootSearchGate.matches(numbers, text: "12-"))
+        XCTAssertFalse(RootSearchGate.matches(numbers, text: "a12"))
+        XCTAssertFalse(RootSearchGate.matches(spec("[0-9+*/ ()-]+"), text: "2+2 = x"))
+        XCTAssertTrue(RootSearchGate.matches(spec("(?i)abc-\\d+"), text: "ABC-123"), "inline flags still apply")
+        XCTAssertFalse(RootSearchGate.matches(spec("a)(b"), text: "ab"), "a pattern that doesn't compile as written never matches")
+        XCTAssertFalse(RootSearchGate.matches(spec("abc"), text: "abc\nx"))
+    }
+}

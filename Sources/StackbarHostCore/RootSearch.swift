@@ -22,8 +22,7 @@ public enum RootSearchGate {
         guard let pattern = spec.rootPattern else { return true }
         guard let regex = cache.regex(pattern) else { return false }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        guard let match = regex.firstMatch(in: text, options: [.anchored], range: range) else { return false }
-        return match.range == range
+        return regex.firstMatch(in: text, options: [.anchored], range: range) != nil
     }
 
     /// Whether `spec` is offered as a fallback for typed text.
@@ -40,7 +39,12 @@ public enum RootSearchGate {
         func regex(_ pattern: String) -> NSRegularExpression? {
             lock.withLock {
                 if let known = compiled[pattern] { return known }
-                let made = try? NSRegularExpression(pattern: pattern)
+                // The pattern as written must compile; it is then matched as
+                // a whole, so that an alternative matching only a prefix
+                // (`\d+|\d+-\d+` on `12-3`) doesn't hide one matching all.
+                let made = (try? NSRegularExpression(pattern: pattern)).flatMap { _ in
+                    try? NSRegularExpression(pattern: "\\A(?:\(pattern))\\z")
+                }
                 compiled[pattern] = made
                 return made
             }

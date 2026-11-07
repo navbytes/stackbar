@@ -114,6 +114,15 @@ final class SystemProtocolTests: XCTestCase {
 }
 
 final class TextMatchTests: XCTestCase {
+    func testWordStartsAreFoundInLongAndMultibyteText() {
+        let words = (0..<2_000).map { "w\($0)" }.joined(separator: " ")
+        XCTAssertEqual(TextMatch.match("w1999", in: words)?.tier, .wordStart)
+        XCTAssertEqual(TextMatch.match("zürich", in: "Café zürich über")?.tier, .wordStart)
+        XCTAssertEqual(TextMatch.match("über", in: "Café zürich über")?.tier, .wordStart)
+        XCTAssertEqual(TextMatch.match("日本", in: "東京 日本 大阪")?.tier, .wordStart)
+        XCTAssertEqual(TextMatch.match("ürich", in: "Café zürich")?.tier, .substring)
+    }
+
     func testPrefixBeatsSubstringBeatsLettersInOrder() throws {
         let prefix = try XCTUnwrap(TextMatch.score("git", in: "GitHub pull requests"))
         let substring = try XCTUnwrap(TextMatch.score("hub", in: "GitHub pull requests"))

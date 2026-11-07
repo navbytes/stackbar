@@ -56,6 +56,12 @@ public final class RootSearchSession<View: RootSearchView> {
     private var fedAt: [CommandKey: Date] = [:]
     /// Each view's rows, filtered once per answer and text.
     private var filtered: [CommandKey: (answers: Int, query: String, rows: [RowNode])] = [:]
+    /// Moves whenever what `rows()` reports could differ from the last call:
+    /// a view opened, closed or stopped, or one filtered a new answer. A
+    /// cache of what was built from the rows keys on this instead of
+    /// comparing the rows themselves.
+    public private(set) var rowsStamp = 0
+    private var shown: Set<CommandKey> = []
     private var text: String?
     private var accepts: (CommandRegistry.Entry, String) -> Bool = { _, _ in false }
     private let now: () -> Date
@@ -92,7 +98,14 @@ public final class RootSearchSession<View: RootSearchView> {
         for entry in wanted {
             if let view = views[entry.key] {
                 if view.query != text {
-                    fedAt[entry.key] = now()
+                    let moment = now()
+                    // New text while the last is still unanswered: a plugin
+                    // that never answers is never timed by `timeAnswers`, so
+                    // the wait so far counts here, and benches it in time.
+                    if view.isSearching, let asked = fedAt[entry.key], moment.timeIntervalSince(asked) > budget.limit {
+                        budget.record(entry.key, took: moment.timeIntervalSince(asked), now: moment)
+                    }
+                    fedAt[entry.key] = moment
                     view.query = text
                 }
                 continue
@@ -119,6 +132,7 @@ public final class RootSearchSession<View: RootSearchView> {
         }
         view.query = current
         views[key] = view
+        rowsStamp += 1
         // Timed from here: waiting for the plugin to start isn't the plugin
         // being slow, and shouldn't bench it.
         fedAt[key] = now()
@@ -135,6 +149,7 @@ public final class RootSearchSession<View: RootSearchView> {
         views[key] = nil
         fedAt[key] = nil
         filtered[key] = nil
+        rowsStamp += 1
         revision += 1
     }
 
@@ -153,7 +168,13 @@ public final class RootSearchSession<View: RootSearchView> {
     public func rows() -> [PaletteRoot.PluginRows] {
         guard text != nil else { return [] }
         timeAnswers()
-        return views.values.filter { !$0.isStopped }.map { PaletteRoot.PluginRows(command: $0.entry, rows: rows(of: $0)) }
+        let live = views.values.filter { !$0.isStopped }
+        let keys = Set(live.map { $0.entry.key })
+        if keys != shown {
+            shown = keys
+            rowsStamp += 1
+        }
+        return live.map { PaletteRoot.PluginRows(command: $0.entry, rows: rows(of: $0)) }
     }
 
     /// A view's rows for its text, from its newest answer.
@@ -161,7 +182,10 @@ public final class RootSearchSession<View: RootSearchView> {
         let key = view.entry.key
         if let known = filtered[key], known.answers == view.answers, known.query == view.query { return known.rows }
         let rows = Self.rows(in: view.root, query: view.query)
-        if views[key] === view { filtered[key] = (view.answers, view.query, rows) }
+        if views[key] === view {
+            filtered[key] = (view.answers, view.query, rows)
+            rowsStamp += 1
+        }
         return rows
     }
 

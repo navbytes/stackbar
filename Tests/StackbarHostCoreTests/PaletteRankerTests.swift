@@ -101,6 +101,21 @@ final class PaletteRankerTests: XCTestCase {
         XCTAssertEqual(fading.weights(for: "s")["slack"] ?? 0, 0.5, accuracy: 0.001)
     }
 
+    func testUsageIsWrittenOffTheCallersThreadAndKeepsTheLastWrite() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("usage-\(UUID().uuidString.prefix(8))")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("palette-usage.json")
+        let now = start
+        let usage = PaletteUsage(file: file) { now }
+        for index in 0..<200 { usage.record("item-\(index % 7)") }
+        usage.flush()
+        let reloaded = PaletteUsage(file: file) { now }
+        XCTAssertEqual(reloaded.score("item-0"), usage.score("item-0"), accuracy: 0.0001, "the newest snapshot is what reached the file")
+        XCTAssertEqual(reloaded.score("item-6"), usage.score("item-6"), accuracy: 0.0001)
+        usage.clear()
+        XCTAssertEqual(PaletteUsage(file: file) { now }.score("item-0"), 0, "a clear is on disk when it returns")
+    }
+
     func testForgetClearAndSave() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("picks-\(UUID().uuidString.prefix(8))")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -109,6 +124,7 @@ final class PaletteRankerTests: XCTestCase {
         let picks = PalettePicks(file: file) { now }
         picks.record(query: "s", id: "slack")
         picks.record(query: "sa", id: "safari")
+        picks.flush()
         XCTAssertEqual(PalettePicks(file: file) { now }.weights(for: "s").keys.sorted(), ["safari", "slack"], "saved and read back")
         picks.forget("slack")
         XCTAssertEqual(PalettePicks(file: file) { now }.weights(for: "s").keys.sorted(), ["safari"])

@@ -160,7 +160,11 @@ public struct PaletteIndex: Sendable {
     /// `search` with each entry's score, for ranking it against plugins'
     /// rows. Empty-query scores are 0.
     public func scored(_ query: String, limit: Int = 50, ranker: PaletteRanker, usage: PaletteUsage? = nil) -> [(entry: Entry, score: Int)] {
-        let all = all
+        scored(query, limit: limit, ranker: ranker, usage: usage, in: all)
+    }
+
+    /// `scored` over `all`, for a caller that already has it.
+    func scored(_ query: String, limit: Int, ranker: PaletteRanker, usage: PaletteUsage?, in all: [Entry]) -> [(entry: Entry, score: Int)] {
         guard !ranker.typed.isEmpty else {
             guard let usage else { return all.prefix(limit).map { ($0, 0) } }
             let used = all.map { usage.score($0.learnID) }

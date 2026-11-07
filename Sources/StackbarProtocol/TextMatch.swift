@@ -79,7 +79,9 @@ extension TextMatch {
         let characters = Array(text)
         let starts = characters.indices.filter { $0 == 0 || wordBreaks.contains(characters[$0 - 1]) }
             .filter { !wordBreaks.contains(characters[$0]) }
-        if starts.contains(where: { text[text.index(text.startIndex, offsetBy: $0)...].hasPrefix(query) }) {
+        // `starts` are offsets in characters; walking to each from the front would be quadratic.
+        let positions = Array(text.indices)
+        if starts.contains(where: { text[positions[$0]...].hasPrefix(query) }) {
             return Match(tier: .wordStart, quality: shortness)
         }
         if squeezedQuery.count >= 2 {
