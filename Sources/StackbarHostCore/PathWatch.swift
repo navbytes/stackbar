@@ -37,8 +37,10 @@ final class PathWatch: @unchecked Sendable {
         self.onTick = onTick
     }
 
+    /// Arms, then looks once, so a change made before the watch was armed
+    /// is not left for the slow safety poll.
     func start() {
-        queue.async { [weak self] in self?.arm() }
+        queue.async { [weak self] in self?.tick() }
     }
 
     func stop() {
@@ -64,7 +66,14 @@ final class PathWatch: @unchecked Sendable {
         guard !stopped else { return }
         arm()
         onTick()
-        if Self.hasEvents, paths() != armed { arm() }
+        // New paths are watched from now on; look again so a change to one
+        // between the look and the re-arm isn't missed.
+        var rounds = 0
+        while Self.hasEvents, !stopped, rounds < 3, paths() != armed {
+            arm()
+            onTick()
+            rounds += 1
+        }
     }
 
     #if canImport(Darwin)
@@ -78,7 +87,9 @@ final class PathWatch: @unchecked Sendable {
         guard !stopped else { return }
         guard Self.hasEvents else { return schedulePoll(interval) }
         armed = paths()
-        let everyPathWatched = watchEvents(armed)
+        // Nothing to raise an event: keep the caller's poll.
+        if armed.isEmpty { disarm() }
+        let everyPathWatched = !armed.isEmpty && watchEvents(armed)
         schedulePoll(everyPathWatched ? max(interval, Self.safetyPoll) : interval)
     }
 
