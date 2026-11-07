@@ -61,11 +61,7 @@ public final class UnixSocketServer: @unchecked Sendable {
 
     private func acceptLoop() {
         while !isStopped {
-            let client = accept(fd, nil, nil)
-            if client < 0 {
-                if isStopped { return }
-                continue
-            }
+            guard let client = UnixSocket.acceptClient(on: fd, isStopped: { isStopped }) else { continue }
             let handler = handler
             Thread {
                 UnixSocket.serve(client, handler: handler)
@@ -78,10 +74,47 @@ public final class UnixSocketServer: @unchecked Sendable {
 public enum UnixSocket {
     static func makeSocket() -> Int32 {
         #if canImport(Glibc)
-        return socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+        let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
         #else
-        return socket(AF_UNIX, SOCK_STREAM, 0)
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         #endif
+        setCloseOnExec(fd)
+        return fd
+    }
+
+    /// Keeps `fd` out of helpers spawned later: posix_spawn hands every
+    /// inheritable descriptor to the child.
+    static func setCloseOnExec(_ fd: Int32) {
+        guard fd >= 0 else { return }
+        _ = fcntl(fd, F_SETFD, fcntl(fd, F_GETFD) | FD_CLOEXEC)
+    }
+
+    /// One turn of an accept loop. Waits at most a quarter second for a
+    /// connection, so a loop whose socket was stopped notices even where
+    /// closing a listening socket does not wake `accept` (macOS), and backs
+    /// off when accept keeps failing (out of descriptors) instead of
+    /// spinning. Returns nil when there is no client yet.
+    static func acceptClient(on fd: Int32, isStopped: () -> Bool) -> Int32? {
+        var poller = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        let ready = poll(&poller, 1, 250)
+        if isStopped() { return nil }
+        if ready < 0 {
+            if errno != EINTR { usleep(50_000) }
+            return nil
+        }
+        if ready == 0 { return nil }
+        if poller.revents & Int16(POLLIN) == 0 {
+            // Error or hang-up on a socket that was not stopped through us.
+            usleep(50_000)
+            return nil
+        }
+        let client = accept(fd, nil, nil)
+        if client < 0 {
+            if errno != EINTR && errno != ECONNABORTED && errno != EAGAIN { usleep(50_000) }
+            return nil
+        }
+        setCloseOnExec(client)
+        return client
     }
 
     static func address(_ path: String) throws -> sockaddr_un {

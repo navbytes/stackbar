@@ -334,7 +334,19 @@ public struct PluginIndex: Codable, Equatable, Sendable {
     public static func download(_ url: URL, limit: Int = 8 * 1024 * 1024) async throws -> Data {
         if url.isFileURL { return try Data(contentsOf: url) }
         guard url.scheme == "https" || (url.scheme == "http" && url.host == "127.0.0.1") else { throw IndexError.insecure(url.absoluteString) }
-        let (data, response) = try await URLSession(configuration: .ephemeral).data(from: url)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForResource = 300
+        let delegate = BoundedBodyDelegate()
+        let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+        // The session holds its delegate until invalidated.
+        defer { session.finishTasksAndInvalidate() }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await delegate.fetch(URLRequest(url: url), on: session, limit: limit)
+        } catch is BodyTooLarge {
+            throw IndexError.tooLarge(url.absoluteString)
+        }
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw IndexError.status(url.absoluteString, (response as? HTTPURLResponse)?.statusCode ?? 0)
         }
