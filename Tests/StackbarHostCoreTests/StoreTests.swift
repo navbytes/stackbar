@@ -136,6 +136,15 @@ final class PluginStoreTests: XCTestCase {
         XCTAssertEqual(review.withdrawn.map(\.installed.id), ["dev.t.w"], "only a signed index can withdraw a plugin")
     }
 
+    func testAnImportedRecordWithoutAPinnedPublisherGetsNoAutomaticUpdate() {
+        let official = PluginStore.Source(url: URL(string: "https://example.com/official.json")!, publicKey: "KEY", isOfficial: true)
+        let catalogs = [PluginStore.Catalog(source: official, index: PluginIndex(name: "O", plugins: [entry("dev.t.a", "1.3.0"), entry("dev.t.b", "2.0.0")], revoked: [.init(id: "dev.t.w", reason: "malware")]))]
+        let installed = [record("dev.t.a", "1.0.0"), record("dev.t.b", "1.0.0"), record("dev.t.w", "1.0.0")]
+        let review = PluginStore.review(catalogs, installed: installed, running: "0.10.0", isPinned: { $0 == "dev.t.b" })
+        XCTAssertEqual(review.updates.map(\.entry.id), ["dev.t.b"])
+        XCTAssertEqual(review.withdrawn.map(\.installed.id), ["dev.t.w"], "a signed withdrawal still removes it")
+    }
+
     func testForgetDropsTheRecordAndKeepsTheFile() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

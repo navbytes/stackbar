@@ -95,7 +95,14 @@ public enum PluginStore {
     /// from the same publisher (the installer's key pin refuses others
     /// anyway), and withdrawals. Only a signed index can withdraw a plugin,
     /// so an index anyone can host can't take someone else's plugin away.
-    public static func review(_ catalogs: [Catalog], installed: [PluginInstaller.Installed], running: String = StackbarVersion.current) -> Review {
+    ///
+    /// `isPinned` says whether the installer holds a publisher key for the
+    /// plugin id. A record without one (it came in with an imported settings
+    /// file, not from an install here) is matched to entries by publisher
+    /// name alone, and the first key seen would be pinned; so it gets no
+    /// automatic update. Installing it again from the Store, which the user
+    /// does knowingly, pins it.
+    public static func review(_ catalogs: [Catalog], installed: [PluginInstaller.Installed], running: String = StackbarVersion.current, isPinned: (String) -> Bool = { _ in true }) -> Review {
         var review = Review()
         for record in installed {
             if let withdrawal = catalogs.lazy.compactMap({ catalog -> PluginIndex.Revocation? in
@@ -105,6 +112,7 @@ public enum PluginStore {
                 review.withdrawn.append(Withdrawn(installed: record, reason: withdrawal.reason))
                 continue
             }
+            guard isPinned(record.id) else { continue }
             var best: Update?
             for catalog in catalogs {
                 let offered = PluginIndex(name: catalog.index.name, plugins: catalog.index.plugins.filter { $0.publisher == record.publisher }, revoked: catalog.index.revoked)

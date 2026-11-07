@@ -164,7 +164,8 @@ final class AppModel {
         guard !installed.isEmpty else { return }
         let (catalogs, _) = await PluginStore.load(storeSources)
         await refreshHelpers(installed: installed, catalogs: catalogs)
-        let review = PluginStore.review(catalogs, installed: installed)
+        let publishers = installer.publishers
+        let review = PluginStore.review(catalogs, installed: installed, isPinned: { publishers.publisher(for: $0) != nil })
         for withdrawn in review.withdrawn {
             let running = controllers.filter { $0.pluginID == withdrawn.installed.id }
             for controller in running { await remove(controller) }
