@@ -332,3 +332,38 @@ private extension Data {
         return Data(text.replacingCharacters(in: range, with: replacement).utf8)
     }
 }
+
+final class StoreLoadingTests: XCTestCase {
+    func testSourcesLoadTogetherAndKeepTheirOrder() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var sources: [PluginStore.Source] = []
+        for name in ["one", "two", "three"] {
+            let file = directory.appendingPathComponent("\(name).json")
+            try PluginIndex(name: name, plugins: []).encoded().write(to: file)
+            sources.append(PluginStore.Source(url: file))
+        }
+        sources.insert(PluginStore.Source(url: directory.appendingPathComponent("missing.json")), at: 1)
+        let result = await PluginStore.load(sources)
+        XCTAssertEqual(result.catalogs.map(\.index.name), ["one", "two", "three"])
+        XCTAssertEqual(result.problems.count, 1)
+        XCTAssertTrue(result.problems[0].contains("missing.json"))
+    }
+
+    func testAStoresHelperListIsFetchedOncePerPass() async throws {
+        let hits = Log()
+        let server = try LoopbackServer { _ in
+            hits.add(.log(.info, "hit"))
+            return .text("none", status: 404)
+        }
+        defer { server.stop() }
+        let cache = HelperIndexCache()
+        let indexURL = try XCTUnwrap(URL(string: "\(server.baseURL)/index.json"))
+        let first = await cache.fetch(beside: indexURL)
+        let second = await cache.fetch(beside: indexURL)
+        XCTAssertNil(first)
+        XCTAssertNil(second)
+        XCTAssertEqual(hits.all.count, 1)
+    }
+}

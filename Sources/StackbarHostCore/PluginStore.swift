@@ -69,14 +69,29 @@ public enum PluginStore {
     /// With `site`, also each store's `site.json` (renders and READMEs), which
     /// only the store's pages need, not the background update check.
     public static func load(_ sources: [Source], site: Bool = false) async -> (catalogs: [Catalog], problems: [String]) {
+        // All sources at once, so one slow host costs its own timeout and
+        // not the sum of everyone's. Results keep the order of `sources`.
+        let results = await withTaskGroup(of: (Int, Result<Catalog, Error>).self) { group in
+            for (position, source) in sources.enumerated() {
+                group.addTask {
+                    do {
+                        let index = try await PluginIndex.fetch(source.url, publicKey: source.publicKey)
+                        return (position, .success(Catalog(source: source, index: index, site: site ? await StoreSite.fetch(beside: source.url) : nil)))
+                    } catch {
+                        return (position, .failure(error))
+                    }
+                }
+            }
+            var collected: [(Int, Result<Catalog, Error>)] = []
+            for await result in group { collected.append(result) }
+            return collected.sorted { $0.0 < $1.0 }
+        }
         var catalogs: [Catalog] = []
         var problems: [String] = []
-        for source in sources {
-            do {
-                let index = try await PluginIndex.fetch(source.url, publicKey: source.publicKey)
-                catalogs.append(Catalog(source: source, index: index, site: site ? await StoreSite.fetch(beside: source.url) : nil))
-            } catch {
-                problems.append("\(source.url.absoluteString): \(error)")
+        for (position, result) in results {
+            switch result {
+            case .success(let catalog): catalogs.append(catalog)
+            case .failure(let error): problems.append("\(sources[position].url.absoluteString): \(error)")
             }
         }
         return (catalogs, problems)

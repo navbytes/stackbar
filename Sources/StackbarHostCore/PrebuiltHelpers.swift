@@ -114,6 +114,25 @@ public struct HelperIndex: Codable, Equatable, Sendable {
     }
 }
 
+/// `helpers.json` of each store, fetched once per pass (a nil answer too: a
+/// store that publishes none is asked once, not once per plugin).
+public final class HelperIndexCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fetches: [URL: Task<(index: HelperIndex, url: URL)?, Never>] = [:]
+
+    public init() {}
+
+    public func fetch(beside indexURL: URL) async -> (index: HelperIndex, url: URL)? {
+        let task = lock.withLock { () -> Task<(index: HelperIndex, url: URL)?, Never> in
+            if let running = fetches[indexURL] { return running }
+            let created = Task { await HelperIndex.fetch(beside: indexURL) }
+            fetches[indexURL] = created
+            return created
+        }
+        return await task.value
+    }
+}
+
 /// Prebuilt helpers on this Mac: `Prebuilt/` in the build cache (downloaded)
 /// and in the app's StackbarKit (built with the app and covered by its
 /// signature). Files are named after what they were built from:
@@ -164,8 +183,13 @@ public enum PrebuiltHelpers {
 
     /// Finds, downloads and verifies the helper for a source from the store
     /// at `indexURL`. Nil when the store lists none that fits.
-    public static func fetch(id: String, sourceDigest: String, publicKey: String, indexURL: URL, stackbarKit: String, protocolVersion: Int = StackbarProtocolVersion.current, compatible: Bool) async throws -> Download? {
-        guard let (index, url) = await HelperIndex.fetch(beside: indexURL),
+    ///
+    /// With `cache`, a store's `helpers.json` is downloaded once for all the
+    /// plugins a pass looks at instead of once for each.
+    public static func fetch(id: String, sourceDigest: String, publicKey: String, indexURL: URL, stackbarKit: String, protocolVersion: Int = StackbarProtocolVersion.current, compatible: Bool, cache: HelperIndexCache? = nil) async throws -> Download? {
+        let found: (index: HelperIndex, url: URL)?
+        if let cache { found = await cache.fetch(beside: indexURL) } else { found = await HelperIndex.fetch(beside: indexURL) }
+        guard let (index, url) = found,
               let (record, exact) = index.match(id: id, sourceDigest: sourceDigest, stackbarKit: stackbarKit, protocolVersion: protocolVersion, compatible: compatible) else { return nil }
         return try await download(record, exact: exact, from: url, publicKey: publicKey)
     }
@@ -266,6 +290,7 @@ extension PrebuiltHelpers {
     /// plugin is pinned to. Returns the ids that got one.
     public static func refresh(installed: [PluginInstaller.Installed], catalogs: [PluginStore.Catalog], publishers: PublisherStore, builder: PluginBuilder, toolchain: Bool) async -> [String] {
         let stackbarKit = builder.stackbarKit
+        let cache = HelperIndexCache()
         var refreshed: [String] = []
         for record in installed {
             guard let source = try? Data(contentsOf: URL(fileURLWithPath: record.file)),
@@ -278,7 +303,7 @@ extension PrebuiltHelpers {
             // download.
             let compatible = !toolchain && !builder.hasPrebuilt(sourceDigest: digest, compatible: true)
             guard let download = try? await fetch(id: record.id, sourceDigest: digest, publicKey: publicKey, indexURL: catalog.source.url,
-                                                  stackbarKit: stackbarKit, compatible: compatible),
+                                                  stackbarKit: stackbarKit, compatible: compatible, cache: cache),
                   (try? save(download, in: builder.downloadedHelpers, stackbarKit: stackbarKit)) != nil else { continue }
             refreshed.append(record.id)
         }
