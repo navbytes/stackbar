@@ -15,7 +15,9 @@ There are two layers:
   Settings › Privacy & Security, once for the whole app.
 - **Plugin approvals** belong to each plugin. When a plugin asks to use the
   network, your calendar or the clipboard, Stackbar shows what it asks for and
-  waits for you. Applications, Calculator and File Search come with Stackbar
+  waits for you. Run one of its commands from the palette and the palette
+  asks right there: Return allows it and the command carries on.
+  Applications, Calculator and File Search come with Stackbar
   and are approved as they are installed. Each plugin's page in
   Settings › Plugins lists what it can do and can take it back.
 

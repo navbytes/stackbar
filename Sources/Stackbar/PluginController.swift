@@ -243,18 +243,24 @@ final class PluginController: Identifiable {
         state = .stopped
     }
 
-    func approve() {
-        guard let manifest, let model else { return }
+    /// Saves the approval and grants it to the running helper. The task
+    /// ends once the helper has it, so a command started after it is
+    /// allowed what it asks for; nil when the approval couldn't be saved.
+    @discardableResult
+    func approve() -> Task<Void, Never>? {
+        guard let manifest, let model else { return nil }
         do {
             try model.ledger.approve(manifest)
             pendingApproval = []
             isNewInstall = false
-            Task {
+            let supervisor = supervisor
+            return Task {
                 await supervisor?.grant(manifest.capabilities)
                 await supervisor?.refresh()
             }
         } catch {
             problem = "could not save the approval: \(error)"
+            return nil
         }
     }
 
