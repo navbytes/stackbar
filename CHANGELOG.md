@@ -6,6 +6,7 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Fixed
+- **A plugin dragged out of the menu bar can come back.** ⌘-dragging an item off the menu bar hid it for good: macOS remembered it, so turning "Show in menu bar" back on in Settings, or a plugin like Clipboard turning its own icon on, made an item you couldn't see. Dragging one out now turns "Show in menu bar" off for that plugin, and turning it on brings the item back.
 - **Typing in the palette does less work per key.** The palette no longer re-filters and re-ranks every row several times for each keystroke, and its saved picks and usage are written in the background.
 - **Copying a big screenshot no longer stutters.** Clipboard images are decoded, converted and saved off the main thread, and old ones are cleaned up gradually.
 - **A slow or frozen app can't freeze Stackbar.** Menu search, window lists, the plugin context read and the cycle-windows key now talk to other apps in the background with a time limit. The cycle-windows key no longer does that work while it holds the keyboard.

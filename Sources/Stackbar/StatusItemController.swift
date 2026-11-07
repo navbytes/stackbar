@@ -18,6 +18,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     private let hosting: PassthroughHostingView<StatusItemContent>
     private var hotKey: HotKey?
     private var hotKeySpec: String?
+    /// Follows the user ⌘-dragging the item out of the menu bar.
+    private var visibility: NSKeyValueObservation?
     /// When the popover last opened. A transient popover shown while the app
     /// is still activating gets a close request from that activation, which
     /// made the first click on each item open and at once close the panel.
@@ -42,6 +44,11 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         super.init()
         statusItem.autosaveName = "stackbar." + controller.source.lastPathComponent
         statusItem.behavior = .removalAllowed
+        // The host makes this item only when it should show. macOS remembers
+        // a ⌘-drag out of the bar under the autosave name, and without this
+        // the item stayed invisible for good: turning "Show in menu bar"
+        // back on, or the plugin drawing again, made an item nobody saw.
+        statusItem.isVisible = true
         popover.behavior = .transient
         popover.animates = false
         popover.delegate = self
@@ -67,9 +74,17 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             button.setAccessibilityLabel(controller.name)
         }
         observe()
+        // A drag out of the bar is the user hiding it: say so in Settings,
+        // whose "Show in menu bar" toggle then brings it back.
+        visibility = statusItem.observe(\.isVisible) { [weak self] item, _ in
+            guard !item.isVisible else { return }
+            Task { @MainActor in self?.controller.hiddenFromMenuBar = true }
+        }
     }
 
     func remove() {
+        visibility?.invalidate()
+        visibility = nil
         hotKey?.unregister()
         hotKey = nil
         popover.close()
