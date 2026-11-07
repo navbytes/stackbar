@@ -337,6 +337,10 @@ public enum HostResult: Codable, Equatable, Sendable {
 }
 
 public struct HTTPRequest: Codable, Equatable, Sendable {
+    /// Longest the host lets one call take from start to last byte, whatever
+    /// its `timeout` (which only measures silence). The plugin's wait for the
+    /// answer is based on this.
+    public static let maxCallSeconds: Double = 300
     public var url: String
     public var method: String
     public var headers: [String: String]

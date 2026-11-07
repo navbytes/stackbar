@@ -226,9 +226,14 @@ extension HostCall {
         case .oauthToken, .chooseFile, .saveFile, .pickColor, .captureScreenText:
             return nil
         case .http(let request):
-            return min(max(request.timeout, 1), 120) + 30
+            // The host may let a call run up to its whole-call maximum (redirects
+            // and a slow trickle keep the idle timeout from firing), so wait
+            // for that, not just for the request's own timeout.
+            return HTTPRequest.maxCallSeconds + 30
         case .run(let request):
-            return min(max(request.timeout, 1), RunRequest.maxTimeout) + 30
+            // The host reads a timeout of 0 or less as the default.
+            let timeout = request.timeout > 0 ? request.timeout : RunRequest.defaultTimeout
+            return min(timeout, RunRequest.maxTimeout) + 30
         case .reminderAccess, .reminderLists, .createReminderList, .reminders, .saveReminder, .deleteReminder,
              .calendarEvents, .saveCalendarEvent, .writableCalendars, .system, .arrangeWindows:
             return Self.promptReplyTimeout

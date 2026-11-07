@@ -13,7 +13,7 @@ import StackbarProtocol
 public final class HTTPService: Sendable {
     public static let maxResponseBytes = 16 * 1024 * 1024
     /// Longest a call may take from start to last byte.
-    static let maxCallSeconds: TimeInterval = 300
+    static let maxCallSeconds: TimeInterval = HTTPRequest.maxCallSeconds
 
     public let audit: NetworkAudit
     private let session: URLSession

@@ -46,6 +46,11 @@ final class RunClientTests: XCTestCase {
         XCTAssertNil(HostCall.pickColor.replyTimeout)
         XCTAssertEqual(HostCall.systemStatus.replyTimeout, HostCall.defaultReplyTimeout)
         XCTAssertEqual(HostCall.run(RunRequest(command: "ls", timeout: 5)).replyTimeout, 35)
+        XCTAssertEqual(HostCall.run(RunRequest(command: "ls", timeout: 0)).replyTimeout, RunRequest.defaultTimeout + 30)
+        XCTAssertEqual(HostCall.run(RunRequest(command: "ls", timeout: -3)).replyTimeout, RunRequest.defaultTimeout + 30)
+        XCTAssertEqual(HostCall.run(RunRequest(command: "ls", timeout: 0.5)).replyTimeout, 30.5)
+        let quick = HostCall.http(HTTPRequest(url: "https://x.test", timeout: 5))
+        XCTAssertGreaterThanOrEqual(quick.replyTimeout ?? 0, HTTPRequest.maxCallSeconds + 30)
         XCTAssertEqual(HostCall.reminderAccess(ask: true).replyTimeout, HostCall.promptReplyTimeout)
     }
 
