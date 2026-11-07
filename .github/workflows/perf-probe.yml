@@ -1,11 +1,9 @@
 name: Perf probe
 
-# One-off measurement of idle CPU, memory and process spawns with the store's
-# plugins installed. Not part of the release flow.
+# Measures idle CPU, memory and process spawns with every store plugin
+# installed (run it from the Actions tab). Not part of the release flow.
 
 on:
-  push:
-    branches: [claude/project-thread-g9pbw8]
   workflow_dispatch:
 
 permissions:
