@@ -59,6 +59,7 @@ struct SettingsTransferGroup: View {
         panel.nameFieldStringValue = "Stackbar \(Date().formatted(.iso8601.year().month().day())).\(SettingsArchive.fileExtension)"
         NSApp.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.services.storage.flushAll()
         do {
             let data = try SettingsArchive.export(dataDirectory: StackbarPaths.dataDirectory).encoded()
             try data.write(to: url, options: .atomic)
@@ -94,11 +95,16 @@ struct SettingsTransferGroup: View {
         alert.addButton(withTitle: "Import and Restart")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
+        // Keep what's in memory from overwriting the imported values on quit.
+        let storage = model.services.storage
+        storage.flushAll()
+        storage.setWritesPaused(true)
         do {
             try archive.apply(to: StackbarPaths.dataDirectory)
             UserDefaults.standard.set(true, forKey: WelcomeView.seenKey)
             Self.relaunch()
         } catch {
+            storage.setWritesPaused(false)
             problem = "Couldn't import: \(error.localizedDescription)"
         }
     }

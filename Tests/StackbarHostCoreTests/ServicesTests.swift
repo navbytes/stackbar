@@ -76,6 +76,59 @@ final class StorageStoreTests: XCTestCase {
         XCTAssertEqual(unchanged, ["b": "\"x\""])
     }
 
+    func testDelayedWritesCoalesceAndFlush() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = StorageStore(directory: directory, quotaBytes: 64, writeDelay: 60)
+        for count in 1...20 { try await store.set("count", "\(count)", for: "p.one") }
+        // In memory at once, on disk only once flushed.
+        let live = await store.snapshot(for: "p.one")
+        XCTAssertEqual(live, ["count": "20"])
+        let unwritten = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(unwritten, [:])
+        // The quota still applies at set time.
+        do {
+            try await store.set("big", String(repeating: "x", count: 100), for: "p.one")
+            XCTFail("over quota must throw")
+        } catch {}
+        store.flushAll()
+        let written = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(written, ["count": "20"])
+        let file = try String(contentsOf: directory.appendingPathComponent("p.one.json"), encoding: .utf8)
+        XCTAssertFalse(file.contains("\n"), "compact JSON")
+
+        // Paused: nothing reaches the disk until resumed.
+        try await store.set("count", "21", for: "p.one")
+        store.setWritesPaused(true)
+        store.flush("p.one")
+        let paused = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(paused, ["count": "20"])
+        store.setWritesPaused(false)
+        store.flush("p.one")
+        let resumed = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(resumed, ["count": "21"])
+
+        // Erasing drops what was waiting.
+        try await store.set("count", "22", for: "p.one")
+        await store.erase("p.one")
+        store.flushAll()
+        let erased = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(erased, [:])
+    }
+
+    func testDelayedWriteLandsOnItsOwn() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = StorageStore(directory: directory, writeDelay: 0.05)
+        try await store.set("a", "1", for: "p.one")
+        var written: [String: String] = [:]
+        for _ in 0..<100 where written.isEmpty {
+            try await Task.sleep(for: .milliseconds(20))
+            written = await StorageStore(directory: directory).snapshot(for: "p.one")
+        }
+        XCTAssertEqual(written, ["a": "1"])
+    }
+
     func testIDsThatLookAlikeGetTheirOwnFiles() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

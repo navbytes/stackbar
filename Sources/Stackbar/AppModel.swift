@@ -85,7 +85,9 @@ final class AppModel {
         let ledger = CapabilityLedger(file: StackbarPaths.ledgerFile)
         self.ledger = ledger
         services = HostServices(
-            storage: StorageStore(directory: StackbarPaths.storageDirectory),
+            // Saves are written a second after a plugin's last one; quitting
+            // and stopping a plugin write what is waiting.
+            storage: StorageStore(directory: StackbarPaths.storageDirectory, writeDelay: 1),
             secrets: StackbarPaths.defaultSecrets(includeEnvironment: false),
             platform: HostServices.Platform(
                 notify: { note in Task { @MainActor in Platform.notify(note) } },
@@ -230,6 +232,7 @@ final class AppModel {
         watcher?.stop()
         agentServer?.stop()
         agentServer = nil
+        services.storage.flushAll()
     }
 
     func add(_ source: URL) {

@@ -116,6 +116,7 @@ public actor PluginSupervisor {
         process?.terminate()
         process = nil
         services?.release(pluginID: manifest.id)
+        services?.storage.flush(manifest.id)
         failToolCalls("the plugin stopped")
         failCommandCalls("\(manifest.name) stopped")
         await services?.bus.unsubscribe(manifest.id)
