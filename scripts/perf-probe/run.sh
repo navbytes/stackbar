@@ -27,6 +27,8 @@ echo "== eslogger / fs_usage (best effort)"
 ( sudo fs_usage -w -f exec > "$OUT/fs_usage-exec.txt" 2> "$OUT/fs_usage.err" & ) 2>/dev/null
 
 echo "== launch"
+# Skip the first-run "Move to Applications?" modal, which blocks AppModel.start.
+defaults write io.navbytes.stackbar skipMoveToApplications -bool true
 "$APP/Contents/MacOS/Stackbar" > "$OUT/app.log" 2>&1 &
 PID=$!
 sleep 5
@@ -35,7 +37,7 @@ kill -0 $PID 2>/dev/null || { echo "::error::app exited"; cat "$OUT/app.log"; ex
 # Sample the powermetrics and `sample` probes inside the window's last part.
 ( sleep $((WARM + WINDOW - 40));
   sample $PID 3 -file "$OUT/sample-main.txt" > /dev/null 2>&1
-  sudo powermetrics --samplers tasks --show-process-wakeups -n 3 -i 5000 > "$OUT/powermetrics.txt" 2> "$OUT/powermetrics.err"
+  sudo powermetrics --samplers tasks -n 3 -i 5000 > "$OUT/powermetrics.txt" 2> "$OUT/powermetrics.err"
 ) &
 PROBES=$!
 
@@ -54,25 +56,30 @@ kill $PID 2>/dev/null; sleep 1
   echo
   cat "$OUT/summary.md" 2>/dev/null
   echo
-  echo "### fs_usage exec events (whole run), by process"
+  echo "### fs_usage exec events (whole run, lines mentioning stackbar), by process"
   echo
   if [ -s "$OUT/fs_usage-exec.txt" ]; then
-    echo '```'; grep -v '^$' "$OUT/fs_usage-exec.txt" | awk '{print $NF}' | sed 's/\.[0-9]*$//' | sort | uniq -c | sort -rn | head -15; echo '```'
+    echo '```'; grep -v '^$' "$OUT/fs_usage-exec.txt" | grep -iE "stackbar|prebuilt" | awk '{print $NF}' | sort | uniq -c | sort -rn | head -15; echo '```'
   else echo "no data: $(head -c 200 "$OUT/fs_usage.err")"; fi
   echo
   echo "### eslogger exec"
   echo
   if [ -s "$OUT/eslogger-exec.jsonl" ]; then
-    echo '```'; python3 - "$OUT/eslogger-exec.jsonl" <<'PY'
+    echo '```'; python3 - "$OUT/eslogger-exec.jsonl" "$PID" <<'PY'
 import json, sys, collections, os
 c = collections.Counter()
+tree = {int(sys.argv[2])}
 for l in open(sys.argv[1]):
     try: e = json.loads(l)
     except Exception: continue
-    ex = e["event"]["exec"]["target"]["executable"]["path"]
-    pp = e["process"]["executable"]["path"]
-    c[(os.path.basename(pp), os.path.basename(ex))] += 1
-print("total", sum(c.values()))
+    ex = e["event"]["exec"]["target"]
+    pr = e["process"]
+    pid = ex["audit_token"]["pid"] if "audit_token" in ex else pr["audit_token"]["pid"]
+    ppid = ex.get("original_ppid", ex.get("ppid", pr.get("ppid")))
+    if ppid in tree or pr["audit_token"]["pid"] in tree:
+        tree.add(pid)
+        c[(os.path.basename(pr["executable"]["path"]), os.path.basename(ex["executable"]["path"]))] += 1
+print("exec events inside the Stackbar tree:", sum(c.values()))
 for (p, t), k in c.most_common(20): print(k, p, "->", t)
 PY
     echo '```'
@@ -81,7 +88,7 @@ PY
   echo "### powermetrics (last sample, top by wakeups)"
   echo
   if [ -s "$OUT/powermetrics.txt" ]; then
-    echo '```'; grep -iE "^(Name|Stackbar|stackbar|.*helper|.*\.stackbar)" "$OUT/powermetrics.txt" | head -40; echo '```'
+    echo '```'; grep -iE "^(Name |Stackbar|.*[0-9a-f]{16}|ALL_TASKS)" "$OUT/powermetrics.txt" | tail -60; echo '```'
   else echo "no data: $(head -c 200 "$OUT/powermetrics.err")"; fi
   echo
   echo "### main thread sample (top of call graph)"
