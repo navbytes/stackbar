@@ -443,6 +443,26 @@ public enum LineCodec {
     public static func decode<T: Decodable>(_ type: T.Type, from line: Data) throws -> T {
         try JSONDecoder().decode(type, from: line)
     }
+
+    /// Like `encode`, but a NaN or infinite number, which JSON can't hold
+    /// and which makes `encode` throw, is written as 0. `replaced` says
+    /// whether there was one. Try `encode` first: this is the slow path.
+    public static func encodeReplacingNonFinite(_ value: some Encodable) throws -> (data: Data, replaced: Bool) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes, .sortedKeys]
+        let marker = nonFiniteMarker
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: marker, negativeInfinity: marker, nan: marker)
+        let text = String(decoding: try encoder.encode(value), as: UTF8.self)
+        let quoted = "\"\(marker)\""
+        let replaced = text.contains(quoted)
+        var data = Data((replaced ? text.replacingOccurrences(of: quoted, with: "0") : text).utf8)
+        data.append(0x0A)
+        return (data, replaced)
+    }
+
+    /// Stands in for a non-finite number until it is replaced; random, so
+    /// no text a plugin shows can match it.
+    private static let nonFiniteMarker = "non-finite-\(UUID().uuidString)"
 }
 
 /// Splits a byte stream into lines, holding a partial line across reads.

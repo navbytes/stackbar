@@ -82,6 +82,8 @@ public final class HostServices: Sendable {
     public let oauth: OAuthBroker
     public let bus: PluginBus
     public let platform: Platform
+    /// The clipboard poll that plugins with a `.clipboard` trigger share.
+    public let clipboard: ClipboardWatch
     /// Runs declared commands, and keeps the audit of what ran.
     public let runs: CommandRunGate
     /// The programs the user approved each plugin to run, by declared name
@@ -105,6 +107,8 @@ public final class HostServices: Sendable {
         self.oauth = OAuthBroker(secrets: secrets, timeout: oauthTimeout, openURL: platform.open)
         self.bus = bus
         self.platform = platform
+        let system = platform.system
+        self.clipboard = ClipboardWatch { system.clipboardChangeCount() }
     }
 
     /// Services rooted in one directory, with the given secret store. For

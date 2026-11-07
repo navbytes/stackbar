@@ -60,6 +60,7 @@ struct SettingsTransferGroup: View {
         NSApp.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         // Reading and encoding every plugin's files can take a while; not on the main thread.
+        model.services.storage.flushAll()
         let directory = StackbarPaths.dataDirectory
         Task {
             let outcome = await Task.detached(priority: .userInitiated) {
@@ -104,6 +105,10 @@ struct SettingsTransferGroup: View {
             alert.addButton(withTitle: "Import and Restart")
             alert.addButton(withTitle: "Cancel")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
+            // Keep what's in memory from overwriting the imported values on quit.
+            let storage = model.services.storage
+            storage.flushAll()
+            storage.setWritesPaused(true)
             let directory = StackbarPaths.dataDirectory
             let applied = await Task.detached(priority: .userInitiated) {
                 Result { try archive.apply(to: directory) }
@@ -113,6 +118,7 @@ struct SettingsTransferGroup: View {
                 UserDefaults.standard.set(true, forKey: WelcomeView.seenKey)
                 Self.relaunch()
             case .failure(let error):
+                storage.setWritesPaused(false)
                 problem = "Couldn't import: \(error.localizedDescription)"
             }
         }

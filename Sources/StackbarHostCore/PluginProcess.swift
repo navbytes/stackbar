@@ -32,7 +32,7 @@ public final class PluginProcess: @unchecked Sendable {
     public let executable: URL
     private let arguments: [String]
     private let environment: [String: String]?
-    private let writeLock = NSLock()
+    private let writes = DispatchQueue(label: "stackbar.plugin-stdin")
     private var child: ChildProcess?
 
     public init(executable: URL, arguments: [String] = [], environment: [String: String]? = nil) {
@@ -58,31 +58,50 @@ public final class PluginProcess: @unchecked Sendable {
         drained.enter()
         drained.enter()
         drained.enter()
+        let exitReport = Once()
+        let report: @Sendable () -> Void = { exitReport.run { onEvent(.exit(child.terminationStatus ?? -1)) } }
         child.onExit { _ in
             child.sweepGroup()
             drained.leave()
+            // Something the helper started may still hold its pipes open;
+            // the exit is reported anyway once the pipes had a moment.
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.pipeGrace) { report() }
         }
 
-        Self.drain(child.stdout, group: drained) { line in
+        Self.drain(child.stdout, group: drained, onDropped: {
+            onEvent(.undecodable("a message over \(LineBuffer.defaultMaxLineBytes / 1024 / 1024) MB was dropped"))
+        }) { line in
             if let message = try? LineCodec.decode(PluginMessage.self, from: line) {
                 onEvent(.message(message))
             } else {
                 onEvent(.undecodable(String(decoding: line, as: UTF8.self)))
             }
         }
-        Self.drain(child.stderr, group: drained) { line in
-            onEvent(.stderr(String(decoding: line, as: UTF8.self)))
+        // The log budget is applied here too, on the drain thread, so a
+        // plugin printing in a loop can't queue lines faster than the
+        // supervisor drops them.
+        let stderrBudget = Budgeted()
+        Self.drain(child.stderr, group: drained, onDropped: {}) { line in
+            switch stderrBudget.take() {
+            case .allow(let suppressed):
+                if suppressed > 0 { onEvent(.stderr("[\(suppressed) more lines were dropped]")) }
+                onEvent(.stderr(String(decoding: line, as: UTF8.self)))
+            case .drop:
+                break
+            }
         }
-        drained.notify(queue: .global()) {
-            onEvent(.exit(child.terminationStatus ?? -1))
-        }
+        drained.notify(queue: .global()) { report() }
     }
 
+    /// Seconds after the helper exits before its exit is reported even
+    /// though its pipes are still open.
+    static let pipeGrace: Double = 2
+
+    /// Writes go through one serial queue, never blocking the caller (the
+    /// supervisor actor) on a full pipe; order is kept.
     public func send(_ message: HostMessage) {
         guard let child, let data = try? LineCodec.encode(message) else { return }
-        writeLock.lock()
-        defer { writeLock.unlock() }
-        try? child.stdin.write(contentsOf: data)
+        writes.async { try? child.stdin.write(contentsOf: data) }
     }
 
     /// Asks the helper to exit, then escalates: SIGTERM to its whole process
@@ -95,16 +114,19 @@ public final class PluginProcess: @unchecked Sendable {
         // re-parented and lost.
         let started = child.descendants()
         send(.shutdown)
-        writeLock.lock()
-        try? child.stdin.close()
-        writeLock.unlock()
+        writes.async { try? child.stdin.close() }
         DispatchQueue.global().async {
             if !child.wait(timeout: grace) {
                 child.signalTree(SIGTERM)
                 if !child.wait(timeout: grace) { child.signalTree(SIGKILL) }
             }
-            // Whatever it started and left behind goes too.
-            for pid in started {
+            // Whatever it started and left behind goes too, if it is still
+            // ours: orphaned, or under the helper or another of its own. A
+            // pid that was reused since is left alone.
+            guard !started.isEmpty else { return }
+            let ours = Set(started).union([child.pid])
+            for (pid, parent) in ProcessTable.parentLinks() where ours.contains(pid) && pid != child.pid {
+                guard parent == 1 || ours.contains(parent) else { continue }
                 _ = killpg(pid, SIGKILL)
                 _ = kill(pid, SIGKILL)
             }
@@ -174,18 +196,40 @@ public final class PluginProcess: @unchecked Sendable {
         signal(SIGPIPE, SIG_IGN)
     }()
 
-    private static func drain(_ handle: FileHandle, group: DispatchGroup, onLine: @escaping @Sendable (Data) -> Void) {
+    private static func drain(_ handle: FileHandle, group: DispatchGroup, onDropped: @escaping @Sendable () -> Void, onLine: @escaping @Sendable (Data) -> Void) {
         let thread = Thread {
             var buffer = LineBuffer()
             // A pool per read: see `withAutoreleasePool`.
             while withAutoreleasePool({ () -> Bool in
                 let chunk = handle.availableData
                 if chunk.isEmpty { return false }
+                let dropped = buffer.droppedLines
                 for line in buffer.append(chunk) { onLine(line) }
+                if buffer.droppedLines > dropped { onDropped() }
                 return true
             }) {}
             group.leave()
         }
         thread.start()
+    }
+
+    /// Runs its body once, whoever calls first.
+    private final class Once: @unchecked Sendable {
+        private let lock = NSLock()
+        private var done = false
+        func run(_ body: () -> Void) {
+            let first = lock.withLock { () -> Bool in
+                defer { done = true }
+                return !done
+            }
+            if first { body() }
+        }
+    }
+
+    /// `LogBudget` for the stderr drain thread.
+    private final class Budgeted: @unchecked Sendable {
+        private let lock = NSLock()
+        private var budget = LogBudget()
+        func take() -> LogBudget.Outcome { lock.withLock { budget.take() } }
     }
 }

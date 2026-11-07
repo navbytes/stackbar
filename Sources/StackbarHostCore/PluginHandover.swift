@@ -73,15 +73,21 @@ public final class PluginHandover: @unchecked Sendable {
         return moved
     }
 
+    /// Writes the records under the lock, so two hand-overs can't land on
+    /// disk in the wrong order; a failed write is logged.
     private func save() {
         guard let file else { return }
-        let snapshot = all
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(snapshot) {
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: file, options: .atomic)
+        lock.withLock {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+            encoder.dateEncodingStrategy = .iso8601
+            do {
+                let data = try encoder.encode(records)
+                try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: file, options: .atomic)
+            } catch {
+                HostLog.shared.write(.error, "could not save plugin hand-overs to \(file.lastPathComponent): \(error)")
+            }
         }
     }
 }

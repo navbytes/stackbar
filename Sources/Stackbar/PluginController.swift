@@ -80,6 +80,8 @@ final class PluginController: Identifiable {
     @ObservationIgnored private weak var model: AppModel?
     @ObservationIgnored private var updatesTask: Task<Void, Never>?
     @ObservationIgnored private var loadGeneration = 0
+    /// The newest load's build, cancelled when a newer load or a stop comes.
+    @ObservationIgnored private var buildTicket: BuildTicket?
 
     init(source: URL, model: AppModel) {
         self.id = source.path
@@ -136,6 +138,10 @@ final class PluginController: Identifiable {
         }
         loadGeneration += 1
         let generation = loadGeneration
+        // A build of an older version still waiting its turn is skipped.
+        buildTicket?.cancel()
+        let ticket = BuildTicket()
+        buildTicket = ticket
         building = true
         problem = nil
         state = .starting
@@ -143,7 +149,7 @@ final class PluginController: Identifiable {
         let source = source
         let loader = PluginLoader(builder: model.builder, sandbox: model.sandbox)
         do {
-            let loaded = try await Task.detached { try loader.load(source) }.value
+            let loaded = try await loader.loadInBackground(source, ticket: ticket)
             guard generation == loadGeneration else { return }
             let manifest = loaded.manifest
             // Just installed from the Store: what was built must be what
@@ -228,6 +234,8 @@ final class PluginController: Identifiable {
     func stop() async {
         // A build still running for this plugin must not start it afterwards.
         loadGeneration += 1
+        buildTicket?.cancel()
+        buildTicket = nil
         building = false
         updatesTask?.cancel()
         await supervisor?.stop()

@@ -13,6 +13,42 @@ final class SentMessages: @unchecked Sendable {
 }
 
 final class RunClientTests: XCTestCase {
+    func testACallThatIsNeverAnsweredFailsAfterItsTimeout() async throws {
+        let client = HostClient()
+        let sent = SentMessages()
+        client.configure(send: sent.add)
+        let result = await client.call(.systemStatus, timeout: 0.05)
+        guard case .failure(let message) = result else { return XCTFail("got \(result)") }
+        XCTAssertTrue(message.contains("no answer"), message)
+        XCTAssertEqual(client.openRequests, 0)
+        // The late answer goes nowhere.
+        XCTAssertFalse(client.resolve(id: try XCTUnwrap(sent.calls.first).id, result: .ok))
+    }
+
+    func testAnAnsweredCallIsNotFailedLater() async throws {
+        let client = HostClient()
+        let sent = SentMessages()
+        client.configure(send: { message in
+            sent.add(message)
+            if case .request(let id, _) = message {
+                DispatchQueue.global().async { client.resolve(id: id, result: .value("hi")) }
+            }
+        })
+        let result = await client.call(.secret(name: "A"), timeout: 0.05)
+        XCTAssertEqual(result, .value("hi"))
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(client.openRequests, 0)
+    }
+
+    func testCallsThatWaitOnTheUserHaveNoTimeout() {
+        XCTAssertNil(HostCall.oauthToken(provider: "github", forceRefresh: false).replyTimeout)
+        XCTAssertNil(HostCall.chooseFile(types: []).replyTimeout)
+        XCTAssertNil(HostCall.pickColor.replyTimeout)
+        XCTAssertEqual(HostCall.systemStatus.replyTimeout, HostCall.defaultReplyTimeout)
+        XCTAssertEqual(HostCall.run(RunRequest(command: "ls", timeout: 5)).replyTimeout, 35)
+        XCTAssertEqual(HostCall.reminderAccess(ask: true).replyTimeout, HostCall.promptReplyTimeout)
+    }
+
     func testAStreamGetsItsOutputThenItsExit() async throws {
         let client = HostClient()
         let sent = SentMessages()
@@ -87,5 +123,19 @@ final class RunClientTests: XCTestCase {
         } catch {
             XCTAssertEqual("\(error)", "the host went away")
         }
+    }
+}
+
+final class TransportEncodingTests: XCTestCase {
+    func testANonFiniteNumberIsSentAsZeroWithAWarning() throws {
+        let render = PluginMessage.render(surface: .panel, root: .stack(axis: .vertical, children: [.progress(value: .nan, total: .infinity), .text("NaN")]))
+        let (data, warning) = try XCTUnwrap(StdioTransport.encoded(render))
+        XCTAssertEqual(try LineCodec.decode(PluginMessage.self, from: data.dropLast()),
+                       .render(surface: .panel, root: .stack(axis: .vertical, children: [.progress(value: 0, total: 0), .text("NaN")])))
+        guard case .log(.warning, _) = warning else { return XCTFail("expected a warning, got \(String(describing: warning))") }
+
+        let plain = PluginMessage.render(surface: .panel, root: .progress(value: 0.5))
+        let (_, none) = try XCTUnwrap(StdioTransport.encoded(plain))
+        XCTAssertNil(none)
     }
 }

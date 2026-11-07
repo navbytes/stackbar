@@ -76,6 +76,59 @@ final class StorageStoreTests: XCTestCase {
         XCTAssertEqual(unchanged, ["b": "\"x\""])
     }
 
+    func testDelayedWritesCoalesceAndFlush() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = StorageStore(directory: directory, quotaBytes: 64, writeDelay: 60)
+        for count in 1...20 { try await store.set("count", "\(count)", for: "p.one") }
+        // In memory at once, on disk only once flushed.
+        let live = await store.snapshot(for: "p.one")
+        XCTAssertEqual(live, ["count": "20"])
+        let unwritten = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(unwritten, [:])
+        // The quota still applies at set time.
+        do {
+            try await store.set("big", String(repeating: "x", count: 100), for: "p.one")
+            XCTFail("over quota must throw")
+        } catch {}
+        store.flushAll()
+        let written = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(written, ["count": "20"])
+        let file = try String(contentsOf: directory.appendingPathComponent("p.one.json"), encoding: .utf8)
+        XCTAssertFalse(file.contains("\n"), "compact JSON")
+
+        // Paused: nothing reaches the disk until resumed.
+        try await store.set("count", "21", for: "p.one")
+        store.setWritesPaused(true)
+        store.flush("p.one")
+        let paused = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(paused, ["count": "20"])
+        store.setWritesPaused(false)
+        store.flush("p.one")
+        let resumed = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(resumed, ["count": "21"])
+
+        // Erasing drops what was waiting.
+        try await store.set("count", "22", for: "p.one")
+        await store.erase("p.one")
+        store.flushAll()
+        let erased = await StorageStore(directory: directory).snapshot(for: "p.one")
+        XCTAssertEqual(erased, [:])
+    }
+
+    func testDelayedWriteLandsOnItsOwn() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = StorageStore(directory: directory, writeDelay: 0.05)
+        try await store.set("a", "1", for: "p.one")
+        var written: [String: String] = [:]
+        for _ in 0..<100 where written.isEmpty {
+            try await Task.sleep(for: .milliseconds(20))
+            written = await StorageStore(directory: directory).snapshot(for: "p.one")
+        }
+        XCTAssertEqual(written, ["a": "1"])
+    }
+
     func testIDsThatLookAlikeGetTheirOwnFiles() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -380,5 +433,163 @@ final class InstanceLockTests: XCTestCase {
         XCTAssertNil(InstanceLock.acquire(file), "a second app is refused while the first runs")
         first = nil
         XCTAssertNotNil(InstanceLock.acquire(file), "and allowed once it is gone")
+    }
+}
+
+final class ClipboardWatchTests: XCTestCase {
+    func testOnePollFansOutAndStopsWithItsLastListener() async throws {
+        let count = Locked(0)
+        let heard = Locked([String]())
+        let watch = ClipboardWatch(interval: 0.02) { count.value }
+        XCTAssertFalse(watch.isPolling)
+        let first = watch.add { heard.mutate { $0.append("a") } }
+        let second = watch.add { heard.mutate { $0.append("b") } }
+        XCTAssertTrue(watch.isPolling)
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(heard.value, [], "nothing changed yet")
+        count.mutate { $0 += 1 }
+        for _ in 0..<100 where heard.value.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(heard.value.sorted(), ["a", "b"])
+        watch.remove(first)
+        XCTAssertTrue(watch.isPolling)
+        watch.remove(second)
+        XCTAssertFalse(watch.isPolling)
+    }
+}
+
+final class Locked<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Value
+    init(_ value: Value) { stored = value }
+    var value: Value { lock.withLock { stored } }
+    func mutate(_ body: (inout Value) -> Void) { lock.withLock { body(&stored) } }
+}
+
+final class ProcessTableTests: XCTestCase {
+    func testTellsWhetherAProcessHasChildren() throws {
+        #if os(Linux) || canImport(Darwin)
+        let lone = try ChildProcess(executable: "/bin/sh", arguments: ["-c", "exec sleep 5"])
+        let parent = try ChildProcess(executable: "/bin/sh", arguments: ["-c", "sleep 5; true"])
+        defer {
+            lone.signalGroup(SIGKILL)
+            parent.signalTree(SIGKILL)
+        }
+        var hasChild: Bool?
+        for _ in 0..<100 {
+            hasChild = ProcessTable.hasChildren(parent.pid)
+            if hasChild == true { break }
+            usleep(20000)
+        }
+        XCTAssertEqual(hasChild, true)
+        XCTAssertEqual(ProcessTable.hasChildren(lone.pid), false)
+        #endif
+    }
+}
+
+final class DirectoryWatcherTests: XCTestCase {
+    func testStartedWatcherReportsAddedChangedAndRemovedPlugins() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let changes = Locked([DirectoryWatcher.Change]())
+        let watcher = DirectoryWatcher(directory: directory)
+        watcher.start(every: 0.05) { change in changes.mutate { $0.append(change) } }
+        defer { watcher.stop() }
+        let file = directory.appendingPathComponent("A.swift")
+
+        func waitFor(_ check: @escaping (DirectoryWatcher.Change) -> Bool) async throws -> Bool {
+            for _ in 0..<200 {
+                if changes.value.contains(where: check) { return true }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            return false
+        }
+        try Data("one".utf8).write(to: file)
+        let added = try await waitFor { $0.added == [file] }
+        XCTAssertTrue(added)
+        // In place, as editors and agents save.
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(" more".utf8))
+        try handle.close()
+        let modified = try await waitFor { $0.modified == [file] }
+        XCTAssertTrue(modified)
+        try FileManager.default.removeItem(at: file)
+        let removed = try await waitFor { $0.removed == [file] }
+        XCTAssertTrue(removed)
+    }
+
+    func testPathWatchStopsTicking() async throws {
+        let ticks = Locked(0)
+        let watch = PathWatch(pollEvery: 0.02, paths: { [] }, onTick: { ticks.mutate { $0 += 1 } })
+        watch.start()
+        for _ in 0..<200 where ticks.value < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertGreaterThanOrEqual(ticks.value, 2)
+        watch.stop()
+        try await Task.sleep(for: .milliseconds(50))
+        let stopped = ticks.value
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(ticks.value, stopped)
+    }
+}
+
+final class StorageRecoveryTests: XCTestCase {
+    func testAnUnreadableFileIsSetAsideNotOverwritten() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Data("{not json".utf8).write(to: directory.appendingPathComponent("p.one.json"))
+        let store = StorageStore(directory: directory)
+        let values = await store.snapshot(for: "p.one")
+        XCTAssertEqual(values, [:])
+        try await store.set("a", "1", for: "p.one")
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        let aside = try XCTUnwrap(names.first { $0.hasPrefix("p.one.json.corrupt-") })
+        XCTAssertEqual(try String(contentsOf: directory.appendingPathComponent(aside), encoding: .utf8), "{not json")
+    }
+
+    func testAFailedWriteLeavesMemoryAsItWas() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // A file where the folder should be: every write fails.
+        try Data().write(to: directory)
+        let store = StorageStore(directory: directory)
+        do {
+            try await store.set("a", "1", for: "p.one")
+            XCTFail("the write must fail")
+        } catch {}
+        let values = await store.snapshot(for: "p.one")
+        XCTAssertEqual(values, [:])
+    }
+}
+
+final class PluginProcessPipeTests: XCTestCase {
+    func testExitIsReportedWhileSomethingStillHoldsThePipes() async throws {
+        guard FileManager.default.isExecutableFile(atPath: "/usr/bin/setsid") else { throw XCTSkip("needs setsid") }
+        // The grandchild leaves the helper's process group and keeps stdout.
+        let process = PluginProcess(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "/usr/bin/setsid sleep 20 & sleep 0.3; exit 3"])
+        let exited = Locked<Int32?>(nil)
+        try process.start { event in
+            if case .exit(let status) = event { exited.mutate { $0 = status } }
+        }
+        for _ in 0..<100 where exited.value == nil { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(exited.value, 3)
+        _ = try? Process.run(URL(fileURLWithPath: "/usr/bin/pkill"), arguments: ["-f", "^sleep 20$"])
+    }
+
+    func testStderrFloodIsCutAtTheDrain() async throws {
+        let process = PluginProcess(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "i=0; while [ $i -lt 1000 ]; do echo line $i >&2; i=$((i+1)); done"])
+        let lines = Locked(0)
+        let exited = Locked(false)
+        try process.start { event in
+            switch event {
+            case .stderr: lines.mutate { $0 += 1 }
+            case .exit: exited.mutate { $0 = true }
+            default: break
+            }
+        }
+        for _ in 0..<200 where !exited.value { try await Task.sleep(for: .milliseconds(25)) }
+        XCTAssertTrue(exited.value)
+        XCTAssertEqual(lines.value, LogBudget.limit)
     }
 }
