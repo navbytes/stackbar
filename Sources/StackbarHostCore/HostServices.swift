@@ -238,7 +238,7 @@ public final class HostServices: Sendable {
             if case .text(let text) = content, text.utf8.count > 1024 * 1024 { return .failure("text is too large to copy") }
             if case .paste(_, let options) = call {
                 var options = options ?? PasteOptions()
-                options.cursorFromEnd = min(options.cursorFromEnd, PasteOptions.maxCursorFromEnd)
+                options.cursorFromEnd = min(max(options.cursorFromEnd, 0), PasteOptions.maxCursorFromEnd)
                 return await perform { try await self.platform.system.paste(content, options: options) }
             }
             return await perform { try self.platform.system.writeClipboard(content) }

@@ -62,6 +62,20 @@ final class PasteTests: XCTestCase {
         XCTAssertEqual(PasteOptions(cursorFromEnd: -4).cursorFromEnd, 0)
     }
 
+    func testANegativeCursorOffsetFromJSONIsClamped() async throws {
+        let json = #"{"restoreClipboard":false,"cursorFromEnd":-5}"#
+        let options = try JSONDecoder().decode(PasteOptions.self, from: Data(json.utf8))
+        XCTAssertEqual(options.cursorFromEnd, 0)
+        let huge = try JSONDecoder().decode(PasteOptions.self, from: Data(#"{"restoreClipboard":true,"cursorFromEnd":99999999}"#.utf8))
+        XCTAssertEqual(huge.cursorFromEnd, PasteOptions.maxCursorFromEnd)
+
+        let system = SimulatedSystem()
+        var raw = PasteOptions()
+        raw.cursorFromEnd = -5
+        _ = await services(system).handle(.paste(.text("x"), options: raw), for: manifest)
+        XCTAssertEqual(system.pastes.last?.options.cursorFromEnd, 0)
+    }
+
     func testOlderPluginsPasteWithoutOptions() throws {
         // A protocol 9 plugin sends `paste` with only the content.
         let old = #"{"paste":{"_0":{"text":{"_0":"hi"}}}}"#
