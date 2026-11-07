@@ -3,12 +3,13 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.28.0
 
 ### Fixed
 - **Commands start the same way from everywhere.** A hotkey, typed keyword, link, Spotlight, Shortcuts and a notification button now follow one rule: a command runs once it has what it needs, and otherwise opens in the palette. Picking a command in the palette still shows its optional fields first. Text you type after a command that shows a list now goes into its search from Spotlight too, as it does in the palette, and a link can no longer run a command you switched off in Settings.
 - **The Store names every permission correctly.** A plugin page showed "Opening Links" for a plugin that opens Terminal, and left Sensors, Menus, Screen Text, System Actions, Text Expansion and Adding Calendar Events out of "Asks For". Each permission now shows its own kind.
 - **Shortcuts read the same everywhere.** Keycaps in ⌘K, Settings and the menu now draw modifiers in the Mac's own order (⇧⌘K). For plugin authors: a shortcut can also be written with symbols (`⌘⇧K`), and `stackbarctl render` points out a row action shortcut it can't read, like `cmd+shft+k`, which never fired.
+- **⌘K shortcuts work on the palette's first screen.** A shortcut listed in ⌘K for a row on the root list, like a plugin result's, now runs straight from the list without opening ⌘K first.
 
 ## 0.27.1
 
