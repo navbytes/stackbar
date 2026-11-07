@@ -496,6 +496,8 @@ final class DirectoryWatcherTests: XCTestCase {
         watcher.start(every: 0.05) { change in changes.mutate { $0.append(change) } }
         defer { watcher.stop() }
         let file = directory.appendingPathComponent("A.swift")
+        // Compared by name: on macOS the temporary folder is reached through
+        // the /var symlink, and listings may come back under /private/var.
 
         func waitFor(_ check: @escaping (DirectoryWatcher.Change) -> Bool) async throws -> Bool {
             for _ in 0..<200 {
@@ -505,17 +507,17 @@ final class DirectoryWatcherTests: XCTestCase {
             return false
         }
         try Data("one".utf8).write(to: file)
-        let added = try await waitFor { $0.added == [file] }
+        let added = try await waitFor { $0.added.map(\.lastPathComponent) == ["A.swift"] }
         XCTAssertTrue(added)
         // In place, as editors and agents save.
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
         try handle.write(contentsOf: Data(" more".utf8))
         try handle.close()
-        let modified = try await waitFor { $0.modified == [file] }
+        let modified = try await waitFor { $0.modified.map(\.lastPathComponent) == ["A.swift"] }
         XCTAssertTrue(modified)
         try FileManager.default.removeItem(at: file)
-        let removed = try await waitFor { $0.removed == [file] }
+        let removed = try await waitFor { $0.removed.map(\.lastPathComponent) == ["A.swift"] }
         XCTAssertTrue(removed)
     }
 
