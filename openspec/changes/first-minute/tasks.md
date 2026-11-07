@@ -9,6 +9,8 @@
 - [x] 1.6 Agent gateway off on a new Mac, kept on a Mac that ran Stackbar
 - [x] 1.7 CHANGELOG Unreleased, llms.txt rate table
 
+- [x] 1.8 Allow a waiting plugin from the palette (approval stage; hotkeys and links open it)
+
 ## 2. Docs
 - [x] 2.1 Permissions page
 - [x] 2.2 Hyper key section (Karabiner) and hotkey keys in The palette
@@ -23,4 +25,5 @@
 - [ ] 4.2 On a new user account: the first search finds apps, sums and files with no approval
 - [ ] 4.3 A file in iCloud Drive and one in Dropbox show in File Search
 - [ ] 4.4 ⌃⌥← and ⌃⌥→ as Windows hotkeys, 30 snaps in a minute
+- [ ] 4.6 A plugin waiting for approval: run its command from the palette, Allow, and it runs; the same from its hotkey
 - [ ] 4.5 A Karabiner Hyper key records and fires a command hotkey

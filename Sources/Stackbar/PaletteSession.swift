@@ -15,11 +15,15 @@ final class PaletteSession {
         case arguments(CommandRegistry.Entry, source: InvocationSource)
         /// A view command, live.
         case view(CommandViewModel)
+        /// The command's plugin waits for the user to allow what it asks
+        /// for: Return allows it and carries on with `plan`.
+        case approval(CommandRegistry.Entry, plan: CommandStart.Plan, source: InvocationSource)
 
         var id: String {
             switch self {
             case .arguments(let entry, _): return "arguments|\(entry.key)"
             case .view(let view): return "view|\(view.id)"
+            case .approval(let entry, _, _): return "approval|\(entry.key)"
             }
         }
 
@@ -27,6 +31,7 @@ final class PaletteSession {
             switch self {
             case .arguments(let entry, _): return entry.spec.title
             case .view(let view): return view.entry.spec.title
+            case .approval(let entry, _, _): return entry.spec.title
             }
         }
     }
@@ -300,7 +305,7 @@ final class PaletteSession {
             guard rows.indices.contains(line - 1), let primary = rows[line - 1].actions.first else { return false }
             perform(primary, in: view)
             return true
-        case .arguments:
+        case .arguments, .approval:
             return false
         }
     }
@@ -311,6 +316,7 @@ final class PaletteSession {
         switch top {
         case .view(let view): return view.entry.pluginID
         case .arguments(let entry, _): return entry.pluginID
+        case .approval(let entry, _, _): return entry.pluginID
         case .none: return selectedEntry?.pluginID
         }
     }
@@ -389,6 +395,13 @@ final class PaletteSession {
     func carryOut(_ plan: CommandStart.Plan, for entry: CommandRegistry.Entry, source: InvocationSource) {
         problem = nil
         showingActions = false
+        // A plugin that waits for approval is asked about here, in the
+        // palette, instead of failing and sending the user to Settings.
+        if plan.starts, model.controller(for: entry.pluginID)?.isWaitingForApproval == true {
+            stack.append(.approval(entry, plan: plan, source: source))
+            selection.reset()
+            return
+        }
         switch plan {
         case .refuse(let message):
             problem = message
@@ -420,6 +433,37 @@ final class PaletteSession {
                 }
             }
         }
+    }
+
+    /// What the plugin of the approval on top asks for, as Settings lists it.
+    var pendingApproval: [Capability] {
+        guard case .approval(let entry, _, _) = top else { return [] }
+        return model.controller(for: entry.pluginID)?.pendingApproval ?? []
+    }
+
+    /// Return on an approval: allows what the plugin asks for, then starts
+    /// the command as it would have.
+    func approve() {
+        guard case .approval(let entry, let plan, let source) = top, let controller = model.controller(for: entry.pluginID) else { return }
+        let granted = controller.approve()
+        Task {
+            await granted?.value
+            guard case .approval(let current, _, _) = top, current.key == entry.key else { return }
+            stack.removeLast()
+            if controller.isWaitingForApproval {
+                problem = controller.problem ?? "\(entry.pluginName) is still waiting for approval"
+                return
+            }
+            carryOut(plan, for: entry, source: source)
+        }
+    }
+
+    /// Opens the plugin's page in Settings, for a closer look first.
+    func reviewInSettings() {
+        guard case .approval(let entry, _, _) = top else { return }
+        let controller = model.controller(for: entry.pluginID)
+        finish()
+        AppDelegate.shared?.showSettings(plugin: controller)
     }
 
     /// Return in the argument fields.
@@ -586,6 +630,9 @@ final class PaletteSession {
             return actions
         case .arguments:
             return [Action(title: "Run") { [weak self] in self?.submitArguments() }]
+        case .approval:
+            return [Action(title: "Allow") { [weak self] in self?.approve() },
+                    Action(title: "Review in Settings") { [weak self] in self?.reviewInSettings() }]
         case .view(let view):
             guard let row = selectedRow(of: view) else { return [] }
             return row.actions.map { ref in
@@ -631,6 +678,8 @@ final class PaletteSession {
             return selectedEntry.map(root.primaryTitle)
         case .arguments:
             return "Run"
+        case .approval:
+            return "Allow"
         case .view(let view):
             return selectedRow(of: view)?.actions.first?.title
         }
@@ -662,6 +711,8 @@ final class PaletteSession {
             if let entry = selectedEntry { activate(entry) }
         case .arguments:
             submitArguments()
+        case .approval:
+            approve()
         case .view(let view):
             if let primary = selectedRow(of: view)?.actions.first { perform(primary, in: view) }
         }
@@ -676,7 +727,7 @@ final class PaletteSession {
         case .none:
             guard !collapsed else { return }
             selection.move(delta, in: results.map(\.id), query: query)
-        case .arguments: break
+        case .arguments, .approval: break
         case .view(let view): selection.move(delta, in: rows(of: view).map(\.key), query: view.query)
         }
     }
@@ -703,7 +754,7 @@ final class PaletteSession {
             showingActions = false
             actions[index].perform()
             return true
-        case .arguments:
+        case .arguments, .approval:
             return false
         }
     }

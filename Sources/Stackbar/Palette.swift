@@ -333,6 +333,8 @@ struct PaletteView: View {
                 case .arguments(let entry, _):
                     ArgumentFields(arguments: entry.spec.arguments, values: $session.argumentValues, focus: $focus, onSubmit: { session.submitArguments() })
                     Spacer(minLength: 0)
+                case .approval:
+                    Spacer(minLength: 0)
                 case .none:
                     EmptyView()
                 }
@@ -363,6 +365,8 @@ struct PaletteView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .view(let view):
             CommandViewBody(session: session, view: view)
+        case .approval(let entry, _, _):
+            PaletteApproval(session: session, entry: entry)
         }
     }
 
@@ -375,6 +379,11 @@ struct PaletteView: View {
         let columns = session.showingActions ? nil : session.gridColumns
         // An arguments form of pickers only has no text field to submit it.
         if press.key == .return, plain, focus == nil, case .arguments = session.top {
+            session.submit()
+            return .handled
+        }
+        // An approval has no field: Return allows it.
+        if press.key == .return, plain, case .approval = session.top {
             session.submit()
             return .handled
         }
@@ -470,8 +479,38 @@ struct PaletteView: View {
                 focus = (empty ?? fields.first).map { .argument($0.name) }
             case .view, .none:
                 focus = .search
+            case .approval:
+                focus = nil
             }
         }
+    }
+}
+
+/// A command whose plugin waits for approval: what it asks for, right in
+/// the palette. Return allows it and the command carries on; Esc goes back.
+struct PaletteApproval: View {
+    @Bindable var session: PaletteSession
+    let entry: CommandRegistry.Entry
+
+    var body: some View {
+        VStack(spacing: 10) {
+            PluginIcon(symbol: session.manifest(of: entry.pluginID)?.symbol, accent: session.accent(of: entry.pluginID), size: 40)
+            Text("Allow \(entry.pluginName) to run \(entry.spec.title)?").font(.headline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(entry.pluginName) asks to:").font(.callout).foregroundStyle(.secondary)
+                ForEach(Array(session.pendingApproval.enumerated()), id: \.offset) { _, capability in
+                    Label(capability.summary, systemImage: "checkmark.shield").font(.callout)
+                }
+            }
+            .frame(maxWidth: 420, alignment: .leading)
+            HStack {
+                Button("Review in Settings") { session.reviewInSettings() }
+                Button("Allow") { session.approve() }.buttonStyle(.borderedProminent)
+            }
+            Text("You can take this back on its page in Settings.").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -948,6 +987,7 @@ struct ActionBar: View {
         switch session.top {
         case .view(let view): return view.entry.pluginName
         case .arguments(let entry, _): return entry.pluginName
+        case .approval(let entry, _, _): return entry.pluginName
         case .none: return session.selectedEntry?.pluginName
         }
     }

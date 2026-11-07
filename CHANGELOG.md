@@ -12,6 +12,7 @@ window. Write for people who use Stackbar, not for the code.
 - **Window snaps no longer run out.** A plugin could move windows only 10 times a minute, so a busy morning of ⌃⌥← and ⌃⌥→ stopped working. It is now 120 a minute, and a snap reads only the windows of the app it moves.
 
 ### Added
+- **Allow a plugin right from the palette.** Running a command of a plugin that waits for your approval now shows what it asks for in the palette: press Return to allow it and the command carries on, or Esc to go back. A hotkey or link for such a command opens the palette to ask. Before, the command failed and you had to find the plugin in Settings.
 - **Hotkeys can use the arrows, Return, Tab, Escape, Delete and punctuation keys**, so a Rectangle-style keymap such as ⌃⌥← for the left half works. ⌘Tab stays the app switcher's. For plugin authors: manifest hotkeys accept these keys from 0.32.0.
 - **New docs:** a [Permissions](https://stackbar.app/docs/permissions/) page listing what macOS asks for and why, a Hyper key section (Karabiner-Elements works with every Stackbar hotkey), and "Coming from Spotlight" in Getting started.
 

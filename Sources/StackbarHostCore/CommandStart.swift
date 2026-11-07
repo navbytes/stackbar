@@ -15,6 +15,12 @@ public enum CommandStart {
         case openView(CommandQuery)
         /// Don't start it; say this instead.
         case refuse(String)
+
+        /// Whether the command would start: anything but a refusal.
+        public var starts: Bool {
+            if case .refuse = self { return false }
+            return true
+        }
     }
 
     /// The plan for `entry` started from `source`.

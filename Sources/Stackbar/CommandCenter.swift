@@ -166,6 +166,9 @@ final class CommandCenter {
         switch plan {
         case .refuse(let message):
             HUD.shared.show(message, isError: true)
+        case .run where model?.controller(for: entry.pluginID)?.isWaitingForApproval == true:
+            // The palette asks for the approval, then runs it.
+            AppDelegate.shared?.palette.open(entry, plan: plan, source: source, context: context)
         case .run(let arguments):
             Task { await run(entry.key, arguments: arguments, source: source, context: context) }
         case .ask, .openView:
@@ -299,7 +302,7 @@ final class CommandCenter {
             return model.controllers.contains { $0.building && $0.manifest == nil } ? .starting : .missing
         }
         if controller.isWaitingForApproval {
-            return .ready(.unavailable("\(controller.name) is waiting for you to approve what it asks for. Open its page in Settings."))
+            return .ready(.unavailable("\(controller.name) is waiting for you to allow what it asks for. Run it from the palette to allow it there, or open its page in Settings."))
         }
         if let supervisor = controller.supervisor { return .ready(.supervisor(supervisor)) }
         if controller.building { return .starting }
