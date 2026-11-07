@@ -123,7 +123,10 @@ public final class PluginInstallation: @unchecked Sendable {
         if let secrets {
             var all = providers
             for provider in approved where !all.contains(provider) { all.append(provider) }
-            OAuthBroker.forgetTokens(of: pluginID, providers: all, in: secrets)
+            let kept = OAuthBroker.forgetTokens(of: pluginID, providers: all, in: secrets)
+            if !kept.isEmpty {
+                HostLog.shared.write(.warning, "could not remove the saved sign-in for \(kept.joined(separator: ", ")); the Keychain refused", plugin: pluginID)
+            }
         }
     }
 
