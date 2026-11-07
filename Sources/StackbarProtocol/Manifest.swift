@@ -418,7 +418,9 @@ public struct HotKeySpec: Equatable, Sendable {
     public typealias Modifier = KeyCombo.Modifier
 
     public var modifiers: Set<Modifier>
-    /// `a`...`z`, `0`...`9`, `space`, or `f1`...`f12`.
+    /// `a`...`z`, `0`...`9`, `space`, `f1`...`f12`, and from 0.32.0 the
+    /// arrows (`up`, `left`), `return`, `tab`, `escape`, `delete`,
+    /// `forwarddelete` and the punctuation keys (`-`, `.`, `/`, ...).
     public var key: String
 
     public init?(_ spec: String) {

@@ -31,10 +31,22 @@ final class KeyComboTests: XCTestCase {
         XCTAssertTrue(KeyCombo("cmd+shift+v")!.isHotKey)
         XCTAssertTrue(KeyCombo("ctrl+f12")!.isHotKey)
         XCTAssertFalse(KeyCombo("shift+v")!.isHotKey)
-        XCTAssertFalse(KeyCombo("cmd+return")!.isHotKey)
-        XCTAssertFalse(KeyCombo("cmd+.")!.isHotKey)
+        XCTAssertFalse(KeyCombo("shift+left")!.isHotKey)
         XCTAssertEqual(HotKeySpec("⌘⇧V")?.key, "v")
         XCTAssertEqual(HotKeySpec("option+space")?.modifiers, [.option])
-        XCTAssertNil(HotKeySpec("cmd+up"))
+    }
+
+    func testHotKeysTakeArrowsNamedKeysAndPunctuation() {
+        // Rectangle-style and Hyper+arrow keymaps.
+        for spec in ["ctrl+option+left", "ctrl+option+cmd+shift+up", "cmd+return", "ctrl+tab", "option+escape", "ctrl+option+delete",
+                     "cmd+.", "ctrl+option+-", "ctrl+option+=", "cmd+shift+/", "ctrl+option+[", "option+`", "ctrl+option+\\"] {
+            XCTAssertNotNil(HotKeySpec(spec), spec)
+        }
+        XCTAssertEqual(HotKeySpec("ctrl+option+←")?.key, "left")
+        XCTAssertEqual(HotKeySpec("ctrl+option+enter")?.key, "return")
+        // The app switcher's keys, and characters a US keyboard has no key for.
+        for spec in ["cmd+tab", "cmd+shift+tab", "cmd+é", "ctrl+option+§"] {
+            XCTAssertNil(HotKeySpec(spec), spec)
+        }
     }
 }

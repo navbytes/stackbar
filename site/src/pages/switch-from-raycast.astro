@@ -19,7 +19,7 @@ const steps = [
   { title: 'Free up ⌘Space', html: 'In Raycast, open Settings › General and change or clear the Raycast hotkey. Then in Stackbar\'s Welcome window (or Settings › General) choose <b>Use ⌘Space</b>. If Spotlight still holds it, <b>Turn Off Spotlight\'s Shortcut…</b> takes you to the switch.' },
   { title: 'Export from Raycast', html: 'In Raycast, run <b>Export Snippets</b> and <b>Export Quicklinks</b>. Each saves a JSON file.' },
   { title: 'Import into Stackbar', html: 'Install Snippets and Quicklinks from the Store, then Settings › General › Coming from Raycast › <b>Snippets…</b> and <b>Quicklinks…</b> (or run <b>Import Snippets</b> in the palette). The template syntax is the same: <code>{clipboard}</code>, <code>{selection}</code>, <code>{date}</code>, <code>{argument}</code> and <code>{cursor}</code> keep working.' },
-  { title: 'Bring your muscle memory', html: 'Settings › Commands gives any command an alias or a hotkey, like the ones you set in Raycast. ⌘K, ⌘Return and ⌘1–9 work as you expect in the palette.' },
+  { title: 'Bring your muscle memory', html: 'Settings › Commands gives any command an alias or a hotkey, like the ones you set in Raycast, including arrows and punctuation. Using a Hyper key? Keep it in Karabiner-Elements: Stackbar hotkeys take all four modifiers (<a href="' + href('/docs/palette/') + '#a-hyper-key">how</a>). ⌘K, ⌘Return and ⌘1–9 work as you expect in the palette. <a href="' + href('/docs/permissions/') + '">Permissions</a> lists what macOS will ask for.' },
 ];
 
 type Map = { raycast: string; stackbar: { name: string; url?: string }[]; note?: string };

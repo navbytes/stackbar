@@ -33,7 +33,7 @@
 - [ ] 5.3 About window with version; Help menu with docs and feedback links
 - [ ] 5.4 "Install command-line tool" (link `stackbarctl` onto the PATH)
 - [ ] 5.5 "Remove all data" (storage, secrets, build cache)
-- [ ] 5.6 Agent gateway off by default
+- [x] 5.6 Agent gateway off by default (new installs, 0.32.0; existing Macs keep theirs)
 - [ ] 5.7 Install sheet says when a secret name is shared with other plugins
 
 ## 6. Ecosystem, docs and policy

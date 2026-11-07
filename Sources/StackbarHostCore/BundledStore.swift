@@ -118,8 +118,14 @@ public struct BundledStore {
     /// Installs each carried core plugin that was never offered here, and
     /// notes it in `offered` so a removed one is not put back. Returns the
     /// new files.
+    ///
+    /// A core plugin is first-party and part of the app, like its palette:
+    /// with a `ledger`, what it asks for is approved as it is installed, so
+    /// apps, sums and files answer on the first search instead of waiting
+    /// on an approval the user would have to find in Settings. Its page in
+    /// Settings still lists what it can do and can take it back.
     @discardableResult
-    public func installCore(offered: URL) -> [URL] {
+    public func installCore(offered: URL, approvingIn ledger: CapabilityLedger? = nil) -> [URL] {
         var done = Set((try? JSONDecoder().decode([String].self, from: Data(contentsOf: offered))) ?? [])
         // Every launch after the first: nothing to offer, so don't decode
         // and verify every carried bundle to find that out.
@@ -132,6 +138,9 @@ public struct BundledStore {
             } else if let file = try? installer.install(bundle) {
                 done.insert(bundle.manifest.id)
                 result.append(file)
+                if let ledger, ledger.approval(for: bundle.manifest.id) == nil {
+                    try? ledger.approve(bundle.manifest)
+                }
             }
         }
         if let data = try? JSONEncoder().encode(done.sorted()) {

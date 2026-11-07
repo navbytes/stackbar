@@ -85,7 +85,7 @@ final class SystemProtocolTests: XCTestCase {
         XCTAssertEqual(HotKeySpec("cmd+f12")?.modifiers, [.command])
         XCTAssertNil(HotKeySpec("shift+v"), "shift alone would steal typing")
         XCTAssertNil(HotKeySpec("cmd+v+c"))
-        XCTAssertNil(HotKeySpec("cmd+return"))
+        XCTAssertNil(HotKeySpec("cmd+tab"), "the app switcher's")
         XCTAssertTrue(Manifest(id: "a.b", name: "A", hotkey: "cmd+shift+v").problems.isEmpty)
         XCTAssertFalse(Manifest(id: "a.b", name: "A", hotkey: "v").problems.isEmpty)
         XCTAssertFalse(Manifest(id: "a.b", name: "A", triggers: [.clipboard]).problems.isEmpty, "the clipboard trigger needs the capability")

@@ -39,11 +39,17 @@ actor InstalledApps {
     private static func scanApps() -> [InstalledApp] {
         let fileManager = FileManager.default
         let home = fileManager.homeDirectoryForCurrentUser.path
-        let roots = ["/Applications", "/Applications/Utilities", "/System/Applications", "/System/Applications/Utilities", home + "/Applications"]
+        // Safari and a few other Apple apps live in the App Cryptex since
+        // macOS 13: /Applications/Safari.app is only a symlink into it.
+        let roots = ["/Applications", "/Applications/Utilities", "/System/Applications", "/System/Applications/Utilities",
+                     "/System/Cryptexes/App/System/Applications", home + "/Applications"]
         var seen = Set<String>()
         var apps: [InstalledApp] = []
         func add(_ url: URL) {
-            guard let id = Bundle(url: url)?.bundleIdentifier, seen.insert(id).inserted else { return }
+            // A symlinked bundle is read where it really is, but listed under
+            // the path the user knows.
+            let bundle = Bundle(url: url) ?? Bundle(url: url.resolvingSymlinksInPath())
+            guard let id = bundle?.bundleIdentifier, seen.insert(id).inserted else { return }
             let name = fileManager.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
             let file = url.deletingPathExtension().lastPathComponent
             apps.append(InstalledApp(id: id, name: name, path: url.path, keywords: file == name ? [] : [file]))
@@ -60,6 +66,11 @@ actor InstalledApps {
                     inner.filter { $0.pathExtension == "app" }.forEach(add)
                 }
             }
+        }
+        // Whatever the scan missed that Launch Services knows opens links,
+        // so no browser is ever left out.
+        if let link = URL(string: "https://example.com") {
+            NSWorkspace.shared.urlsForApplications(toOpen: link).forEach(add)
         }
         return apps
     }
