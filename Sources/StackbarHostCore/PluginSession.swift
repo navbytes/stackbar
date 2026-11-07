@@ -33,14 +33,14 @@ public actor PluginSession {
     public func ensureRunning() async throws -> Bool {
         let loader = loader
         let source = source
-        let built = try await Task.detached { try loader.helper(for: source).binary }.value
+        let built = try await PluginLoader.inBackground { try loader.helper(for: source).binary }
         if let supervisor, built == binary, await supervisor.state != .stopped {
             if case .failed = await supervisor.state {} else { return false }
         }
         await supervisor?.stop()
         // Loading the built helper rather than the source skips a second
         // build and still reads, checks and signs it like any other load.
-        let loaded = try await Task.detached { try loader.load(built) }.value
+        let loaded = try await loader.loadInBackground(built)
         let next = PluginSupervisor(executable: loaded.binary, manifest: loaded.manifest, policy: BackoffPolicy(initialDelay: 0.2, multiplier: 2, maxDelay: 2, maxConsecutiveFailures: 2), services: services) { [weak self] update in
             Task { await self?.record(update) }
         }

@@ -27,6 +27,31 @@ final class PluginLoaderTests: XCTestCase {
         }
     }
 
+    func testLoadsInTheBackground() async throws {
+        let helper = PluginSupervisorTests.helper("FixturePlugin")
+        let loaded = try await PluginLoader(builder: nil, sandbox: false).loadInBackground(helper)
+        XCTAssertEqual(loaded.manifest.id, "io.navbytes.stackbar.test.fixture")
+    }
+
+    func testASupersededBuildIsSkipped() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("Old.swift")
+        try Data("import StackbarKit\n".utf8).write(to: source)
+        var builder = PluginBuilder(stackbarPackage: directory, cacheRoot: directory.appendingPathComponent("cache"))
+        builder.toolchain = true
+        builder.usesPrebuilt = false
+        let ticket = BuildTicket()
+        ticket.cancel()
+        do {
+            _ = try await PluginLoader(builder: builder, sandbox: false).loadInBackground(source, ticket: ticket)
+            XCTFail("a cancelled ticket must not build")
+        } catch {
+            XCTAssertTrue(error is PluginBuilder.Superseded, "\(error)")
+        }
+    }
+
     func testASourceNeedsABuilder() {
         XCTAssertThrowsError(try PluginLoader(builder: nil, sandbox: false).load(URL(fileURLWithPath: "/tmp/Plugin.swift"))) { error in
             XCTAssertEqual(error as? PluginLoader.LoadError, .noBuilder)

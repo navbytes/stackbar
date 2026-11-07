@@ -17,7 +17,10 @@ import Darwin
 /// plugin's own file: the loop an AI author needs.
 ///
 /// Builds are serialized: within a process by a lock, across processes (the
-/// app and `stackbarctl`) by an advisory file lock on the workspace.
+/// app and `stackbarctl`) by an advisory file lock on the workspace. `build`
+/// blocks, so async callers go through `PluginLoader.loadInBackground`,
+/// which waits on a dispatch thread rather than the cooperative pool, and
+/// whose `BuildTicket` skips a build that was superseded while it waited.
 public struct PluginBuilder: Sendable {
     public struct Output: Sendable {
         public var binary: URL
@@ -77,7 +80,13 @@ public struct PluginBuilder: Sendable {
         return compatible && PrebuiltHelpers.find(PrebuiltHelpers.compatibleName(sourceDigest: sourceDigest, protocolVersion: StackbarProtocolVersion.current), in: prebuiltDirectories) != nil
     }
 
-    public func build(source: URL) throws -> Output {
+    /// A build skipped because its `BuildTicket` was cancelled while it
+    /// waited for the one before it.
+    public struct Superseded: Error, CustomStringConvertible, Sendable {
+        public var description: String { "a newer build replaced this one" }
+    }
+
+    public func build(source: URL, ticket: BuildTicket? = nil) throws -> Output {
         let code = try Data(contentsOf: source)
         // The key covers StackbarKit too: after an update of Stackbar, a plugin
         // built against the old StackbarKit must be rebuilt, not reused.
@@ -109,11 +118,14 @@ public struct PluginBuilder: Sendable {
             throw Failure(diagnostics: [], log: Self.noToolchainMessage)
         }
 
+        if ticket?.isCancelled == true { throw Superseded() }
         Self.lock.lock()
         defer { Self.lock.unlock() }
+        if ticket?.isCancelled == true { throw Superseded() }
         try FileManager.default.createDirectory(at: sourcesDir, withIntermediateDirectories: true)
         let fileLock = try FileLock(workspace.appendingPathComponent(".stackbar-build.lock"))
         defer { fileLock.unlock() }
+        if ticket?.isCancelled == true { throw Superseded() }
         // Another process may have built it while we waited for the lock.
         if FileManager.default.isExecutableFile(atPath: binary.path) {
             return Output(binary: binary, cached: true)
