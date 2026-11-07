@@ -15,6 +15,10 @@ public final class NetworkAudit: @unchecked Sendable {
         public var lastUsed: Date
     }
 
+    /// Hosts kept per plugin. A plugin can name any host it likes, so past
+    /// this the entry that was refused and least recently used makes room.
+    static let maxHostsPerPlugin = 100
+
     private let lock = NSLock()
     private var entries: [String: [String: Entry]] = [:]
 
@@ -26,6 +30,10 @@ public final class NetworkAudit: @unchecked Sendable {
         var entry = entries[pluginID]?[host] ?? Entry(host: host, allowed: 0, refused: 0, lastUsed: date)
         if allowed { entry.allowed += 1 } else { entry.refused += 1 }
         entry.lastUsed = date
+        if entries[pluginID]?[host] == nil, (entries[pluginID]?.count ?? 0) >= Self.maxHostsPerPlugin,
+           let victim = entries[pluginID]?.values.min(by: { ($0.allowed > 0 ? 1 : 0, $0.lastUsed) < ($1.allowed > 0 ? 1 : 0, $1.lastUsed) }) {
+            entries[pluginID]?[victim.host] = nil
+        }
         entries[pluginID, default: [:]][host] = entry
     }
 

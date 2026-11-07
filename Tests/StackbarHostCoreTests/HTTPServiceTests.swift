@@ -33,3 +33,16 @@ final class HTTPServiceTests: XCTestCase {
         }
     }
 }
+
+final class NetworkAuditTests: XCTestCase {
+    func testTheHostListIsBoundedAndKeepsHostsThatWereUsed() {
+        let audit = NetworkAudit()
+        audit.record(pluginID: "p", host: "api.example.com", allowed: true)
+        for index in 0..<(NetworkAudit.maxHostsPerPlugin * 3) {
+            audit.record(pluginID: "p", host: "made-up-\(index).example", allowed: false, at: Date().addingTimeInterval(Double(index)))
+        }
+        let entries = audit.entries(for: "p")
+        XCTAssertEqual(entries.count, NetworkAudit.maxHostsPerPlugin)
+        XCTAssertTrue(entries.contains { $0.host == "api.example.com" })
+    }
+}

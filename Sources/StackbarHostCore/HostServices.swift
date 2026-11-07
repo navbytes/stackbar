@@ -101,7 +101,7 @@ public final class HostServices: Sendable {
         self.secrets = secrets
         self.audit = audit
         self.http = HTTPService(audit: audit)
-        self.images = RemoteImageStore(http: http)
+        self.images = RemoteImageStore(http: http, budget: pools[.requests])
         self.oauth = OAuthBroker(secrets: secrets, timeout: oauthTimeout, openURL: platform.open)
         self.bus = bus
         self.platform = platform
