@@ -57,23 +57,27 @@ public final class RemoteImageStore: @unchecked Sendable {
             return fresh
         }
         guard !wanted.isEmpty else { return [] }
-        let results = await withTaskGroup(of: (String, Data?).self) { group in
+        let results = await withTaskGroup(of: (String, Fetch).self) { group in
             for url in wanted {
                 group.addTask { (url, await self.fetch(url, pluginID: pluginID, allowedHosts: allowedHosts)) }
             }
-            var collected: [(String, Data?)] = []
+            var collected: [(String, Fetch)] = []
             for await result in group { collected.append(result) }
             return collected
         }
         return lock.withLock {
             var loaded: [String] = []
-            for (url, data) in results {
+            for (url, result) in results {
                 loading.remove(url)
-                if let data {
+                switch result {
+                case .image(let data):
                     store(url, data)
                     loaded.append(url)
-                } else {
+                case .failed:
                     failed[url] = now
+                case .overBudget:
+                    // Not the image's fault: tried again on a later render.
+                    break
                 }
             }
             pruneFailed(now: now)
@@ -107,14 +111,16 @@ public final class RemoteImageStore: @unchecked Sendable {
         }
     }
 
-    private func fetch(_ url: String, pluginID: String, allowedHosts: [String]) async -> Data? {
-        guard Self.isFetchable(url) else { return nil }
-        if let budget, !budget.allow(pluginID) { return nil }
+    private enum Fetch { case image(Data), failed, overBudget }
+
+    private func fetch(_ url: String, pluginID: String, allowedHosts: [String]) async -> Fetch {
+        guard Self.isFetchable(url) else { return .failed }
+        if let budget, !budget.allow(pluginID) { return .overBudget }
         let result = await http.perform(HTTPRequest(url: url, headers: ["Accept": "image/*"], timeout: 20), pluginID: pluginID, allowedHosts: allowedHosts)
         guard case .http(let response) = result, (200..<300).contains(response.status),
               !response.body.isEmpty, response.body.count <= RemoteImageLimits.maxBytes,
-              Self.isImage(contentType: response.headers["content-type"], body: response.body) else { return nil }
-        return response.body
+              Self.isImage(contentType: response.headers["content-type"], body: response.body) else { return .failed }
+        return .image(response.body)
     }
 
     /// An https URL with a host.

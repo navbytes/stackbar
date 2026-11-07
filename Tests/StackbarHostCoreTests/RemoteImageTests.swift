@@ -34,6 +34,8 @@ final class RemoteImageTests: XCTestCase {
         let urls = (0..<5).map { "https://images.example.com/\($0).png" }
         await store.load(urls, pluginID: "io.test.images", allowedHosts: [])
         XCTAssertEqual(audit.entries(for: "io.test.images").first?.refused, 2, "only two got as far as the network")
+        // The three the budget turned away are not marked failed, so a later render tries them.
+        XCTAssertEqual(store.failedCount, 2)
     }
 
     func testOldFailuresAreForgotten() async {
