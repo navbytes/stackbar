@@ -378,6 +378,13 @@ many app switches; at most 120 a minute".
 
 \#(RateBudget.guideTable)
 
+A host call that gets no answer fails instead of waiting for good: after two
+minutes for most calls, after its own timeout plus 30 seconds for `http` and
+`run`, and after ten minutes for calls that can show a macOS permission prompt
+(Reminders, Calendar, system actions, arranging windows). Calls that wait on
+the user (OAuth sign-in, file panels, the color picker, screen text) have no
+limit.
+
 `auth:` reads a declared secret and adds the header: `.bearer(secret: "GITHUB_TOKEN")`
 sends `Authorization: Bearer …`, `.header("Authorization", secret: "LINEAR_API_KEY")`
 the bare key, and `prefix: "DeepL-Auth-Key"` puts a word before it. While the

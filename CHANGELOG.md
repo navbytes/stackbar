@@ -3,6 +3,25 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Typing in the palette does less work per key.** The palette no longer re-filters and re-ranks every row several times for each keystroke, and its saved picks and usage are written in the background.
+- **Copying a big screenshot no longer stutters.** Clipboard images are decoded, converted and saved off the main thread, and old ones are cleaned up gradually.
+- **A slow or frozen app can't freeze Stackbar.** Menu search, window lists, the plugin context read and the cycle-windows key now talk to other apps in the background with a time limit. The cycle-windows key no longer does that work while it holds the keyboard.
+- **Stackbar can no longer crash from a bad paste or sign-in request.** A plugin pasting with a negative cursor offset, or a malformed request to the sign-in page, used to quit the app.
+- **A network blip while refreshing a sign-in no longer opens your browser.** Stackbar only asks you to sign in again when the service says the sign-in is no longer valid.
+- **Plugins save less often and read faster.** Saved values are written about a second after a plugin's last change, as one write, and are read from memory. Nothing is lost on quit.
+- **A plugin waiting on an answer that never comes recovers.** Host calls now give up after a time limit instead of freezing the plugin.
+- **A plugin whose view has an invalid number still updates.** The number is shown as 0 instead of the whole update being dropped.
+- **Large downloads stop at the size limit** instead of being read in full first.
+- **Desktop widgets refresh more gently.** Repeated identical updates are dropped, and widgets reload at most every five seconds.
+- **Global shortcuts that macOS refuses now say so** in Settings instead of looking active, and the shortcut conflict check uses your palette shortcut rather than the default.
+- Fewer wakeups at idle: one shared clipboard check for all plugins, and a plugin only scans its child processes when it has some.
+- Removing a plugin whose files can't all be moved to the Trash keeps it listed so you can try again. Settings import and export include plugins' latest saved values.
+- A pasted item that asked to restore the clipboard no longer replaces your clipboard when Stackbar lacks Accessibility access.
+- If an edited plugin fails to build, its previous copy stops instead of carrying on behind the error.
+
 ## 0.29.0
 
 ### Fixed
