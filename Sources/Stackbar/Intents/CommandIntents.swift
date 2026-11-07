@@ -232,35 +232,48 @@ enum StackbarIntents {
 @MainActor
 final class CommandSpotlightIndexer {
     nonisolated static let indexName = "io.navbytes.stackbar.commands"
-    private var indexed: [CommandIndexItem] = []
+    /// What reached the index, which each sync diffs against: only what
+    /// Spotlight took, so a call that failed is made again by the next sync.
+    private var applied: [CommandIndexItem] = []
     private var started = false
     private var task: Task<Void, Never>?
 
     func sync(_ items: [CommandIndexItem]) {
         let previous = task
-        let starting = !started
-        started = true
-        let old = indexed
-        indexed = items
         task = Task {
             await previous?.value
             // A launch starts from a clean index, so nothing a previous run
             // left behind (a plugin since removed) lingers.
-            await Self.apply(reset: starting, old: starting ? [] : old, new: items)
+            let starting = !started
+            started = true
+            let succeeded = await Self.apply(reset: starting, old: starting ? [] : applied, new: items)
+            if succeeded {
+                applied = items
+            } else {
+                // Left as it was: the next sync diffs from there (and starts
+                // clean again if the reset is what failed).
+                if starting { started = false }
+                HostLog.shared.write(.warning, "Spotlight index: could not update the commands; will try again at the next change")
+            }
         }
     }
 
-    nonisolated private static func apply(reset: Bool, old: [CommandIndexItem], new: [CommandIndexItem]) async {
+    /// Whether every call to the index succeeded.
+    nonisolated private static func apply(reset: Bool, old: [CommandIndexItem], new: [CommandIndexItem]) async -> Bool {
         let index = CSSearchableIndex(name: indexName)
-        if reset { try? await index.deleteAllSearchableItems() }
+        var succeeded = true
+        if reset {
+            do { try await index.deleteAllSearchableItems() } catch { succeeded = false }
+        }
         let (upsert, delete) = CommandIndexing.diff(from: old, to: new)
         if !delete.isEmpty {
-            try? await index.deleteAppEntities(identifiedBy: delete, ofType: CommandEntity.self)
+            do { try await index.deleteAppEntities(identifiedBy: delete, ofType: CommandEntity.self) } catch { succeeded = false }
         }
         for (priority, items) in Dictionary(grouping: upsert, by: \.priority) {
-            try? await index.indexAppEntities(items.map(CommandEntity.init), priority: priority)
+            do { try await index.indexAppEntities(items.map(CommandEntity.init), priority: priority) } catch { succeeded = false }
         }
         StackbarShortcuts.updateAppShortcutParameters()
+        return succeeded
     }
 }
 #endif

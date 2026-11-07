@@ -12,14 +12,14 @@ public final class PalettePicks: @unchecked Sendable {
 
     /// (query, item) pairs kept, at most; the oldest go first.
     public static let limit = 2000
-    private let file: URL?
+    private let writer: DeferredFileWriter?
     private let lock = NSLock()
     /// Typed text (collapsed, lowercased) → item id → its picks.
     private var picks: [String: [String: Pick]] = [:]
     private let now: @Sendable () -> Date
 
     public init(file: URL?, now: @escaping @Sendable () -> Date = Date.init) {
-        self.file = file
+        writer = file.map(DeferredFileWriter.init)
         self.now = now
         if let file, let data = try? Data(contentsOf: file), let decoded = try? JSONDecoder().decode([String: [String: Pick]].self, from: data) {
             picks = decoded
@@ -40,8 +40,11 @@ public final class PalettePicks: @unchecked Sendable {
             picks[key, default: [:]][id] = Pick(score: current + 1, last: time)
             trim()
         }
-        save()
+        save(wait: false)
     }
+
+    /// Returns once every change so far is written to the file.
+    public func flush() { writer?.flush() }
 
     /// Each item's learned weight for `query`: its decayed picks for exactly
     /// this text, plus half its picks for longer text that starts with it
@@ -109,13 +112,13 @@ public final class PalettePicks: @unchecked Sendable {
         }
     }
 
-    private func save() {
-        guard let file else { return }
+    /// Writes the file off this thread; `wait` holds the caller until it is
+    /// written. A use or a pick on Return doesn't wait.
+    private func save(wait: Bool = true) {
+        guard let writer else { return }
         let snapshot = lock.withLock { picks }
-        if let data = try? JSONEncoder().encode(snapshot) {
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: file, options: .atomic)
-        }
+        writer.write { try? JSONEncoder().encode(snapshot) }
+        if wait { writer.flush() }
     }
 }
 

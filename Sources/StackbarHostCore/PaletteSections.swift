@@ -117,7 +117,8 @@ extension PaletteSection {
                             resultScore: Int? = nil) -> [PaletteSection] {
         let resultTop = results.isEmpty ? nil : (resultScore ?? results.first.flatMap(ranker.score) ?? 0)
         var sections = sections
-        let scores = sections.map { $0.entries.map(ranker.rowScore) }
+        // Each row is scored once; what follows reads these.
+        var scores = sections.map { $0.entries.map(ranker.rowScore) }
         // The best plugin row outside the pattern-led sections; ties go to
         // the earlier section and row.
         var topHit: PaletteIndex.Entry?
@@ -130,12 +131,13 @@ extension PaletteSection {
         }
         if let bestRow, bestRow.row > 0, bestRow.score > (resultTop ?? Int.min) {
             topHit = sections[bestRow.section].entries.remove(at: bestRow.row)
+            scores[bestRow.section].remove(at: bestRow.row)
         }
         // A section's best row once the Top Hit has left it.
-        func best(_ index: Int) -> Int { sections[index].entries.map(ranker.rowScore).max() ?? Int.min }
-        let led = sections.indices.filter { sections[$0].leads }.sorted { (best($0), -$0) > (best($1), -$1) }.map { sections[$0] }
+        let bests = scores.map { $0.max() ?? Int.min }
+        let led = sections.indices.filter { sections[$0].leads }.sorted { (bests[$0], -$0) > (bests[$1], -$1) }.map { sections[$0] }
         // Results is index -1: it wins ties with every plugin section.
-        var ordered: [(section: PaletteSection, score: Int, index: Int)] = candidates.map { (sections[$0], best($0), $0) }
+        var ordered: [(section: PaletteSection, score: Int, index: Int)] = candidates.map { (sections[$0], bests[$0], $0) }
         if let resultTop { ordered.append((PaletteSection(.results, entries: results), resultTop, -1)) }
         ordered.sort { ($0.score, -$0.index) > ($1.score, -$1.index) }
         let hit = topHit.map { [PaletteSection(.topHit, entries: [$0])] } ?? []
@@ -246,22 +248,36 @@ public extension StoreListing {
         let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
         guard typed.filter({ !$0.isWhitespace }).count >= 2 else { return [] }
         var seen = Set<String>()
-        let scored = all(catalogs, running: running).compactMap { item -> (PluginIndex.Entry, Int)? in
-            let entry = item.entry
-            guard !installed.contains(entry.id), entry.requiredStackbar(running: running) == nil, seen.insert(entry.id).inserted else { return nil }
-            if let score = TextMatch.score(typed, in: entry.name) { return (entry, 1000 + score) }
-            let words = [entry.summary ?? "", entry.category ?? ""].joined(separator: " ").lowercased()
-                .split { !$0.isLetter && !$0.isNumber }
-            // Every word typed starts a word of the summary ("time zone").
-            let parts = typed.split(separator: " ")
-            if parts.allSatisfy({ part in words.contains { $0.hasPrefix(part) } }) { return (entry, 100) }
-            return nil
+        // Scored before sorting: `all` would sort every catalog by name for
+        // the sake of three suggestions. Only the hits are put in its order
+        // (store, then name), which breaks ties as it did.
+        let replaced = replacedIDs(catalogs, running: running)
+        let parts = typed.split(separator: " ")
+        var scored: [(entry: PluginIndex.Entry, score: Int, store: Int)] = []
+        for (store, catalog) in catalogs.enumerated() {
+            for entry in catalog.index.search("", running: running) {
+                guard replaced[entry.id] == nil, !installed.contains(entry.id), entry.requiredStackbar(running: running) == nil else { continue }
+                if let score = TextMatch.score(typed, in: entry.name) {
+                    scored.append((entry, 1000 + score, store))
+                    continue
+                }
+                let words = [entry.summary ?? "", entry.category ?? ""].joined(separator: " ").lowercased()
+                    .split { !$0.isLetter && !$0.isNumber }
+                // Every word typed starts a word of the summary ("time zone").
+                if parts.allSatisfy({ part in words.contains { $0.hasPrefix(part) } }) { scored.append((entry, 100, store)) }
+            }
         }
         return scored
-            .sorted { $0.1 > $1.1 }
+            .sorted {
+                if $0.score != $1.score { return $0.score > $1.score }
+                if $0.store != $1.store { return $0.store < $1.store }
+                return $0.entry.name.localizedCaseInsensitiveCompare($1.entry.name) == .orderedAscending
+            }
+            .filter { seen.insert($0.entry.id).inserted }
             .prefix(limit)
-            .map { entry, _ in
-                PaletteIndex.Entry(pluginID: entry.id, pluginName: "Store", title: entry.name, subtitle: entry.summary,
+            .map { hit in
+                let entry = hit.entry
+                return PaletteIndex.Entry(pluginID: entry.id, pluginName: "Store", title: entry.name, subtitle: entry.summary,
                                    symbol: entry.symbol, kind: .open(StoreLink(pluginID: entry.id).url.absoluteString))
             }
     }

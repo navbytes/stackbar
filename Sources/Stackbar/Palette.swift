@@ -72,7 +72,9 @@ final class PaletteController {
         hotKeys = specs.compactMap { HotKeySpec($0) }.compactMap { spec in
             HotKey(spec: spec) { [weak self] in self?.toggle() }
         }
-        registeredSpecs = specs
+        // One the system refused (⌘Space while Spotlight holds it) is tried
+        // again the next time the user comes back to Stackbar.
+        registeredSpecs = hotKeys.count == specs.count ? specs : []
     }
 
     private var registeredSpecs: [String] = []
@@ -478,11 +480,13 @@ struct RootResults: View {
     @Bindable var session: PaletteSession
 
     var body: some View {
-        let sections = session.sections
-        let selected = session.selectedEntry?.id
+        // The root is read once for the pass; each read also checks its cache.
+        let root = session.root
+        let sections = root.sections
+        let selected = session.selectedEntry(in: root)?.id
         // ⌘1…⌘9 count the lines as drawn.
         let numbers = session.commandHeld
-            ? Dictionary(session.results.prefix(9).enumerated().map { ($1.id, $0 + 1) }, uniquingKeysWith: { first, _ in first })
+            ? Dictionary(root.entries.prefix(9).enumerated().map { ($1.id, $0 + 1) }, uniquingKeysWith: { first, _ in first })
             : [:]
         ScrollViewReader { proxy in
             ScrollView {
@@ -541,9 +545,14 @@ struct PaletteRow: View {
         HStack(spacing: 10) {
             // The entry's symbol on a tile in its plugin's colour, so each
             // plugin is told apart at a glance.
-            if let icon = entry.appIcon.flatMap(AppIcons.icon) ?? entry.fileIcon.map(AppIcons.fileIcon) {
-                // An app's or file's own icon, as Spotlight and Raycast show it.
-                Image(nsImage: icon).resizable().interpolation(.high).frame(width: 26, height: 26).padding(-1)
+            if entry.appIcon != nil || entry.fileIcon != nil {
+                // An app's or file's own icon, as Spotlight and Raycast show it;
+                // the tile until it is looked up.
+                LookupIcon(appIcon: entry.appIcon, fileIcon: entry.fileIcon) { icon in
+                    Image(nsImage: icon).resizable().interpolation(.high).frame(width: 26, height: 26).padding(-1)
+                } placeholder: {
+                    SettingsIconTile(symbol: iconName, color: PluginIcon.color(accent), size: 24)
+                }
             } else {
                 SettingsIconTile(symbol: iconName, color: PluginIcon.color(accent), size: 24)
             }
@@ -664,10 +673,12 @@ struct CommandViewBody: View {
         if let problem = view.problem {
             ContentUnavailableView(problem, systemImage: "exclamationmark.triangle")
         } else if let root = view.root {
-            if let items = RowFilter.items(in: root, query: view.query) {
-                if let columns = RowFilter.columns(in: root) {
+            // Filtered once per answer and text, however often this body runs.
+            let state = session.list(of: view)
+            if let items = state.items {
+                if let columns = state.columns {
                     tiles(items, columns: columns)
-                } else if let preview = RowFilter.detail(for: session.selectedRow(of: view), in: root) {
+                } else if let preview = RowFilter.detail(for: session.selectedRow(of: view), hasPreviews: state.hasPreviews) {
                     // Raycast's list with a detail: the list on the left, the
                     // selected row's full text or image on the right. Once
                     // one row has a preview every row gets the pane, so the
@@ -798,7 +809,8 @@ struct PalettePreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let id = preview.imageID, let data = imageData?(id), let image = NSImage(data: data) {
+            // Kept images are named by their content, so the id keys the decode.
+            if let id = preview.imageID, let image = DecodedImages.image(key: "kept|\(id)", data: { imageData?(id) }) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
@@ -971,13 +983,20 @@ struct BarButton: View {
 /// place of a spinner.
 struct LoadingBar: View {
     let active: Bool
+    /// How long it sweeps: a plugin that never answers would otherwise keep
+    /// the window redrawing every frame until it is closed.
+    static let sweepLimit: Duration = .seconds(20)
+    @State private var expired = false
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Rectangle().fill(Color.primary.opacity(0.08))
-                if active {
-                    TimelineView(.animation) { timeline in
+                if active, expired {
+                    // Still waiting, no longer moving.
+                    Rectangle().fill(Color.accentColor.opacity(0.35))
+                } else if active {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
                         let width = geometry.size.width
                         let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) / 1.2
                         Rectangle()
@@ -990,6 +1009,12 @@ struct LoadingBar: View {
         }
         .frame(height: active ? 2 : 1)
         .clipped()
+        .task(id: active) {
+            expired = false
+            guard active else { return }
+            do { try await Task.sleep(for: Self.sweepLimit) } catch { return }
+            expired = true
+        }
     }
 }
 
@@ -1002,14 +1027,20 @@ final class HotKey {
     private nonisolated(unsafe) static var actions: [UInt32: () -> Void] = [:]
     private static var nextID: UInt32 = 1
 
-    init(keyCode: UInt32, modifiers: UInt32, action: @escaping () -> Void) {
+    /// Nil when the system refuses the shortcut (taken by another app or
+    /// reserved), so the caller doesn't treat it as active.
+    init?(keyCode: UInt32, modifiers: UInt32, action: @escaping () -> Void) {
         Self.installHandler()
         let id = Self.nextID
         self.id = id
         Self.nextID += 1
         Self.actions[id] = action
         let hotKeyID = EventHotKeyID(signature: OSType(0x464C_5544), id: id) // 'FLUD'
-        RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &reference)
+        let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &reference)
+        guard status == noErr, reference != nil else {
+            Self.actions[id] = nil
+            return nil
+        }
     }
 
     private let id: UInt32
