@@ -2,9 +2,8 @@ import Foundation
 
 /// Watches a folder for `.swift` files being added, removed or changed. The
 /// app uses it to pick up plugins as they are saved, which is what makes
-/// editing a plugin (by hand or by an agent) feel live. On macOS file events
-/// wake it and the poll is a slow safety net (`PathWatch`); elsewhere it
-/// polls.
+/// editing a plugin (by hand or by an agent) feel live. It polls through
+/// `PathWatch`, off the caller's actor.
 public final class DirectoryWatcher: @unchecked Sendable {
     public struct Change: Equatable, Sendable {
         public var added: [URL]
@@ -28,7 +27,7 @@ public final class DirectoryWatcher: @unchecked Sendable {
     deinit { watch?.stop() }
 
     /// Calls `onChange` (on an arbitrary thread) whenever a look finds a
-    /// change. `interval` is the poll where there are no file events.
+    /// change, polling every `interval` seconds.
     public func start(every interval: Double = 1.5, onChange: @escaping @Sendable (Change) -> Void) {
         let watch = PathWatch(pollEvery: interval, paths: { [weak self] in
             guard let self else { return [] }

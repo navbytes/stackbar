@@ -308,9 +308,8 @@ public actor PluginSupervisor {
     }
 
     /// Watches the manifest's watched files (and a folder's direct
-    /// children) through `PathWatch`: file events on macOS, a two-second
-    /// poll elsewhere, and the stat calls on the watch's queue rather than
-    /// on this actor.
+    /// children) through `PathWatch`: a two-second poll, with the stat
+    /// calls on the watch's queue rather than on this actor.
     private func startWatcher() {
         watcher?.stop()
         watcher = nil
