@@ -129,6 +129,27 @@ final class StorageStoreTests: XCTestCase {
         XCTAssertEqual(written, ["a": "1"])
     }
 
+    func testAFailedDelayedWriteIsRetriedWithoutAnotherSave() async throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: base) }
+        // A plain file where the folder should be makes every write fail.
+        let directory = base.appendingPathComponent("Storage")
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: directory)
+        let store = StorageStore(directory: directory, quotaBytes: StorageStore.defaultQuotaBytes, writeDelay: 0.02, retryDelay: 0.05)
+        try await store.set("a", "1", for: "p.one")
+        try await Task.sleep(for: .milliseconds(200))
+        // The disk recovers; a second set must not be needed for the save to land.
+        try FileManager.default.removeItem(at: directory)
+        try await store.set("b", "2", for: "p.one")
+        var written: [String: String] = [:]
+        for _ in 0..<150 where written.isEmpty {
+            try await Task.sleep(for: .milliseconds(20))
+            written = await StorageStore(directory: directory).snapshot(for: "p.one")
+        }
+        XCTAssertEqual(written, ["a": "1", "b": "2"])
+    }
+
     func testIDsThatLookAlikeGetTheirOwnFiles() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

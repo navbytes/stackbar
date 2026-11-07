@@ -24,10 +24,16 @@ public actor StorageStore {
     private nonisolated let writer: Writer
 
     public init(directory: URL, quotaBytes: Int = StorageStore.defaultQuotaBytes, writeDelay: Double = 0) {
+        self.init(directory: directory, quotaBytes: quotaBytes, writeDelay: writeDelay, retryDelay: 1)
+    }
+
+    /// `retryDelay` is the first wait before a failed delayed write is tried
+    /// again; it doubles on each failure up to 30 seconds.
+    init(directory: URL, quotaBytes: Int, writeDelay: Double, retryDelay: Double) {
         self.directory = directory
         self.quotaBytes = quotaBytes
         self.writeDelay = max(0, writeDelay)
-        self.writer = Writer(directory: directory)
+        self.writer = Writer(directory: directory, retryDelay: retryDelay)
     }
 
     public func snapshot(for pluginID: String) -> [String: String] {
@@ -108,10 +114,13 @@ public actor StorageStore {
         private let io = NSLock()
         private var pending: [String: [String: String]] = [:]
         private var paused = false
+        private var failures: [String: Int] = [:]
+        private let retryDelay: Double
         private let queue = DispatchQueue(label: "stackbar.storage", qos: .utility)
 
-        init(directory: URL) {
+        init(directory: URL, retryDelay: Double = 1) {
             self.directory = directory
+            self.retryDelay = retryDelay
         }
 
         /// Remembers the latest values; true when nothing was waiting yet
@@ -140,11 +149,21 @@ public actor StorageStore {
             for (pluginID, values) in due {
                 do {
                     try writeLocked(values, for: pluginID)
+                    state.withLock { _ = failures.removeValue(forKey: pluginID) }
                 } catch {
                     HostLog.shared.write(.error, "could not save stored values: \(error)", plugin: pluginID)
-                    // Kept for the next flush (the next save, a stop, quitting)
-                    // unless a newer set is already waiting.
-                    state.withLock { if pending[pluginID] == nil { pending[pluginID] = values } }
+                    // Kept unless a newer set is already waiting (that one has
+                    // its own write scheduled), and tried again after a growing
+                    // wait, so a later set that finds it pending isn't left
+                    // with nothing scheduled until the app quits.
+                    let retryAfter = state.withLock { () -> Double? in
+                        guard pending[pluginID] == nil else { return nil }
+                        pending[pluginID] = values
+                        let count = (failures[pluginID] ?? 0) + 1
+                        failures[pluginID] = count
+                        return min(30, retryDelay * pow(2, Double(min(count - 1, 10))))
+                    }
+                    if let retryAfter { schedule(pluginID, after: retryAfter) }
                 }
             }
         }
