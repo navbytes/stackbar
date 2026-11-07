@@ -29,7 +29,8 @@ public enum StackbarProtocolVersion {
     /// notification buttons that run the plugin's own commands, adding
     /// calendar events, opening a command in a terminal, reading text in
     /// images and on screen, and temperature and fan sensors.
-    public static let current = 21
+    /// 22 added rows kept out of the palette's results.
+    public static let current = 22
 }
 
 /// Host → plugin.

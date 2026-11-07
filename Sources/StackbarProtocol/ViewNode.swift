@@ -175,9 +175,14 @@ public struct RowNode: Codable, Equatable, Sendable {
     /// What the host shows for the selected row in a searchable list: the
     /// full text, an image the host keeps, or both.
     public var preview: RowPreview?
+    /// Kept out of the command palette's own results: the row still draws
+    /// and acts in its panel, but the palette doesn't list its actions.
+    /// For data rows (clipboard history) that would flood the palette.
+    /// Protocol 22.
+    public var hiddenFromPalette: Bool?
 
     public init(key: String, title: String, subtitle: String? = nil, symbol: String? = nil, appIcon: String? = nil, fileIcon: String? = nil,
-                accessories: [ViewNode] = [], actions: [ActionRef] = [], preview: RowPreview? = nil) {
+                accessories: [ViewNode] = [], actions: [ActionRef] = [], preview: RowPreview? = nil, hiddenFromPalette: Bool? = nil) {
         self.key = key
         self.title = title
         self.subtitle = subtitle
@@ -187,6 +192,7 @@ public struct RowNode: Codable, Equatable, Sendable {
         self.accessories = accessories
         self.actions = actions
         self.preview = preview
+        self.hiddenFromPalette = hiddenFromPalette
     }
 }
 

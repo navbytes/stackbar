@@ -71,12 +71,14 @@ extension ViewNode {
         switch self {
         case .row(let row):
             return row.actions.enumerated().map { index, action in
-                Affordance(
+                var affordance = Affordance(
                     title: index == 0 ? row.title : "\(action.title): \(row.title)",
                     subtitle: row.subtitle ?? (index == 0 ? action.title : nil),
                     symbol: row.symbol,
                     kind: action.navigate.map { .navigate($0, action: action.id) } ?? .action(action.id, value: nil)
                 )
+                affordance.isHiddenFromPalette = row.hiddenFromPalette == true
+                return affordance
             }
         case .button(let title, let symbol, _, let action):
             return [Affordance(title: title, symbol: symbol, kind: .action(action, value: nil))]
@@ -131,6 +133,9 @@ public struct Affordance: Equatable, Sendable {
     /// Inside a tappable's content. The palette lists only the tappable,
     /// whose content is its label; the plugin still accepts the action.
     public var isInsideTappable = false
+    /// From a row the plugin keeps out of the palette's results
+    /// (`RowNode.hiddenFromPalette`). Agents and `actions` still see it.
+    public var isHiddenFromPalette = false
 
     public init(title: String, subtitle: String? = nil, symbol: String? = nil, kind: Kind) {
         self.title = title

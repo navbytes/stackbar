@@ -3,6 +3,12 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Clipboard history no longer floods the palette.** Copies (and their Copy, Pin and Delete actions) showed in the palette's results even with Clipboard's "Show matching copies in the palette's results" off, because the palette also lists what a plugin's panel can do. A plugin can now keep rows of its own data out of the palette; Clipboard 1.10.0 does.
+- For plugin authors: `Row(...).hiddenFromPalette()` keeps a row out of the palette's own results while it still shows and acts in your panel (protocol 22).
+
 ## 0.30.0
 
 ### Fixed

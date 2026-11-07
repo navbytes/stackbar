@@ -148,6 +148,7 @@ public struct Row: StackbarView {
     var accessories: [ViewNode] = []
     var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler?, navigate: CommandTarget?)] = []
     var preview: RowPreview?
+    var hiddenFromPalette: Bool?
 
     /// `key` defaults to the title; give one explicitly when titles can repeat
     /// or change (an id from your data is ideal).
@@ -171,6 +172,16 @@ public struct Row: StackbarView {
     public func fileIcon(_ path: String?) -> Row {
         var copy = self
         copy.fileIcon = path
+        return copy
+    }
+
+    /// Keeps this row out of the command palette's own results. It still
+    /// shows and acts in your panel. For rows of your data (history, items)
+    /// that would flood the palette; a root-search command is the way to
+    /// offer them there. Protocol 22.
+    public func hiddenFromPalette(_ hidden: Bool = true) -> Row {
+        var copy = self
+        copy.hiddenFromPalette = hidden ? true : nil
         return copy
     }
 
@@ -217,7 +228,7 @@ public struct Row: StackbarView {
             let id = action.handler.map { context.register(base, $0) } ?? ActionID(context.prefix + base)
             return ActionRef(id: id, title: action.title, shortcut: action.shortcut, role: action.role, navigate: action.navigate)
         }
-        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, fileIcon: fileIcon, accessories: accessories, actions: refs, preview: preview))]
+        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, fileIcon: fileIcon, accessories: accessories, actions: refs, preview: preview, hiddenFromPalette: hiddenFromPalette))]
     }
 }
 

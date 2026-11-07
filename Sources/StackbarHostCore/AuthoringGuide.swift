@@ -227,6 +227,7 @@ for a form to flag. Errors name the placeholder that failed.
   image under the list while the row is selected; search looks through it.
 - `Row(...).appIcon("com.apple.Safari")` draws that app's icon instead of the symbol (the symbol stays as the fallback).
 - `Row(...).fileIcon(path)` draws a file or folder's Finder icon (a path from `Stackbar.findFiles`).
+- `Row(...).hiddenFromPalette()` keeps the row out of the command palette's own results; it still shows and acts in your panel. Use it on rows of your data (history, items) that would flood the palette, and offer them with a root-search command instead (minimumStackbar 0.31.0).
 - `Badge(text, role:)`, `ProgressBar(label, value:, total:, style: .ring(lineWidth: 6))`, `LabeledContent(label, value:)`
 - `Chart(label, values: [Double], kind: .line|.bar|.area|.donut|.heatmap, role:, labels: ["Mon", …], unit: "h", goal: 4, highlight: 6)`
   `labels` name the points (or a donut's slices), `unit` follows values, `goal`
