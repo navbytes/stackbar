@@ -75,7 +75,7 @@ public actor PluginSupervisor {
     private var consumer: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
     private var watcher: Task<Void, Never>?
-    private var clipboardWatcher: Task<Void, Never>?
+    private var clipboardWatcher: UUID?
     private var pendingRestart: Task<Void, Never>?
     private var nextToolCall = 1
     private var toolCalls: [Int: CheckedContinuation<(text: String, isError: Bool), Never>] = [:]
@@ -117,7 +117,7 @@ public actor PluginSupervisor {
         pendingRestart?.cancel()
         ticker?.cancel()
         watcher?.cancel()
-        clipboardWatcher?.cancel()
+        stopClipboardWatcher()
         process?.terminate()
         process = nil
         services?.release(pluginID: manifest.id)
@@ -322,23 +322,21 @@ public actor PluginSupervisor {
         }
     }
 
-    /// Polls the clipboard's change count twice a second for a plugin with a
-    /// `.clipboard` trigger and the approved `.clipboard` capability. The
-    /// count is one integer, so polling costs next to nothing.
+    /// Listens to the shared clipboard poll (`HostServices.clipboard`) for a
+    /// plugin with a `.clipboard` trigger; `clipboardChanged` checks the
+    /// approved `.clipboard` capability.
     private func startClipboardWatcher() {
-        clipboardWatcher?.cancel()
-        guard manifest.triggers.contains(.clipboard), let system = services?.platform.system else { return }
-        clipboardWatcher = Task { [weak self] in
-            var last = system.clipboardChangeCount()
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
-                guard !Task.isCancelled else { return }
-                let now = system.clipboardChangeCount()
-                guard now != last else { continue }
-                last = now
-                await self?.clipboardChanged()
-            }
+        stopClipboardWatcher()
+        guard manifest.triggers.contains(.clipboard), let services else { return }
+        clipboardWatcher = services.clipboard.add { [weak self] in
+            Task { await self?.clipboardChanged() }
         }
+    }
+
+    private func stopClipboardWatcher() {
+        guard let clipboardWatcher else { return }
+        services?.clipboard.remove(clipboardWatcher)
+        self.clipboardWatcher = nil
     }
 
     private func clipboardChanged() {
@@ -471,7 +469,7 @@ public actor PluginSupervisor {
         guard exitGeneration == generation else { return }
         ticker?.cancel()
         watcher?.cancel()
-        clipboardWatcher?.cancel()
+        stopClipboardWatcher()
         process = nil
         // A crashed plugin must not keep the Mac awake; a restarted one asks again.
         services?.release(pluginID: manifest.id)

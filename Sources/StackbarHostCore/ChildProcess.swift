@@ -217,7 +217,9 @@ public final class ChildProcess: @unchecked Sendable {
         timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(500))
         timer.setEventHandler { [weak self] in
             guard let self, self.isRunning else { return }
-            let found = ProcessTable.descendants(of: self.pid)
+            // Most helpers never start anything: a cheap look at the direct
+            // children spares them a read of the whole process table.
+            let found = ProcessTable.hasChildren(self.pid) == false ? [] : ProcessTable.descendants(of: self.pid)
             self.lock.lock()
             if self.exitStatus == nil { self.snapshot = found }
             self.lock.unlock()
@@ -252,6 +254,26 @@ private func systemPipe(_ fds: UnsafeMutablePointer<Int32>) -> Int32 {
 
 /// Reads parent links for every process on the machine.
 enum ProcessTable {
+    /// Whether `pid` has a child right now, without reading the whole
+    /// table; `nil` when that can't be told cheaply here.
+    static func hasChildren(_ pid: pid_t) -> Bool? {
+        #if os(Linux)
+        // Each thread lists the children it started.
+        guard let tasks = try? FileManager.default.contentsOfDirectory(atPath: "/proc/\(pid)/task") else { return nil }
+        for task in tasks {
+            guard let children = try? String(contentsOfFile: "/proc/\(pid)/task/\(task)/children", encoding: .utf8) else { return nil }
+            if children.contains(where: \.isNumber) { return true }
+        }
+        return false
+        #elseif canImport(Darwin)
+        var buffer = [pid_t](repeating: 0, count: 16)
+        let found = buffer.withUnsafeMutableBytes { proc_listchildpids(pid, $0.baseAddress, Int32($0.count)) }
+        return found < 0 ? nil : found > 0
+        #else
+        return nil
+        #endif
+    }
+
     static func descendants(of root: pid_t) -> [pid_t] {
         var children: [pid_t: [pid_t]] = [:]
         for (pid, parent) in parentLinks() { children[parent, default: []].append(pid) }

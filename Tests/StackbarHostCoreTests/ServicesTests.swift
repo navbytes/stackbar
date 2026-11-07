@@ -435,3 +435,53 @@ final class InstanceLockTests: XCTestCase {
         XCTAssertNotNil(InstanceLock.acquire(file), "and allowed once it is gone")
     }
 }
+
+final class ClipboardWatchTests: XCTestCase {
+    func testOnePollFansOutAndStopsWithItsLastListener() async throws {
+        let count = Locked(0)
+        let heard = Locked([String]())
+        let watch = ClipboardWatch(interval: 0.02) { count.value }
+        XCTAssertFalse(watch.isPolling)
+        let first = watch.add { heard.mutate { $0.append("a") } }
+        let second = watch.add { heard.mutate { $0.append("b") } }
+        XCTAssertTrue(watch.isPolling)
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(heard.value, [], "nothing changed yet")
+        count.mutate { $0 += 1 }
+        for _ in 0..<100 where heard.value.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(heard.value.sorted(), ["a", "b"])
+        watch.remove(first)
+        XCTAssertTrue(watch.isPolling)
+        watch.remove(second)
+        XCTAssertFalse(watch.isPolling)
+    }
+}
+
+final class Locked<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Value
+    init(_ value: Value) { stored = value }
+    var value: Value { lock.withLock { stored } }
+    func mutate(_ body: (inout Value) -> Void) { lock.withLock { body(&stored) } }
+}
+
+final class ProcessTableTests: XCTestCase {
+    func testTellsWhetherAProcessHasChildren() throws {
+        #if os(Linux) || canImport(Darwin)
+        let lone = try ChildProcess(executable: "/bin/sh", arguments: ["-c", "exec sleep 5"])
+        let parent = try ChildProcess(executable: "/bin/sh", arguments: ["-c", "sleep 5; true"])
+        defer {
+            lone.signalGroup(SIGKILL)
+            parent.signalTree(SIGKILL)
+        }
+        var hasChild: Bool?
+        for _ in 0..<100 {
+            hasChild = ProcessTable.hasChildren(parent.pid)
+            if hasChild == true { break }
+            usleep(20000)
+        }
+        XCTAssertEqual(hasChild, true)
+        XCTAssertEqual(ProcessTable.hasChildren(lone.pid), false)
+        #endif
+    }
+}
