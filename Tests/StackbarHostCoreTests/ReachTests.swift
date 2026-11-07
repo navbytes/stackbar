@@ -58,6 +58,32 @@ final class WidgetSnapshotTests: XCTestCase {
         store.remove("dev.x.y")
         XCTAssertNil(store.read("dev.x.y"))
     }
+
+    func testPublishQueueDropsRepeatsAndSpacesReloads() {
+        var queue = WidgetPublishQueue(debounce: 0.5, minimumInterval: 5)
+        let start = Date(timeIntervalSince1970: 1000)
+        func widget(_ id: String, _ text: String) -> WidgetSnapshot { WidgetSnapshot(pluginID: id, name: id, node: .text(text)) }
+
+        XCTAssertEqual(queue.delay(now: start), 0.5, "the first change waits only the debounce")
+        XCTAssertTrue(queue.change(widget("a", "1")))
+        XCTAssertTrue(queue.change(widget("a", "2")), "a later render replaces the queued one")
+        XCTAssertTrue(queue.change(widget("b", "1")))
+        XCTAssertEqual(queue.take(now: start).map(\.node), [.text("2"), .text("1")], "one write per plugin, its latest render")
+        XCTAssertTrue(queue.isEmpty)
+
+        XCTAssertFalse(queue.change(widget("a", "2")), "the same as what was written: nothing to do")
+        XCTAssertTrue(queue.isEmpty)
+        XCTAssertTrue(queue.change(widget("a", "3")))
+        XCTAssertEqual(queue.delay(now: start.addingTimeInterval(1)), 4, "reloads are spaced by the minimum interval")
+        XCTAssertEqual(queue.delay(now: start.addingTimeInterval(10)), 0.5)
+        XCTAssertFalse(queue.change(widget("a", "2")), "back to what was written drops the queued change")
+        XCTAssertTrue(queue.take(now: start).isEmpty)
+
+        XCTAssertTrue(queue.remembers("a"))
+        queue.forget("a")
+        XCTAssertFalse(queue.remembers("a"))
+        XCTAssertTrue(queue.change(widget("a", "2")), "after a plugin's widget is removed, its next render is written")
+    }
 }
 
 final class RuntimeGatewayTests: XCTestCase {

@@ -59,6 +59,8 @@ final class MacTextExpansion {
     private var source: CFRunLoopSource?
     private var trustPoll: Timer?
     private var promptedForAccess = false
+    /// The listener couldn't be made: said once in the log, not on every retry.
+    private var reportedTapFailure = false
     private var matcher = TextExpansionMatcher()
     private var excludedFront = false
     private var observers: [NSObjectProtocol] = []
@@ -144,10 +146,14 @@ final class MacTextExpansion {
         let types: [CGEventType] = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
         let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .tailAppendEventTap, options: .listenOnly, eventsOfInterest: mask, callback: expansionTapCallback, userInfo: nil) else {
-            HostLog.shared.write(.warning, "text expansion: could not create the keyboard listener; check Accessibility access")
+            if !reportedTapFailure {
+                reportedTapFailure = true
+                HostLog.shared.write(.warning, "text expansion: could not create the keyboard listener; check Accessibility access")
+            }
             pollForAccess()
             return
         }
+        reportedTapFailure = false
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)

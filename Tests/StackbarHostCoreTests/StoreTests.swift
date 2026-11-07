@@ -286,6 +286,17 @@ final class BundledStoreTests: XCTestCase {
         XCTAssertEqual(installed("Todo.swift"), "import StackbarKit // mine\n")
     }
 
+    func testCoreInstallStopsEarlyOnceEveryCorePluginWasOffered() throws {
+        let (store, installer) = store(publicKey: nil)
+        let offered = root.appendingPathComponent("core-plugins.json")
+        // Unsorted on purpose: a pass over the bundles would write it back sorted.
+        let written = try JSONEncoder().encode(Array(BundledStore.corePluginIDs.sorted().reversed()))
+        try written.write(to: offered)
+        XCTAssertEqual(store.installCore(offered: offered), [])
+        XCTAssertEqual(try Data(contentsOf: offered), written, "the record is left as it was")
+        XCTAssertTrue(installer.installed.isEmpty)
+    }
+
     #if canImport(CryptoKit)
     func testInstallsTheNewestOfficiallySignedBundles() throws {
         let key = try Signing.generateKey()

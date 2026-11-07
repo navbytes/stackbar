@@ -54,6 +54,9 @@ final class AppModel {
     /// Store, Settings and the update check.
     @ObservationIgnored private(set) var installation: PluginInstallation!
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
+    /// Widget renders waiting to be written, and when the next write may go.
+    @ObservationIgnored private var widgetQueue = WidgetPublishQueue()
+    @ObservationIgnored private var widgetFlush: Task<Void, Never>?
     /// Presses on widget buttons, left by the widget extension.
     @ObservationIgnored private let widgetActions = WidgetActionInbox.shared()
     /// Which plugin tools agents may use (Settings → Agents).
@@ -250,7 +253,7 @@ final class AppModel {
         controllers.removeAll { $0 === controller }
         palette.remove(pluginID: controller.pluginID)
         commands.forget(pluginID: controller.pluginID)
-        widgets.remove(controller.pluginID)
+        forgetWidget(controller.pluginID)
         onPluginsChanged?()
     }
 
@@ -298,7 +301,7 @@ final class AppModel {
     func pluginTurnedOff(_ controller: PluginController) {
         palette.remove(pluginID: controller.pluginID)
         commands.forget(pluginID: controller.pluginID)
-        widgets.remove(controller.pluginID)
+        forgetWidget(controller.pluginID)
         onPluginsChanged?()
     }
 
@@ -434,10 +437,46 @@ final class AppModel {
         }
     }
 
+    /// A plugin rendered its widget. Renders are coalesced: one that matches
+    /// what was last written is dropped, the rest are written together off
+    /// the main thread, and WidgetKit is asked to reload at most every few
+    /// seconds (it budgets reloads).
     func widgetChanged(_ controller: PluginController) {
         guard let node = controller.widget else { return }
-        try? widgets.write(WidgetSnapshot(pluginID: controller.pluginID, name: controller.name, node: node))
+        guard widgetQueue.change(WidgetSnapshot(pluginID: controller.pluginID, name: controller.name, node: node)), widgetFlush == nil else { return }
+        let delay = widgetQueue.delay(now: Date())
+        widgetFlush = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            await self?.flushWidgets()
+        }
+    }
+
+    private func flushWidgets() async {
+        widgetFlush = nil
+        let snapshots = widgetQueue.take(now: Date())
+        guard !snapshots.isEmpty else { return }
+        let store = widgets
+        let failures = await Task.detached { () -> [(String, String)] in
+            snapshots.compactMap { snapshot -> (String, String)? in
+                do {
+                    try store.write(snapshot)
+                    return nil
+                } catch {
+                    return (snapshot.pluginID, "\(error)")
+                }
+            }
+        }.value
+        for (pluginID, error) in failures {
+            HostLog.shared.write(.warning, "widget: could not write the snapshot the widget shows: \(error)", plugin: pluginID)
+        }
+        // Removed or turned off while it was being written.
+        for snapshot in snapshots where !widgetQueue.remembers(snapshot.pluginID) { widgets.remove(snapshot.pluginID) }
         Platform.reloadWidgets()
+    }
+
+    private func forgetWidget(_ pluginID: String) {
+        widgetQueue.forget(pluginID)
+        widgets.remove(pluginID)
     }
 
     func secretMissing(pluginID: String, name: String) {

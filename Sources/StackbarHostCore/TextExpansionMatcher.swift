@@ -60,7 +60,8 @@ public struct TextExpansionMatcher: Sendable {
     private func completed() -> Match? {
         for entry in table where typed.count >= entry.keyword.count {
             let start = typed.count - entry.keyword.count
-            guard Array(typed[start...]) == entry.keyword else { continue }
+            // Compared in place: this runs for every key press in any app.
+            guard typed[start...].elementsEqual(entry.keyword) else { continue }
             if start > 0, Self.isWordCharacter(typed[start - 1]), Self.isWordCharacter(entry.keyword[0]) { continue }
             return Match(keyword: String(entry.keyword), pluginID: entry.pluginID, command: entry.command, deleteCount: entry.keyword.count)
         }

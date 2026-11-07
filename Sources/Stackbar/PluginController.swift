@@ -191,8 +191,15 @@ final class PluginController: Identifiable {
             await next.start()
         } catch {
             guard generation == loadGeneration else { return }
+            // The helper from the last good build is still running: stop it,
+            // or its updates would flip the state back from failed.
+            updatesTask?.cancel()
+            updatesTask = nil
+            let previous = supervisor
+            supervisor = nil
             state = .failed("could not start")
             problem = "\(error)"
+            await previous?.stop()
         }
     }
 
