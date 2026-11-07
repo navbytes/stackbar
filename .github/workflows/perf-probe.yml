@@ -1,0 +1,31 @@
+name: Perf probe
+
+# One-off measurement of idle CPU, memory and process spawns with the store's
+# plugins installed. Not part of the release flow.
+
+on:
+  push:
+    branches: [claude/project-thread-g9pbw8]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build
+        run: scripts/bundle.sh
+
+      - name: Probe
+        run: scripts/perf-probe/run.sh 60 300
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: perf-probe
+          path: build/perf-probe
