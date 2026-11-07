@@ -30,8 +30,9 @@ final class PluginHandoverTests: XCTestCase {
 
     func testMovesHotkeysAliasesUsageAndFavouritesOnce() throws {
         let preferences = CommandPreferences(file: directory.appendingPathComponent("prefs.json"))
-        let usage = PaletteUsage(file: nil)
-        let favorites = PaletteFavorites(file: nil)
+        let memory = PaletteMemory(directory: nil)
+        let usage = memory.usage
+        let favorites = memory.favorites
         try preferences.set(CommandPreference(alias: "lh", hotkey: "ctrl+option+l"), for: key("dev.t.layouts", "left-half"))
         try preferences.set(CommandPreference(hotkey: "ctrl+option+m"), for: key("dev.t.layouts", "maximize"))
         try preferences.set(CommandPreference(alias: "mine"), for: key("dev.t.windows", "maximize"))
@@ -40,6 +41,9 @@ final class PluginHandoverTests: XCTestCase {
         usage.record("dev.t.layouts|panel")
         favorites.toggle("dev.t.layouts/left-half")
         favorites.toggle("dev.t.other/x")
+        memory.picks.record(query: "lh", id: "dev.t.layouts/left-half")
+        memory.picks.record(query: "le", id: "dev.t.layouts|row|left-half|screen-2")
+        memory.picks.record(query: "zz", id: "dev.t.layouts|row|gone|a")
 
         let handover = PluginHandover(file: directory.appendingPathComponent("handovers.json"))
         let manifest = Manifest(id: "dev.t.windows", name: "Windows", replaces: ["dev.t.layouts", "dev.t.layouts"])
@@ -50,7 +54,7 @@ final class PluginHandoverTests: XCTestCase {
         let commands = ["left-half": "Left Half", "maximize": "Maximize", "restore": "Restore Window Layout"]
         let oldTitles = ["left-half": "Left Half", "maximize": "Maximize", "restore": "Restore", "gone": "Gone"]
         let moved = handover.hand(from: "dev.t.layouts", to: "dev.t.windows", commands: commands, oldTitles: oldTitles,
-                                  preferences: preferences, usage: usage, favorites: favorites)
+                                  preferences: preferences, memory: memory)
         XCTAssertEqual(moved, [key("dev.t.windows", "left-half")], "maximize already had the new plugin's own preference")
         XCTAssertNil(preferences[key("dev.t.windows", "restore")].hotkey, "same id, different command: it stays behind")
         XCTAssertEqual(preferences[key("dev.t.layouts", "restore")].hotkey, "ctrl+option+z")
@@ -65,6 +69,9 @@ final class PluginHandoverTests: XCTestCase {
         XCTAssertEqual(usage.score("dev.t.layouts/left-half"), 0)
         XCTAssertGreaterThan(usage.score("dev.t.layouts|panel"), 0, "only commands carry over")
         XCTAssertEqual(favorites.ids, ["dev.t.windows/left-half", "dev.t.other/x"])
+        XCTAssertEqual(memory.picks.weights(for: "lh").keys.sorted(), ["dev.t.windows/left-half"], "what the ranker learned moves too")
+        XCTAssertEqual(memory.picks.weights(for: "le").keys.sorted(), ["dev.t.windows|row|left-half|screen-2"], "and a command's root rows")
+        XCTAssertEqual(memory.picks.weights(for: "zz").keys.sorted(), ["dev.t.layouts|row|gone|a"], "a row of a command that doesn't carry stays")
 
         XCTAssertEqual(handover.pending(for: manifest), [])
         XCTAssertEqual(handover.replacement(of: "dev.t.layouts"), "dev.t.windows")

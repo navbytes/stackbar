@@ -13,11 +13,9 @@ import StackbarProtocol
 final class CommandCenter {
     @ObservationIgnored let registry: CommandRegistry
     @ObservationIgnored let preferences: CommandPreferences
-    @ObservationIgnored let usage: PaletteUsage
-    /// What was picked in the palette for what was typed.
-    @ObservationIgnored let picks: PalettePicks
-    /// The palette entries pinned to the top of its root.
-    @ObservationIgnored let favorites: PaletteFavorites
+    /// What the palette learned: use, picks and pins.
+    @ObservationIgnored let memory: PaletteMemory
+    var usage: PaletteUsage { memory.usage }
     @ObservationIgnored let runner: CommandRunner
     /// Changes whenever the commands or their preferences change, so views
     /// that read the registry redraw.
@@ -42,9 +40,7 @@ final class CommandCenter {
         let directory = StackbarPaths.dataDirectory
         registry = CommandRegistry(file: directory.appendingPathComponent("commands.json"))
         preferences = CommandPreferences(file: directory.appendingPathComponent("command-preferences.json"))
-        usage = PaletteUsage(file: directory.appendingPathComponent("palette-usage.json"))
-        picks = PalettePicks(file: directory.appendingPathComponent("palette-picks.json"))
-        favorites = PaletteFavorites(file: directory.appendingPathComponent("palette-favorites.json"))
+        memory = PaletteMemory(directory: directory)
         let lookup = CommandLookup()
         runner = CommandRunner(registry: registry, services: services) { id in await lookup.target(for: id) }
         self.model = model
@@ -192,7 +188,7 @@ final class CommandCenter {
 
     /// Runs a run command, records the use, and shows what happened.
     func run(_ key: CommandKey, arguments: [String: String] = [:], source: InvocationSource, context: InvocationContext? = nil) async {
-        usage.record(key.description)
+        memory.used(key)
         donate(key)
         let outcome = await runner.run(key, arguments: arguments, source: source, context: context)
         if let message = outcome.message { HUD.shared.show(message, isError: outcome.isError) }
@@ -236,7 +232,7 @@ final class CommandCenter {
             carryOut(plan, for: entry, source: .spotlight, context: context)
             return "Opened \(entry.spec.title) in Stackbar"
         }
-        usage.record(entry.key.description)
+        memory.used(entry.key)
         let outcome = await runner.run(entry.key, arguments: arguments, source: .spotlight, context: context)
         if outcome.isError { throw CommandIntentError(outcome.message ?? "\(entry.spec.title) failed") }
         return outcome.message ?? "Done"
@@ -260,7 +256,7 @@ final class CommandCenter {
         case .success(let found): supervisor = found
         case .failure(let outcome): return .failure(outcome)
         }
-        if recordUse { usage.record(key.description) }
+        if recordUse { memory.used(key) }
         let session = nextSession
         nextSession += 1
         let view = CommandViewModel(session: session, entry: entry, supervisor: supervisor, query: query, context: context) { [weak self] in

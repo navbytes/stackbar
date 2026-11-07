@@ -218,12 +218,12 @@ public final class PaletteUsage: @unchecked Sendable {
         save()
     }
 
-    /// Carries the use of plugin `from`'s commands (`from/command`) over to
-    /// plugin `to`'s commands with the same ids, adding to what is there.
+    /// Carries the use of plugin `from`'s commands and root rows over to
+    /// plugin `to` (see `PaletteMemory.carried`), adding to what is there.
     public func move(pluginID from: String, to: String, carries: (String) -> Bool = { _ in true }) {
         lock.withLock {
-            for (id, use) in uses where id.hasPrefix(from + "/") && carries(String(id.dropFirst(from.count + 1))) {
-                let target = to + "/" + id.dropFirst(from.count + 1)
+            for (id, use) in uses {
+                guard let target = PaletteMemory.carried(id, from: from, to: to, carries: carries) else { continue }
                 uses[id] = nil
                 if let existing = uses[target] {
                     uses[target] = Use(score: existing.score + use.score, last: max(existing.last, use.last))

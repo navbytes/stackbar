@@ -79,6 +79,25 @@ public final class PalettePicks: @unchecked Sendable {
         save()
     }
 
+    /// Carries the picks of plugin `from`'s commands and root rows over to
+    /// plugin `to` (see `PaletteMemory.carried`), adding to what is there.
+    public func move(pluginID from: String, to: String, carries: (String) -> Bool = { _ in true }) {
+        lock.withLock {
+            for (typed, items) in picks {
+                for (id, pick) in items {
+                    guard let target = PaletteMemory.carried(id, from: from, to: to, carries: carries) else { continue }
+                    picks[typed]?[id] = nil
+                    if let existing = picks[typed]?[target] {
+                        picks[typed]?[target] = Pick(score: existing.score + pick.score, last: max(existing.last, pick.last))
+                    } else {
+                        picks[typed, default: [:]][target] = pick
+                    }
+                }
+            }
+        }
+        save()
+    }
+
     /// Drops the oldest pairs past `limit`. Called with the lock held.
     private func trim() {
         let count = picks.values.reduce(0) { $0 + $1.count }
