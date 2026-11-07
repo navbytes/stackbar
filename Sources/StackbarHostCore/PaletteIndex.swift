@@ -193,10 +193,10 @@ public struct PaletteIndex: Sendable {
 
     /// The tree's affordances the palette can press on its own: not inputs,
     /// which need their control, nor what a tappable wraps, nor a tappable
-    /// with no words to find it by.
+    /// with no words to find it by, nor rows the plugin keeps out.
     static func entries(in node: ViewNode, pluginID: String, pluginName: String) -> [Entry] {
         node.affordances.compactMap { affordance in
-            guard !affordance.isInsideTappable else { return nil }
+            guard !affordance.isInsideTappable, !affordance.isHiddenFromPalette else { return nil }
             let kind: Entry.Kind
             switch affordance.kind {
             case .action(let action, let value):

@@ -44,6 +44,21 @@ final class PaletteIndexTests: XCTestCase {
         XCTAssertEqual(entries.map(\.kind), [.navigate(target), .action("button/Start", value: nil)])
         XCTAssertEqual(entries.first?.subtitle, "Details")
     }
+
+    func testRowsKeptOutOfThePaletteStayOut() throws {
+        let copied = RowNode(key: "1", title: "secret plans", actions: [ActionRef(id: "row/1/Paste", title: "Paste"), ActionRef(id: "row/1/Pin", title: "Pin")], hiddenFromPalette: true)
+        let panel = ViewNode.stack(axis: .vertical, children: [
+            .button(title: "Pause", action: "button/Pause"),
+            .list(children: [.row(copied)]),
+        ])
+        let entries = PaletteIndex.entries(in: panel, pluginID: "p", pluginName: "P")
+        XCTAssertEqual(entries.map(\.title), ["Pause"], "the row and its secondary actions are left out")
+        XCTAssertEqual(panel.affordances.count, 3, "agents and actions still see the row")
+        let decoded = try JSONDecoder().decode(RowNode.self, from: JSONEncoder().encode(copied))
+        XCTAssertEqual(decoded.hiddenFromPalette, true)
+        let old = try JSONDecoder().decode(RowNode.self, from: Data(#"{"key":"1","title":"t","accessories":[],"actions":[]}"#.utf8))
+        XCTAssertNil(old.hiddenFromPalette, "an older plugin's row decodes")
+    }
 }
 
 final class WidgetSnapshotTests: XCTestCase {
