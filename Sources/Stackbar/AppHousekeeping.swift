@@ -107,6 +107,9 @@ enum AppHousekeeping {
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         Task { @MainActor in
             await model.stop()
+            // A save still waiting on its delay (or the flush at quit) must not
+            // recreate Storage/<id>.json once the folder is in the Trash.
+            model.services.storage.setWritesPaused(true)
             let files = FileManager.default
             var left: [String] = []
             for folder in [StackbarPaths.dataDirectory, StackbarPaths.cacheDirectory, StackbarPaths.logFile.deletingLastPathComponent()] where files.fileExists(atPath: folder.path) {
