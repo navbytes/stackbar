@@ -47,13 +47,14 @@ public actor StorageStore {
             throw StorageError.overQuota(pluginID: pluginID, bytes: size, quota: quota)
         }
         values[key] = value
-        cache[pluginID] = values
-        sizes[pluginID] = size
         if writeDelay == 0 {
+            // Memory takes the value only once it is on disk.
             try writer.write(values, for: pluginID)
         } else if writer.stage(values, for: pluginID) {
             writer.schedule(pluginID, after: writeDelay)
         }
+        cache[pluginID] = values
+        sizes[pluginID] = size
     }
 
     /// Writes a plugin's waiting changes now (when it stops).
@@ -141,6 +142,9 @@ public actor StorageStore {
                     try writeLocked(values, for: pluginID)
                 } catch {
                     HostLog.shared.write(.error, "could not save stored values: \(error)", plugin: pluginID)
+                    // Kept for the next flush (the next save, a stop, quitting)
+                    // unless a newer set is already waiting.
+                    state.withLock { if pending[pluginID] == nil { pending[pluginID] = values } }
                 }
             }
         }
@@ -167,8 +171,19 @@ public actor StorageStore {
 
         func read(_ pluginID: String) -> [String: String] {
             // Values saved before per-id file names are read from the old file.
-            let data = (try? Data(contentsOf: file(for: pluginID))) ?? (try? Data(contentsOf: legacyFile(for: pluginID)))
-            return data.flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+            let current = file(for: pluginID)
+            let legacy = legacyFile(for: pluginID)
+            for url in [current, legacy] {
+                guard let data = try? Data(contentsOf: url) else { continue }
+                if let values = try? JSONDecoder().decode([String: String].self, from: data) { return values }
+                // Unreadable: set aside rather than overwritten by the next
+                // save, so what it held can still be recovered by hand.
+                let aside = url.appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970))")
+                try? FileManager.default.moveItem(at: url, to: aside)
+                HostLog.shared.write(.error, "stored values in \(url.lastPathComponent) were unreadable; moved to \(aside.lastPathComponent)", plugin: pluginID)
+                return [:]
+            }
+            return [:]
         }
 
         private func writeLocked(_ values: [String: String], for pluginID: String) throws {

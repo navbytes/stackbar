@@ -532,3 +532,33 @@ final class DirectoryWatcherTests: XCTestCase {
         XCTAssertEqual(ticks.value, stopped)
     }
 }
+
+final class StorageRecoveryTests: XCTestCase {
+    func testAnUnreadableFileIsSetAsideNotOverwritten() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Data("{not json".utf8).write(to: directory.appendingPathComponent("p.one.json"))
+        let store = StorageStore(directory: directory)
+        let values = await store.snapshot(for: "p.one")
+        XCTAssertEqual(values, [:])
+        try await store.set("a", "1", for: "p.one")
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        let aside = try XCTUnwrap(names.first { $0.hasPrefix("p.one.json.corrupt-") })
+        XCTAssertEqual(try String(contentsOf: directory.appendingPathComponent(aside), encoding: .utf8), "{not json")
+    }
+
+    func testAFailedWriteLeavesMemoryAsItWas() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // A file where the folder should be: every write fails.
+        try Data().write(to: directory)
+        let store = StorageStore(directory: directory)
+        do {
+            try await store.set("a", "1", for: "p.one")
+            XCTFail("the write must fail")
+        } catch {}
+        let values = await store.snapshot(for: "p.one")
+        XCTAssertEqual(values, [:])
+    }
+}
