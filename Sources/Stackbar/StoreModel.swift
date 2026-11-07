@@ -79,8 +79,7 @@ final class StoreModel {
             // Fetched first: on a Mac that can't build plugins, a plugin with
             // no prebuilt helper yet is not installed (or updated) at all.
             let helper = try await model.prebuiltHelper(for: bundle, indexURL: item.catalog.source.url)
-            let file = try model.installer.install(bundle)
-            model.save(helper)
+            let file = try model.installation.install(bundle, helper: helper)
             if let controller = model.controller(for: entry.id) { controller.reload() } else { model.add(file) }
             model.refreshInstalled()
             if !quietly {
@@ -109,15 +108,7 @@ final class StoreModel {
     }
 
     func uninstall(_ entry: PluginIndex.Entry, deleteData: Bool) async {
-        if let controller = model.controller(for: entry.id) {
-            await model.uninstall(controller, deleteData: deleteData)
-        } else if let record = model.installedPlugins.first(where: { $0.id == entry.id }) {
-            try? FileManager.default.trashItem(at: URL(fileURLWithPath: record.file), resultingItemURL: nil)
-            try? model.installer.forget(entry.id)
-            model.switches.set(entry.id, on: true)
-            if deleteData { await model.services.storage.erase(entry.id) }
-            model.refreshInstalled()
-        }
+        await model.uninstall(pluginID: entry.id, deleteData: deleteData)
         toast = StoreToast(entry: entry, text: "Moved to the Trash" + (deleteData ? " with its data" : ""), isError: false)
     }
 

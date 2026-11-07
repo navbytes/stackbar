@@ -550,13 +550,14 @@ case "install":
         if let indexURL {
             prebuilt = try await PrebuiltHelpers.prepare(bundle, indexURL: indexURL, builder: builder, toolchain: PluginBuilder.hasToolchain)
         }
-        let file = try installer.install(bundle)
+        let installation = PluginInstallation(installer: installer, ledger: CapabilityLedger(file: StackbarPaths.ledgerFile), switches: PluginSwitches(),
+                                              helpers: .init(directory: builder.downloadedHelpers, stackbarKit: builder.stackbarKit))
+        let file = try installation.install(bundle, helper: prebuilt)
         if let prebuilt {
-            try PrebuiltHelpers.save(prebuilt, in: builder.downloadedHelpers, stackbarKit: builder.stackbarKit)
             note(prebuilt.exact ? "using the store's prebuilt helper" : "using the store's prebuilt helper for another StackbarKit with the same protocol")
         }
         let built = try PluginProcess.readManifest(executable: helper(for: file.path))
-        try installer.confirm(built, matches: bundle, file: file)
+        try installation.confirm(built, file: file)
         print("installed \(bundle.manifest.name) \(bundle.manifest.version) to \(file.path)")
         for line in SandboxEntitlements.summary(for: bundle.manifest) { print("- \(line)") }
         print("Stackbar asks you to approve these the first time it runs the plugin.")

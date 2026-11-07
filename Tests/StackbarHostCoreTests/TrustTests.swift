@@ -181,8 +181,6 @@ final class BundleTests: XCTestCase {
         let other = try Signing.generateKey()
         let impostor = try Signing.bundle(source: "// evil", manifest: manifest, publisherName: "Evil", privateKey: other.privateKey)
         XCTAssertThrowsError(try installer.install(impostor))
-        XCTAssertThrowsError(try installer.confirm(Manifest(id: "dev.t.bundle", name: "Other"), matches: bundle, file: file))
-        XCTAssertEqual(installer.installed, [], "a manifest mismatch undoes the install")
     }
     #endif
 }

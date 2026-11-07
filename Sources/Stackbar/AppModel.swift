@@ -50,6 +50,9 @@ final class AppModel {
     @ObservationIgnored let handover = PluginHandover(file: StackbarPaths.dataDirectory.appendingPathComponent("handovers.json"))
     @ObservationIgnored let installer = PluginInstaller(pluginsDirectory: StackbarPaths.pluginsDirectory, publishers: PublisherStore(file: StackbarPaths.publishersFile), recordFile: StackbarPaths.dataDirectory.appendingPathComponent("installed.json"))
     @ObservationIgnored let builder = PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache)
+    /// Installing, updating and removing plugins, the same way from the
+    /// Store, Settings and the update check.
+    @ObservationIgnored private(set) var installation: PluginInstallation!
     @ObservationIgnored let widgets = WidgetSnapshotStore.shared()
     /// Presses on widget buttons, left by the widget extension.
     @ObservationIgnored private let widgetActions = WidgetActionInbox.shared()
@@ -100,6 +103,9 @@ final class AppModel {
             approvedCommands: { ledger.approvedCommandPaths(for: $0) }
         )
         secretRouter.model = self
+        installation = PluginInstallation(installer: installer, ledger: ledger, switches: switches, storage: services.storage, secrets: services.secrets,
+                                          helpers: .init(directory: builder.downloadedHelpers, stackbarKit: builder.stackbarKit),
+                                          trash: { try? FileManager.default.trashItem(at: $0, resultingItemURL: nil) })
         commands = CommandCenter(model: self, services: services)
         // A key layer's assign chord (Right ⌘ ⌥ + a letter) runs the
         // plugin's assign command, as a hotkey would.
@@ -156,9 +162,9 @@ final class AppModel {
         await refreshHelpers(installed: installed, catalogs: catalogs)
         let review = PluginStore.review(catalogs, installed: installed)
         for withdrawn in review.withdrawn {
-            if let controller = controller(for: withdrawn.installed.id) { await remove(controller) }
-            try? FileManager.default.trashItem(at: URL(fileURLWithPath: withdrawn.installed.file), resultingItemURL: nil)
-            try? installer.forget(withdrawn.installed.id)
+            let running = controllers.filter { $0.pluginID == withdrawn.installed.id }
+            for controller in running { await remove(controller) }
+            await installation.withdraw(withdrawn.installed, loaded: running.map(\.source))
             Platform.notify(HostNotification(pluginID: withdrawn.installed.id, pluginName: "Stackbar", title: "Removed a withdrawn plugin", body: "\(withdrawn.installed.id) \(withdrawn.installed.version) was withdrawn by its publisher and is in the Trash: \(withdrawn.reason)"))
         }
         guard autoUpdatePlugins else {
@@ -178,8 +184,7 @@ final class AppModel {
         let bundle = try await PluginIndex.bundle(for: update.entry, indexURL: update.indexURL)
         guard bundle.manifest.id == update.entry.id else { throw PluginBundle.BundleError.manifestMismatch }
         let helper = try await prebuiltHelper(for: bundle, indexURL: update.indexURL)
-        let file = try installer.install(bundle)
-        save(helper)
+        let file = try installation.install(bundle, helper: helper)
         if let controller = controller(for: update.entry.id) { controller.reload() } else { add(file) }
         pendingUpdates.removeAll { $0.entry.id == update.entry.id }
         refreshInstalled()
@@ -194,12 +199,6 @@ final class AppModel {
         let builder = builder
         let toolchain = await Task.detached { PluginBuilder.hasToolchain }.value
         return try await PrebuiltHelpers.prepare(bundle, indexURL: indexURL, builder: builder, toolchain: toolchain)
-    }
-
-    /// Saves a helper once its source is installed.
-    func save(_ helper: PrebuiltHelpers.Download?) {
-        guard let helper else { return }
-        try? PrebuiltHelpers.save(helper, in: builder.downloadedHelpers, stackbarKit: builder.stackbarKit)
     }
 
     /// Fetches helpers that installed store plugins are missing (after a
@@ -247,36 +246,31 @@ final class AppModel {
         onPluginsChanged?()
     }
 
-    /// Moves a plugin's file to the Trash and forgets it: its approvals, and
-    /// the store's record of installing it (so the store offers it again and
-    /// the update check doesn't bring it back). Every copy loaded under the
-    /// same id goes, so nothing of it is left running.
-    ///
-    /// Its saved data stays unless `deleteData`, so installing it again picks
-    /// up where it left off. Deleting erases its storage and its sign-ins;
-    /// named secrets are shared between plugins and stay either way.
+    /// Removes a plugin (see `PluginInstallation.uninstall`): every copy
+    /// loaded under the same id stops first, so nothing of it is left
+    /// running. Its saved data stays unless `deleteData`, so installing it
+    /// again picks up where it left off.
     func uninstall(_ controller: PluginController, deleteData: Bool = false) async {
         let id = controller.pluginID
         let providers = controller.manifest?.capabilities.compactMap { capability -> OAuthProvider? in
             if case .oauth(let provider) = capability { return provider }
             return nil
         } ?? []
-        var files = [controller.source.standardizedFileURL]
-        files += installer.installed.filter { $0.id == id }.map { URL(fileURLWithPath: $0.file).standardizedFileURL }
+        let files = installation.files(of: id, loaded: [controller.source])
         let doomed = controllers.filter { $0 === controller || $0.pluginID == id || files.contains($0.source.standardizedFileURL) }
         for other in doomed { await remove(other) }
-        for file in Set(files) where FileManager.default.fileExists(atPath: file.path) {
-            try? FileManager.default.trashItem(at: file, resultingItemURL: nil)
-        }
-        try? installer.forget(id)
-        try? ledger.revoke(id)
-        switches.set(id, on: true)
-        for file in Set(files) { switches.forget(file: file) }
-        if deleteData {
-            await services.storage.erase(id)
-            OAuthBroker.forgetTokens(of: id, providers: providers, in: services.secrets)
-        }
+        await installation.uninstall(id, loaded: doomed.map(\.source), deleteData: deleteData, providers: providers)
         refreshInstalled()
+    }
+
+    /// Removes an installed plugin by id, whether or not it is loaded.
+    func uninstall(pluginID: String, deleteData: Bool = false) async {
+        if let controller = controller(for: pluginID) {
+            await uninstall(controller, deleteData: deleteData)
+        } else {
+            await installation.uninstall(pluginID, deleteData: deleteData)
+            refreshInstalled()
+        }
     }
 
     /// Plugins installed from a store or a bundle, for the store pane.

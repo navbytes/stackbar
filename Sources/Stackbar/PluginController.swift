@@ -146,6 +146,9 @@ final class PluginController: Identifiable {
             let loaded = try await Task.detached { try loader.load(source) }.value
             guard generation == loadGeneration else { return }
             let manifest = loaded.manifest
+            // Just installed from the Store: what was built must be what
+            // was signed, or the install is undone.
+            try model.installation.confirm(manifest, file: source)
             if let clash = model.controllers.first(where: { $0 !== self && $0.pluginID == manifest.id }) {
                 throw LoadError.duplicateID(manifest.id, clash.source.lastPathComponent)
             }
