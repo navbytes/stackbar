@@ -60,9 +60,13 @@ final class StdioTransport: Sendable {
         let mailbox = Mailbox()
         // Raw reads, not `readLine`: a thread parked in C stdio's stdin
         // would hold a lock that the `fflush(nil)` in `send` also takes.
+        let send = self.send
         let reader = Thread {
             let input = FileHandle.standardInput
-            var buffer = LineBuffer()
+            // Room for `hello` with the largest storage grant: the host is
+            // trusted, and a hello dropped for its size left the plugin
+            // starting for good.
+            var buffer = LineBuffer(maxLineBytes: Self.maxIncomingLineBytes)
             while true {
                 // Each read gets its own autorelease pool: on macOS
                 // `availableData` and the decoding behind it hand back
@@ -72,7 +76,11 @@ final class StdioTransport: Sendable {
                 let more = withAutoreleasePool {
                     let chunk = input.availableData
                     if chunk.isEmpty { return false }
+                    let dropped = buffer.droppedLines
                     Self.dispatch(buffer.append(chunk), to: mailbox)
+                    if buffer.droppedLines > dropped {
+                        send(.log(level: .error, message: "a message from Stackbar over \(Self.maxIncomingLineBytes / 1024 / 1024) MB was dropped"))
+                    }
                     return true
                 }
                 if !more { break }
@@ -87,6 +95,9 @@ final class StdioTransport: Sendable {
         reader.start()
         return mailbox
     }
+
+    /// Twice the largest storage quota (JSON escaping), plus room for the rest.
+    static let maxIncomingLineBytes = 2 * Manifest.maxStorageMegabytes * 1024 * 1024 + LineBuffer.defaultMaxLineBytes
 
     private static func dispatch(_ lines: [Data], to mailbox: Mailbox) {
         for line in lines {

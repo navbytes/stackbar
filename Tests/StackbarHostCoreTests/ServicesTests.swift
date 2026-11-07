@@ -562,3 +562,34 @@ final class StorageRecoveryTests: XCTestCase {
         XCTAssertEqual(values, [:])
     }
 }
+
+final class PluginProcessPipeTests: XCTestCase {
+    func testExitIsReportedWhileSomethingStillHoldsThePipes() async throws {
+        guard FileManager.default.isExecutableFile(atPath: "/usr/bin/setsid") else { throw XCTSkip("needs setsid") }
+        // The grandchild leaves the helper's process group and keeps stdout.
+        let process = PluginProcess(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "/usr/bin/setsid sleep 20 & sleep 0.3; exit 3"])
+        let exited = Locked<Int32?>(nil)
+        try process.start { event in
+            if case .exit(let status) = event { exited.mutate { $0 = status } }
+        }
+        for _ in 0..<100 where exited.value == nil { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(exited.value, 3)
+        _ = try? Process.run(URL(fileURLWithPath: "/usr/bin/pkill"), arguments: ["-f", "^sleep 20$"])
+    }
+
+    func testStderrFloodIsCutAtTheDrain() async throws {
+        let process = PluginProcess(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "i=0; while [ $i -lt 1000 ]; do echo line $i >&2; i=$((i+1)); done"])
+        let lines = Locked(0)
+        let exited = Locked(false)
+        try process.start { event in
+            switch event {
+            case .stderr: lines.mutate { $0 += 1 }
+            case .exit: exited.mutate { $0 = true }
+            default: break
+            }
+        }
+        for _ in 0..<200 where !exited.value { try await Task.sleep(for: .milliseconds(25)) }
+        XCTAssertTrue(exited.value)
+        XCTAssertEqual(lines.value, LogBudget.limit)
+    }
+}

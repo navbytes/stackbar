@@ -9,6 +9,8 @@ public actor PluginSession {
     private let loader: PluginLoader
     private let services: HostServices?
     private var supervisor: PluginSupervisor?
+    /// Applies the supervisor's updates one at a time, in the order they came.
+    private var updates: Task<Void, Never>?
     private var binary: URL?
     private var expected = 0
     private var logLines: [String] = []
@@ -41,8 +43,11 @@ public actor PluginSession {
         // Loading the built helper rather than the source skips a second
         // build and still reads, checks and signs it like any other load.
         let loaded = try await loader.loadInBackground(built)
-        let next = PluginSupervisor(executable: loaded.binary, manifest: loaded.manifest, policy: BackoffPolicy(initialDelay: 0.2, multiplier: 2, maxDelay: 2, maxConsecutiveFailures: 2), services: services) { [weak self] update in
-            Task { await self?.record(update) }
+        // The old consumer ends on its own once the old supervisor is gone.
+        let (stream, continuation) = AsyncStream.makeStream(of: PluginSupervisor.Update.self)
+        let next = PluginSupervisor(executable: loaded.binary, manifest: loaded.manifest, policy: BackoffPolicy(initialDelay: 0.2, multiplier: 2, maxDelay: 2, maxConsecutiveFailures: 2), services: services) { continuation.yield($0) }
+        updates = Task { [weak self] in
+            for await update in stream { await self?.record(update) }
         }
         supervisor = next
         binary = built

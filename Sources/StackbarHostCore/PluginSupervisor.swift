@@ -253,6 +253,11 @@ public actor PluginSupervisor {
         setState(.starting)
         let storage = await services?.storage.snapshot(for: manifest.id) ?? [:]
         guard current == generation, !stopping else { return }
+        let storedBytes = storage.reduce(0) { $0 + $1.key.utf8.count + $1.value.utf8.count }
+        if storedBytes > LineBuffer.defaultMaxLineBytes * 3 / 4 {
+            // Older StackbarKit drops a line over 8 MB, and hello carries every saved value.
+            onUpdate(.log(.warning, "saved values are \(storedBytes / 1024 / 1024) MB; a plugin built with an older StackbarKit can't read a start message that large and won't start until it is rebuilt"))
+        }
         let helper = PluginProcess(executable: executable, environment: environment)
         let (events, continuation) = AsyncStream.makeStream(of: PluginProcess.Event.self)
         do {
