@@ -362,6 +362,28 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.menuItems()` returns `MenuSnapshot` (appID, appName, items: `[MenuItemInfo]` with path like `["File", "Export…"]`, shortcut like `⇧⌘S`, isEnabled, isChecked) for the app the user was in, the Apple menu left out, at most 3000 items; `try await Stackbar.pressMenuItem(appID: menus.appID, path: item.path)` brings that app forward and chooses the item; 0.25.0, needs Accessibility for Stackbar | `.menus` |
 | `try await Stackbar.pickColor()` shows the system magnifier and returns `PickedColor?` (red, green, blue, alpha from 0 to 1; `.hex` like `#0A60C8`, `.rgb`, `.hsl`; `PickedColor(hex:)`), nil on Escape; `try await Stackbar.define("serendipity")` returns `Definition?` (word, text) from the Mac's own Dictionary, offline; 0.26.0 | none |
 
+### Rate limits
+
+Each plugin gets its own limits, counted over the last minute. Calls on one
+line share that line's limit. Past it, the call throws a message like "too
+many app switches; at most 120 a minute".
+
+| Calls | At most, per plugin |
+| --- | --- |
+| `getJSON`, `postJSON`, `get`, `http` | 300 a minute |
+| `notify` | 10 a minute |
+| `alert` | one a minute |
+| `play` | 10 a minute |
+| `hud` | 30 a minute |
+| `system` | 10 a minute |
+| `chooseFile`, `saveFile`, `pickColor` | 10 a minute |
+| `activateApp`, `hideApp`, `focusWindow`, `pressMenuItem` | 120 a minute |
+| `saveCalendarEvent` | 30 a minute |
+| `openInTerminal` | 5 a minute |
+| `recognizeText`, `captureScreenText` | 30 a minute |
+| `arrangeWindows` | 10 a minute |
+| every host call together | 1200 a minute |
+
 `auth:` reads a declared secret and adds the header: `.bearer(secret: "GITHUB_TOKEN")`
 sends `Authorization: Bearer …`, `.header("Authorization", secret: "LINEAR_API_KEY")`
 the bare key, and `prefix: "DeepL-Auth-Key"` puts a word before it. While the
