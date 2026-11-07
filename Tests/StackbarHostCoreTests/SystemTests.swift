@@ -40,7 +40,7 @@ final class SystemServicesTests: XCTestCase {
     func testImageStoreDedupesAndPrunes() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let store = ClipboardImageStore(directory: directory, limit: 2)
+        let store = ClipboardImageStore(directory: directory, limit: 2, pruneEvery: 1)
         let first = try store.save(Data("one".utf8))
         XCTAssertEqual(try store.save(Data("one".utf8)), first)
         _ = try store.save(Data("two".utf8))
@@ -48,6 +48,41 @@ final class SystemServicesTests: XCTestCase {
         let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
         XCTAssertEqual(files.count, 2)
         XCTAssertNil(store.data(for: "../secrets"), "ids are hex only")
+    }
+
+    func testCalendarEventIDsKeepAnAtSignInTheIdentifier() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let id = CalendarEventID.make(identifier: "040000008200E0@example.com", start: start)
+        XCTAssertEqual(id, "040000008200E0@example.com@1700000000")
+        let split = CalendarEventID.split(id)
+        XCTAssertEqual(split.identifier, "040000008200E0@example.com", "the start is after the last @")
+        XCTAssertEqual(split.start, 1_700_000_000)
+        XCTAssertEqual(CalendarEventID.split("ABC-123").identifier, "ABC-123")
+        XCTAssertNil(CalendarEventID.split("ABC-123").start)
+        XCTAssertEqual(CalendarEventID.split("someone@example.com").identifier, "someone@example.com", "no start: the whole id")
+    }
+
+    func testImageStorePrunesOnTheFirstSaveThenEveryFewSaves() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Left over from an earlier launch, older than anything saved now.
+        for index in 0..<3 {
+            let file = directory.appendingPathComponent("old\(index).bin")
+            try Data("old \(index)".utf8).write(to: file)
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)], ofItemAtPath: file.path)
+        }
+        let store = ClipboardImageStore(directory: directory, limit: 2, pruneEvery: 3)
+        func count() throws -> Int { try FileManager.default.contentsOfDirectory(atPath: directory.path).count }
+
+        let first = try store.save(Data("one".utf8))
+        XCTAssertEqual(try count(), 2, "the first save prunes what an earlier launch left")
+        XCTAssertNotNil(store.data(for: first), "the newest is kept")
+        _ = try store.save(Data("two".utf8))
+        _ = try store.save(Data("three".utf8))
+        XCTAssertEqual(try count(), 4, "the saves in between don't list the folder")
+        _ = try store.save(Data("four".utf8))
+        XCTAssertEqual(try count(), 2, "every third save prunes again")
     }
 
     /// The SystemFixture plugin, started and settled.
