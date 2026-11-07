@@ -92,6 +92,8 @@ final class PaletteSession {
 
     init(model: AppModel) {
         self.model = model
+        rootSearch = RootSearchSession(budget: model.commands.rootBudget)
+        rootSearch.onChange = { [weak self] in self?.rootViewsRevision += 1 }
     }
 
     var top: Stage? { stack.last }
@@ -208,89 +210,36 @@ final class PaletteSession {
 
     // MARK: - Plugins in the root
 
-    /// Views of `.rootSearch()` commands, open while the user types at the
-    /// root and fed the same text. Their top rows are a section each.
-    @ObservationIgnored private var rootViews: [CommandKey: CommandViewModel] = [:]
-    @ObservationIgnored private var rootOpening: Set<CommandKey> = []
-    /// When each root view was last given new text and hasn't answered yet,
-    /// for the time budget.
-    @ObservationIgnored private var rootFedAt: [CommandKey: Date] = [:]
-    /// Bumped when a root view opens, so the list reads it.
+    /// The views of `.rootSearch()` commands, open while the user types at
+    /// the root and fed the same text. Their top rows are a section each.
+    @ObservationIgnored private let rootSearch: RootSearchSession<CommandViewModel>
+    /// Bumped when a root view opens or closes, so the list reads it.
     private(set) var rootViewsRevision = 0
-
-    private var rootText: String? {
-        let text = query.trimmingCharacters(in: .whitespaces)
-        return stack.isEmpty && text.count >= 2 ? text : nil
-    }
 
     /// Opens or updates the root views. Only running plugins are asked: the
     /// palette never starts one to search it.
     private func feedRootSearch() {
-        guard let text = rootText else {
-            closeRootSearch()
-            return
-        }
         let commands: CommandCenter = model.commands
-        let wanted = commands.registry.entries.filter {
-            RootSearchGate.accepts($0.spec, text: text, preference: commands.preferences[$0.key]) && !commands.rootBudget.isBenched($0.key)
-        }
-        let keys = Set(wanted.map(\.key))
-        // A view whose pattern no longer matches (or that was benched) closes,
-        // so its rows for older text don't linger.
-        for (key, view) in rootViews where !keys.contains(key) {
-            view.close()
-            rootViews[key] = nil
-            rootFedAt[key] = nil
-            rootViewsRevision += 1
-        }
-        for entry in wanted {
-            if let view = rootViews[entry.key] {
-                if view.query != text { rootFedAt[entry.key] = Date() }
-                view.query = text
-                continue
-            }
-            guard !rootOpening.contains(entry.key), model.controller(for: entry.pluginID)?.supervisor != nil else { continue }
-            rootOpening.insert(entry.key)
-            let key = entry.key
-            Task {
-                let opened = await model.commands.openView(key, query: CommandQuery(text: text), context: context, recordUse: false)
-                rootOpening.remove(key)
-                guard case .success(let view) = opened else { return }
-                // The text may have moved on while it opened: keep the view
-                // only if its pattern still matches and it isn't benched.
-                guard let now = rootText, rootViews[key] == nil,
-                      RootSearchGate.accepts(view.entry.spec, text: now, preference: commands.preferences[key]),
-                      !commands.rootBudget.isBenched(key) else {
-                    view.close()
-                    return
-                }
-                view.query = now
-                rootViews[key] = view
-                // Timed from here: waiting for the plugin to start isn't
-                // the plugin being slow, and shouldn't bench it.
-                rootFedAt[key] = Date()
-                rootViewsRevision += 1
-            }
-        }
+        let text = RootSearchSession<CommandViewModel>.searchText(query, atRoot: stack.isEmpty)
+        rootSearch.feed(text, commands: commands.registry.entries,
+                        accepts: { RootSearchGate.accepts($0.spec, text: $1, preference: commands.preferences[$0.key]) },
+                        canOpen: { [model] in model.controller(for: $0.pluginID)?.supervisor != nil },
+                        open: { [weak self] entry, text in
+                            guard let self else { return nil }
+                            let opened = await commands.openView(entry.key, query: CommandQuery(text: text), context: self.context, recordUse: false)
+                            if case .success(let view) = opened { return view }
+                            return nil
+                        })
     }
 
     private func closeRootSearch() {
-        for view in rootViews.values { view.close() }
-        rootViews = [:]
-        rootFedAt = [:]
-        if rootViewsRevision != 0 { rootViewsRevision += 1 }
+        rootSearch.closeAll()
     }
 
     /// What each root view shows now. Also times the views that answered.
     private func rootSearchRows() -> [PaletteRoot.PluginRows] {
         _ = rootViewsRevision
-        guard rootText != nil else { return [] }
-        for (key, view) in rootViews where !view.isSearching {
-            if let fed = rootFedAt.removeValue(forKey: key) {
-                model.commands.rootBudget.record(key, took: Date().timeIntervalSince(fed))
-            }
-        }
-        return rootViews.values.filter { !$0.isStopped }.map { PaletteRoot.PluginRows(command: $0.entry, rows: rows(of: $0)) }
+        return rootSearch.rows()
     }
 
     /// The `.fallback()` commands to offer for whatever was typed.
@@ -302,7 +251,7 @@ final class PaletteSession {
 
     /// The live view behind a plugin's row on the root, and the row.
     private func rootRow(_ entry: PaletteIndex.Entry) -> (view: CommandViewModel, row: PaletteRoot.PluginRow)? {
-        guard let row = root.pluginRow(entry), let view = rootViews[row.command] else { return nil }
+        guard let row = root.pluginRow(entry), let view = rootSearch.views[row.command] else { return nil }
         return (view, row)
     }
 
@@ -500,16 +449,13 @@ final class PaletteSession {
     }
 
     func rows(of view: CommandViewModel) -> [RowNode] {
-        guard let root = view.root, let items = RowFilter.items(in: root, query: view.query) else { return [] }
-        return items.compactMap { if case .row(let row) = $0 { return row } else { return nil } }
+        RootSearchSession<CommandViewModel>.rows(in: view.root, query: view.query)
     }
 
     /// Return on a plugin's row in the root. While its view is still
-    /// answering newer text, the row on screen comes from the older answer,
-    /// and the plugin drops actions of rows it no longer shows: Return then
-    /// closed the palette and nothing happened. So wait for the answer (a
-    /// second at most) and run the same row from it; if the row is gone, say
-    /// so and keep the palette open.
+    /// answering newer text, the row on screen comes from the older answer:
+    /// the session waits for the answer and runs the same row from it. If
+    /// the row is gone, say so and keep the palette open.
     private func activateRootRow(_ view: CommandViewModel, key: String, action: ActionRef) {
         guard view.isSearching else {
             perform(action, in: view)
@@ -517,19 +463,11 @@ final class PaletteSession {
         }
         let shown = shownCount
         Task { @MainActor [weak self] in
-            let deadline = Date().addingTimeInterval(1)
-            while view.isSearching, !view.isClosed, Date() < deadline {
-                try? await Task.sleep(for: .milliseconds(25))
-            }
-            guard let self, self.shownCount == shown, !view.isClosed else { return }
-            let fresh = self.rows(of: view).first { $0.key == key }
-            if let ref = fresh?.actions.first(where: { $0.title == action.title }) ?? fresh?.actions.first {
-                self.perform(ref, in: view)
-            } else if view.isSearching {
-                // Still no answer: the row as shown is the best there is.
-                self.perform(action, in: view)
-            } else {
-                self.problem = "That result went away as you typed. Press Return again."
+            guard let activation = await self?.rootSearch.activation(of: view, key: key, action: action),
+                  let self, self.shownCount == shown else { return }
+            switch activation {
+            case .perform(let ref): self.perform(ref, in: view)
+            case .gone: self.problem = "That result went away as you typed. Press Return again."
             }
         }
     }

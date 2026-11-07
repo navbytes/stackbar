@@ -352,6 +352,11 @@ final class CommandViewModel: Identifiable {
     private(set) var root: ViewNode?
     private(set) var isSearching = true
     private(set) var problem: String?
+    /// Counts the trees shown, so root search filters rows once per answer.
+    /// Observed: a list that reads only this redraws when an answer arrives.
+    private(set) var answers = 0
+    /// When the newest tree arrived, to time root search's answers.
+    @ObservationIgnored private(set) var answeredAt: Date?
 
     /// Runs when a submitted form comes back without errors.
     @ObservationIgnored var onFinished: (() -> Void)?
@@ -416,6 +421,8 @@ final class CommandViewModel: Identifiable {
         let (show, next) = state.received(seq: seq, root: root)
         if show {
             self.root = root
+            answers += 1
+            answeredAt = Date()
             problem = nil
         }
         if let next { deliver(next) }
@@ -540,4 +547,6 @@ final class HUD {
         return panel
     }
 }
+
+extension CommandViewModel: RootSearchView {}
 #endif
