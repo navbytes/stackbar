@@ -131,12 +131,19 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     /// Where the text cursor is in the focused app, in screen coordinates,
     /// through Accessibility (which pasting already needs). `nil` when
     /// there's no text field or the app doesn't say, as many web views don't.
+    ///
+    /// Read on the main thread, before Stackbar activates, so each message
+    /// waits at most `AXWorker.timeout` for an app that doesn't answer. It
+    /// asks the front app rather than the system-wide element: a timeout set
+    /// on that one would change it for every element in Stackbar.
     static func caretRect() -> NSRect? {
-        guard AXIsProcessTrusted(), let primary = NSScreen.screens.first else { return nil }
+        guard AXIsProcessTrusted(), let primary = NSScreen.screens.first,
+              let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != getpid() else { return nil }
+        let application = AXWorker.timed(AXUIElementCreateApplication(front.processIdentifier))
         var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+        guard AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
               let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
-        let element = unsafeBitCast(focused, to: AXUIElement.self)
+        let element = AXWorker.timed(unsafeBitCast(focused, to: AXUIElement.self))
         var range: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &range) == .success, let range else { return nil }
         var bounds: CFTypeRef?
@@ -184,10 +191,14 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     private func resize() {
         hosting.invalidateIntrinsicContentSize()
-        let width = max(hosting.fittingSize.width, 22)
-        statusItem.length = ceil(width)
-        statusItem.button?.setAccessibilityLabel(controller.name)
-        statusItem.button?.toolTip = controller.menuBarClick.map { "\($0.title). Right-click for \(controller.name)." }
+        let length = ceil(max(hosting.fittingSize.width, 22))
+        // Setting the length lays out the whole menu bar again, even when
+        // it is the same; a bar whose text ticks rarely changes width.
+        if statusItem.length != length { statusItem.length = length }
+        guard let button = statusItem.button else { return }
+        if button.accessibilityLabel() != controller.name { button.setAccessibilityLabel(controller.name) }
+        let tip = controller.menuBarClick.map { "\($0.title). Right-click for \(controller.name)." }
+        if button.toolTip != tip { button.toolTip = tip }
     }
 
     /// A plugin that pastes (it has the clipboard capability) opens at the

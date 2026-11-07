@@ -84,9 +84,10 @@ extension MacSystem {
         }
         guard !volumes.isEmpty else { throw SystemServiceError("there are no disks to eject") }
         var failed: [String] = []
+        // Unmounting can take seconds per disk: off the main thread.
         for volume in volumes {
             do {
-                try await MainActor.run { try NSWorkspace.shared.unmountAndEjectDevice(at: volume) }
+                try await FileManager.default.unmountVolume(at: volume, options: [.allPartitionsAndEjectDisk])
             } catch {
                 failed.append(volume.lastPathComponent)
             }
