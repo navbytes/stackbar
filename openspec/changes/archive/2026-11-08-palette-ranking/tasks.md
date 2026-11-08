@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Host
 - [x] 1.1 `TextMatch.match` with tiers and quality; tests
 - [x] 1.2 `PalettePicks`: per-query decayed picks, prefix lookup at half weight, cap, reset, clear; tests

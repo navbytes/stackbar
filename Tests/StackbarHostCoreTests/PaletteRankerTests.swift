@@ -2,7 +2,7 @@ import XCTest
 @testable import StackbarHostCore
 import StackbarProtocol
 
-/// The palette's one ranker (openspec/changes/palette-ranking): tiers, learned
+/// The palette's one ranker (openspec/changes/archive/2026-11-08-palette-ranking): tiers, learned
 /// picks, Top Hit, and the cases earlier fixes pinned (#114, #116, #118).
 final class PaletteRankerTests: XCTestCase {
     // MARK: Matcher

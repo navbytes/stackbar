@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Protocol and host (navbytes/stackbar)
 - [x] 1.1 `confirm` on `ActionRef` and `ViewNode.button`, `ViewNode.confirmations`, protocol 25, decoding tests for old payloads
 - [x] 1.2 `ActionConfirmer` with injected clock and tests (arm, send, expire, vanish, text change, one arm per surface)

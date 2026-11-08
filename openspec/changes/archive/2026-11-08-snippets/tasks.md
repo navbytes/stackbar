@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Host
 - [x] 1.1 `PasteOptions` (restore, cursor from end); transient marking; restore guarded by change count
 - [x] 1.2 `Capability.storage(megabytes:)`; quota from the grant; install sheet wording

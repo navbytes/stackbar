@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Release and updates
 - [x] 1.1 `scripts/release.sh`: Xcode build with the widget, embed, prebuild helpers, sign inside out, notarize, staple
 - [x] 1.2 Release workflow uses it; `dry_run` input; pre-release off by default
