@@ -278,10 +278,15 @@ final class PluginController: Identifiable {
         }
     }
 
+    /// A click, toggle or field from a surface (`SendAction`).
+    func send(_ action: ActionID, _ value: EventValue?) {
+        press(action, value)
+    }
+
     /// Sends a press to the plugin; false when it was held for a second
     /// press instead (the palette stays open for it).
     @discardableResult
-    func send(_ action: ActionID, _ value: EventValue?) -> Bool {
+    func press(_ action: ActionID, _ value: EventValue?) -> Bool {
         // A row action that opens one of the plugin's commands is the host's
         // to perform; the plugin never hears about it.
         for root in [panelTree, windowTree, settingsTree].compactMap({ $0 }) {

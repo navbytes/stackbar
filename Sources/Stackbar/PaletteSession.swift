@@ -360,7 +360,7 @@ final class PaletteSession {
         switch entry.kind {
         case .action(let action, let value):
             // Held for a second press: stay open so Return again sends it.
-            guard model.controller(for: entry.pluginID)?.send(action, value) != false else { return }
+            guard model.controller(for: entry.pluginID)?.press(action, value) != false else { return }
             finish()
         case .open(let url):
             guard let url = URL(string: url) else { return }
