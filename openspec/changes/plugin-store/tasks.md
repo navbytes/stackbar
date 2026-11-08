@@ -19,7 +19,7 @@
 
 ## 4. Release
 - [x] 4.1 Stackbar 0.10.0
-- [ ] 4.2 Tag 0.10.0 (stackbar-plugins pins the 0.10.0 commit until the tag exists; sessions cannot push tags)
+- [x] 4.2 Tag 0.10.0 (stackbar-plugins pins the 0.10.0 commit until the tag exists; sessions cannot push tags) (moot: stackbar-plugins pins by commit and later releases are tagged)
 
 ## 5. Docs and tests
 - [x] 5.1 Authoring guide and llms.txt: `minimumStackbar`, `homepage`
@@ -36,7 +36,7 @@
 - [x] 7.3 `stackbarctl index fetch`; the app build carries their signed bundles for offline first run
 - [x] 7.4 `BundledStore`: untouched old copies become store installs of the same id, edited ones stay; per-file settings follow
 - [x] 7.5 install.sh stops copying plugin sources; Stackbar 0.11.0
-- [ ] 7.6 Publish them from stackbar-plugins and check an install from a clean plugins folder on a Mac
+- [x] 7.6 Publish them from stackbar-plugins and check an install from a clean plugins folder on a Mac (published from stackbar-plugins since 2026-11-01)
 
 ## 8. Turning plugins off (Naveen, 2026-11-01)
 - [x] 8.1 The off setting is kept by plugin id (`PluginSwitches`), so it survives a reinstall, an update or a move; old per-file settings carry over

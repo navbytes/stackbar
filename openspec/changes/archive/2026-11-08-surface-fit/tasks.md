@@ -22,4 +22,4 @@
 
 ## 3. Release and check
 - [x] 3.1 Release 0.21.0
-- [ ] 3.2 Mac checks from design.md (Naveen's Mac)
+- [x] 3.2 Mac checks from design.md (Naveen's Mac) (Naveen confirmed on his Mac after 0.21.0)

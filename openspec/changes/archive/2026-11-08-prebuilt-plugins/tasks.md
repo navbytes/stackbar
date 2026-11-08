@@ -24,4 +24,4 @@
 - [x] 5.3 Each Stackbar release starts the Helpers workflow (`PLUGINS_DISPATCH_TOKEN`), since its hourly schedule is unreliable
 
 ## 6. On a Mac
-- [ ] 6.1 A Mac without the Command Line Tools installs and runs a store plugin
+- [x] 6.1 A Mac without the Command Line Tools installs and runs a store plugin (verified with 0.20.0 on the no-toolchain macOS runner (No toolchain workflow, #97))
