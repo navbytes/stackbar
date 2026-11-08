@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Protocol 7
 - [x] 1.1 `CommandSpec`, `ArgumentSpec`, `CommandResult`, `CommandTarget`, `InvocationContext` (empty for now)
 - [x] 1.2 Messages: `commands`, `runCommand`/`commandResult`, `openView`/`updateView`/`view`/`closeView`

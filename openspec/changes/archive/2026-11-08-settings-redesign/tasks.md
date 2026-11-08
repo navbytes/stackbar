@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Core
 - [x] 1.1 `SettingsPresentation`: permission rows, status, access overview, secrets
 - [x] 1.2 Tests on Linux

@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Host (stackbar)
 - [x] 1.1 Protocol 24: `HostCall.chooseFolder(prompt:)`, `ChosenFolder`, `HostCall.grantedFolders`, `Capability.sshAgent`
 - [x] 1.2 Folder grants in the plugin ledger; refused picks (`/`, `~`, `~/Library`, system folders); `CommandRunGate` allows granted folders as working directories

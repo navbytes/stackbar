@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Run
 - [x] 1.1 `RunRequest`, `RunResult`, `HostCall.run`/`cancelRun`, `HostMessage.runOutput`/`runExit`
 - [x] 1.2 Command resolution on the fixed search path; ledger stores resolved paths; "moved, approve again"

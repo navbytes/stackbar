@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Protocol and kit
 - [x] 1.1 `Surface.settings`, protocol version 4
 - [x] 1.2 `FluidPlugin.settings` (default empty) and the runtime renders it

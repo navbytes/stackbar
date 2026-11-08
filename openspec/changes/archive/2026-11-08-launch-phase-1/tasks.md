@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Host (stackbar)
 - [x] 1.1 `PaletteHotKey`: stored spec, default ⌃⌥Space, re-register on change
 - [x] 1.2 `SpotlightShortcut`: read whether Spotlight's ⌘Space is on; helper to open its settings

@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 - [x] Protocol 21: `NotificationAction` command buttons, `CalendarEventDraft`, `CalendarInfo`, `RecognizedText`, `SensorReading`, six calls, four capabilities
 - [x] HostServices routing, checks and rate limits; SimulatedSystem; StackbarKit API
 - [x] Mac: notification command buttons, EventKit saves, terminal, Vision, screen capture, sensors

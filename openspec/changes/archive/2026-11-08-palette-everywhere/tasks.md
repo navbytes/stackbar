@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Host
 - [x] 1.1 File search section (stackbar #93)
 - [x] 1.2 `CommandSpec.rootSearch` / `.fallback`, hand-written decoder, protocol 16; StackbarKit modifiers

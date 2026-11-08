@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Protocol and index
 - [x] 1.1 `Manifest.minimumStackbar` and `homepage`, optional and checked in `problems`
 - [x] 1.2 `VersionNumber`

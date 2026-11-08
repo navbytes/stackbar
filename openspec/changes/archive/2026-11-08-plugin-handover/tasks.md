@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Host (navbytes/stackbar)
 - [x] 1.1 `Manifest.replaces` with checks; `PluginIndex.Entry.replaces`
 - [x] 1.2 `CommandPreferences`, `PaletteUsage`, `PaletteFavorites` move by plugin id

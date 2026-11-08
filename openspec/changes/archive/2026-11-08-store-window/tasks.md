@@ -1,5 +1,7 @@
 # Tasks
 
+> Archived 2026-11-08. The unticked Mac checks below are tracked in `openspec/mac-checks.md`.
+
 ## 1. Core
 - [x] 1.1 `StoreListing.featured` with tests
 - [x] 1.2 `SettingsPresentation.Access(summary:)` with tests
