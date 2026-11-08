@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.32.0
 
 ### Fixed
 - **Safari shows up in Applications search.** Safari and a few other Apple apps live in a part of the system the app scan didn't look in; /Applications only holds a link to them. Any browser macOS knows about is now listed too.
