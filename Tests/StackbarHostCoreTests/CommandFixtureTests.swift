@@ -53,6 +53,28 @@ final class CommandFixtureTests: XCTestCase {
         XCTAssertEqual(result, .message("Imported links.json"), "the chosen file reaches the plugin")
     }
 
+    func testAHeadlessPressOfAnActionThatAsksIsHeldUntilTheSecond() async throws {
+        let session = try await session()
+        defer { Task { await session.stop() } }
+        try await importLinks(#"[{"name": "Docs", "url": "https://example.com"}]"#) {
+            try await session.runCommand("import")
+        }
+        let arm = try await session.event("button/forget")
+        XCTAssertEqual(arm?.prompt, "Press again within 10 s to forget 1 links")
+        var shown = await session.view(.panel)?.plainText ?? ""
+        XCTAssertTrue(shown.hasPrefix("1 links"), "nothing sent")
+        let second = try await session.event("button/forget")
+        XCTAssertNil(second)
+        shown = await session.view(.panel)?.plainText ?? ""
+        XCTAssertTrue(shown.hasPrefix("0 links"))
+        try await importLinks(#"[{"name": "Docs", "url": "https://example.com"}]"#) {
+            try await session.runCommand("import")
+        }
+        try await session.event("button/forget", confirmed: true)
+        shown = await session.view(.panel)?.plainText ?? ""
+        XCTAssertTrue(shown.hasPrefix("0 links"), "confirmed sends at once")
+    }
+
     func testCommandResultsOpenWithTheChosenAppAndPasteWithTheClipboardBack() async throws {
         let services = services
         let registry = CommandRegistry(file: nil)

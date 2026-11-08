@@ -139,6 +139,8 @@ final class PaletteSession {
             actionQuery = ""
             return true
         }
+        // Esc while an action asks for its second press forgets it.
+        if case .view(let view)? = top, view.cancelConfirmation() { return true }
         // Esc while a command is still opening cancels it.
         if opening {
             openToken += 1
@@ -357,7 +359,8 @@ final class PaletteSession {
         }
         switch entry.kind {
         case .action(let action, let value):
-            model.controller(for: entry.pluginID)?.send(action, value)
+            // Held for a second press: stay open so Return again sends it.
+            guard model.controller(for: entry.pluginID)?.press(action, value) != false else { return }
             finish()
         case .open(let url):
             guard let url = URL(string: url) else { return }
@@ -565,7 +568,7 @@ final class PaletteSession {
             problem = view.problem ?? "\(view.entry.pluginName) isn't running"
             return
         }
-        view.perform(action.id)
+        guard view.perform(action.id) else { return }
         finish()
     }
 

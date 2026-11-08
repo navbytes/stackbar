@@ -115,7 +115,7 @@ public struct NodeView: View {
             RowView(row: row, send: send)
         case .badge(let text, let role):
             BadgeView(text: text, role: role)
-        case .button(let title, let symbol, _, let action) where readOnly && widgetButton != nil:
+        case .button(let title, let symbol, _, let action, _) where readOnly && widgetButton != nil:
             widgetButton?.make(action, nil, false, AnyView(Group {
                 if let symbol { Label(title, systemImage: symbol) } else { Text(title) }
             }))
@@ -123,7 +123,7 @@ public struct NodeView: View {
             widgetButton?.make(action, .bool(!isOn), true, AnyView(
                 Toggle(title, isOn: .constant(isOn)).allowsHitTesting(false)
             ))
-        case .button(let title, let symbol, let role, let action):
+        case .button(let title, let symbol, let role, let action, _):
             Button(role: role == .critical ? .destructive : nil) {
                 send(action, nil)
             } label: {
@@ -236,9 +236,9 @@ public struct NodeView: View {
                 .foregroundStyle(tint(.primary))
         case .spacer(let minLength):
             Spacer(minLength: minLength.map { CGFloat($0) })
-        case .tappable(let content, let action) where readOnly && widgetButton != nil:
+        case .tappable(let content, let action, _) where readOnly && widgetButton != nil:
             widgetButton?.make(action, nil, true, AnyView(NodeView(node: content, send: send).contentShape(Rectangle())))
-        case .tappable(let content, let action):
+        case .tappable(let content, let action, _):
             Button { send(action, nil) } label: {
                 NodeView(node: content, send: send).contentShape(Rectangle())
             }

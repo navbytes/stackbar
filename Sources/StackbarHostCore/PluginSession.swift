@@ -165,9 +165,16 @@ public actor PluginSession {
     }
 
     /// Sends an event and waits until the plugin has handled it.
-    public func event(_ action: ActionID, value: EventValue? = nil) async throws {
+    ///
+    /// An action that carries `confirm` is held on its first press, as the
+    /// app does: the arm comes back and nothing is sent. The same event
+    /// again within `ActionConfirmer.window` sends it; `confirmed` sends it
+    /// at once, for tests and scripts that mean it.
+    @discardableResult
+    public func event(_ action: ActionID, value: EventValue? = nil, confirmed: Bool = false) async throws -> ActionConfirmer.Arm? {
         guard let supervisor else { throw SessionError.notRunning }
-        let actions = await supervisor.views.values.flatMap(\.actions) + commandViews.values.flatMap { $0.root?.actions ?? [] }
+        let views = await supervisor.views
+        let actions = Surface.allCases.compactMap { views[$0] }.flatMap(\.actions) + commandViews.values.flatMap { $0.root?.actions ?? [] }
         guard actions.contains(action) else {
             throw SessionError.unknownAction(action, available: actions)
         }
@@ -175,16 +182,31 @@ public actor PluginSession {
         // palette: a stopped view takes none, and a submitted form is
         // watched for whether it finished.
         if let session = commandViews.first(where: { $0.value.root?.actions.contains(action) == true })?.key {
+            if confirmed {
+                commandViews[session]?.cancelConfirmation()
+            } else if case .armed(let arm) = commandViews[session]?.confirm(action) {
+                return arm
+            }
             finishedForms.remove(session)
             let sends = commandViews[session]?.perform(action, value) ?? []
             guard !sends.isEmpty else { throw SessionError.viewCannotAct(commandViews[session]?.problem) }
             await deliver(sends, session: session)
         } else {
+            let surface = Surface.allCases.first { views[$0]?.actions.contains(action) == true }
+            if confirmed {
+                confirmer.cancel()
+            } else if case .armed(let arm) = confirmer.press(action, surface: surface, in: surface.flatMap { views[$0] }) {
+                return arm
+            }
             await supervisor.event(action, value: value)
             expected += 1
         }
         try await settle()
+        return nil
     }
+
+    /// The panel's, window's and settings' "press again", as the app keeps it.
+    private var confirmer = ActionConfirmer()
 
     public func refresh() async throws {
         guard let supervisor else { throw SessionError.notRunning }
@@ -233,7 +255,10 @@ public actor PluginSession {
             if result.finished { finishedForms.insert(session) }
             if !result.sends.isEmpty { Task { await self.deliver(result.sends, session: session) } }
             return
-        case .render, .tools, .menuBarClick, .commands: return
+        case .render(let surface, let root):
+            confirmer.rendered(root, surface: surface)
+            return
+        case .tools, .menuBarClick, .commands: return
         }
         if logLines.count > maxLogLines { logLines.removeFirst(logLines.count - maxLogLines) }
     }

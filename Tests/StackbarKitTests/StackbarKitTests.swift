@@ -295,3 +295,82 @@ final class MailboxTests: XCTestCase {
         XCTAssertNil(end)
     }
 }
+
+@MainActor
+final class Pruner: StackbarPlugin {
+    static let manifest = Manifest(id: "test.pruner", name: "Pruner", surfaces: [.panel])
+    var pruned = 0
+    var stopped: [String] = []
+
+    var panel: ViewContent {
+        Button("Prune", role: .critical, confirm: "remove \(3 - pruned) containers") { self.pruned += 1 }
+        Row("web", key: "web")
+            .action("Open") {}
+            .action("Stop", role: .critical, confirm: "stop web") { self.stopped.append("web") }
+        ActionButton("Reset", key: "reset", confirm: .none) {}
+    }
+}
+
+/// Protocol 25: `confirm:` on actions, and the kit asking on older hosts.
+@MainActor
+final class ConfirmKitTests: XCTestCase {
+    override func setUp() async throws {
+        KitConfirmer.shared.reset()
+        Stackbar.hostProtocol = nil
+    }
+
+    func testConfirmGoesOnTheWire() async {
+        let nodes = Pruner().panel.resolve(in: RenderContext())
+        XCTAssertEqual(nodes[0], .button(title: "Prune", role: .critical, action: "button/Prune", confirm: "remove 3 containers"))
+        guard case .row(let row) = nodes[1] else { return XCTFail("a row") }
+        XCTAssertEqual(row.actions.map(\.confirm), [nil, "stop web"])
+        guard case .tappable(_, _, let confirm) = nodes[2] else { return XCTFail("a tappable") }
+        XCTAssertNil(confirm, "`.none` says no on purpose")
+        XCTAssertEqual(Confirm("  "), .none)
+        XCTAssertEqual(Confirm(String(repeating: "x", count: 200)).text?.count, Confirm.maxLength)
+    }
+
+    func testANewHostAsksSoTheKitSendsEveryPressThrough() async {
+        let plugin = Pruner()
+        let runtime = PluginRuntime(plugin: plugin, send: Outbox().send)
+        await runtime.handle(.hello(protocolVersion: StackbarProtocolVersion.current, surfaces: [.panel]))
+        await runtime.handle(.event(action: "button/Prune", value: nil))
+        XCTAssertEqual(plugin.pruned, 1, "the host already held the first press")
+    }
+
+    func testAnOldHostDoesntAskSoTheKitHoldsTheFirstPress() async {
+        let plugin = Pruner()
+        let runtime = PluginRuntime(plugin: plugin, send: Outbox().send)
+        await runtime.handle(.hello(protocolVersion: 24, surfaces: [.panel]))
+        await runtime.handle(.event(action: "row/web/Stop", value: nil))
+        XCTAssertEqual(plugin.stopped, [], "held")
+        await runtime.handle(.event(action: "button/Prune", value: nil))
+        await runtime.handle(.event(action: "row/web/Stop", value: nil))
+        XCTAssertEqual(plugin.stopped, [], "another press in between starts over")
+        await runtime.handle(.event(action: "row/web/Stop", value: nil))
+        XCTAssertEqual(plugin.stopped, ["web"])
+        XCTAssertEqual(plugin.pruned, 0)
+        await runtime.handle(.hello(protocolVersion: StackbarProtocolVersion.current, surfaces: [.panel]))
+    }
+
+    func testAConfirmableIdThatNeededASuffixIsLoggedOnce() async {
+        let outbox = Outbox()
+        let runtime = PluginRuntime(plugin: Twins(), send: outbox.send)
+        await runtime.handle(.hello(protocolVersion: StackbarProtocolVersion.current, surfaces: [.panel]))
+        await runtime.handle(.trigger(reason: .manual))
+        let warnings = outbox.take().filter { if case .log(.warning, _) = $0 { return true } else { return false } }
+        XCTAssertEqual(warnings.count, 1)
+    }
+}
+
+@MainActor
+final class Twins: StackbarPlugin {
+    static let manifest = Manifest(id: "test.twins", name: "Twins", surfaces: [.panel])
+    var tick = 0
+    func refresh() async throws { tick += 1 }
+    var panel: ViewContent {
+        Text("\(tick)")
+        Row("a", key: "same").action("Delete", confirm: "delete a") {}
+        Row("b", key: "same").action("Delete", confirm: "delete b") {}
+    }
+}

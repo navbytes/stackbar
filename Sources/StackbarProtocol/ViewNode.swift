@@ -25,7 +25,9 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     case section(title: String?, children: [ViewNode])
     case row(RowNode)
     case badge(String, role: Role = .secondary)
-    case button(title: String, symbol: String? = nil, role: Role = .primary, action: ActionID)
+    /// With `confirm` (protocol 25) the host holds the first press and asks
+    /// for a second within `ActionConfirmer.window`: see `ActionRef.confirm`.
+    case button(title: String, symbol: String? = nil, role: Role = .primary, action: ActionID, confirm: String? = nil)
     case toggle(title: String, isOn: Bool, action: ActionID)
     /// A determinate gauge; `value` is clamped to `0...total` by renderers.
     /// With `timing` (protocol 11) the host computes the value from the clock
@@ -71,7 +73,8 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     /// Flexible space along the enclosing stack's axis. Protocol 11.
     case spacer(minLength: Double? = nil)
     /// Any content as a button: a click sends `action`. Protocol 11.
-    case tappable(ViewNode, action: ActionID)
+    /// `confirm` as on `button` (protocol 25).
+    case tappable(ViewNode, action: ActionID, confirm: String? = nil)
     /// Children in rows of `columns` equal-width cells, filled left to right:
     /// tiles, launchers, stat blocks. Protocol 12.
     case grid(columns: Int, spacing: Double? = nil, children: [ViewNode])
@@ -227,13 +230,20 @@ public struct ActionRef: Codable, Equatable, Sendable {
     /// When set, the host opens this command itself instead of sending the
     /// action: the palette pushes it as a new view.
     public var navigate: CommandTarget?
+    /// What the action does, as the end of "Press again within 10 s to …":
+    /// `"stop web (pid 412)"`. When set, the host holds the first press,
+    /// says so and redraws the control as armed; only a second press within
+    /// the window sends the action (`ActionConfirmer`). Protocol 25; older
+    /// hosts ignore it, so the plugin kit confirms on their behalf.
+    public var confirm: String?
 
-    public init(id: ActionID, title: String, shortcut: String? = nil, role: Role = .primary, navigate: CommandTarget? = nil) {
+    public init(id: ActionID, title: String, shortcut: String? = nil, role: Role = .primary, navigate: CommandTarget? = nil, confirm: String? = nil) {
         self.id = id
         self.title = title
         self.shortcut = shortcut
         self.role = role
         self.navigate = navigate
+        self.confirm = confirm
     }
 }
 
@@ -300,7 +310,7 @@ extension ViewNode {
         switch self {
         case .stack(_, _, _, let children), .list(_, let children), .section(_, let children), .grid(_, _, let children):
             return children
-        case .styled(let child, _), .tappable(let child, _):
+        case .styled(let child, _), .tappable(let child, _, _):
             return [child]
         case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .clock, .spacer:
             return []
@@ -334,6 +344,17 @@ extension ViewNode {
         affordances.compactMap(\.action)
     }
 
+    /// The actions in this tree that ask for a second press, with what each
+    /// does (`ActionRef.confirm`). The first one wins when an id repeats.
+    public var confirmations: [ActionID: String] {
+        var found: [ActionID: String] = [:]
+        for affordance in affordances {
+            guard let action = affordance.action, let confirm = affordance.confirm, found[action] == nil else { continue }
+            found[action] = confirm
+        }
+        return found
+    }
+
     /// The words this tree shows, joined by spaces: what names a `tappable`
     /// in the palette and the agent text. An accessibility label stands in
     /// for its child.
@@ -341,7 +362,7 @@ extension ViewNode {
         switch self {
         case .text(let string, _, _), .badge(let string, _):
             return string
-        case .label(let title, _, _), .button(let title, _, _, _):
+        case .label(let title, _, _), .button(let title, _, _, _, _):
             return title
         case .styled(_, let style) where style.accessibilityLabel != nil:
             return style.accessibilityLabel ?? ""

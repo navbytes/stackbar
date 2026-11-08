@@ -41,7 +41,7 @@ public enum StyleLint {
             if let color = style.background.flatMap({ colors(of: $0.paint).first }) {
                 backdrop = HexColor(opaque(color.light, over: backdrop, dark: false), dark: opaque(color.hex(dark: true), over: backdrop, dark: true))
             }
-        case .tappable(let content, let action) where !labeled && content.plainText.isEmpty:
+        case .tappable(let content, let action, _) where !labeled && content.plainText.isEmpty:
             found.append("button {\(action)} has no text; give it .accessibilityLabel(...)")
         default:
             break

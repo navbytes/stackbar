@@ -86,9 +86,9 @@ public enum SurfaceParity {
         case .stack: return "VStack / HStack / ZStack, aligned"
         case .list: return "List; filter field when searchable"
         case .section: return "Captioned group"
-        case .row: return "Row with app icon or symbol; click = first action, context menu = all"
+        case .row: return "Row with app icon or symbol; click = first action, context menu = all; an action with confirm arms first (subtitle says Press again)"
         case .badge: return "Capsule"
-        case .button: return "Button"
+        case .button: return "Button; with confirm the first press arms it (Press again, critical, HUD, VoiceOver)"
         case .toggle: return "Toggle"
         case .progress: return "Bar or ring; a timed range animates on its own"
         case .divider: return "Divider"
@@ -106,7 +106,7 @@ public enum SurfaceParity {
         case .timer: return "Live timer text the host counts"
         case .clock: return "Time of day the host keeps current"
         case .spacer: return "Spacer"
-        case .tappable: return "Content as a plain button; click sends the action"
+        case .tappable: return "Content as a plain button; click sends the action; with confirm the first press arms it"
         case .grid: return "Equal-width columns, filled left to right"
         }
     }
@@ -114,7 +114,7 @@ public enum SurfaceParity {
     private static func command(_ kind: Kind) -> String {
         switch kind {
         case .list: return "List filtered by the plugin as the user types"
-        case .row: return "Row; Return = first action, ⌘K = all, navigate pushes"
+        case .row: return "Row; Return = first action, ⌘K = all, navigate pushes; with confirm Return arms, Esc forgets"
         case .text, .label, .stack, .section, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form,
              .styled, .shape, .image, .timer, .clock, .spacer, .tappable, .grid:
             return "As panel"
@@ -144,11 +144,11 @@ public enum SurfaceParity {
     private static func widget(_ kind: Kind) -> String {
         switch kind {
         case .list: return "First 4 rows, no filter"
-        case .row: return "Row; click = first action, sent through the app"
-        case .button: return "Button; click sends the action through the app"
+        case .row: return "Row; click = first action, sent through the app; one with confirm opens the panel"
+        case .button: return "Button; click sends the action through the app; with confirm it opens the panel"
         case .toggle: return "Toggle; click flips it through the app"
         case .textField, .picker, .slider, .form: return "Drawn disabled"
-        case .tappable: return "Content as a button; click sends the action through the app"
+        case .tappable: return "Content as a button; click sends the action through the app; with confirm it opens the panel"
         case .link: return "Link (opens Stackbar's URL)"
         case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .timer, .clock, .spacer, .grid: return "As panel"
         case .styled: return "As panel, without hover"
@@ -158,8 +158,8 @@ public enum SurfaceParity {
 
     private static func palette(_ kind: Kind) -> String {
         switch kind {
-        case .row: return "Entry per action, searchable by title and subtitle"
-        case .button: return "Entry, runs the button"
+        case .row: return "Entry per action, searchable by title and subtitle; with confirm Return arms, Return again runs"
+        case .button: return "Entry, runs the button; with confirm Return arms, Return again runs"
         case .toggle: return "Entry, flips the toggle"
         case .link: return "Entry, opens the URL"
         case .tappable: return "Entry named by its text"
@@ -175,9 +175,9 @@ public enum SurfaceParity {
         case .stack: return "Lines, or one line when horizontal"
         case .list: return "`List` then indented rows"
         case .section: return "`-- title --`"
-        case .row: return "`* title - subtitle <actions {ids}>`"
+        case .row: return "`* title - subtitle <actions {ids}>`, `[asks: …]` after one with confirm"
         case .badge: return "`[text]`"
-        case .button: return "`(title) {id}`"
+        case .button: return "`(title) {id}`, then `[asks: …]` with confirm"
         case .toggle: return "`[x] title {id}`"
         case .progress: return "`[####......] 40%`"
         case .divider: return "`----`"
@@ -194,7 +194,7 @@ public enum SurfaceParity {
         case .image: return "`[symbol]`, or `[image]` for a remote one"
         case .timer: return "`12:34` as of now"
         case .clock: return "The time as of now, in its pattern"
-        case .tappable: return "`(text) {id}`"
+        case .tappable: return "`(text) {id}`, then `[asks: …]` with confirm"
         case .grid: return "Lines, one per cell"
         }
     }

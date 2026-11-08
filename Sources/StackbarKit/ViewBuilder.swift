@@ -1,4 +1,5 @@
 @_exported import StackbarProtocol
+import Foundation
 
 /// Anything a plugin can put in a view body.
 ///
@@ -43,6 +44,8 @@ public final class RenderContext {
     public typealias Handler = @MainActor (EventValue?) async throws -> Void
 
     public private(set) var handlers: [ActionID: Handler] = [:]
+    /// Problems found while resolving, logged once by the runtime.
+    public private(set) var warnings: [String] = []
     /// The next suffix to try per base, so many same-titled controls don't
     /// probe from `#2` up each time.
     private var nextSuffix: [String: Int] = [:]
@@ -67,5 +70,61 @@ public final class RenderContext {
         }
         handlers[id] = handler
         return id
+    }
+
+    /// Registers an action that asks for a second press (`Confirm`). The
+    /// host does the asking from protocol 25; an older host would send the
+    /// first press straight through, so the kit holds it here instead
+    /// (`KitConfirmer`). An id that needed a `#2` suffix is logged once:
+    /// render order decides which closure it reaches, so a confirmation
+    /// could land on the wrong row. Give such rows distinct keys.
+    public func register(_ base: String, confirm: String?, _ handler: @escaping Handler) -> ActionID {
+        guard let confirm else { return register(base, handler) }
+        let key = ActionID(prefix + base)
+        let held: Handler = { value in
+            guard KitConfirmer.shared.pass(key, text: confirm) else { return }
+            try await handler(value)
+        }
+        let id = register(base, KitConfirmer.hostConfirms ? handler : held)
+        if id.rawValue != prefix + base, KitConfirmer.shared.warned.insert(id).inserted {
+            warnings.append("\(id) asks for confirmation but shares its id with another control, so which one a press reaches depends on order; give it a distinct key")
+        }
+        return id
+    }
+}
+
+/// The kit's own "press again" for hosts older than protocol 25, which don't
+/// know `confirm`. Same window and wording as the host's `ActionConfirmer`,
+/// but it can't redraw when the window passes: that is what the host adds.
+@MainActor
+final class KitConfirmer {
+    static let shared = KitConfirmer()
+    static let window: TimeInterval = 10
+    /// The first protocol whose host confirms by itself.
+    static let hostVersion = 25
+
+    private var armed: (action: ActionID, text: String, at: Date)?
+    var warned: Set<ActionID> = []
+
+    /// Whether the host asks for confirmation itself. Unknown (no hello yet,
+    /// as in a test driving views by hand) counts as yes.
+    static var hostConfirms: Bool {
+        (Stackbar.hostProtocol ?? StackbarProtocolVersion.current) >= hostVersion
+    }
+
+    /// A press of `action`: true when it is the second within the window.
+    func pass(_ action: ActionID, text: String, now: Date = Date()) -> Bool {
+        if let armed, armed.action == action, armed.text == text, now.timeIntervalSince(armed.at) < Self.window {
+            self.armed = nil
+            return true
+        }
+        armed = (action, text, now)
+        Stackbar.hud("Press again within \(Int(Self.window)) s to \(text)")
+        return false
+    }
+
+    func reset() {
+        armed = nil
+        warned = []
     }
 }

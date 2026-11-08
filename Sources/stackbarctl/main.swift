@@ -24,6 +24,8 @@ usage:
                   the last frame shows (1 s by default), --wait pauses and adds a frame.
                   Without macOS it prints each frame as text.
                   --command opens a view command; --event then presses things inside it
+                  --confirm sends events that ask for a second press at once; without it
+                  their first --event is held, as in the app, and the same --event again sends it
                   --preview shows one of the plugin's previews (sample data, no refreshes)
                   --copy pretends you copied text in another app (clipboard plugins);
                   the clipboard, battery, calendar, windows and apps are simulated (STACKBAR_CALENDAR=<events.json>, STACKBAR_REMINDERS=<reminders.json>, STACKBAR_WINDOWS=<snapshot.json>, STACKBAR_APPS=<apps.json>)
@@ -192,6 +194,7 @@ func render(_ path: String, options: [String]) async {
     var framesPath: String?
     var dark = false
     var verbose = false
+    var confirmEvents = false
     var command: String?
     var query = ""
     var commandArguments: [String: JSONValue] = [:]
@@ -222,6 +225,7 @@ func render(_ path: String, options: [String]) async {
             steps.append((String(name.dropFirst(2)), text, nil))
         case "--dark": dark = true
         case "--verbose": verbose = true
+        case "--confirm": confirmEvents = true
         case "--command": command = value(after: "--command", in: options, at: &index)
         case "--preview": usePreview(value(after: "--preview", in: options, at: &index), of: path)
         case "--query": query = value(after: "--query", in: options, at: &index)
@@ -293,7 +297,8 @@ func render(_ path: String, options: [String]) async {
             let value: JSONValue = step.value.map { text in
                 text.hasPrefix("{") ? (try? JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))) ?? .string(text) : .string(text)
             } ?? .null
-            let result = await run("stackbar_send_event", ["action": .string(step.name), "value": value])
+            let result = await run("stackbar_send_event", ["action": .string(step.name), "value": value, "confirm": .bool(confirmEvents)])
+            if case .text(let text) = result.content.first, text.hasPrefix("Held:") { print("== \(step.name) ==\n\(text)") }
             if command != nil, step.name.hasPrefix("view/"), case .text(let text) = result.content.first { viewText = text }
         } else if step.kind == "copy" {
             _ = await run("stackbar_simulate_copy", ["text": .string(step.name)])

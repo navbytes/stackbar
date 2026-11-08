@@ -41,8 +41,9 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             MCPTool(name: "stackbar_render", description: "Build if needed, run the plugin, and show what a surface draws. Text output lists the action id of every control in {braces}.", properties: [
                 "path": path, "surface": surface, "format": MCPTool.property("string", "Output format", enumValues: formats),
             ], required: ["path"]),
-            MCPTool(name: "stackbar_send_event", description: "Press a control by action id (from stackbar_render), then return the new panel and menu bar. Fields take value as text, toggles true/false, sliders a number.", properties: [
+            MCPTool(name: "stackbar_send_event", description: "Press a control by action id (from stackbar_render), then return the new panel and menu bar. Fields take value as text, toggles true/false, sliders a number. A control marked [asks: …] is held on the first press, as in the app: press it again within 10 s, or pass confirm: true.", properties: [
                 "path": path, "action": MCPTool.property("string", "Action id, e.g. button/Refresh"), "value": MCPTool.property("string", "Optional value"),
+                "confirm": MCPTool.property("boolean", "Send an action that asks for confirmation on this press (default false)"),
             ], required: ["path", "action"]),
             MCPTool(name: "stackbar_refresh", description: "Run the plugin's refresh() now and return the new render.", properties: ["path": path], required: ["path"]),
             MCPTool(name: "stackbar_call_tool", description: "Call one of the plugin's agent tools.", properties: [
@@ -90,7 +91,10 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
                 guard let action = arguments["action"]?.string else { return .text("action is required", isError: true) }
                 let session = session(for: url)
                 if await !session.isRunning { try await session.ensureRunning() }
-                try await session.event(ActionID(action), value: Self.eventValue(arguments["value"], for: action))
+                let confirmed = arguments["confirm"]?.bool ?? false
+                if let arm = try await session.event(ActionID(action), value: Self.eventValue(arguments["value"], for: action), confirmed: confirmed) {
+                    return .text("Held: the app would say \"\(arm.prompt)\" and send nothing. Send the same event again within \(Int(ActionConfirmer.window)) s, or pass confirm: true.")
+                }
                 if let open = lock.withLock({ openViews[url.path] }), action.hasPrefix("view/\(open)/") {
                     return await renderCommandView(session, open, format: "text")
                 }
