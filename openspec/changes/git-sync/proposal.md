@@ -47,6 +47,8 @@ defaults.
   behind), panel grouped by state, window with every local branch, widget
   with the count and an Update button, palette commands, settings, opt-in
   notifications, and a `repo_status` agent tool.
+- **Worktrees:** a count on each repository, every worktree's branch and
+  state under it, and a Clean Up view for merged ones left behind.
 - **Actions:** Fetch, Pull, Push (never forced), Update All Safe, show the
   incoming commits, open in the editor, terminal or Finder, open the
   compare view on the web, copy the branch, prune branches whose upstream

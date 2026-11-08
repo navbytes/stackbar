@@ -119,6 +119,58 @@ Hidden repositories are kept by path in storage. Rescan on launch, on wake,
 every hour, and from a button.
 
 
+### Worktrees
+
+A repository with linked worktrees is one entry, not one per folder. The
+scan finds `.git` *files* (a linked worktree) as well as folders, and
+groups each under its main repository by `git rev-parse --git-common-dir`.
+
+Data, from the main repository:
+
+```
+git worktree list --porcelain
+```
+
+gives each worktree's path, HEAD, branch, and `locked` / `prunable`
+(folder gone) / `detached`. Ahead/behind for every worktree's branch comes
+from the same `for-each-ref` call as all-branches mode, because worktrees
+share refs: no extra command per worktree. Uncommitted changes need
+`git status` run *in* the worktree, so that runs only when the worktree is
+inside a granted folder. Outside one, the row says "changes unknown: add
+this folder" with a button that calls `chooseFolder` on its parent.
+
+"Merged": the branch is merged into the default branch
+(`git branch --merged origin/HEAD`) or its upstream is `[gone]`. A merged,
+clean, unlocked worktree is "safe to remove".
+
+Worktrees made by coding agents get a small label when their path matches a
+known pattern (`.claude/worktrees/`, `.worktrees/`, Conductor's and
+Codex's folders), because those pile up fastest.
+
+UX:
+
+- **Repository row:** a count badge, "3 worktrees", next to ↓↑. When
+  some can be removed, it says "3 worktrees · 2 to clean up".
+- **Expanded row:** one sub-row per worktree: folder name, branch, ↓↑,
+  changes dot, last commit age, and labels (agent, locked, merged,
+  missing). The main worktree is first and marked.
+- **Per worktree:** Open (editor / terminal / Finder), Pull, Push, Copy
+  path, Copy branch, Remove (clean only, confirms, never `--force`), Unlock.
+  Missing ones offer Prune (`git worktree prune`).
+- **Clean up:** a panel header button and a palette command, "Clean Up
+  Worktrees", list every safe-to-remove worktree across repositories with
+  checkboxes (all ticked), and remove the ticked ones; dirty or unmerged
+  ones are listed below, unticked and explained.
+- **New worktree…** on a repository: branch name (new or existing), folder
+  from the setting below, then Open. `git worktree add <folder> -b <branch>`
+  or without `-b` for an existing branch.
+- **Window:** a Worktrees tab, a table across all repositories (repository,
+  worktree, branch, state, last commit, labels) sortable by age, so the
+  oldest abandoned ones float up.
+- **Palette:** "Search Worktrees" by branch or folder name; Return opens it.
+  Root search on branch names, so typing a branch jumps to its worktree.
+- **Update All Safe** includes worktrees under the same rules (setting).
+
 ### Settings
 
 | Setting | Options | Default |
@@ -132,6 +184,9 @@ every hour, and from a button.
 | Count in menu bar | behind, behind + ahead | behind |
 | Open in | Recent Projects-style editor list, Terminal, iTerm, Ghostty, Finder | Finder until set |
 | Notifications | off, when repos fall behind, only when I have unpushed work too | off |
+| Worktrees | under their repository, hidden | under their repository |
+| Update All includes worktrees | on, off | on |
+| New worktrees go in | next to the repository (`../repo-branch`), a `.worktrees` folder inside it, a folder you pick | next to the repository |
 | Hidden repositories | list with Unhide | none |
 
 ### Surfaces

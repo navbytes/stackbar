@@ -13,6 +13,7 @@
 ## 2. Plugin (stackbar-plugins `Developer/GitSync`, 1.0.0)
 - [ ] 2.1 Discovery: picked folders with depth, single repos, hidden list, suggestions
 - [ ] 2.2 Status from `git status --porcelain=v2 --branch`; all-branches mode with `for-each-ref`
+- [ ] 2.2a Worktrees: grouping, `worktree list`, per-worktree status, merged / missing / agent labels, Remove / Prune / Unlock, Clean Up, New Worktree, Search Worktrees
 - [ ] 2.3 Fetch scheduler (interval setting, wake, 3 at once, staggered)
 - [ ] 2.4 Pull (ff-only / rebase), dirty handling (skip / stash / ask), push, Update All Safe
 - [ ] 2.5 Panel, menu bar, window, widget, palette commands, root search, settings
