@@ -188,7 +188,7 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
     }
 
     private func render(_ session: PluginSession, surfaces: [Surface], format: String) async -> MCPToolResult {
-        let views = await session.views()
+        let views = await session.shownViews()
         let declared = await session.manifest?.surfaces ?? []
         let wanted = surfaces.filter(declared.contains)
         switch format {

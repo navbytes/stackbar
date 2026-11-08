@@ -65,6 +65,18 @@ public actor PluginSession {
         await supervisor?.views ?? [:]
     }
 
+    /// The surfaces as the app draws them: an action held by its first
+    /// press reads "Press again to …" (protocol 25), so renders and demo
+    /// frames show the question the user sees.
+    public func shownViews() async -> [Surface: ViewNode] {
+        confirmer.expire()
+        var shown = await views()
+        if let surface = confirmer.arm?.surface, let root = shown[surface] {
+            shown[surface] = confirmer.decorate(root, surface: surface)
+        }
+        return shown
+    }
+
     public func tools() async -> [ToolSpec] {
         await supervisor?.tools ?? []
     }

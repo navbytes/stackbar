@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- For plugin authors: `stackbarctl render` and demo frames (`--frames`) show a held action as "Press again to …", as the app draws it, so a demo of a destructive action shows the question.
+
 ## 0.35.0
 
 ### Added
