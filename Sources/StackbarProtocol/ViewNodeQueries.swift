@@ -16,8 +16,8 @@ extension ViewNode {
             return .section(title: title, children: children.map(transform))
         case .styled(let child, let style):
             return .styled(transform(child), style: style)
-        case .tappable(let child, let action):
-            return .tappable(transform(child), action: action)
+        case .tappable(let child, let action, let confirm):
+            return .tappable(transform(child), action: action, confirm: confirm)
         case .grid(let columns, let spacing, let children):
             return .grid(columns: columns, spacing: spacing, children: children.map(transform))
         case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .clock, .spacer:
@@ -78,10 +78,13 @@ extension ViewNode {
                     kind: action.navigate.map { .navigate($0, action: action.id) } ?? .action(action.id, value: nil)
                 )
                 affordance.isHiddenFromPalette = row.hiddenFromPalette == true
+                affordance.confirm = action.confirm
                 return affordance
             }
-        case .button(let title, let symbol, _, let action):
-            return [Affordance(title: title, symbol: symbol, kind: .action(action, value: nil))]
+        case .button(let title, let symbol, _, let action, let confirm):
+            var affordance = Affordance(title: title, symbol: symbol, kind: .action(action, value: nil))
+            affordance.confirm = confirm
+            return [affordance]
         case .toggle(let title, let isOn, let action):
             return [Affordance(title: "\(isOn ? "Turn off" : "Turn on") \(title)", symbol: "switch.2", kind: .action(action, value: .bool(!isOn)))]
         case .textField(let placeholder, _, let action):
@@ -92,13 +95,15 @@ extension ViewNode {
             return [Affordance(title: form.submitTitle, kind: .input(form.action))]
         case .link(let title, let url):
             return [Affordance(title: title, subtitle: url, symbol: "link", kind: .open(url))]
-        case .tappable(let content, let action):
+        case .tappable(let content, let action, let confirm):
             let inside = content.affordances.map { affordance in
                 var affordance = affordance
                 affordance.isInsideTappable = true
                 return affordance
             }
-            return [Affordance(title: content.plainText, kind: .tappable(action))] + inside
+            var affordance = Affordance(title: content.plainText, kind: .tappable(action))
+            affordance.confirm = confirm
+            return [affordance] + inside
         case .stack, .list, .section, .styled, .grid:
             return children.flatMap(\.affordances)
         case .text, .label, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .image, .timer, .clock, .spacer:
@@ -136,6 +141,9 @@ public struct Affordance: Equatable, Sendable {
     /// From a row the plugin keeps out of the palette's results
     /// (`RowNode.hiddenFromPalette`). Agents and `actions` still see it.
     public var isHiddenFromPalette = false
+    /// The action asks for a second press first (`ActionRef.confirm`):
+    /// what it does, as the end of "Press again within 10 s to …".
+    public var confirm: String?
 
     public init(title: String, subtitle: String? = nil, symbol: String? = nil, kind: Kind) {
         self.title = title

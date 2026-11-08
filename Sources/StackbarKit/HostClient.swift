@@ -209,6 +209,11 @@ public enum Stackbar {
     /// Stackbar 0.15.0 for reasons they don't send.
     @MainActor public internal(set) static var refreshReason: TriggerReason?
 
+    /// The protocol version the host said in `hello`; `nil` before it.
+    /// Plugins rarely need it: the kit already covers the gaps it knows
+    /// (an older host's missing confirmations, say).
+    @MainActor public internal(set) static var hostProtocol: Int?
+
     /// A secret the manifest declares with `.secret(name:)`, or `nil` when the
     /// user hasn't entered it yet (the host asks them for it).
     public static func secret(_ name: String) async throws -> String? {

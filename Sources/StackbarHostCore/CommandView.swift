@@ -42,6 +42,9 @@ public struct CommandView: Sendable {
     /// Stopped or failed: nothing will answer.
     public private(set) var isStopped = false
     private var submitting = false
+    /// The view's own "press again" (`ActionConfirmer`), apart from the
+    /// panel's.
+    public private(set) var confirmer = ActionConfirmer()
 
     public init(session: Int, pluginName: String, query: CommandQuery) {
         self.session = session
@@ -51,6 +54,8 @@ public struct CommandView: Sendable {
     }
 
     public var root: ViewNode? { state.root }
+    /// `root` as the palette draws it: an armed action says "Press again".
+    public var shownRoot: ViewNode? { root.map { confirmer.decorate($0, surface: nil) } }
     /// Waiting for the plugin to answer the newest query.
     public var isSearching: Bool { isWaitingForPlugin || (!isStopped && !isClosed && state.isSearching) }
     /// Whether an action can reach the plugin now. After a close the plugin
@@ -79,11 +84,32 @@ public struct CommandView: Sendable {
         guard show else { return result }
         answers += 1
         problem = nil
+        confirmer.rendered(root, surface: nil)
         if submitting {
             submitting = false
             result.finished = !root.hasFormErrors
         }
         return result
+    }
+
+    /// Asks before an action that carries `confirm`: `.armed` holds this
+    /// press (show its prompt, send nothing); `.send` means go on to
+    /// `perform`. A view that can't act holds nothing.
+    public mutating func confirm(_ action: ActionID, now: Date = Date()) -> ActionConfirmer.Outcome {
+        guard canAct else { return .send }
+        return confirmer.press(action, surface: nil, in: root, now: now)
+    }
+
+    /// Drops an arm whose window passed; true when the view should redraw.
+    @discardableResult
+    public mutating func expireConfirmation(now: Date = Date()) -> Bool {
+        confirmer.expire(now: now)
+    }
+
+    /// Esc on an armed action.
+    @discardableResult
+    public mutating func cancelConfirmation() -> Bool {
+        confirmer.cancel()
     }
 
     /// An action inside the view. A submitted form (`.fields`) waits for its
@@ -126,6 +152,7 @@ public struct CommandView: Sendable {
     public mutating func close() -> [Send] {
         guard !isClosed else { return [] }
         isClosed = true
+        confirmer.cancel()
         return [.close]
     }
 

@@ -455,7 +455,15 @@ final class AppModel {
     /// Sends each waiting widget press to its plugin, as a panel click would.
     func drainWidgetActions() {
         for press in widgetActions.drain() {
-            controller(for: press.pluginID)?.send(press.action, press.value)
+            guard let controller = controller(for: press.pluginID) else { continue }
+            // A widget can't show "press again" in time (its reloads are
+            // rationed), so an action that asks first opens the panel,
+            // where the user presses it with the question in view.
+            if controller.asksToConfirm(press.action) {
+                AppDelegate.shared?.showPanel(pluginID: controller.pluginID)
+            } else {
+                controller.send(press.action, press.value)
+            }
         }
     }
 

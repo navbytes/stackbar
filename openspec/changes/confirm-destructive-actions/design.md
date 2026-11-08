@@ -8,9 +8,11 @@ public var confirm: String?          // protocol 25
 // ViewNode
 case button(title: String, symbol: String? = nil, role: Role = .primary,
             action: ActionID, confirm: String? = nil)
+case tappable(ViewNode, action: ActionID, confirm: String? = nil)
 ```
 
-Both optional, so synthesized decoding uses `decodeIfPresent` and old
+`tappable` carries it too, because the kit's `ActionButton` and `IconButton`
+resolve to tappables. All three are optional, so synthesized decoding uses `decodeIfPresent` and old
 plugins decode unchanged. `confirm` is a lower-case verb phrase ("stop web
 (pid 412)", "clear 12 items"); the host owns the rest of the sentence so the
 wording is the same everywhere. Kit limits it to 120 characters.
@@ -34,8 +36,9 @@ idle ──press──▶ armed(at, text) ──press within 10 s──▶ sent 
   are `row/<key>/<title>`; when two rows share a key the kit adds `#2` in
   render order, so the kit logs a warning when a confirmable action's id
   needed a suffix.
-- **One arm per plugin and surface.** Arming B disarms A. Pressing a different
-  action of the same plugin disarms too, so a stray arm never lingers.
+- **One arm per plugin.** Arming B disarms A, on any of the plugin's
+  surfaces. Pressing a different action of the same plugin disarms too, so a
+  stray arm never lingers. Each palette command view keeps its own.
 - **Text check.** On the second press the host compares the action's current
   `confirm` text with the armed one. If it changed ("Remove 3" → "Remove 4")
   the press counts as a new first press. This is what keeps the scope of
@@ -68,15 +71,18 @@ Hook points (each already finds the action before sending it):
 | Command view in the palette | `CommandView.perform` | ask the confirmer, surface `.panel`-like key per session |
 | Palette rows derived from panels | `Palette` → `PluginController.send` | same as panel; Return twice |
 | Widget button | `WidgetActionInbox` → event | confirmable action opens the panel instead |
-| `stackbarctl render --event` | `PluginSession` | runs through the confirmer, so tests see the arm; `--confirm` sends the second press |
+| `stackbarctl render --event` | `PluginSession` | runs through the confirmer, so the first press is held and reported; the same `--event` again sends it, and `--confirm` sends every event at once |
 | Soak | `Soak.safeActions` | skips any action in `confirmations` |
 | Agent tools, notification buttons | never ActionIDs | unchanged |
 
 ## What armed looks like
 
-- **Row / button:** title replaced by "Press again to <confirm>", critical
-  tint, a small countdown ring (`.timer`-style, host-drawn). The original
-  title returns on expiry.
+- **Row / button / tappable:** the host rewrites the tree it draws
+  (`ActionConfirmer.decorate`), so every renderer shows the state without
+  knowing about it. A button's title becomes "Press again to <confirm>" in
+  the critical role; a row's subtitle and the armed action's title say the
+  same; a tappable gets that label beside its content. Ids never change. The
+  original returns on expiry. (No countdown ring in v1.)
 - **HUD:** "Press again within 10 s to <confirm>", once per arm.
 - **VoiceOver:** the control's label changes to the armed text and the host
   posts an announcement with it; expiry announces "Cancelled".
@@ -88,8 +94,8 @@ the ledger in `docs/surface-parity.md` is regenerated.
 
 ## Old hosts
 
-The kit reads the host's protocol from `hello`. Below 25 it strips `confirm`
-from what it sends and wraps the handler in its own arm with the same text
+The kit reads the host's protocol from `hello`. Below 25 it wraps the
+handler (an old host ignores the unknown `confirm` field) in its own arm with the same text
 (HUD on first press, 10 s, keyed by action id). It cannot redraw on expiry;
 that is the old behaviour, now in one place instead of fifteen.
 

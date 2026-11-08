@@ -42,7 +42,8 @@ public final class PluginRuntime {
     @discardableResult
     public func handle(_ message: HostMessage) async -> Bool {
         switch message {
-        case .hello(_, let offered, let storage):
+        case .hello(let hostProtocol, let offered, let storage):
+            Stackbar.hostProtocol = hostProtocol
             Stackbar.storage.isScratch = preview != nil
             Stackbar.storage.load(preview == nil ? storage : [:])
             let declared = type(of: plugin).manifest.surfaces
@@ -141,6 +142,7 @@ public final class PluginRuntime {
             send(.menuBarClick(click))
         }
         handlers = context.handlers
+        for warning in context.warnings { send(.log(level: .warning, message: warning)) }
         let tools = plugin.tools.map(\.spec)
         if tools != lastTools, !(lastTools == nil && tools.isEmpty) {
             lastTools = tools
@@ -184,6 +186,7 @@ public final class PluginRuntime {
                 root = .empty(title: "\(view.command) is not a view command", symbol: "exclamationmark.triangle", message: nil)
             }
             view.handlers = context.handlers
+            for warning in context.warnings { send(.log(level: .warning, message: warning)) }
             if root != view.lastRoot || session == forced {
                 view.lastRoot = root
                 send(.view(session: session, seq: view.seq, root: root))

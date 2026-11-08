@@ -28,6 +28,7 @@ final class CommandFixture: StackbarPlugin {
 
     var panel: ViewContent {
         Text("\(links.count) links")
+        Button("Forget links", role: .critical, key: "forget", confirm: "forget \(links.count) links") { self.links = [] }
     }
 
     var commands: [Command] {

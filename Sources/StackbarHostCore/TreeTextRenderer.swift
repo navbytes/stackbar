@@ -15,6 +15,8 @@ public enum TreeTextRenderer {
     static func lines(_ node: ViewNode, depth: Int, showActions: Bool, now: Date) -> [String] {
         let pad = String(repeating: "  ", count: depth)
         func tag(_ id: ActionID) -> String { showActions ? "  {\(id)}" : "" }
+        /// An action that asks for a second press says what it confirms.
+        func asks(_ confirm: String?) -> String { showActions ? confirm.map { " [asks: \($0)]" } ?? "" : "" }
 
         switch node {
         case .text(let string, let style, let role):
@@ -41,15 +43,15 @@ public enum TreeTextRenderer {
             }
             if !row.actions.isEmpty {
                 let actions = row.actions.map { action in
-                    action.title + (action.shortcut.map { " (\($0)" + (KeyCombo($0) == nil ? ": not a shortcut, so it never fires" : "") + ")" } ?? "") + (action.navigate.map { " -> \($0.command)" } ?? tag(action.id))
+                    action.title + (action.shortcut.map { " (\($0)" + (KeyCombo($0) == nil ? ": not a shortcut, so it never fires" : "") + ")" } ?? "") + (action.navigate.map { " -> \($0.command)" } ?? tag(action.id)) + asks(action.confirm)
                 }
                 line += "  <" + actions.joined(separator: ", ") + ">"
             }
             return [line]
         case .badge(let text, let role):
             return [pad + "[\(text)]" + roleSuffix(role)]
-        case .button(let title, _, let role, let action):
-            return [pad + "(\(title))" + roleSuffix(role) + tag(action)]
+        case .button(let title, _, let role, let action, let confirm):
+            return [pad + "(\(title))" + roleSuffix(role) + tag(action) + asks(confirm)]
         case .toggle(let title, let isOn, let action):
             return [pad + (isOn ? "[x] " : "[ ] ") + title + tag(action)]
         case .progress(let value, let total, let label, _, _, let timing):
@@ -102,7 +104,7 @@ public enum TreeTextRenderer {
         case .styled(let child, let style):
             if let label = style.accessibilityLabel {
                 // The label names the child; its actions stay pressable.
-                if case .tappable(_, let action) = child { return [pad + "(\(label))" + tag(action)] }
+                if case .tappable(_, let action, let confirm) = child { return [pad + "(\(label))" + tag(action) + asks(confirm)] }
                 return [pad + label + child.actions.map(tag).joined()]
             }
             return lines(child, depth: depth, showActions: showActions, now: now)
@@ -116,8 +118,8 @@ public enum TreeTextRenderer {
             return [pad + range.clock(at: now, countsDown: countsDown)]
         case .clock(let face):
             return [pad + face.string(at: now)]
-        case .tappable(let content, let action):
-            return [pad + "(\(content.plainText))" + tag(action)]
+        case .tappable(let content, let action, let confirm):
+            return [pad + "(\(content.plainText))" + tag(action) + asks(confirm)]
         }
     }
 

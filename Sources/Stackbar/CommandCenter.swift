@@ -371,6 +371,8 @@ final class CommandViewModel: Identifiable {
     /// Messages to the plugin go out in order: an action before the close
     /// that follows it.
     @ObservationIgnored private var chain: Task<Void, Never>?
+    /// Drops an armed confirmation when its window passes.
+    @ObservationIgnored private var confirmExpiry: Task<Void, Never>?
 
     init(session: Int, entry: CommandRegistry.Entry, supervisor: PluginSupervisor, query: CommandQuery, context: InvocationContext? = nil, onClose: @escaping () -> Void) {
         id = session
@@ -395,7 +397,7 @@ final class CommandViewModel: Identifiable {
     func received(seq: Int, root: ViewNode) {
         let result = view.received(seq: seq, root: root)
         if result.shown {
-            self.root = root
+            self.root = view.shownRoot ?? root
             answers = view.answers
             answeredAt = Date()
         }
@@ -405,8 +407,37 @@ final class CommandViewModel: Identifiable {
 
     /// Sends an action inside the view to the plugin. A submitted form waits
     /// for its answer: the palette closes once it comes back without errors.
-    func perform(_ action: ActionID, _ value: EventValue? = nil) {
+    /// Sends an action to the plugin; false when it was held for a second
+    /// press instead (`confirm`), and the palette stays open for it.
+    @discardableResult
+    func perform(_ action: ActionID, _ value: EventValue? = nil) -> Bool {
+        if case .armed(let arm) = view.confirm(action) {
+            HUD.shared.show(arm.prompt)
+            VoiceOver.announce(arm.prompt)
+            root = view.shownRoot
+            confirmExpiry?.cancel()
+            confirmExpiry = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(0, arm.deadline.timeIntervalSinceNow) + 0.05))
+                guard !Task.isCancelled, let self, self.view.expireConfirmation() else { return }
+                VoiceOver.announce("Cancelled")
+                self.root = self.view.shownRoot
+            }
+            return false
+        }
+        confirmExpiry?.cancel()
+        root = view.shownRoot
         deliver(view.perform(action, value))
+        return true
+    }
+
+    /// Esc while an action asks for its second press: forget it, and
+    /// answer whether there was one (so Esc doesn't also close the view).
+    @discardableResult
+    func cancelConfirmation() -> Bool {
+        guard view.cancelConfirmation() else { return false }
+        confirmExpiry?.cancel()
+        root = view.shownRoot
+        return true
     }
 
     /// The plugin's process changed state (restarting, running again,

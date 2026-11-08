@@ -34,8 +34,9 @@ public enum SystemAction: String, Codable, CaseIterable, Sendable {
     }
 
     /// Whether the action loses the user's work or data if run by mistake.
-    /// Plugins should ask before running one (`role: .critical`); the host
-    /// runs it as asked, since the user already confirmed in the plugin.
+    /// Give the control that runs one `confirm` (protocol 25), and the host
+    /// asks for a second press before the plugin hears of it. The call itself
+    /// runs as asked: by then the user has confirmed.
     public var isDestructive: Bool {
         switch self {
         case .restart, .shutDown, .logOut, .emptyTrash, .quitOtherApps: return true

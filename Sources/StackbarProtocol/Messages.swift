@@ -34,7 +34,9 @@ public enum StackbarProtocolVersion {
     /// send values while dragged.
     /// 24 added folders the user chooses for a plugin's commands, and the SSH
     /// agent capability.
-    public static let current = 24
+    /// 25 added `confirm` on row actions, buttons and tappables: the host
+    /// asks for a second press before it sends the action.
+    public static let current = 25
 }
 
 /// Host → plugin.

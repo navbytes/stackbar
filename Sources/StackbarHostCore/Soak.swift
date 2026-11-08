@@ -109,16 +109,19 @@ public struct Soak: Sendable {
         return Report(samples: samples, restarts: restarts, ticks: ticks, allowedGrowth: allowedGrowth)
     }
 
-    /// Button actions, minus anything that sounds destructive, crashes, or
-    /// changes something outside the plugin: a soak on a real Mac once ran
-    /// Homebrew's Upgrade All.
+    /// Button actions, minus anything that asks for confirmation (protocol
+    /// 25) and anything that sounds destructive, crashes, or changes
+    /// something outside the plugin: a soak on a real Mac once ran Homebrew's
+    /// Upgrade All. Pressing about once a second, a soak would land the
+    /// second press of a confirmation itself.
     static func safeActions(in node: ViewNode) -> [ActionID] {
+        let confirmed = node.confirmations
         let avoid = [
             "crash", "delete", "remove", "clear", "reset", "quit", "sign out", "logout", "uninstall",
             "upgrade", "update", "install", "stop", "kill", "prune", "force", "approve", "merge", "send", "publish",
         ]
         return node.actions.filter { action in
-            guard action.rawValue.hasPrefix("button/") else { return false }
+            guard action.rawValue.hasPrefix("button/"), confirmed[action] == nil else { return false }
             let label = action.rawValue.lowercased()
             return !avoid.contains { label.contains($0) }
         }

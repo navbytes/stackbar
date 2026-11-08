@@ -146,7 +146,7 @@ public struct Row: StackbarView {
     var appIcon: String?
     var fileIcon: String?
     var accessories: [ViewNode] = []
-    var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler?, navigate: CommandTarget?)] = []
+    var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler?, navigate: CommandTarget?, confirm: String?)] = []
     var preview: RowPreview?
     var hiddenFromPalette: Bool?
 
@@ -207,9 +207,14 @@ public struct Row: StackbarView {
     }
 
     /// Adds an action. The first one is what a click on the row does.
-    public func action(_ title: String, shortcut: String? = nil, role: Role = .primary, perform: @escaping @MainActor () async throws -> Void) -> Row {
+    ///
+    /// `confirm` makes the host ask for a second press first, and says what
+    /// the action does as the end of "Press again within 10 s to …":
+    /// `confirm: "stop \(name) (pid \(pid))"`. Give it to anything that
+    /// loses work or data. Protocol 25; on older hosts the kit asks itself.
+    public func action(_ title: String, shortcut: String? = nil, role: Role = .primary, confirm: Confirm = .none, perform: @escaping @MainActor () async throws -> Void) -> Row {
         var copy = self
-        copy.actions.append((title, shortcut, role, { _ in try await perform() }, nil))
+        copy.actions.append((title, shortcut, role, { _ in try await perform() }, nil, confirm.text))
         return copy
     }
 
@@ -218,15 +223,15 @@ public struct Row: StackbarView {
     /// palette it is pushed as a new view (Esc comes back).
     public func navigate(_ title: String, to command: String, arguments: [String: String] = [:], shortcut: String? = nil) -> Row {
         var copy = self
-        copy.actions.append((title, shortcut, .primary, nil, CommandTarget(command: command, arguments: arguments)))
+        copy.actions.append((title, shortcut, .primary, nil, CommandTarget(command: command, arguments: arguments), nil))
         return copy
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] {
         let refs = actions.map { action in
             let base = "row/\(key)/\(action.title)"
-            let id = action.handler.map { context.register(base, $0) } ?? ActionID(context.prefix + base)
-            return ActionRef(id: id, title: action.title, shortcut: action.shortcut, role: action.role, navigate: action.navigate)
+            let id = action.handler.map { context.register(base, confirm: action.confirm, $0) } ?? ActionID(context.prefix + base)
+            return ActionRef(id: id, title: action.title, shortcut: action.shortcut, role: action.role, navigate: action.navigate, confirm: action.confirm)
         }
         return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, fileIcon: fileIcon, accessories: accessories, actions: refs, preview: preview, hiddenFromPalette: hiddenFromPalette))]
     }
@@ -249,31 +254,63 @@ public struct Button: StackbarView {
     var symbol: String?
     var role: Role
     var key: String?
+    var confirm: Confirm
     var label: ViewContent?
     var handler: RenderContext.Handler
 
-    public init(_ title: String, symbol: String? = nil, role: Role = .primary, key: String? = nil, action: @escaping @MainActor () async throws -> Void) {
+    /// `confirm` as on `Row.action`: the host asks for a second press first.
+    public init(_ title: String, symbol: String? = nil, role: Role = .primary, key: String? = nil, confirm: Confirm = .none, action: @escaping @MainActor () async throws -> Void) {
         self.title = title
         self.symbol = symbol
         self.role = role
         self.key = key
+        self.confirm = confirm
         self.handler = { _ in try await action() }
     }
 
     /// A button drawn as any content: a round icon, a tile, a chip. Give it a
     /// `key` when the content has no text, so its action id stays stable.
-    public init(key: String? = nil, action: @escaping @MainActor () async throws -> Void, @ViewBuilder label: () -> ViewContent) {
-        self.init("", key: key, action: action)
+    public init(key: String? = nil, confirm: Confirm = .none, action: @escaping @MainActor () async throws -> Void, @ViewBuilder label: () -> ViewContent) {
+        self.init("", key: key, confirm: confirm, action: action)
         self.label = label()
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] {
         guard let label else {
-            return [.button(title: title, symbol: symbol, role: role, action: context.register("button/\(key ?? title)", handler))]
+            let id = context.register("button/\(key ?? title)", confirm: confirm.text, handler)
+            return [.button(title: title, symbol: symbol, role: role, action: id, confirm: confirm.text)]
         }
         let nodes = label.resolve(in: context)
         let content = nodes.count == 1 ? nodes[0] : .stack(axis: .horizontal, children: nodes)
-        return [.tappable(content, action: context.register("button/\(key ?? content.plainText)", handler))]
+        let id = context.register("button/\(key ?? content.plainText)", confirm: confirm.text, handler)
+        return [.tappable(content, action: id, confirm: confirm.text)]
+    }
+}
+
+/// Whether an action asks for a second press, and what it does: the end of
+/// "Press again within 10 s to …". Write it as a string,
+/// `confirm: "remove \(count) containers"`, or `.none` to say on purpose that
+/// a `.critical` action needs no confirmation (the store's check looks for
+/// one or the other).
+public struct Confirm: ExpressibleByStringInterpolation, Equatable, Sendable {
+    /// The longest text the host shows; longer is cut.
+    public static let maxLength = 120
+    /// No second press.
+    public static let none = Confirm(text: nil)
+
+    public let text: String?
+
+    public init(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.text = trimmed.isEmpty ? nil : String(trimmed.prefix(Self.maxLength))
+    }
+
+    public init(stringLiteral value: String) {
+        self.init(value)
+    }
+
+    private init(text: String?) {
+        self.text = text
     }
 }
 

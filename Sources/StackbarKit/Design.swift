@@ -687,15 +687,18 @@ public struct IconButton: StackbarView {
     var prominence: Prominence
     var size: Double
     var key: String?
+    var confirm: Confirm
     var action: @MainActor () async throws -> Void
 
-    public init(_ symbol: String, label: String, theme: Theme = .neutral, prominence: Prominence = .plain, size: Double = 28, key: String? = nil, action: @escaping @MainActor () async throws -> Void) {
+    /// `confirm` as on `Row.action`: the host asks for a second press first.
+    public init(_ symbol: String, label: String, theme: Theme = .neutral, prominence: Prominence = .plain, size: Double = 28, key: String? = nil, confirm: Confirm = .none, action: @escaping @MainActor () async throws -> Void) {
         self.symbol = symbol
         self.label = label
         self.theme = theme
         self.prominence = prominence
         self.size = size
         self.key = key
+        self.confirm = confirm
         self.action = action
     }
 
@@ -707,7 +710,7 @@ public struct IconButton: StackbarView {
         case .filled: (fill, ink) = (theme.gradient, theme.onSolidPaint)
         case .onMedia: (fill, ink) = (.hex("#FFFFFF24"), .onMedia)
         }
-        return Button(key: key ?? label, action: action) {
+        return Button(key: key ?? label, confirm: confirm, action: action) {
             Image(systemName: symbol)
                 .font(size: (size * 0.43).rounded(), weight: .semibold)
                 .foreground(ink)
@@ -729,20 +732,23 @@ public struct ActionButton: StackbarView {
     var prominent: Bool
     var fillWidth: Bool
     var key: String?
+    var confirm: Confirm
     var action: @MainActor () async throws -> Void
 
-    public init(_ title: String, symbol: String? = nil, theme: Theme = .neutral, prominent: Bool = false, fillWidth: Bool = false, key: String? = nil, action: @escaping @MainActor () async throws -> Void) {
+    /// `confirm` as on `Row.action`: the host asks for a second press first.
+    public init(_ title: String, symbol: String? = nil, theme: Theme = .neutral, prominent: Bool = false, fillWidth: Bool = false, key: String? = nil, confirm: Confirm = .none, action: @escaping @MainActor () async throws -> Void) {
         self.title = title
         self.symbol = symbol
         self.theme = theme
         self.prominent = prominent
         self.fillWidth = fillWidth
         self.key = key
+        self.confirm = confirm
         self.action = action
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] {
-        Button(key: key ?? title, action: action) {
+        Button(key: key ?? title, confirm: confirm, action: action) {
             HStack(spacing: Space.xs + 1) {
                 if let symbol { Image(systemName: symbol).font(size: 11, weight: .bold) }
                 Text(title)

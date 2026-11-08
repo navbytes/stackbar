@@ -16,11 +16,20 @@ final class PluginController: Identifiable {
     private(set) var manifest: Manifest?
     private(set) var state: PluginSupervisor.State = .stopped
     private(set) var menuBar: ViewNode?
-    private(set) var panel: ViewNode?
-    private(set) var window: ViewNode?
+    /// The trees as the plugin sent them. Surfaces draw `panel`, `window`
+    /// and `settings`, which show an armed confirmation (`confirmer`).
+    private var panelTree: ViewNode?
+    private var windowTree: ViewNode?
     private(set) var widget: ViewNode?
+    private var settingsTree: ViewNode?
+    /// The host's "press again" for this plugin's actions that carry
+    /// `confirm` (protocol 25): one arm across its panel, window, settings
+    /// and the palette's rows from its panel.
+    private(set) var confirmer = ActionConfirmer()
+    var panel: ViewNode? { panelTree.map { confirmer.decorate($0, surface: .panel) } }
+    var window: ViewNode? { windowTree.map { confirmer.decorate($0, surface: .window) } }
     /// The plugin's page in Settings, when its manifest lists `.settings`.
-    private(set) var settings: ViewNode?
+    var settings: ViewNode? { settingsTree.map { confirmer.decorate($0, surface: .settings) } }
     /// What a left click on the status item does, when not the panel.
     private(set) var menuBarClick: MenuBarClick?
     private(set) var tools: [ToolSpec] = []
@@ -82,6 +91,9 @@ final class PluginController: Identifiable {
     @ObservationIgnored private var loadGeneration = 0
     /// The newest load's build, cancelled when a newer load or a stop comes.
     @ObservationIgnored private var buildTicket: BuildTicket?
+    /// Drops the arm when its window passes, so the control can't keep
+    /// saying "Press again" after a press would arm it anew.
+    @ObservationIgnored private var confirmExpiry: Task<Void, Never>?
 
     init(source: URL, model: AppModel) {
         self.id = source.path
@@ -220,10 +232,11 @@ final class PluginController: Identifiable {
     private func turnOff() async {
         await stop()
         menuBar = nil
-        panel = nil
-        window = nil
+        panelTree = nil
+        windowTree = nil
         widget = nil
-        settings = nil
+        settingsTree = nil
+        cancelConfirmation()
         menuBarClick = nil
         tools = []
         commands = []
@@ -241,6 +254,7 @@ final class PluginController: Identifiable {
         await supervisor?.stop()
         supervisor = nil
         state = .stopped
+        cancelConfirmation()
     }
 
     /// Saves the approval and grants it to the running helper. The task
@@ -264,20 +278,70 @@ final class PluginController: Identifiable {
         }
     }
 
-    func send(_ action: ActionID, _ value: EventValue?) {
+    /// Sends a press to the plugin; false when it was held for a second
+    /// press instead (the palette stays open for it).
+    @discardableResult
+    func send(_ action: ActionID, _ value: EventValue?) -> Bool {
         // A row action that opens one of the plugin's commands is the host's
         // to perform; the plugin never hears about it.
-        for root in [panel, window, settings].compactMap({ $0 }) {
+        for root in [panelTree, windowTree, settingsTree].compactMap({ $0 }) {
             if let target = root.rows.flatMap(\.actions).first(where: { $0.id == action })?.navigate {
                 model?.openCommand(pluginID: pluginID, target: target, source: .panel)
-                return
+                return true
             }
         }
+        // An action that carries `confirm` is held on its first press: the
+        // host says so and redraws, and only a second press reaches the
+        // plugin.
+        let trees: [(Surface, ViewNode?)] = [(.panel, panelTree), (.window, windowTree), (.settings, settingsTree)]
+        let found = trees.first { $0.1?.actions.contains(action) == true }
+        let wasArmed = confirmer.arm != nil
+        if case .armed(let arm) = confirmer.press(action, surface: found?.0, in: found?.1) {
+            HUD.shared.show(arm.prompt)
+            VoiceOver.announce(arm.prompt)
+            scheduleExpiry(arm.deadline)
+            armChanged()
+            return false
+        }
+        if wasArmed { armChanged() }
         Task { await supervisor?.event(action, value: value) }
+        return true
+    }
+
+    /// The palette lists the panel's rows, so it hears when one arms or
+    /// stops being armed.
+    private func armChanged() {
+        model?.panelChanged(self)
+    }
+
+    /// Whether a press of `action` would be held for confirmation: the
+    /// widget opens the panel for these instead of arming, since it can't
+    /// redraw in time.
+    func asksToConfirm(_ action: ActionID) -> Bool {
+        [panelTree, windowTree, settingsTree, widget].contains { $0?.confirmations[action] != nil }
+    }
+
+    /// Esc, or the surface closing: forget an arm.
+    func cancelConfirmation(_ surface: Surface? = nil) {
+        guard confirmer.cancel(surface: surface) else { return }
+        confirmExpiry?.cancel()
+        confirmExpiry = nil
+        armChanged()
+    }
+
+    private func scheduleExpiry(_ deadline: Date) {
+        confirmExpiry?.cancel()
+        confirmExpiry = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow) + 0.05))
+            guard !Task.isCancelled, let self, self.confirmer.expire() else { return }
+            VoiceOver.announce("Cancelled")
+            self.armChanged()
+        }
     }
 
     func setVisible(_ surface: Surface, _ visible: Bool) {
         if surface == .panel && visible { panelShownCount += 1 }
+        if !visible { cancelConfirmation(surface) }
         Task { await supervisor?.setVisible(surface, visible) }
     }
 
@@ -389,17 +453,20 @@ final class PluginController: Identifiable {
             menuBar = root
             menuBarIdle = root.isNothing
         case .render(.panel, let root):
-            panel = root
+            panelTree = root
+            confirmer.rendered(root, surface: .panel)
             model?.panelChanged(self)
             loadImages(root)
         case .render(.window, let root):
-            window = root
+            windowTree = root
+            confirmer.rendered(root, surface: .window)
             loadImages(root)
         case .render(.widget, let root):
             widget = root
             model?.widgetChanged(self)
         case .render(.settings, let root):
-            settings = root
+            settingsTree = root
+            confirmer.rendered(root, surface: .settings)
             loadImages(root)
         case .menuBarClick(let click):
             menuBarClick = click
