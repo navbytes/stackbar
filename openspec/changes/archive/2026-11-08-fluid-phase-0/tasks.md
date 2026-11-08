@@ -20,7 +20,7 @@
 
 - [x] 4.1 Tests for protocol, DSL, runtime, supervisor (real processes), builder (real build, opt-in)
 - [x] 4.2 `Fluid` CI workflow: Linux on GitHub, macOS on a self-hosted runner
-- [ ] 4.3 On a Mac: the app runs the examples (README "What is not verified yet", step 1)
-- [ ] 4.4 On a Mac: the sandbox spike (step 2)
-- [ ] 4.5 On a Mac: the ExtensionKit discovery spike (step 3)
-- [ ] 4.6 One-week memory gate with PR Cockpit (step 4); `fluidctl soak` now runs it (see fluid-1-0)
+- [x] 4.3 On a Mac: the app runs the examples (README "What is not verified yet", step 1) (the app has run plugins on Naveen's Mac since 0.13.0)
+- [x] 4.4 On a Mac: the sandbox spike (step 2) (superseded: sandbox on by default with a Mac test (#8))
+- [x] 4.5 On a Mac: the ExtensionKit discovery spike (step 3) (superseded: run in rich-plugin-ui/spike.md, 2026-11-01)
+- [x] 4.6 One-week memory gate with PR Cockpit (step 4); `fluidctl soak` now runs it (see fluid-1-0) (done in fluid-1-0 4.10 (24 h soak PASS))

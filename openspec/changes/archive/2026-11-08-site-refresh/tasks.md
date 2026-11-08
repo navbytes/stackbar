@@ -22,5 +22,5 @@
 
 ## 5. Demo loops
 - [x] 5.1 `render --frames` records a scripted preview as an animated PNG (`--hold`, `--wait`; copies reach previews)
-- [ ] 5.2 Store: `demos.json` scripts, publish renders them into `site.json` `demos`
+- [x] 5.2 Store: `demos.json` scripts, publish renders them into `site.json` `demos` (stackbar-plugins #32 (demos.json, Clipboard, PR Cockpit, World Clock, Pomodoro))
 - [x] 5.3 Site: the hero and plugin pages play a demo where there is one

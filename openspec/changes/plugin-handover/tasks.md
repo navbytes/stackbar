@@ -10,9 +10,9 @@
 - [x] 1.7 `Stackbar.open` takes `stackbar://store/<id>` and `stackbar://settings` without the scheme (Applications links to App Switcher)
 
 ## 2. Plugins (navbytes/stackbar-plugins)
-- [ ] 2.1 Workspaces becomes Windows and takes over Window Layouts (`replaces`), keeping its command ids
-- [ ] 2.2 Window Layouts README points to Workspaces; App Switcher link from Applications
+- [x] 2.1 Workspaces becomes Windows and takes over Window Layouts (`replaces`), keeping its command ids (Windows 2.0.0, stackbar-plugins #42)
+- [x] 2.2 Window Layouts README points to Workspaces; App Switcher link from Applications (stackbar-plugins #42)
 
 ## 3. Check
-- [ ] 3.1 `swift build && swift test`
+- [x] 3.1 `swift build && swift test` (CI on #42 and the host PR)
 - [ ] 3.2 On Naveen's Mac: hotkeys carry over, Window Layouts turns off

@@ -5,5 +5,5 @@
 - [x] 1.3 `Capability.userServer(secret:)`: secret name, network entitlement, HTTP allow list, install sheet line
 - [x] 1.4 Authoring guide, llms.txt and the surface parity ledger
 - [x] 1.5 Tests: number format, heatmap layout and levels, user server allow and refuse, agent text
-- [ ] 1.6 LiteLLM plugin in stackbar-plugins (Monitoring/LiteLLM)
+- [x] 1.6 LiteLLM plugin in stackbar-plugins (Monitoring/LiteLLM) (Monitoring/LiteLLM in stackbar-plugins)
 - [ ] 1.7 Look at the panel on a Mac (stackbarctl render --png)

@@ -18,5 +18,5 @@
 - [x] 2.3 Pin to the merged stackbar commit (fdb5042); System Commands `minimumStackbar` 0.22.0 (stackbar-plugins #36)
 
 ## 3. Release
-- [ ] 3.1 Release 0.22.0 (Naveen says "release")
+- [x] 3.1 Release 0.22.0 (Naveen says "release") (v0.22.0 released)
 - [ ] 3.2 Mac check: ⌘Space flow on a Mac with Spotlight's shortcut on and off, welcome on a fresh user, each system action
