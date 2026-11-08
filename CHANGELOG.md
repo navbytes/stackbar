@@ -9,8 +9,6 @@ window. Write for people who use Stackbar, not for the code.
 - **Stackbar asks before a plugin does something you can't undo.** Stopping a process, removing containers or clearing history now takes a second press: the first one changes the button or row to "Press again to …", shows it on screen and tells VoiceOver, and does nothing else. After 10 seconds, or if what it would do changes (three containers become four), it goes back to normal. In the palette Return twice runs it and Esc forgets it. A widget button that would ask opens the plugin's panel instead. Every plugin now asks the same way, where before each one did it a little differently.
 - For plugin authors: `confirm:` on `Row.action`, `Button`, `ActionButton` and `IconButton` (`confirm: "stop web (pid 412)"`), protocol 25. On older Stackbar versions the kit asks itself. `stackbarctl soak --press` never presses these, and `stackbarctl render --event` holds the first press as the app does (`--confirm` sends at once).
 
-## 0.34.1
-
 ### Fixed
 - **Installing the command-line tool no longer freezes Stackbar.** While the password prompt was up, the menu bar, palette and every window stopped responding. Settings now waits for the prompt without holding up the rest of the app.
 
