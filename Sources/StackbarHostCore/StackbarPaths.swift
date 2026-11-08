@@ -29,6 +29,15 @@ public enum StackbarPaths {
         #endif
     }
 
+    /// Where `stackbarctl` keeps plugins' saved values: a scratch folder in
+    /// the cache, so a `render` or `soak` never overwrites what the app
+    /// saved. `STACKBAR_HOME` (a whole separate home) or `--real-storage`
+    /// uses that home's `Storage`.
+    public static func toolStorageDirectory(realStorage: Bool, environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+        if realStorage || environment["STACKBAR_HOME"] != nil { return storageDirectory }
+        return cacheDirectory.appendingPathComponent("stackbarctl/Storage", isDirectory: true)
+    }
+
     public static var pluginsDirectory: URL { dataDirectory.appendingPathComponent("Plugins", isDirectory: true) }
     public static var storageDirectory: URL { dataDirectory.appendingPathComponent("Storage", isDirectory: true) }
     /// Each plugin's folder for the commands it runs (`Run/<id>`, with `tmp`).

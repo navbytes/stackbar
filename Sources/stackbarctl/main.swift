@@ -66,8 +66,10 @@ usage:
 A .swift path is built first (cached by content); anything else is run as an
 already-built helper. On macOS, render, commands, run, mcp, agent and soak run
 plugins in the App Sandbox their manifest allows, as the app does; --no-sandbox
-runs them unsigned. STACKBAR_PACKAGE overrides where StackbarKit is found, and
-STACKBAR_HOME where Stackbar keeps its data.
+runs them unsigned. Plugins' saved values go to a scratch folder
+(stackbarctl/Storage in Stackbar's cache), never the app's own; --real-storage
+uses the app's. STACKBAR_PACKAGE overrides where StackbarKit is found, and
+STACKBAR_HOME where Stackbar keeps its data (saved values included).
 """
 
 func fail(_ message: String) -> Never {
@@ -86,6 +88,9 @@ let sandbox = !CommandLine.arguments.contains("--no-sandbox")
 #else
 let sandbox = false
 #endif
+/// Plugins' saved values go to a scratch folder unless `--real-storage`
+/// (or `STACKBAR_HOME`), so trying a plugin can't overwrite the app's data.
+let realStorage = CommandLine.arguments.contains("--real-storage")
 let loader = PluginLoader(builder: PluginBuilder(stackbarPackage: StackbarPaths.stackbarPackage(), cacheRoot: StackbarPaths.buildCache), sandbox: sandbox)
 
 /// stackbarctl runs plugins against a simulated clipboard, battery and calendar
@@ -106,7 +111,7 @@ func simulateContext(_ flag: String, _ value: String) {
 
 func makeServices() -> HostServices {
     HostServices(
-        storage: StorageStore(directory: StackbarPaths.storageDirectory),
+        storage: StorageStore(directory: StackbarPaths.toolStorageDirectory(realStorage: realStorage)),
         secrets: StackbarPaths.defaultSecrets(),
         platform: .init(
             notify: { posted in
@@ -346,7 +351,7 @@ func flag(_ name: String, in options: [String]) -> String? {
     return options[index + 1]
 }
 
-let arguments = CommandLine.arguments.dropFirst().filter { $0 != "--no-sandbox" }
+let arguments = CommandLine.arguments.dropFirst().filter { $0 != "--no-sandbox" && $0 != "--real-storage" }
 guard let command = arguments.first else { fail(usage) }
 let rest = Array(arguments.dropFirst())
 

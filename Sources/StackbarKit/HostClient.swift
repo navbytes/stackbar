@@ -312,6 +312,10 @@ public enum Stackbar {
         HostClient.shared.fire(.hud(message, isError: isError))
     }
 
+    /// Opens a URL or an absolute (or `~/`) path without waiting: the
+    /// same rules as `open(_:with:)`, so a scheme or path the manifest
+    /// declares in `.openURLs` opens here too (from 0.33.0; before, only
+    /// https, http, mailto, tel and meeting links did).
     public static func open(_ url: String) {
         HostClient.shared.fire(.openURL(url))
     }

@@ -410,6 +410,9 @@ final class PluginSupervisorTests: XCTestCase {
             .button(title: "Save", action: "button/Save"),
             .button(title: "Crash", action: "button/Crash"),
             .button(title: "Clear laps", action: "button/Clear laps"),
+            .button(title: "Upgrade All", action: "button/Upgrade All"),
+            .button(title: "Stop container", action: "button/Stop container"),
+            .button(title: "Approve", action: "button/Approve"),
             .toggle(title: "On", isOn: true, action: "toggle/On"),
         ])
         XCTAssertEqual(Soak.safeActions(in: panel), ["button/Save"])

@@ -214,8 +214,15 @@ public final class HostServices: Sendable {
             }
 
         case .openURL(let string):
-            guard let url = URL(string: string), let scheme = url.scheme?.lowercased(), Self.openableSchemes.contains(scheme) else {
-                return .failure("only https, http, mailto, tel and meeting app (zoommtg, msteams) URLs can be opened")
+            // The same rules as `open(_:with: nil)`: the schemes and paths
+            // the manifest declares, not only the ones that need nothing.
+            let url: URL
+            switch Self.openTarget(string, granted: granted) {
+            case .success(let target): url = target
+            case .failure(let message): return .failure(message.description)
+            }
+            if url.isFileURL, Self.isProgram(url) {
+                return .failure("\(url.path) is a program; open it with an app chosen explicitly")
             }
             platform.open(url)
             return .ok
