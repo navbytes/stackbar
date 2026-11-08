@@ -83,6 +83,7 @@ public enum SettingsPresentation {
                 ("Sees which apps", .apps), ("Listens for a key", .keyLayer), ("Finds files", .fileSearch),
                 ("Locks, sleeps", .systemActions), ("Replaces keywords", .textExpansion), ("Reads the menus", .menus),
                 ("Reads the text in a part of the screen", .screenText), ("Reads your Mac's temperatures", .sensors),
+                ("Uses your SSH keys", .sshAgent),
             ]
             guard let match = prefixes.first(where: { summary.hasPrefix($0.0) }) else { return nil }
             self.init(kind: match.1)
@@ -96,7 +97,7 @@ public enum SettingsPresentation {
             switch kind {
             case .network: self = .network
             case .files, .fileSearch: self = .files
-            case .run, .terminal: self = .run
+            case .run, .terminal, .sshAgent: self = .run
             case .secret: self = .secret
             case .oauth: self = .account
             case .clipboard: self = .clipboard
@@ -174,6 +175,7 @@ public enum SettingsPresentation {
         case .terminal: return "Opens commands in the terminal"
         case .screenText: return "Reads text on screen"
         case .sensors: return "Temperatures and fans"
+        case .sshAgent: return "SSH keys"
         }
     }
 

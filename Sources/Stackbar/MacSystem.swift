@@ -707,6 +707,21 @@ final class MacSystem: SystemServices, @unchecked Sendable {
         return ChosenFile(name: url.lastPathComponent, data: try Data(contentsOf: url))
     }
 
+    func chooseFolder(prompt: String?, startingAt: String?, for pluginName: String) async throws -> String? {
+        await MainActor.run {
+            let panel = NSOpenPanel()
+            panel.message = prompt.map { "\(pluginName): \($0)" } ?? "\(pluginName) asks for a folder. Its commands can run in the folder you choose."
+            panel.prompt = "Choose"
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.canCreateDirectories = false
+            panel.allowsMultipleSelection = false
+            if let startingAt { panel.directoryURL = URL(fileURLWithPath: startingAt, isDirectory: true) }
+            NSApp.activate()
+            return panel.runModal() == .OK ? panel.url?.path : nil
+        }
+    }
+
     func saveFile(name: String, data: Data, for pluginName: String) async throws -> String? {
         let url: URL? = await MainActor.run {
             let panel = NSSavePanel()

@@ -36,13 +36,18 @@ public final class CommandRunGate: @unchecked Sendable {
         /// The approved program for each granted name. A name missing here
         /// resolves now (`stackbarctl` and tests, which have no ledger).
         public var approvedPaths: [String: String]?
-        /// Granted `.files` paths, as written (`~/` allowed).
+        /// Granted `.files` paths, as written (`~/` allowed), and the
+        /// folders the user chose for the plugin.
         public var folders: [String]
+        /// The SSH agent's socket, passed as `SSH_AUTH_SOCK` when the plugin
+        /// holds `.sshAgent`; nil passes none.
+        public var sshAgentSocket: String?
 
-        public init(pluginID: String, approvedPaths: [String: String]? = nil, folders: [String] = []) {
+        public init(pluginID: String, approvedPaths: [String: String]? = nil, folders: [String] = [], sshAgentSocket: String? = nil) {
             self.pluginID = pluginID
             self.approvedPaths = approvedPaths
             self.folders = folders
+            self.sshAgentSocket = sshAgentSocket
         }
     }
 
@@ -154,7 +159,7 @@ public final class CommandRunGate: @unchecked Sendable {
     /// Variables a plugin may not set: what the host sets itself, and what
     /// would load other code into the approved program.
     static func isReservedVariable(_ name: String) -> Bool {
-        ["PATH", "HOME", "TMPDIR"].contains(name) || name.hasPrefix("DYLD_") || name.hasPrefix("LD_")
+        ["PATH", "HOME", "TMPDIR", "SSH_AUTH_SOCK"].contains(name) || name.hasPrefix("DYLD_") || name.hasPrefix("LD_")
     }
 
     func prepare(_ request: RunRequest, grant: Grant) -> Result<Prepared, Refusal> {
@@ -200,7 +205,7 @@ public final class CommandRunGate: @unchecked Sendable {
             }
             let allowed = [Self.canonical(home.path)] + grant.folders.map { Self.canonical(NSString(string: $0).expandingTildeInPath) }
             guard allowed.contains(where: { expanded == $0 || expanded.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") }) else {
-                return refuse(.invalid, "\(wanted) is outside the plugin's folder and its .files paths")
+                return refuse(.invalid, "\(wanted) is outside the plugin's folder, its .files paths and the folders you chose for it")
             }
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -217,6 +222,7 @@ public final class CommandRunGate: @unchecked Sendable {
             "LANG": "en_US.UTF-8",
             "TMPDIR": tmp.path + "/",
         ]
+        if let socket = grant.sshAgentSocket, !socket.isEmpty { environment["SSH_AUTH_SOCK"] = socket }
         var size = 0
         for (key, value) in request.environment {
             guard !key.isEmpty, !key.contains("="), !key.contains("\0"), !value.contains("\0") else {

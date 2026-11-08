@@ -27,6 +27,9 @@ public protocol SystemServices: Sendable {
     func finderSelection() async throws -> [String]
     /// An Open panel; nil when the user cancelled.
     func chooseFile(types: [String], for pluginName: String) async throws -> ChosenFile?
+    /// An Open panel for one folder, starting at `startingAt` when given;
+    /// the folder's path, or nil when the user cancelled.
+    func chooseFolder(prompt: String?, startingAt: String?, for pluginName: String) async throws -> String?
     /// A Save panel; the path written, or nil when the user cancelled.
     func saveFile(name: String, data: Data, for pluginName: String) async throws -> String?
     /// An installed app's bundle id, from its name, path or bundle id.
@@ -95,6 +98,7 @@ extension SystemServices {
     public func finderSelection() async throws -> [String] { throw SystemServiceError("Finder is not available on this platform") }
     public func chooseFile(types: [String], for pluginName: String) async throws -> ChosenFile? { throw SystemServiceError("choosing files is not available on this platform") }
     public func saveFile(name: String, data: Data, for pluginName: String) async throws -> String? { throw SystemServiceError("saving files is not available on this platform") }
+    public func chooseFolder(prompt: String?, startingAt: String?, for pluginName: String) async throws -> String? { throw SystemServiceError("choosing folders is not available on this platform") }
     public func resolveApplication(_ nameOrPath: String) async -> String? { nil }
     public func windows() async throws -> WindowSnapshot { throw SystemServiceError("windows are not available on this platform") }
     public func arrangeWindows(_ placements: [WindowPlacement], launch: Bool) async throws -> ArrangeResult { throw SystemServiceError("windows are not available on this platform") }
@@ -188,7 +192,8 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
     /// `STACKBAR_WINDOWS` (`WindowSnapshot` as JSON, inline or a file) and
     /// `STACKBAR_APPS` (`[RunningApp]` as JSON, inline or a file) and
     /// `STACKBAR_REMINDERS` (`SimulatedReminders` as JSON, inline or a file)
-    /// and `STACKBAR_MENUS` (`MenuSnapshot` as JSON, inline or a file) when
+    /// and `STACKBAR_MENUS` (`MenuSnapshot` as JSON, inline or a file) and
+    /// `STACKBAR_CHOOSE_FOLDER` (the folders panels pick, `:`-separated) when
     /// set.
     public static func fromEnvironment() -> SimulatedSystem {
         let environment = ProcessInfo.processInfo.environment
@@ -213,6 +218,10 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
             let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
             if let state = try? SystemCodec.decode(SimulatedReminders.self, from: text) { system.simulate(reminders: state) }
         }
+        // Folder panels answer with these paths in turn (":"-separated).
+        if let value = environment["STACKBAR_CHOOSE_FOLDER"] {
+            for path in value.split(separator: ":") { system.simulate(chosenFolder: NSString(string: String(path)).expandingTildeInPath) }
+        }
         if let value = environment["STACKBAR_CONTEXT"] {
             let text = value.hasPrefix("{") ? value : ((try? String(contentsOfFile: value, encoding: .utf8)) ?? "")
             if let context = try? SystemCodec.decode(InvocationContext.self, from: text) { system.simulate(context: context) }
@@ -231,6 +240,15 @@ public final class SimulatedSystem: SystemServices, @unchecked Sendable {
 
     public func chooseFile(types: [String], for pluginName: String) async throws -> ChosenFile? {
         lock.withLock { chosen.isEmpty ? nil : chosen.removeFirst() }
+    }
+
+    private var chosenFolders: [String?] = []
+
+    /// The next folder panel picks this folder (`nil`: the user cancels).
+    public func simulate(chosenFolder: String?) { lock.withLock { chosenFolders.append(chosenFolder) } }
+
+    public func chooseFolder(prompt: String?, startingAt: String?, for pluginName: String) async throws -> String? {
+        lock.withLock { chosenFolders.isEmpty ? nil : chosenFolders.removeFirst() }
     }
 
     public func saveFile(name: String, data: Data, for pluginName: String) async throws -> String? {

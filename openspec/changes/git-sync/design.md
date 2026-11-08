@@ -21,8 +21,9 @@ the panel says to pick a folder inside it.
 folders the user removed. The plugin's sandbox is unchanged: it never reads
 these folders itself, only commands run there.
 
-`stackbarctl` simulates the panel with `--choose-folder <path>` and keeps
-grants in its scratch storage.
+`stackbarctl` simulates the panel with `STACKBAR_CHOOSE_FOLDER=<path>[:<path>…]`
+(like the other `STACKBAR_*` simulations) and keeps grants in its scratch
+folder.
 
 ## SSH agent
 

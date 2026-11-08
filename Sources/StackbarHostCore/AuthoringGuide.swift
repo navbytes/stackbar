@@ -351,6 +351,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `invocation.context` in commands, or `try await Stackbar.context()` now: frontmostApp, windowTitle, selectedText (nil when the app doesn't share it); `try await Stackbar.finderSelection()` returns paths | `.context` |
 | `@Stored("key") var x = default` (any Codable, 1 MB per plugin) | nothing; `.storage(megabytes: 16)` for up to 64 MB |
 | `try await Stackbar.chooseFile(types: ["json"])` returns `ChosenFile?` (name, data; 5 MB at most), `try await Stackbar.saveFile("x.json", data:)` returns the path; nil when the user cancels | nothing (the user picks) |
+| `try await Stackbar.chooseFolder(prompt: "Where your code is", startingAt: "~/Developer")` returns `ChosenFolder?` (path, name; nil on cancel) and lets your commands run in that folder and inside it until the user removes it on your Settings page; `try await Stackbar.grantedFolders()` lists those still allowed. `~`, `/`, `~/Library` and system folders are refused; 0.34.0 | nothing (the user picks) |
 | `try await Stackbar.resolveApplication("Google Chrome")` returns a bundle id from an app's name, path or id | nothing |
 | `try await Stackbar.clipboard()` returns `ClipboardItem?` (kind, text, files, imageID, contentID for formatted copies, sourceAppID, concealed, changeCount); hear every copy with the `.clipboard` trigger | `.clipboard` |
 | `try await Stackbar.recognizeText(imageID: item.imageID!)` returns `RecognizedText` (text, lines with confidence) read from a kept clipboard image with Vision, on the Mac; `languages: ["fr-FR"]` narrows it; 0.26.0 | `.clipboard` |
@@ -421,9 +422,10 @@ given. A bare name is found in /opt/homebrew/bin, /usr/local/bin, /usr/bin,
 /bin, /usr/sbin or /sbin (never the user's PATH), and the user approves the
 path it resolves to; if it later resolves elsewhere, the run fails until they
 approve again. The environment is PATH, HOME, LANG and TMPDIR (the plugin's
-own temporary folder) plus `environment:`; the working directory is the
-plugin's own folder unless `workingDirectory:` names one inside a `.files`
-path. At most 4 at once, 8 MB of output a channel, a 60 second timeout by
+own temporary folder) plus `environment:`, and SSH_AUTH_SOCK with `.sshAgent`
+(0.34.0), so `git` and `ssh` reach the user's SSH agent; the working
+directory is the plugin's own folder unless `workingDirectory:` names one
+inside a `.files` path or a folder the user chose with `chooseFolder`. At most 4 at once, 8 MB of output a channel, a 60 second timeout by
 default and 10 minutes at most; on timeout the whole process group is
 stopped. Declaring a shell or interpreter (sh, zsh, python3, node,
 osascript, ...) is allowed but the install sheet warns it can run any program;
@@ -433,7 +435,9 @@ Selected text comes through Accessibility and is cut to 100 KB. Apps built
 on the standard macOS text views share it; others may not, so always handle
 nil (offer the clipboard, or an argument, instead). On Linux and in `stackbarctl`, the context is simulated: pass
 `--selected-text` and `--frontmost-app` (or `selected_text` and
-`frontmost_app` to the MCP command tools).
+`frontmost_app` to the MCP command tools). Folder panels pick the paths in
+`STACKBAR_CHOOSE_FOLDER` (`:`-separated, one per panel), and the folders
+chosen stay in `stackbarctl`'s scratch folder.
 
 Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
 `.file(path: "~/x")`, `.topic(name: "t")`, `.clipboard`, `.displays` (a

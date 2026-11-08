@@ -1,14 +1,14 @@
 # Tasks
 
 ## 1. Host (stackbar)
-- [ ] 1.1 Protocol 24: `HostCall.chooseFolder(prompt:)`, `ChosenFolder`, `HostCall.grantedFolders`, `Capability.sshAgent`
-- [ ] 1.2 Folder grants in the plugin ledger; refused picks (`/`, `~`, `~/Library`, system folders); `CommandRunGate` allows granted folders as working directories
-- [ ] 1.3 Settings page: "Folders you chose" with Remove (refresh with reason `.settings`)
-- [ ] 1.4 `SSH_AUTH_SOCK` passed for `.sshAgent`, reserved for plugins; install sheet line
-- [ ] 1.5 MacSystem open panel; SimulatedSystem and `stackbarctl --choose-folder`
-- [ ] 1.6 StackbarKit `Stackbar.chooseFolder`, `Stackbar.grantedFolders`
-- [ ] 1.7 Tests: grant, refusal, removal stops runs, agent variable present only with the capability
-- [ ] 1.8 AuthoringGuide + llms.txt, CHANGELOG
+- [x] 1.1 Protocol 24: `HostCall.chooseFolder(prompt:)`, `ChosenFolder`, `HostCall.grantedFolders`, `Capability.sshAgent`
+- [x] 1.2 Folder grants in the plugin ledger; refused picks (`/`, `~`, `~/Library`, system folders); `CommandRunGate` allows granted folders as working directories
+- [x] 1.3 Settings page: "Folders you chose" with Remove (refresh with reason `.settings`)
+- [x] 1.4 `SSH_AUTH_SOCK` passed for `.sshAgent`, reserved for plugins; install sheet line
+- [x] 1.5 MacSystem open panel; SimulatedSystem and `STACKBAR_CHOOSE_FOLDER` for `stackbarctl`
+- [x] 1.6 StackbarKit `Stackbar.chooseFolder`, `Stackbar.grantedFolders`
+- [x] 1.7 Tests: grant, refusal, removal stops runs, agent variable present only with the capability
+- [x] 1.8 AuthoringGuide + llms.txt, CHANGELOG
 
 ## 2. Plugin (stackbar-plugins `Developer/GitSync`, 1.0.0)
 - [ ] 2.1 Discovery: picked folders with depth, single repos, hidden list, suggestions

@@ -58,6 +58,8 @@ public enum HostReplies {
     public static let context = HostReply<InvocationContext>()
     public static let finderSelection = HostReply<[String]>()
     public static let chooseFile = HostReply<ChosenFile>()
+    public static let chooseFolder = HostReply<ChosenFolder>()
+    public static let grantedFolders = HostReply<[String]>()
     public static let windows = HostReply<WindowSnapshot>()
     public static let arrangeWindows = HostReply<ArrangeResult>()
     public static let installedApps = HostReply<[InstalledApp]>()

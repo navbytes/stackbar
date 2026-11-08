@@ -60,6 +60,8 @@ extension HostCall {
         case .recognizeText: return "reading the text in an image"
         case .captureScreenText: return "reading text on the screen"
         case .sensors: return "reading temperatures and fans"
+        case .chooseFolder: return "choosing a folder"
+        case .grantedFolders: return "reading the folders you chose"
         }
     }
 
@@ -103,7 +105,7 @@ extension HostCall {
         case .createReminderList, .saveReminder, .deleteReminder: return (.reminders, "change your reminders")
         case .storageSet, .secret, .http, .oauthToken, .publish, .notify, .alert, .playSound,
              .openURL, .open, .copy, .run, .cancelRun, .chooseFile, .saveFile, .resolveApplication, .hud,
-             .pickColor, .define:
+             .pickColor, .define, .chooseFolder, .grantedFolders:
             return nil
         }
     }
@@ -147,7 +149,7 @@ public struct RateBudget: Equatable, Sendable {
             case .sounds: return "`play`"
             case .huds: return "`hud`"
             case .systemActions: return "`system`"
-            case .filePanels: return "`chooseFile`, `saveFile`, `pickColor`"
+            case .filePanels: return "`chooseFile`, `chooseFolder`, `saveFile`, `pickColor`"
             case .appSwitching: return "`activateApp`, `hideApp`, `focusWindow`, `pressMenuItem`"
             case .calendarWrites: return "`saveCalendarEvent`"
             case .terminals: return "`openInTerminal`"
@@ -192,7 +194,7 @@ extension HostCall {
         case .playSound: return RateBudget(.sounds, "sounds")
         case .hud: return RateBudget(.huds, "HUD messages")
         case .system: return RateBudget(.systemActions, "system actions")
-        case .chooseFile, .saveFile: return RateBudget(.filePanels, "file panels")
+        case .chooseFile, .chooseFolder, .saveFile: return RateBudget(.filePanels, "file panels")
         case .pickColor: return RateBudget(.filePanels, "color pickers")
         case .activateApp, .hideApp, .focusWindow: return RateBudget(.appSwitching, "app switches")
         case .pressMenuItem: return RateBudget(.appSwitching, "menu presses")
@@ -204,7 +206,7 @@ extension HostCall {
              .paste, .keepAwake, .systemStatus, .calendarEvents, .run, .cancelRun, .context, .finderSelection,
              .resolveApplication, .windows, .runningApps, .setKeyLayer, .keyLayerStatus, .reminderAccess,
              .reminderLists, .createReminderList, .reminders, .saveReminder, .deleteReminder, .installedApps,
-             .findFiles, .setExpansions, .expansionStatus, .menuItems, .define, .writableCalendars, .sensors:
+             .findFiles, .setExpansions, .expansionStatus, .menuItems, .define, .writableCalendars, .sensors, .grantedFolders:
             return nil
         }
     }
@@ -223,7 +225,7 @@ extension HostCall {
     /// picker, a screen selection).
     public var replyTimeout: Double? {
         switch self {
-        case .oauthToken, .chooseFile, .saveFile, .pickColor, .captureScreenText:
+        case .oauthToken, .chooseFile, .chooseFolder, .saveFile, .pickColor, .captureScreenText:
             return nil
         case .http(let request):
             // The host may let a call run up to its whole-call maximum (redirects
@@ -241,7 +243,7 @@ extension HostCall {
              .clipboardWrite, .paste, .keepAwake, .systemStatus, .cancelRun, .context, .finderSelection,
              .resolveApplication, .windows, .runningApps, .activateApp, .hideApp, .setKeyLayer, .keyLayerStatus,
              .installedApps, .findFiles, .hud, .setExpansions, .expansionStatus, .focusWindow, .menuItems,
-             .pressMenuItem, .define, .openInTerminal, .recognizeText, .sensors:
+             .pressMenuItem, .define, .openInTerminal, .recognizeText, .sensors, .grantedFolders:
             return Self.defaultReplyTimeout
         }
     }

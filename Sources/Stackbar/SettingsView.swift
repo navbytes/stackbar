@@ -446,6 +446,8 @@ struct PluginPage: View {
 
     @State private var confirmingUninstall = false
     @State private var showingDiagnostics = false
+    /// The folders the user chose for the plugin, read when the page shows.
+    @State private var folders: [String] = []
 
     private var manifest: Manifest? { controller.manifest }
 
@@ -486,9 +488,15 @@ struct PluginPage: View {
             pluginSettings
             shortcuts
             permissions
+            chosenFolders
             secrets
             diagnostics
             actions
+        }
+        .onAppear { folders = AppModel.folderGrants.folders(for: controller.pluginID) }
+        .onChange(of: controller.pluginID) { _, id in folders = AppModel.folderGrants.folders(for: id) }
+        .onReceive(NotificationCenter.default.publisher(for: AppModel.folderGrantsChanged)) { _ in
+            folders = AppModel.folderGrants.folders(for: controller.pluginID)
         }
         .modifier(UninstallDialog(isPresented: $confirmingUninstall, name: controller.name, canTurnOff: controller.isEnabled) { deleteData in
             Task { await model.uninstall(controller, deleteData: deleteData) }
@@ -577,6 +585,26 @@ struct PluginPage: View {
                             StatusTag(text: "Asks", color: .orange)
                         } else {
                             StatusTag(text: "Allowed", color: .green)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Folders picked with `Stackbar.chooseFolder`: the plugin's commands
+    /// may run in them until removed here.
+    @ViewBuilder private var chosenFolders: some View {
+        let pluginID = controller.pluginID
+        if !folders.isEmpty {
+            SettingsGroup("Folders you chose", footer: "\(controller.name) can run its commands in these folders. Removing one stops that at once.") {
+                ForEach(folders, id: \.self) { folder in
+                    SettingsRow(symbol: "folder.fill", color: SettingsPresentation.Access.files.color,
+                                title: (folder as NSString).lastPathComponent,
+                                caption: (folder as NSString).abbreviatingWithTildeInPath) {
+                        Button("Remove") {
+                            try? AppModel.folderGrants.remove(folder, for: pluginID)
+                            folders = AppModel.folderGrants.folders(for: pluginID)
                         }
                     }
                 }
