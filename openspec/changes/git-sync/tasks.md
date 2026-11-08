@@ -11,17 +11,17 @@
 - [x] 1.8 AuthoringGuide + llms.txt, CHANGELOG
 
 ## 2. Plugin (stackbar-plugins `Developer/GitSync`, 1.0.0)
-- [ ] 2.1 Discovery: picked folders with depth, single repos, hidden list, suggestions
-- [ ] 2.2 Status from `git status --porcelain=v2 --branch`; all-branches mode with `for-each-ref`
-- [ ] 2.2a Worktrees: grouping, `worktree list`, per-worktree status, merged / missing / agent labels, Remove / Prune / Unlock, Clean Up, New Worktree, Search Worktrees
-- [ ] 2.3 Fetch scheduler (interval setting, wake, 3 at once, staggered)
-- [ ] 2.4 Pull (ff-only / rebase), dirty handling (skip / stash / ask), push, Update All Safe
-- [ ] 2.5 Panel, menu bar, window, widget, palette commands, root search, settings
-- [ ] 2.6 Notifications (opt-in) and `repo_status` agent tool
-- [ ] 2.7 Row errors (moved, auth, offline, no git, timeout)
-- [ ] 2.8 README, preview scenes with sample data, `scripts/check.sh`
+- [x] 2.1 Discovery: picked folders with depth, single repos, hidden list (suggestions from recent editor projects left for later)
+- [x] 2.2 Status from `git status --porcelain=v2 --branch`; all-branches mode with `for-each-ref`
+- [x] 2.2a Worktrees: grouping, `worktree list`, per-worktree status, merged / missing / agent labels, Remove / Prune (Unlock left to `git worktree unlock`), Clean Up, New Worktree, Search Worktrees
+- [x] 2.3 Fetch scheduler (interval setting, wake, 3 at once, staggered)
+- [x] 2.4 Pull (ff-only / rebase), dirty handling (skip / stash / ask), push, Update All Safe
+- [x] 2.5 Panel, menu bar, window, widget, palette commands, root search, settings
+- [x] 2.6 Notifications (opt-in) and `repo_status` agent tool
+- [x] 2.7 Row errors (moved, auth, offline, no git, timeout)
+- [x] 2.8 README, preview scenes with sample data, `scripts/check.sh`
 
 ## 3. Ship
-- [ ] 3.1 Release the host (minimumStackbar for Git Sync)
+- [x] 3.1 Release the host (minimumStackbar for Git Sync)
 - [ ] 3.2 Publish Git Sync 1.0.0
 - [ ] 3.3 Check on Naveen's Mac: SSH remote, HTTPS remote, a dirty repo, a diverged repo
