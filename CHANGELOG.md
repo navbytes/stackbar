@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.35.1
 
 ### Fixed
 - Opening a command's view from the palette puts the cursor in its search field, so the arrow keys move through the list at once instead of after pressing Tab.
