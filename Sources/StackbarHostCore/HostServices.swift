@@ -90,15 +90,22 @@ public final class HostServices: Sendable {
     /// (the capability ledger's). `nil`: every granted name runs what it
     /// resolves to now, as in `stackbarctl` and tests.
     private let approvedCommands: (@Sendable (String) -> [String: String])?
+    /// The folders users chose for plugins with `chooseFolder`.
+    public let folderGrants: FolderGrants
+    /// The SSH agent's socket for plugins with `.sshAgent`: the host's own
+    /// `SSH_AUTH_SOCK`.
+    public let sshAgentSocket: String?
     /// Every call a plugin makes, so a loop that hammers the host is cut off
     /// instead of starving the others.
     private let calls = RateLimiter(limit: RateBudget.allCalls.limit, per: RateBudget.allCalls.window)
     /// One limiter per pool in `HostCall.budget`.
     private let pools = Dictionary(uniqueKeysWithValues: RateBudget.Pool.allCases.map { ($0, RateLimiter(limit: $0.limit, per: $0.window)) })
 
-    public init(storage: StorageStore, secrets: any SecretStore, platform: Platform = Platform(), audit: NetworkAudit = NetworkAudit(), bus: PluginBus = PluginBus(), oauthTimeout: Double = 300, runs: CommandRunGate? = nil, approvedCommands: (@Sendable (String) -> [String: String])? = nil) {
+    public init(storage: StorageStore, secrets: any SecretStore, platform: Platform = Platform(), audit: NetworkAudit = NetworkAudit(), bus: PluginBus = PluginBus(), oauthTimeout: Double = 300, runs: CommandRunGate? = nil, approvedCommands: (@Sendable (String) -> [String: String])? = nil, folderGrants: FolderGrants = FolderGrants(file: nil), sshAgentSocket: String? = ProcessInfo.processInfo.environment["SSH_AUTH_SOCK"]) {
         self.runs = runs ?? CommandRunGate(root: FileManager.default.temporaryDirectory.appendingPathComponent("stackbar-run", isDirectory: true))
         self.approvedCommands = approvedCommands
+        self.folderGrants = folderGrants
+        self.sshAgentSocket = sshAgentSocket
         self.storage = storage
         self.secrets = secrets
         self.audit = audit
@@ -115,7 +122,8 @@ public final class HostServices: Sendable {
     /// `stackbarctl` and tests; the app builds its own with the Keychain.
     public static func local(directory: URL, secrets: (any SecretStore)? = nil, platform: Platform = Platform()) -> HostServices {
         let store = secrets ?? ChainedSecretStore([FileSecretStore(file: directory.appendingPathComponent("secrets.json")), EnvironmentSecretStore()])
-        return HostServices(storage: StorageStore(directory: directory.appendingPathComponent("storage", isDirectory: true)), secrets: store, platform: platform)
+        return HostServices(storage: StorageStore(directory: directory.appendingPathComponent("storage", isDirectory: true)), secrets: store, platform: platform,
+                            folderGrants: FolderGrants(file: directory.appendingPathComponent("folder-grants.json")))
     }
 
     /// Handles one call for a plugin whose granted capabilities are those of
@@ -327,6 +335,19 @@ public final class HostServices: Sendable {
                 return .failure("\(error)")
             }
 
+        case .chooseFolder(let prompt, let start):
+            do {
+                let startPath = start.map { NSString(string: $0).expandingTildeInPath }
+                guard let path = try await platform.system.chooseFolder(prompt: prompt, startingAt: startPath, for: granted.name) else { return .value(nil) }
+                let granted = try folderGrants.add(path, for: granted.id)
+                return HostReplies.chooseFolder.result(ChosenFolder(path: granted, name: (granted as NSString).lastPathComponent))
+            } catch {
+                return .failure("\(error)")
+            }
+
+        case .grantedFolders:
+            return HostReplies.grantedFolders.result(folderGrants.folders(for: granted.id))
+
         case .saveFile(let name, let data):
             guard data.count <= ChosenFile.maxBytes else { return .failure("files saved this way are at most 5 MB") }
             let safe = (name as NSString).lastPathComponent
@@ -450,7 +471,9 @@ public final class HostServices: Sendable {
             if case .files(let paths) = capability { return paths }
             return []
         }
-        let grant = CommandRunGate.Grant(pluginID: granted.id, approvedPaths: approvedCommands?(granted.id), folders: folders)
+        let socket = granted.capabilities.contains(.sshAgent) ? sshAgentSocket : nil
+        let grant = CommandRunGate.Grant(pluginID: granted.id, approvedPaths: approvedCommands?(granted.id),
+                                         folders: folders + folderGrants.folders(for: granted.id), sshAgentSocket: socket)
         func refused(_ refusal: CommandRunGate.Refusal) -> HostResult {
             if refusal.kind == .moved { platform.approvalNeeded(granted.id) }
             return .failure(refusal.description)

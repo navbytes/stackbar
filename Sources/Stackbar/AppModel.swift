@@ -70,6 +70,9 @@ final class AppModel {
     @ObservationIgnored private var storeTimer: Timer?
 
     /// Clipboard images and formatted copies the host keeps for plugins.
+    /// The folders users chose for plugins (`Stackbar.chooseFolder`).
+    nonisolated static let folderGrantsChanged = Notification.Name("io.navbytes.stackbar.folderGrantsChanged")
+    nonisolated static let folderGrants = FolderGrants(file: StackbarPaths.dataDirectory.appendingPathComponent("folder-grants.json"))
     nonisolated static let clipboardImages = ClipboardImageStore(directory: StackbarPaths.dataDirectory.appendingPathComponent("ClipboardImages", isDirectory: true))
 
     /// Loads kept clipboard images for a plugin's row previews; only for
@@ -115,9 +118,17 @@ final class AppModel {
                 approvalNeeded: { pluginID in secretRouter.reviewAgain(pluginID) }
             ),
             runs: CommandRunGate(root: StackbarPaths.runDirectory) { pluginID, line in HostLog.shared.write(.info, line, plugin: pluginID) },
-            approvedCommands: { ledger.approvedCommandPaths(for: $0) }
+            approvedCommands: { ledger.approvedCommandPaths(for: $0) },
+            folderGrants: Self.folderGrants
         )
         secretRouter.model = self
+        // A folder removed in Settings (or added): the plugin looks again.
+        Self.folderGrants.observe { [weak self] pluginID in
+            Task { @MainActor in
+                NotificationCenter.default.post(name: AppModel.folderGrantsChanged, object: nil)
+                self?.controller(for: pluginID)?.refresh()
+            }
+        }
         installation = PluginInstallation(installer: installer, ledger: ledger, switches: switches, storage: services.storage, secrets: services.secrets,
                                           helpers: .init(directory: builder.downloadedHelpers, stackbarKit: builder.stackbarKit),
                                           trash: { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) })
@@ -282,6 +293,7 @@ final class AppModel {
         let doomed = controllers.filter { $0 === controller || $0.pluginID == id || files.contains($0.source.standardizedFileURL) }
         for other in doomed { await remove(other) }
         let stuck = await installation.uninstall(id, loaded: doomed.map(\.source), deleteData: deleteData, providers: providers)
+        try? Self.folderGrants.removeAll(for: id)
         refreshInstalled()
         return stuck
     }
@@ -293,6 +305,7 @@ final class AppModel {
             return await uninstall(controller, deleteData: deleteData)
         } else {
             let stuck = await installation.uninstall(pluginID, deleteData: deleteData)
+            try? Self.folderGrants.removeAll(for: pluginID)
             refreshInstalled()
             return stuck
         }

@@ -90,6 +90,7 @@ final class SettingsPresentationTests: XCTestCase {
         case .terminal: return .terminal
         case .screenText: return .screenText
         case .sensors: return .sensors
+        case .sshAgent: return .sshAgent
         }
     }
 

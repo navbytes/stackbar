@@ -687,6 +687,22 @@ public enum Stackbar {
         try await HostReplies.chooseFile.decode(value(.chooseFile(types: types)))
     }
 
+    /// Asks the user to pick a folder and lets the plugin's commands run in it
+    /// (`Stackbar.run(_:_:workingDirectory:)`) and inside it, until the user
+    /// removes it on the plugin's Settings page. `startingAt` opens the panel
+    /// there (a `~/` path is fine). Returns the folder, or `nil` when they
+    /// cancel. Needs no capability: the user chooses. Folders as broad as
+    /// `~` or `/` are refused. Stackbar 0.34.0 and later.
+    public static func chooseFolder(prompt: String? = nil, startingAt: String? = nil) async throws -> ChosenFolder? {
+        try await HostReplies.chooseFolder.decode(value(.chooseFolder(prompt: prompt, startingAt: startingAt)))
+    }
+
+    /// The folders the user chose for this plugin with `chooseFolder` and
+    /// hasn't removed, as full paths. Stackbar 0.34.0 and later.
+    public static func grantedFolders() async throws -> [String] {
+        try await HostReplies.grantedFolders.decode(value(.grantedFolders)) ?? []
+    }
+
     /// Asks the user where to save `data`, suggesting `name`; returns the
     /// path written, or `nil` when they cancel. At most 5 MB.
     @discardableResult

@@ -340,6 +340,10 @@ public enum Capability: Codable, Hashable, Sendable {
     /// Reads temperatures and fan speeds (`Stackbar.sensors()`). Stackbar
     /// 0.26.0 and later.
     case sensors
+    /// Lets the plugin's commands use the SSH agent (the host passes
+    /// `SSH_AUTH_SOCK`), so `git` and `ssh` can use the user's SSH keys.
+    /// Stackbar 0.34.0 and later.
+    case sshAgent
 
     public static func network(_ hosts: String...) -> Capability { .network(hosts: hosts) }
 
@@ -348,7 +352,7 @@ public enum Capability: Codable, Hashable, Sendable {
     /// the Store can show a capability without reading its summary.
     public enum Kind: String, CaseIterable, Codable, Sendable {
         case network, files, run, secret, oauth, clipboard, power, calendar, context, openURLs, storage, userServer
-        case windows, apps, keyLayer, reminders, fileSearch, systemActions, textExpansion, menus, calendarWrite, terminal, screenText, sensors
+        case windows, apps, keyLayer, reminders, fileSearch, systemActions, textExpansion, menus, calendarWrite, terminal, screenText, sensors, sshAgent
     }
 
     public var kind: Kind {
@@ -377,6 +381,7 @@ public enum Capability: Codable, Hashable, Sendable {
         case .terminal: return .terminal
         case .screenText: return .screenText
         case .sensors: return .sensors
+        case .sshAgent: return .sshAgent
         }
     }
 }

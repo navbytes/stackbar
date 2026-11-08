@@ -14,7 +14,7 @@ public enum SandboxEntitlements {
             switch capability {
             case .network, .oauth, .userServer:
                 result["com.apple.security.network.client"] = true
-            case .files, .run, .secret, .clipboard, .power, .calendar, .reminders, .context, .openURLs, .storage, .windows, .apps, .keyLayer, .fileSearch, .systemActions, .textExpansion, .menus, .calendarWrite, .terminal, .screenText, .sensors:
+            case .files, .run, .secret, .clipboard, .power, .calendar, .reminders, .context, .openURLs, .storage, .windows, .apps, .keyLayer, .fileSearch, .systemActions, .textExpansion, .menus, .calendarWrite, .terminal, .screenText, .sensors, .sshAgent:
                 // Files are opened up path by path (`fileExceptions`).
                 // Children inherit the sandbox; secrets, the clipboard, power
                 // assertions and calendar events all go through the host.
@@ -108,6 +108,7 @@ extension Capability {
         case .terminal: return "Opens your terminal app running a command it names, where you see it run"
         case .screenText: return "Reads the text in a part of the screen you choose"
         case .sensors: return "Reads your Mac's temperatures and fan speeds"
+        case .sshAgent: return "Uses your SSH keys through the SSH agent, for the commands it runs"
         }
     }
 }

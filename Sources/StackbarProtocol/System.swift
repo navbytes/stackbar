@@ -107,6 +107,19 @@ public struct ChosenFile: Codable, Equatable, Sendable {
     public static let maxBytes = 5 * 1024 * 1024
 }
 
+/// A folder the user picked with `Stackbar.chooseFolder`. Protocol 24.
+public struct ChosenFolder: Codable, Equatable, Sendable {
+    /// The full path, without `~`.
+    public var path: String
+    /// The folder's name, for showing.
+    public var name: String
+
+    public init(path: String, name: String) {
+        self.path = path
+        self.name = name
+    }
+}
+
 /// Asks the host to keep the Mac awake for this plugin.
 public struct KeepAwakeRequest: Codable, Equatable, Sendable {
     /// Keep the display on too, not just the system.

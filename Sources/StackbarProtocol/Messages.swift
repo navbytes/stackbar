@@ -32,7 +32,9 @@ public enum StackbarProtocolVersion {
     /// 22 added rows kept out of the palette's results.
     /// 23 added the clock node the host keeps current, and live sliders that
     /// send values while dragged.
-    public static let current = 23
+    /// 24 added folders the user chooses for a plugin's commands, and the SSH
+    /// agent capability.
+    public static let current = 24
 }
 
 /// Host → plugin.
@@ -330,6 +332,15 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// Temperatures and fan speeds (`[SensorReading]` as JSON). Needs
     /// `.sensors`. Protocol 21.
     case sensors
+    /// Shows an Open panel for a folder and, when the user picks one, lets
+    /// the plugin's commands run there (`Stackbar.run(workingDirectory:)`)
+    /// until the user removes it in Settings. Answers `ChosenFolder` as JSON,
+    /// or nil when they cancelled. `startingAt` opens the panel there. Needs
+    /// nothing: the user picks the folder. Protocol 24.
+    case chooseFolder(prompt: String?, startingAt: String?)
+    /// The folders the user chose for this plugin and hasn't removed
+    /// (`[String]` as JSON, full paths). Protocol 24.
+    case grantedFolders
 }
 
 public enum HostResult: Codable, Equatable, Sendable {
