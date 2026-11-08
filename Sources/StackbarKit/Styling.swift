@@ -1,3 +1,4 @@
+import Foundation
 /// Styling and custom controls (protocol 11), named after SwiftUI so an AI
 /// already knows them:
 ///
@@ -147,6 +148,22 @@ public struct TimerText: StackbarView {
     }
 
     public func resolve(in context: RenderContext) -> [ViewNode] { [.timer(range, countsDown: countsDown)] }
+}
+
+/// The time of day, kept current by the host: every second when the pattern
+/// shows seconds, every minute otherwise, without the plugin rendering again.
+/// The pattern is a Unicode date pattern (`EEE d MMM HH:mm`, `h:mm a`);
+/// without a time zone it follows the Mac's own, even after it changes. In the
+/// menu bar it keeps the width of its widest reading so the bar doesn't shift.
+/// Protocol 23.
+public struct Clock: StackbarView {
+    var face: ClockFace
+
+    public init(_ pattern: String, timeZone: TimeZone? = nil) {
+        face = ClockFace(pattern: pattern, timeZone: timeZone?.identifier)
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] { [.clock(face)] }
 }
 
 /// What the four shapes share: a fill and a stroke over one `ShapeNode`.

@@ -20,7 +20,7 @@ extension ViewNode {
             return .tappable(transform(child), action: action)
         case .grid(let columns, let spacing, let children):
             return .grid(columns: columns, spacing: spacing, children: children.map(transform))
-        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .spacer:
+        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .clock, .spacer:
             return self
         }
     }
@@ -39,7 +39,7 @@ extension ViewNode {
     /// shows the plugin's name instead. Controls and lists live in the panel.
     public var isBlankInMenuBar: Bool {
         switch self {
-        case .text, .label, .badge, .progress, .labeled, .chart, .empty, .image, .timer:
+        case .text, .label, .badge, .progress, .labeled, .chart, .empty, .image, .timer, .clock:
             return false
         case .stack, .styled:
             return children.allSatisfy(\.isBlankInMenuBar)
@@ -86,7 +86,7 @@ extension ViewNode {
             return [Affordance(title: "\(isOn ? "Turn off" : "Turn on") \(title)", symbol: "switch.2", kind: .action(action, value: .bool(!isOn)))]
         case .textField(let placeholder, _, let action):
             return [Affordance(title: placeholder, kind: .input(action))]
-        case .picker(let title, _, _, _, let action), .slider(let title, _, _, _, _, let action):
+        case .picker(let title, _, _, _, let action), .slider(let title, _, _, _, _, let action, _):
             return [Affordance(title: title, kind: .input(action))]
         case .form(let form):
             return [Affordance(title: form.submitTitle, kind: .input(form.action))]
@@ -101,7 +101,7 @@ extension ViewNode {
             return [Affordance(title: content.plainText, kind: .tappable(action))] + inside
         case .stack, .list, .section, .styled, .grid:
             return children.flatMap(\.affordances)
-        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .image, .timer, .spacer:
+        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .image, .timer, .clock, .spacer:
             return []
         }
     }
@@ -236,7 +236,7 @@ public enum RowFilter {
             case .grid:
                 guard let rows = gridRows(child) else { return nil }
                 items += rows.map(Item.row)
-            case .text, .label, .stack, .list, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .styled, .shape, .image, .timer, .spacer, .tappable:
+            case .text, .label, .stack, .list, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .styled, .shape, .image, .timer, .clock, .spacer, .tappable:
                 return nil
             }
         }

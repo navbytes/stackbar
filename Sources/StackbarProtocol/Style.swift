@@ -444,6 +444,63 @@ public struct TimeRange: Codable, Equatable, Sendable {
     }
 }
 
+/// The time of day in a pattern, for a `clock` node the host keeps current.
+public struct ClockFace: Codable, Equatable, Sendable {
+    /// A Unicode date pattern, like `EEE d MMM HH:mm` or `h:mm:ss a`.
+    public var pattern: String
+    /// An IANA time zone, like `Asia/Tokyo`; nil follows the Mac's own zone,
+    /// even after it changes.
+    public var timeZone: String?
+
+    public init(pattern: String, timeZone: String? = nil) {
+        self.pattern = pattern
+        self.timeZone = timeZone
+    }
+
+    /// Whether the pattern shows seconds, so the host ticks every second
+    /// rather than every minute. Quoted text doesn't count.
+    public var showsSeconds: Bool {
+        var quoted = false
+        for character in pattern {
+            if character == "'" { quoted.toggle() } else if !quoted, character == "s" || character == "S" { return true }
+        }
+        return false
+    }
+
+    public func formatter(locale: Locale = .autoupdatingCurrent) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone.flatMap(TimeZone.init(identifier:)) ?? .autoupdatingCurrent
+        formatter.dateFormat = pattern
+        return formatter
+    }
+
+    public func string(at date: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        formatter(locale: locale).string(from: date)
+    }
+
+    /// Readings across a year that between them hold the widest the clock
+    /// gets: every month and weekday, late in the day, with two-digit days.
+    /// A menu-bar clock reserves the widest so the bar doesn't shift as it ticks.
+    public func widestReadings(locale: Locale = .autoupdatingCurrent) -> [String] {
+        let formatter = formatter(locale: locale)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = formatter.timeZone
+        var readings = Set<String>()
+        // 2028 starts on a Saturday, so the 22nd to 28th of January covers
+        // every weekday; the 28th of each month covers every month name.
+        let dates = (22...28).map { (1, $0) } + (1...12).map { ($0, 28) }
+        for (month, day) in dates {
+            for hour in [10, 23] {
+                if let date = calendar.date(from: DateComponents(year: 2028, month: month, day: day, hour: hour, minute: 58, second: 58)) {
+                    readings.insert(formatter.string(from: date))
+                }
+            }
+        }
+        return readings.sorted()
+    }
+}
+
 /// How a `progress` node draws.
 public enum ProgressStyle: Codable, Equatable, Sendable {
     case bar

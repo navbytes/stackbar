@@ -88,6 +88,14 @@ struct MenuBarNode: View {
             Image(systemName: symbol)
         case .timer(let range, let countsDown):
             Text(timerInterval: range.start...range.end, countsDown: countsDown).font(.system(size: 13).monospacedDigit())
+        case .clock(let face):
+            // The widest readings sit underneath, hidden, so the item keeps
+            // one width as the clock ticks and the bar doesn't shift.
+            ZStack(alignment: .trailing) {
+                ForEach(face.widestReadings(), id: \.self) { Text($0).hidden() }
+                ClockText(face: face)
+            }
+            .font(.system(size: 13).monospacedDigit())
         case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable, .grid, .image(.url):
             EmptyView()
         }

@@ -231,7 +231,7 @@ for a form to flag. Errors name the placeholder that failed.
   such sections makes a row of stat tiles.
 - `Button(title, symbol:, role:) { }`, `Toggle(title, isOn:) { newValue in }`
 - `TextField(placeholder, text:) { submitted in }`, `Picker(title, options:, selection:, style: .segmented) { choice in }`
-- `Slider(title, value:, in: 0...10, step:) { value in }`, `Link(title, url:)`
+- `Slider(title, value:, in: 0...10, step:) { value in }` sends on release; `live: true` also sends while dragging (keep the handler cheap), `Link(title, url:)`
 - `ContentUnavailableView(title, symbol:, message:)`
 
 Roles: `.primary .secondary .accent .success .warning .critical`. Without
@@ -260,6 +260,8 @@ the order written:
   `ProgressBar(timing: range, style: .ring(lineWidth: 6))` fills with the clock. Render once when the
   timer starts, not every second; an `.every(.seconds(1))` trigger lets `refresh()` notice the end
   (re-renders that come out the same are not sent).
+- `Clock("EEE d MMM HH:mm", timeZone:)` is the time of day the host keeps current, every second when the
+  pattern shows seconds, every minute otherwise; no trigger needed. In the menu bar it keeps its widest width.
 - `Stackbar.play(.glass)` plays a system sound (at most 10 a minute).
 
 ### The shared look (minimumStackbar 0.13.0)

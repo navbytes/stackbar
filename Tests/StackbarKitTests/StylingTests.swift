@@ -15,6 +15,16 @@ final class StylingTests: XCTestCase {
         XCTAssertEqual(font, [.styled(.text("x"), style: Style(font: FontSpec(size: 64, weight: .heavy), foreground: orange))])
     }
 
+    func testAClockAndALiveSliderResolve() async {
+        XCTAssertEqual(Clock("HH:mm", timeZone: TimeZone(identifier: "Asia/Tokyo")).resolve(in: RenderContext()),
+                       [.clock(ClockFace(pattern: "HH:mm", timeZone: "Asia/Tokyo"))])
+        XCTAssertEqual(Clock("HH:mm").resolve(in: RenderContext()), [.clock(ClockFace(pattern: "HH:mm"))], "no zone follows the Mac's")
+        let live = Slider("Shift", value: 0, in: -12...12, step: 0.5, key: "shift", live: true) { _ in }.resolve(in: RenderContext())
+        XCTAssertEqual(live, [.slider(title: "Shift", value: 0, min: -12, max: 12, step: 0.5, action: "slider/shift", live: true)])
+        let plain = Slider("Volume", value: 1) { _ in }.resolve(in: RenderContext())
+        XCTAssertEqual(plain, [.slider(title: "Volume", value: 1, min: 0, max: 1, action: "slider/Volume")], "sends on release, as before")
+    }
+
     func testCustomControlsResolve() async {
         let start = Date(timeIntervalSince1970: 1_000)
         let session = TimeRange(start: start, end: start.addingTimeInterval(1500))

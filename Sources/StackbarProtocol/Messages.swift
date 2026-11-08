@@ -30,7 +30,9 @@ public enum StackbarProtocolVersion {
     /// calendar events, opening a command in a terminal, reading text in
     /// images and on screen, and temperature and fan sensors.
     /// 22 added rows kept out of the palette's results.
-    public static let current = 22
+    /// 23 added the clock node the host keeps current, and live sliders that
+    /// send values while dragged.
+    public static let current = 23
 }
 
 /// Host → plugin.

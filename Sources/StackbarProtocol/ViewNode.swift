@@ -41,8 +41,10 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     case textField(placeholder: String, text: String, action: ActionID)
     /// A choice among a few options. Choosing sends `.text` with the option.
     case picker(title: String, options: [String], selection: String?, style: ChoiceStyle? = nil, action: ActionID)
-    /// A continuous value. Releasing sends `.number`.
-    case slider(title: String, value: Double, min: Double, max: Double, step: Double? = nil, action: ActionID)
+    /// A continuous value. Releasing sends `.number`. With `live` (protocol
+    /// 23) the host also sends values while it is dragged, a few dozen a
+    /// second at most; older hosts send on release only.
+    case slider(title: String, value: Double, min: Double, max: Double, step: Double? = nil, action: ActionID, live: Bool? = nil)
     /// Opens a URL. The host opens it; the plugin never hears about the click.
     case link(title: String, url: String)
     /// What to show when there is nothing to show, like `ContentUnavailableView`.
@@ -62,6 +64,10 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     /// Live clock text the host counts through `range` on its own: down to
     /// `0:00`, or up from it. Protocol 11.
     case timer(TimeRange, countsDown: Bool = true)
+    /// The time of day as text the host keeps current on its own, every
+    /// second or every minute as the pattern needs, so a menu-bar clock never
+    /// waits for the plugin. Protocol 23.
+    case clock(ClockFace)
     /// Flexible space along the enclosing stack's axis. Protocol 11.
     case spacer(minLength: Double? = nil)
     /// Any content as a button: a click sends `action`. Protocol 11.
@@ -296,7 +302,7 @@ extension ViewNode {
             return children
         case .styled(let child, _), .tappable(let child, _):
             return [child]
-        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .spacer:
+        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .clock, .spacer:
             return []
         }
     }

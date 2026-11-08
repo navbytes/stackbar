@@ -189,10 +189,10 @@ public struct NodeView: View {
                 }
             }
             .disabled(readOnly)
-        case .slider(let title, let value, let low, let high, _, _) where snapshot:
+        case .slider(let title, let value, let low, let high, _, _, _) where snapshot:
             SnapshotSlider(title: title, fraction: high > low ? (value - low) / (high - low) : 0, tint: foreground?.flatColor ?? .accentColor)
-        case .slider(let title, let value, let low, let high, let step, let action):
-            SliderNodeView(title: title, value: value, range: low...max(high, low), step: step, action: action, send: send)
+        case .slider(let title, let value, let low, let high, let step, let action, let live):
+            SliderNodeView(title: title, value: value, range: low...max(high, low), step: step, action: action, live: live == true, send: send)
                 .tint(foreground?.flatColor)
                 .disabled(readOnly)
         case .link(let title, _) where snapshot:
@@ -225,6 +225,14 @@ public struct NodeView: View {
         case .timer(let range, let countsDown):
             Text(timerInterval: range.start...range.end, countsDown: countsDown)
                 .font(textFont(.body))
+                .foregroundStyle(tint(.primary))
+        case .clock(let face) where snapshot:
+            Text(face.string(at: Date()))
+                .font(textFont(.body).monospacedDigit())
+                .foregroundStyle(tint(.primary))
+        case .clock(let face):
+            ClockText(face: face)
+                .font(textFont(.body).monospacedDigit())
                 .foregroundStyle(tint(.primary))
         case .spacer(let minLength):
             Spacer(minLength: minLength.map { CGFloat($0) })
@@ -287,7 +295,7 @@ struct IdentifiedNode: Identifiable {
         case .row(let row): return "row|\(row.key)"
         case .section(let title, _): return "section|\(title ?? "")"
         case .textField(_, _, let action): return "field|\(action.rawValue)"
-        case .slider(_, _, _, _, _, let action): return "slider|\(action.rawValue)"
+        case .slider(_, _, _, _, _, let action, _): return "slider|\(action.rawValue)"
         case .styled(let child, _): return name(of: child).map { "styled|" + $0 }
         default: return nil
         }
@@ -911,15 +919,39 @@ struct FieldNodeView: View {
     }
 }
 
+/// A `clock` node: the time in its pattern, redrawn on the second or on the
+/// minute by SwiftUI's timeline, never by the plugin.
+struct ClockText: View {
+    let face: ClockFace
+
+    var body: some View {
+        let formatter = face.formatter()
+        if face.showsSeconds {
+            TimelineView(.periodic(from: Date(timeIntervalSinceReferenceDate: Date().timeIntervalSinceReferenceDate.rounded(.down)), by: 1)) { context in
+                Text(formatter.string(from: context.date))
+            }
+        } else {
+            TimelineView(.everyMinute) { context in
+                Text(formatter.string(from: context.date))
+            }
+        }
+    }
+}
+
 /// A slider that sends its value when the user lets go, not on every pixel.
+/// A live one also sends while it is dragged, at most every 30 ms, and holds
+/// the thumb where the pointer is while the plugin's answers catch up.
 struct SliderNodeView: View {
     let title: String
     let value: Double
     let range: ClosedRange<Double>
     let step: Double?
     let action: ActionID
+    var live = false
     let send: SendAction
     @State private var current = 0.0
+    @State private var dragging = false
+    @State private var lastSent: (value: Double, at: Date)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -933,11 +965,22 @@ struct SliderNodeView: View {
             }
         }
         .onAppear { current = value }
-        .onChange(of: value) { _, newValue in current = newValue }
+        .onChange(of: value) { _, newValue in if !dragging { current = newValue } }
+        .onChange(of: current) { _, newValue in
+            guard live, dragging else { return }
+            let now = Date()
+            if let last = lastSent, last.value == newValue || now.timeIntervalSince(last.at) < 0.03 { return }
+            lastSent = (newValue, now)
+            send(action, .number(newValue))
+        }
     }
 
     private func commit(_ editing: Bool) {
-        if !editing { send(action, .number(current)) }
+        dragging = editing
+        if !editing {
+            lastSent = nil
+            send(action, .number(current))
+        }
     }
 }
 
