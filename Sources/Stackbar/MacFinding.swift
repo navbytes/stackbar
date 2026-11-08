@@ -41,8 +41,10 @@ actor InstalledApps {
         let home = fileManager.homeDirectoryForCurrentUser.path
         // Safari and a few other Apple apps live in the App Cryptex since
         // macOS 13: /Applications/Safari.app is only a symlink into it.
+        // CoreServices/Applications holds Screen Sharing, Ticket Viewer and
+        // Directory Utility.
         let roots = ["/Applications", "/Applications/Utilities", "/System/Applications", "/System/Applications/Utilities",
-                     "/System/Cryptexes/App/System/Applications", home + "/Applications"]
+                     "/System/Cryptexes/App/System/Applications", "/System/Library/CoreServices/Applications", home + "/Applications"]
         var seen = Set<String>()
         var apps: [InstalledApp] = []
         func add(_ url: URL) {
@@ -67,12 +69,41 @@ actor InstalledApps {
                 }
             }
         }
+        // Finder lives with the system's agents, which the list leaves out.
+        add(URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"))
         // Whatever the scan missed that Launch Services knows opens links,
         // so no browser is ever left out.
         if let link = URL(string: "https://example.com") {
             NSWorkspace.shared.urlsForApplications(toOpen: link).forEach(add)
         }
+        // Then every other app Spotlight knows: deeper folders, other drives,
+        // Xcode's Simulator. With indexing off this finds nothing and the
+        // scan above stands.
+        for path in spotlightApps() where AppListFilter.keeps(path) {
+            let url = URL(fileURLWithPath: path)
+            guard let info = Bundle(url: url)?.infoDictionary, (info["LSBackgroundOnly"] as? Bool) != true else { continue }
+            add(url)
+        }
         return apps
+    }
+
+    /// The paths of every application bundle in Spotlight's index, on every
+    /// indexed drive. Spotlight's C API, run synchronously off the main
+    /// thread (see `SpotlightFiles` for why not `NSMetadataQuery`).
+    private static func spotlightApps() -> [String] {
+        let text = "kMDItemContentTypeTree == \"com.apple.application-bundle\""
+        guard let search = MDQueryCreate(kCFAllocatorDefault, text as CFString, nil, nil) else { return [] }
+        MDQuerySetSearchScope(search, [kMDQueryScopeComputerIndexed] as CFArray, 0)
+        MDQuerySetMaxCount(search, 5000)
+        guard MDQueryExecute(search, CFOptionFlags(kMDQuerySynchronous.rawValue)) else { return [] }
+        defer { MDQueryStop(search) }
+        var paths: [String] = []
+        for index in 0..<MDQueryGetResultCount(search) {
+            guard let raw = MDQueryGetResultAtIndex(search, index) else { continue }
+            let item = Unmanaged<MDItem>.fromOpaque(raw).takeUnretainedValue()
+            if let path = MDItemCopyAttribute(item, kMDItemPath) as? String { paths.append(path) }
+        }
+        return paths
     }
 
     /// The panes System Settings itself lists: the ExtensionKit extensions

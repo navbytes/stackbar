@@ -7,6 +7,7 @@ window. Write for people who use Stackbar, not for the code.
 
 ### Fixed
 - **Safari shows up in Applications search.** Safari and a few other Apple apps live in a part of the system the app scan didn't look in; /Applications only holds a link to them. Any browser macOS knows about is now listed too.
+- **Applications finds every app Spotlight knows**, not just the ones in a few folders: Finder, Screen Sharing and the other system apps, Xcode's Simulator and Instruments, apps nested in subfolders and apps on other drives. Helpers inside other apps, updaters and backups stay out.
 - **The palette finds apps, files and sums on a new Mac's first search.** Applications, Calculator and File Search come with Stackbar and are now approved as they are installed, instead of waiting for an approval in Settings that most people never found. Their page in Settings still lists what they can do.
 - **File Search finds iCloud Drive, Dropbox, OneDrive and Google Drive files.** They live in your Library folder, which File Search skipped. Their folders read as "iCloud Drive/…" and "Dropbox/…".
 - **Window snaps no longer run out.** A plugin could move windows only 10 times a minute, so a busy morning of ⌃⌥← and ⌃⌥→ stopped working. It is now 120 a minute, and a snap reads only the windows of the app it moves.

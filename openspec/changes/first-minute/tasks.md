@@ -10,6 +10,7 @@
 - [x] 1.7 CHANGELOG Unreleased, llms.txt rate table
 
 - [x] 1.8 Allow a waiting plugin from the palette (approval stage; hotkeys and links open it)
+- [x] 1.9 Apps from Spotlight's index (`AppListFilter`), Finder and CoreServices/Applications; tests
 
 ## 2. Docs
 - [x] 2.1 Permissions page
@@ -21,7 +22,7 @@
 - [x] 3.2 Quicklinks 1.6.0: "Search Google" fallback until one of yours is a fallback; site icons off by default
 
 ## 4. Mac check
-- [ ] 4.1 Safari, and an app installed only in ~/Applications, show in Applications
+- [ ] 4.1 Safari, Finder, Simulator, an app in ~/Applications and one on another drive show in Applications; no Helper apps
 - [ ] 4.2 On a new user account: the first search finds apps, sums and files with no approval
 - [ ] 4.3 A file in iCloud Drive and one in Dropbox show in File Search
 - [ ] 4.4 ⌃⌥← and ⌃⌥→ as Windows hotkeys, 30 snaps in a minute
