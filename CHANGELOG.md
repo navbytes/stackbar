@@ -3,16 +3,14 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## 0.34.1
-
-### Fixed
-- **Installing the command-line tool no longer freezes Stackbar.** While the password prompt was up, the menu bar, palette and every window stopped responding. Settings now waits for the prompt without holding up the rest of the app.
-
 ## 0.34.0
 
 ### Added
 - **Plugins can ask for a folder, and only that folder.** A plugin can show an Open panel for a folder, and the folder you pick is the one its commands may run in. Each plugin's Settings page lists the folders you chose, with Remove. The upcoming Git Sync plugin uses this for your code folders. For plugin authors: `Stackbar.chooseFolder()` and `Stackbar.grantedFolders()`, protocol 24.
 - **Commands can use your SSH agent.** A plugin with the new SSH agent permission gets `SSH_AUTH_SOCK`, so `git fetch` over SSH works with the macOS agent, 1Password or Secretive. For plugin authors: `.sshAgent`.
+
+### Fixed
+- **Installing the command-line tool no longer freezes Stackbar.** While the password prompt was up, the menu bar, palette and every window stopped responding. Settings now waits for the prompt without holding up the rest of the app.
 
 ## 0.33.0
 
