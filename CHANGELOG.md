@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## 0.34.1
+
+### Fixed
+- **Installing the command-line tool no longer freezes Stackbar.** While the password prompt was up, the menu bar, palette and every window stopped responding. Settings now waits for the prompt without holding up the rest of the app.
+
 ## 0.34.0
 
 ### Added

@@ -78,17 +78,47 @@ enum AppHousekeeping {
 
     /// Links `stackbarctl` into /usr/local/bin, which asks for an admin
     /// password. Answers the error to show, or nil.
-    static func installCommandLineTool() -> String? {
+    ///
+    /// The password prompt runs in `osascript`, off the main thread: running
+    /// the script in-process held the main thread inside AuthorizationCreate
+    /// for as long as the prompt was up, and the whole app hung (Sentry
+    /// STACKBAR-2).
+    static func installCommandLineTool() async -> String? {
         let tool = Platform.stackbarctlPath
         guard FileManager.default.isExecutableFile(atPath: tool) else { return "This copy of Stackbar has no stackbarctl next to it." }
         let command = AppLocation.linkCommand(to: tool)
         let source = "do shell script \"\(command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\" with administrator privileges"
-        var error: NSDictionary?
-        NSAppleScript(source: source)?.executeAndReturnError(&error)
-        guard let error else { return nil }
+        let (status, output) = await runOsascript(source)
+        guard status != 0 else { return nil }
         // -128: the user cancelled the password prompt.
-        if (error[NSAppleScript.errorNumber] as? Int) == -128 { return nil }
-        return (error[NSAppleScript.errorMessage] as? String) ?? "The link couldn't be made."
+        if output.contains("(-128)") { return nil }
+        // osascript prefixes its errors with "0:180: execution error: ".
+        var message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let range = message.range(of: "execution error: ") { message = String(message[range.upperBound...]) }
+        return message.isEmpty ? "The link couldn't be made." : message
+    }
+
+    /// Runs one AppleScript in `/usr/bin/osascript` and answers its exit
+    /// status and standard error, without blocking the caller's thread.
+    private nonisolated static func runOsascript(_ source: String) async -> (Int32, String) {
+        await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-e", source]
+            let errors = Pipe()
+            process.standardError = errors
+            process.standardOutput = FileHandle.nullDevice
+            process.terminationHandler = { finished in
+                let data = errors.fileHandleForReading.readDataToEndOfFile()
+                continuation.resume(returning: (finished.terminationStatus, String(decoding: data, as: UTF8.self)))
+            }
+            do {
+                try process.run()
+            } catch {
+                process.terminationHandler = nil
+                continuation.resume(returning: (-1, error.localizedDescription))
+            }
+        }
     }
 
     // MARK: Remove all data
