@@ -478,7 +478,16 @@ struct PaletteView: View {
                 let empty = fields.first { (session.argumentValues[$0.name] ?? "").isEmpty }
                 focus = (empty ?? fields.first).map { .argument($0.name) }
             case .view, .none:
-                focus = .search
+                // The root's search field and a view's are different fields
+                // that share `.search`. Setting the value it already has is
+                // no change, so the new field never took focus: the arrows
+                // and typing went nowhere until Tab. Clear it first.
+                if focus == .search {
+                    focus = nil
+                    DispatchQueue.main.async { focus = .search }
+                } else {
+                    focus = .search
+                }
             case .approval:
                 focus = nil
             }
@@ -662,11 +671,17 @@ struct ViewHeader: View {
     let onSubmit: () -> Void
 
     var body: some View {
-        TextField("Search \(view.entry.spec.title)", text: $view.query)
+        TextField(Self.prompt(view.entry.spec.title), text: $view.query)
             .textFieldStyle(.plain)
             .focused(focus, equals: .search)
             .onSubmit(onSubmit)
         ArgumentFields(arguments: view.entry.spec.arguments, values: $view.arguments, focus: focus, onSubmit: onSubmit)
+    }
+
+    /// "Search Pull Request Files", but "Search Browser Tabs" stays as it is
+    /// rather than "Search Search Browser Tabs".
+    static func prompt(_ title: String) -> String {
+        title.lowercased().hasPrefix("search ") ? title : "Search \(title)"
     }
 }
 
@@ -731,6 +746,11 @@ struct CommandViewBody: View {
                 } else {
                     list(items)
                 }
+            } else if let empty = Self.emptyState(root) {
+                // "No tabs open" and the like sit in the middle of the
+                // palette, not at the top left of a scroll view.
+                NodeView(node: empty) { _, _ in }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     NodeView(node: root) { action, value in session.send(action, value, in: view) }
@@ -740,6 +760,17 @@ struct CommandViewBody: View {
             }
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// The view's empty state when that is all it shows, through any stack
+    /// or styling around it.
+    static func emptyState(_ node: ViewNode) -> ViewNode? {
+        switch node {
+        case .empty: return node
+        case .stack(_, _, _, let children) where children.count == 1: return emptyState(children[0])
+        case .styled(let child, _): return emptyState(child)
+        default: return nil
         }
     }
 

@@ -6,6 +6,8 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Fixed
+- Opening a command's view from the palette puts the cursor in its search field, so the arrow keys move through the list at once instead of after pressing Tab.
+- In the palette, a view with nothing to show ("No tabs open") puts its message in the middle, and a view called "Search …" no longer has a search field that says "Search Search …".
 - For plugin authors: `stackbarctl render` and demo frames (`--frames`) show a held action as "Press again to …", as the app draws it, so a demo of a destructive action shows the question.
 
 ## 0.35.0
