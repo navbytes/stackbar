@@ -23,5 +23,5 @@
 
 ## 3. Ship
 - [x] 3.1 Release the host (minimumStackbar for Git Sync)
-- [ ] 3.2 Publish Git Sync 1.0.0
+- [x] 3.2 Publish Git Sync 1.0.0 (stackbar-plugins #64, with Stackbar 0.34.0)
 - [ ] 3.3 Check on Naveen's Mac: SSH remote, HTTPS remote, a dirty repo, a diverged repo
