@@ -478,7 +478,16 @@ struct PaletteView: View {
                 let empty = fields.first { (session.argumentValues[$0.name] ?? "").isEmpty }
                 focus = (empty ?? fields.first).map { .argument($0.name) }
             case .view, .none:
-                focus = .search
+                // The root's search field and a view's are different fields
+                // that share `.search`. Setting the value it already has is
+                // no change, so the new field never took focus: the arrows
+                // and typing went nowhere until Tab. Clear it first.
+                if focus == .search {
+                    focus = nil
+                    DispatchQueue.main.async { focus = .search }
+                } else {
+                    focus = .search
+                }
             case .approval:
                 focus = nil
             }
