@@ -447,14 +447,20 @@ public struct Slider: StackbarView {
     var range: ClosedRange<Double>
     var step: Double?
     var key: String?
+    var live: Bool
     var onChange: @MainActor (Double) async throws -> Void
 
-    public init(_ title: String, value: Double, in range: ClosedRange<Double> = 0...1, step: Double? = nil, key: String? = nil, onChange: @escaping @MainActor (Double) async throws -> Void) {
+    /// Sends the value when the slider is let go. With `live` it also sends
+    /// values while it is dragged (a few dozen a second at most), for a
+    /// preview that follows the thumb; keep such a handler cheap. Hosts
+    /// before protocol 23 send on release only.
+    public init(_ title: String, value: Double, in range: ClosedRange<Double> = 0...1, step: Double? = nil, key: String? = nil, live: Bool = false, onChange: @escaping @MainActor (Double) async throws -> Void) {
         self.title = title
         self.value = value
         self.range = range
         self.step = step
         self.key = key
+        self.live = live
         self.onChange = onChange
     }
 
@@ -464,7 +470,7 @@ public struct Slider: StackbarView {
         let id = context.register("slider/\(key ?? title)") { value in
             if case .number(let number) = value { try await change(min(max(number, range.lowerBound), range.upperBound)) }
         }
-        return [.slider(title: title, value: value, min: range.lowerBound, max: range.upperBound, step: step, action: id)]
+        return [.slider(title: title, value: value, min: range.lowerBound, max: range.upperBound, step: step, action: id, live: live ? true : nil)]
     }
 }
 

@@ -85,8 +85,8 @@ public enum TreeTextRenderer {
         case .picker(let title, let options, let selection, _, let action):
             let choices = options.map { $0 == selection ? "*\($0)*" : $0 }.joined(separator: " | ")
             return [pad + "\(title): \(choices)" + tag(action)]
-        case .slider(let title, let value, let min, let max, _, let action):
-            return [pad + "\(title): \(format(value)) (\(format(min))...\(format(max)))" + tag(action)]
+        case .slider(let title, let value, let min, let max, _, let action, let live):
+            return [pad + "\(title): \(format(value)) (\(format(min))...\(format(max)))" + (live == true ? " live" : "") + tag(action)]
         case .link(let title, let url):
             return [pad + "<\(title)> \(url)"]
         case .empty(let title, let symbol, let message):
@@ -114,6 +114,8 @@ public enum TreeTextRenderer {
             return [pad + "[image]"]
         case .timer(let range, let countsDown):
             return [pad + range.clock(at: now, countsDown: countsDown)]
+        case .clock(let face):
+            return [pad + face.string(at: now)]
         case .tappable(let content, let action):
             return [pad + "(\(content.plainText))" + tag(action)]
         }

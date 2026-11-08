@@ -88,6 +88,14 @@ struct MenuBarNode: View {
             Image(systemName: symbol)
         case .timer(let range, let countsDown):
             Text(timerInterval: range.start...range.end, countsDown: countsDown).font(.system(size: 13).monospacedDigit())
+        case .clock(let face):
+            // The widest readings sit underneath, hidden, so the item keeps
+            // one width as the clock ticks and the bar doesn't shift.
+            ZStack(alignment: .trailing) {
+                ForEach(ClockWidths.readings(face), id: \.self) { Text($0).hidden() }
+                ClockText(face: face)
+            }
+            .font(.system(size: 13).monospacedDigit())
         case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable, .grid, .image(.url):
             EmptyView()
         }
@@ -99,6 +107,21 @@ struct MenuBarNode: View {
         ForEach(Array(children.enumerated()), id: \.offset) { _, child in
             if !child.isBlankInMenuBar { MenuBarNode(node: child) }
         }
+    }
+}
+/// A clock's widest readings, worked out once per pattern, zone and language
+/// rather than on every menu-bar redraw.
+@MainActor
+enum ClockWidths {
+    private static var cache: [String: [String]] = [:]
+
+    static func readings(_ face: ClockFace) -> [String] {
+        let key = face.pattern + "|" + (face.timeZone ?? TimeZone.autoupdatingCurrent.identifier) + "|" + Locale.autoupdatingCurrent.identifier
+        if let cached = cache[key] { return cached }
+        if cache.count > 32 { cache.removeAll() }
+        let readings = face.widestReadings()
+        cache[key] = readings
+        return readings
     }
 }
 #endif

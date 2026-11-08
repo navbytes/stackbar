@@ -15,6 +15,8 @@ window. Write for people who use Stackbar, not for the code.
 ### Added
 - **Allow a plugin right from the palette.** Running a command of a plugin that waits for your approval now shows what it asks for in the palette: press Return to allow it and the command carries on, or Esc to go back. A hotkey or link for such a command opens the palette to ask. Before, the command failed and you had to find the plugin in Settings.
 - **Hotkeys can use the arrows, Return, Tab, Escape, Delete and punctuation keys**, so a Rectangle-style keymap such as ⌃⌥← for the left half works. ⌘Tab stays the app switcher's. For plugin authors: manifest hotkeys accept these keys from 0.32.0.
+- **Plugins can show a clock that keeps time on its own.** A plugin's menu bar can now show the time of day the way the macOS clock does, ticking on the minute (or the second) without waiting for the plugin, and keeping one width so the bar doesn't shift. World Clock uses it. For plugin authors: `Clock("EEE d MMM HH:mm", timeZone:)`, protocol 23.
+- **Sliders can follow your finger.** A plugin can ask for a slider that updates while you drag it rather than when you let go, so World Clock's time-travel slider moves every clock as you scrub. For plugin authors: `Slider(..., live: true)`.
 - **New docs:** a [Permissions](https://stackbar.app/docs/permissions/) page listing what macOS asks for and why, a Hyper key section (Karabiner-Elements works with every Stackbar hotkey), and "Coming from Spotlight" in Getting started.
 
 ### Changed
