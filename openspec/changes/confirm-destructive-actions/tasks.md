@@ -12,9 +12,9 @@
 - [x] 1.9 `SystemActions.swift` comment, authoring guide + `llms.txt`, release notes
 
 ## 2. Plugins (navbytes/stackbar-plugins)
-- [ ] 2.1 `scripts/check.sh` rule and CONTRIBUTING wording
-- [ ] 2.2 Migrate the 15 plugins in one PR after the release (pin bump, versions raised)
+- [x] 2.1 `scripts/check.sh` rule and CONTRIBUTING wording
+- [x] 2.2 Migrate the 15 plugins in one PR after the release (pin bump, versions raised)
 
 ## 3. Check
-- [ ] 3.1 `swift build && swift test` in both repos
+- [x] 3.1 `swift build && swift test` in both repos
 - [ ] 3.2 On Naveen's Mac: arm and expire in panel, palette and a command view; VoiceOver reads the armed state
