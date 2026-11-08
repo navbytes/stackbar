@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.33.0
 
 ### Fixed
 - For plugin authors: `Stackbar.open(url)` now opens the links and files a plugin declares in `.openURLs`, as `Stackbar.open(url, with:)` already did. Before, it opened only https, http, mailto, tel and meeting links, so a System Settings pane from `installedApps()` did nothing, although the guide said to open it this way.
