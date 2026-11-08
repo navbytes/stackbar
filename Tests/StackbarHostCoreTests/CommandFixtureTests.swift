@@ -63,6 +63,8 @@ final class CommandFixtureTests: XCTestCase {
         XCTAssertEqual(arm?.prompt, "Press again within 10 s to forget 1 links")
         var shown = await session.view(.panel)?.plainText ?? ""
         XCTAssertTrue(shown.hasPrefix("1 links"), "nothing sent")
+        let drawn = await session.shownViews()[.panel].map { TreeTextRenderer.render($0) } ?? ""
+        XCTAssertTrue(drawn.contains("Press again to forget 1 links"), "renders and demo frames show the question: \(drawn)")
         let second = try await session.event("button/forget")
         XCTAssertNil(second)
         shown = await session.view(.panel)?.plainText ?? ""
