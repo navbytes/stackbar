@@ -3,6 +3,13 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- For plugin authors: `Stackbar.open(url)` now opens the links and files a plugin declares in `.openURLs`, as `Stackbar.open(url, with:)` already did. Before, it opened only https, http, mailto, tel and meeting links, so a System Settings pane from `installedApps()` did nothing, although the guide said to open it this way.
+- For plugin authors: `stackbarctl render`, `run`, `soak` and the other commands that run a plugin keep its saved values in a scratch folder, so trying a plugin no longer overwrites what the app saved. `--real-storage` uses the app's, and `STACKBAR_HOME` still moves everything.
+- For plugin authors: `stackbarctl soak --press` no longer presses buttons that upgrade, update, install, stop, kill, prune, force, approve, merge, send or publish. One run on a real Mac started Homebrew's Upgrade All.
+
 ## 0.32.0
 
 ### Fixed

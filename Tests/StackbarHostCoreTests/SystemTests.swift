@@ -179,4 +179,33 @@ final class OpenURLTests: XCTestCase {
             guard case .failure = await services.handle(.openURL(url), for: manifest) else { return XCTFail("\(url) must not open") }
         }
     }
+
+    /// `Stackbar.open(url)` follows the manifest like `open(_:with:)`: a
+    /// declared scheme opens, and with "*" a folder does, but not a program.
+    func testOpenURLHonoursDeclaredSchemesAndPaths() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let services = HostServices.local(directory: directory.appendingPathComponent("home"), secrets: MemorySecretStore([:]))
+
+        let panes = Manifest(id: "dev.test.panes", name: "Panes", capabilities: [.openURLs(schemes: ["x-apple.systempreferences"])])
+        guard case .ok = await services.handle(.openURL("x-apple.systempreferences:com.apple.Network-Settings.extension"), for: panes) else { return XCTFail("a declared scheme opens") }
+        guard case .failure = await services.handle(.openURL(directory.path), for: panes) else { return XCTFail("a path needs \"*\"") }
+
+        let files = Manifest(id: "dev.test.files", name: "Files", capabilities: [.openURLs(schemes: ["*"])])
+        guard case .ok = await services.handle(.openURL(directory.path), for: files) else { return XCTFail("a folder opens with \"*\"") }
+        let program = directory.appendingPathComponent("tool")
+        FileManager.default.createFile(atPath: program.path, contents: Data("#!/bin/sh\n".utf8), attributes: [.posixPermissions: 0o755])
+        guard case .failure = await services.handle(.openURL(program.path), for: files) else { return XCTFail("a program needs an app chosen explicitly") }
+    }
+
+    /// stackbarctl keeps plugins' saved values out of the app's own folder
+    /// unless asked, or unless STACKBAR_HOME moves everything.
+    func testToolStorageIsScratchByDefault() {
+        let scratch = StackbarPaths.toolStorageDirectory(realStorage: false, environment: [:])
+        XCTAssertNotEqual(scratch.standardizedFileURL, StackbarPaths.storageDirectory.standardizedFileURL)
+        XCTAssertTrue(scratch.path.hasSuffix("stackbarctl/Storage"))
+        XCTAssertEqual(StackbarPaths.toolStorageDirectory(realStorage: true, environment: [:]), StackbarPaths.storageDirectory)
+        XCTAssertEqual(StackbarPaths.toolStorageDirectory(realStorage: false, environment: ["STACKBAR_HOME": "/tmp/x"]), StackbarPaths.storageDirectory)
+    }
 }
