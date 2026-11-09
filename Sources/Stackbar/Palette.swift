@@ -387,6 +387,11 @@ struct PaletteView: View {
             session.submit()
             return .handled
         }
+        // Tab with text at the root asks AI (or the fallback picked in
+        // Settings), as in Raycast.
+        if press.key == .tab, press.modifiers.isEmpty, focus == .search, session.tabToFallback() {
+            return .handled
+        }
         switch press.key {
         case .downArrow where plain:
             session.move(columns ?? 1)

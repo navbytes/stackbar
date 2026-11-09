@@ -22,6 +22,7 @@ run the selected result, Esc to go back or close.
 | ⌘K | Every action for the selection, with its own search |
 | ⌘1 … ⌘9 | Run the first nine results |
 | ⌘⇧F | Add the selection to Favorites, or take it off. Apps and files can be favourites too |
+| Tab | With text typed, hands it to Ask AI when that plugin is installed, as Raycast's Quick AI does. Settings › Command Palette › Tab with text picks another fallback, such as Search Google, or none |
 | Esc | Close ⌘K, go back a step, then close |
 
 If you close the palette and open it again within a minute, it comes back

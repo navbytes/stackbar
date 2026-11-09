@@ -18,6 +18,7 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
     public static let defaultsKeys: Set<String> = [
         PaletteHotKey.defaultsKey, "pluginsOff", "autoUpdatePlugins", "indexURLs", "paletteCompact", "dockIconWithWindows",
         "textExpansion", "textExpansionExcludedApps", TerminalChoice.defaultsKey,
+        HyperKey.defaultsKey, HyperKey.escapeDefaultsKey, PaletteTabTarget.defaultsKey, CommandResolver.extraFoldersKey,
     ]
 
     /// Files in the data directory that travel, by their path there.

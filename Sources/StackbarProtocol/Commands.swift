@@ -44,9 +44,12 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
     /// Text that doesn't match never reaches the plugin, and a section that
     /// matched comes before the other results. Protocol 17.
     public var rootPattern: String?
+    /// How long a run command may take, in seconds, when that is more than
+    /// the host's 30 (a script, a build). At most `maxTimeout`. 0.36.0.
+    public var timeout: Double?
 
     public init(id: String, title: String, subtitle: String? = nil, symbol: String? = nil, keywords: [String] = [], kind: Kind = .run, arguments: [ArgumentSpec] = [], exposure: Exposure = .everywhere,
-                rootSearch: Bool = false, rootSection: String? = nil, fallback: Bool = false, rootPattern: String? = nil) {
+                rootSearch: Bool = false, rootSection: String? = nil, fallback: Bool = false, rootPattern: String? = nil, timeout: Double? = nil) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -59,6 +62,7 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         self.rootSection = rootSection
         self.fallback = fallback
         self.rootPattern = rootPattern
+        self.timeout = timeout
     }
 
     // Written by hand so specs from plugins built before protocol 16, which
@@ -77,10 +81,21 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         rootSection = try container.decodeIfPresent(String.self, forKey: .rootSection)
         fallback = try container.decodeIfPresent(Bool.self, forKey: .fallback) ?? false
         rootPattern = try container.decodeIfPresent(String.self, forKey: .rootPattern)
+        timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
     }
 
     /// At most this many arguments, so their fields fit on one line.
     public static let maxArguments = 3
+    /// The longest a run command may ask to take: ten minutes.
+    public static let maxTimeout: Double = 600
+
+    /// The time the host gives a run, within 1 second and `maxTimeout`;
+    /// `standard` when the command names none.
+    public func runTimeout(standard: Double) -> Double {
+        guard let timeout else { return standard }
+        return min(max(timeout, 1), Self.maxTimeout)
+    }
+
     /// At most this many commands per plugin.
     public static let maxCommands = 200
 

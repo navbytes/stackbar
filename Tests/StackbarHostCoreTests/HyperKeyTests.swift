@@ -1,5 +1,6 @@
 import XCTest
 @testable import StackbarHostCore
+import StackbarProtocol
 
 final class HyperKeyTests: XCTestCase {
     private let hidutilOutput = """
@@ -54,5 +55,26 @@ final class HyperKeyTests: XCTestCase {
         var noEscape = HyperKey.State(escapeOnTap: false)
         _ = noEscape.handle(.keyDown(code: HyperKey.f18KeyCode, at: 0))
         XCTAssertEqual(noEscape.handle(.keyUp(code: HyperKey.f18KeyCode, at: 0.1)), .swallow)
+    }
+}
+
+final class CommandFoldersTests: XCTestCase {
+    func testAddedFoldersAreCleanedAndComeLast() {
+        let home = NSHomeDirectory()
+        XCTAssertEqual(CommandResolver.extraFolders("~/.cargo/bin: /opt/tools/ \n relative/bin\n/usr/bin\n~/.cargo/bin"),
+                       [home + "/.cargo/bin", "/opt/tools"], "tilde expanded, relative and repeated folders dropped, built-in ones not added twice")
+        XCTAssertEqual(CommandResolver.extraFolders(nil), [])
+        XCTAssertEqual(Array(CommandResolver.searchPath.prefix(CommandResolver.builtInSearchPath.count)), CommandResolver.builtInSearchPath)
+    }
+
+    func testARunCommandCanAskForMoreTime() throws {
+        let spec = CommandSpec(id: "build", title: "Build", timeout: 120)
+        XCTAssertEqual(spec.runTimeout(standard: 30), 120)
+        XCTAssertEqual(CommandSpec(id: "a", title: "A").runTimeout(standard: 30), 30)
+        XCTAssertEqual(CommandSpec(id: "a", title: "A", timeout: 99_999).runTimeout(standard: 30), CommandSpec.maxTimeout)
+        let decoded = try JSONDecoder().decode(CommandSpec.self, from: JSONEncoder().encode(spec))
+        XCTAssertEqual(decoded.timeout, 120)
+        let old = try JSONDecoder().decode(CommandSpec.self, from: Data(#"{"id":"a","title":"A","kind":"run"}"#.utf8))
+        XCTAssertNil(old.timeout)
     }
 }

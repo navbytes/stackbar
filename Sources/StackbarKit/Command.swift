@@ -92,6 +92,16 @@ public struct Command: Sendable {
         return copy
     }
 
+    /// Lets a run command take longer than the host's 30 seconds, up to
+    /// ten minutes: a script, a build, a long download. 0.36.0; older hosts
+    /// keep 30.
+    public func timeout(_ duration: Duration) -> Command {
+        var copy = self
+        let parts = duration.components
+        copy.spec.timeout = Double(parts.seconds) + Double(parts.attoseconds) / 1e18
+        return copy
+    }
+
     /// Keeps the command out of Spotlight, Shortcuts and links.
     public func stackbarOnly() -> Command {
         var copy = self

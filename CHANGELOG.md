@@ -6,6 +6,9 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Added
+- **Tab asks AI.** With text typed in the palette, Tab hands it to the Ask AI plugin (or any fallback you pick in Settings › Command Palette).
+- **Longer commands.** A plugin's run command can ask for up to ten minutes with `.timeout(_:)`, instead of 30 seconds. Script Commands uses it.
+- **More folders for commands.** Settings › Terminal adds folders such as ~/.cargo/bin to where plugins and scripts find programs, after Homebrew and the system folders.
 - **Hyper key.** Settings › General › Keyboard turns Caps Lock into ⌃⌥⇧⌘ for hotkeys, and Escape when tapped alone. No Karabiner needed.
 - **Starter sets in Welcome.** Launcher, Developer, and Windows & Keys switch on a matching group of plugins in one click.
 - **Permissions step in Welcome.** It shows whether Accessibility is allowed and asks for it in place, with a link to the Permissions page.

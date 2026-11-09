@@ -158,6 +158,8 @@ picker), and a selected row's `preview` shows beside the list.
 Results: `.done`, `.message(text)`, `.open(url:app:)`, `.copy(text)`,
 `.paste(text, cursorFromEnd:)` (needs `.clipboard`; puts the user's clipboard
 back afterwards and keeps the paste out of clipboard history), `.failure(text)`.
+A run command has 30 seconds; `.timeout(.seconds(120))` gives one up to ten
+minutes, for a script or a build (0.36.0).
 The host performs them under the plugin's capabilities. Ids are lowercase letters,
 digits and `-`, stable forever (aliases, hotkeys and links remember them);
 titles can change. `invocation["name"]` is nil when an argument was left

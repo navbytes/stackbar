@@ -206,6 +206,9 @@ struct GeneralSettings: View {
                 SettingsRow(title: "Aliases and hotkeys", caption: "Give any command a short alias or its own shortcut.") {
                     Button("Edit…") { model.settingsTab = .commands }
                 }
+                SettingsRow(title: "Tab with text", caption: "Hands what you typed to this command, as Raycast's Tab does for AI.") {
+                    PaletteTabPicker(model: model)
+                }
                 Toggle("Compact: show only the search field until you type", isOn: $paletteCompact)
                     .toggleStyle(TrailingSwitchStyle())
                 SettingsRow(title: "Search history", caption: "The palette learns what you pick for what you type, and ranks it first next time.") {
@@ -242,6 +245,9 @@ struct GeneralSettings: View {
             SettingsGroup("Terminal") {
                 SettingsRow(title: "Open commands in", caption: "Where a plugin's Open in Terminal runs, such as Docker's shell or a script command.") {
                     TerminalPicker()
+                }
+                SettingsRow(title: "More folders for commands", caption: "Plugins and scripts also find programs here, after Homebrew and the system folders. Separate folders with colons, like ~/.cargo/bin:~/.local/bin.") {
+                    CommandFoldersField()
                 }
             }
             SpotlightReplacementsSection(model: model)
@@ -857,6 +863,37 @@ struct CrashReportsGroup: View {
                 .toggleStyle(TrailingSwitchStyle())
                 .onChange(of: allowed) { _, on in CrashReports.isAllowed = on }
         }
+    }
+}
+
+/// Settings › Terminal › More folders for commands.
+struct CommandFoldersField: View {
+    @AppStorage(CommandResolver.extraFoldersKey) private var folders = ""
+
+    var body: some View {
+        TextField("~/.cargo/bin", text: $folders)
+            .frame(width: 220)
+    }
+}
+
+/// Settings › Command Palette › Tab with text: any fallback command, the
+/// default (Ask AI when installed) or nothing.
+struct PaletteTabPicker: View {
+    let model: AppModel
+    @AppStorage(PaletteTabTarget.defaultsKey) private var chosen = ""
+
+    var body: some View {
+        let fallbacks = model.commands.registry.entries.filter(\.spec.fallback)
+        let preferred = fallbacks.first { $0.key == PaletteTabTarget.preferred }
+        Picker("Tab with text", selection: $chosen) {
+            Text(preferred.map { "Default (\($0.spec.title))" } ?? "Default (Ask AI, when installed)").tag("")
+            ForEach(fallbacks, id: \.key) { entry in
+                Text("\(entry.spec.title) — \(entry.pluginName)").tag(entry.key.description)
+            }
+            Text("Nothing: move focus").tag(PaletteTabTarget.off)
+        }
+        .labelsHidden()
+        .fixedSize()
     }
 }
 
