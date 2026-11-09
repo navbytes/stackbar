@@ -189,4 +189,23 @@ final class RootPatternTests: XCTestCase {
         XCTAssertFalse(RootSearchGate.matches(spec("a)(b"), text: "ab"), "a pattern that doesn't compile as written never matches")
         XCTAssertFalse(RootSearchGate.matches(spec("abc"), text: "abc\nx"))
     }
+
+    @MainActor
+    func testAKeptRowIsFoundAgainOnceTheViewAnswers() async {
+        let command = { (id: String) in CommandRegistry.Entry(pluginID: "dev.t.\(id)", pluginName: id, spec: CommandSpec(id: id, title: id, kind: .view, rootSearch: true)) }
+        let view = FakeRootView(command("apps"), query: "Safari")
+        Task { @MainActor in view.answer(["Safari", "Safari Technology Preview"]) }
+        let action = await RootSearchSession<FakeRootView>.replay(view, key: "Safari")
+        XCTAssertEqual(action?.id, ActionID("row/Safari/0"))
+
+        let gone = FakeRootView(command("apps"), query: "Tower")
+        Task { @MainActor in gone.answer([]) }
+        let missing = await RootSearchSession<FakeRootView>.replay(gone, key: "Tower")
+        XCTAssertNil(missing, "an uninstalled app")
+
+        let stopped = FakeRootView(command("apps"), query: "Mail")
+        stopped.isStopped = true
+        let none = await RootSearchSession<FakeRootView>.replay(stopped, key: "Mail", wait: .seconds(5))
+        XCTAssertNil(none, "a stopped plugin doesn't hold the palette")
+    }
 }

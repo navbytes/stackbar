@@ -12,20 +12,25 @@ public final class PaletteMemory: @unchecked Sendable {
     public let usage: PaletteUsage
     public let picks: PalettePicks
     public let favorites: PaletteFavorites
+    /// Snapshots of plugin rows that were pinned or used, to show them
+    /// when nothing is typed.
+    public let rows: PaletteRememberedRows
     private let lock = NSLock()
     private var changes = 0
 
-    public init(usage: PaletteUsage, picks: PalettePicks, favorites: PaletteFavorites) {
+    public init(usage: PaletteUsage, picks: PalettePicks, favorites: PaletteFavorites, rows: PaletteRememberedRows = PaletteRememberedRows(file: nil)) {
         self.usage = usage
         self.picks = picks
         self.favorites = favorites
+        self.rows = rows
     }
 
     /// The three stores in `directory`, or in memory when it is nil.
     public convenience init(directory: URL?, now: @escaping @Sendable () -> Date = Date.init) {
         self.init(usage: PaletteUsage(file: directory?.appendingPathComponent("palette-usage.json"), now: now),
                   picks: PalettePicks(file: directory?.appendingPathComponent("palette-picks.json"), now: now),
-                  favorites: PaletteFavorites(file: directory?.appendingPathComponent("palette-favorites.json")))
+                  favorites: PaletteFavorites(file: directory?.appendingPathComponent("palette-favorites.json")),
+                  rows: PaletteRememberedRows(file: directory?.appendingPathComponent("palette-rows.json")))
     }
 
     /// Bumped by every change that reorders or regroups the root (a reset,
@@ -83,14 +88,48 @@ public final class PaletteMemory: @unchecked Sendable {
         changed()
     }
 
-    public func isFavorite(_ entry: PaletteIndex.Entry) -> Bool { favorites.contains(entry.id) }
+    /// A plugin's root row is pinned under its stable id (`learnID`), not
+    /// the action ids that change with every answer.
+    public func isFavorite(_ entry: PaletteIndex.Entry) -> Bool { favorites.contains(entry.learnID) }
 
-    /// Pins the entry, or unpins it. True when it is now pinned.
+    /// Pins the entry, or unpins it. True when it is now pinned. `row` is
+    /// the snapshot of a plugin's root row, kept to show it once pinned.
     @discardableResult
-    public func toggleFavorite(_ entry: PaletteIndex.Entry) -> Bool {
+    public func toggleFavorite(_ entry: PaletteIndex.Entry, row: PaletteRememberedRows.Row? = nil) -> Bool {
         defer { changed() }
-        return favorites.toggle(entry.id)
+        if let row { remember(row) }
+        return favorites.toggle(entry.learnID)
     }
+
+    /// Keeps a plugin row's snapshot: it was chosen or pinned.
+    public func remember(_ row: PaletteRememberedRows.Row) {
+        rows.remember(row, keeping: Set(favorites.ids))
+    }
+
+    /// The pinned entries, in the order pinned: found in `all`, or a
+    /// plugin row's snapshot.
+    public func favoriteEntries(in all: [PaletteIndex.Entry]) -> [PaletteIndex.Entry] {
+        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return favorites.ids.compactMap { byID[$0] ?? rows.row($0)?.entry }
+    }
+
+    /// The apps (plugin rows with an app's icon) used most, decayed by
+    /// age, for the root when nothing is typed. Pinned ones are left out:
+    /// they show under Favorites.
+    public func frequentApps(limit: Int = 5) -> [PaletteIndex.Entry] {
+        let pinned = Set(favorites.ids)
+        var scored: [(row: PaletteRememberedRows.Row, score: Double)] = []
+        for row in rows.all where row.appIcon != nil && !pinned.contains(row.id) {
+            let score = usage.score(row.id)
+            if score >= Self.frequentUses { scored.append((row, score)) }
+        }
+        scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.row.title < $1.row.title }
+        return scored.prefix(limit).map { $0.row.entry }
+    }
+
+    /// The decayed use an app needs to count as frequent: about twice in
+    /// the last two weeks.
+    public static let frequentUses = 1.5
 
     /// Plugin `to` replaces plugin `from`: its commands' (and their rows')
     /// use, picks and pins move to `to`'s commands with the same ids, for
@@ -99,6 +138,7 @@ public final class PaletteMemory: @unchecked Sendable {
         usage.move(pluginID: from, to: to, carries: carries)
         picks.move(pluginID: from, to: to, carries: carries)
         favorites.move(pluginID: from, to: to, carries: carries)
+        rows.move(pluginID: from, to: to, carries: carries)
         changed()
     }
 

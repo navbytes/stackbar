@@ -112,7 +112,14 @@ final class AppModel {
                     }
                 },
                 openWith: { url, bundleID in try await Platform.open(url, with: bundleID) },
-                copy: { text in Task { @MainActor in Platform.copy(text) } },
+                // Every plugin's Copy says so, so none has to: a plugin's own
+                // HUD after it replaces this one.
+                copy: { text in
+                    Task { @MainActor in
+                        Platform.copy(text)
+                        HUD.shared.show("Copied to Clipboard")
+                    }
+                },
                 secretMissing: { pluginID, name in secretRouter.route(pluginID, name) },
                 system: MacSystem(images: Self.clipboardImages),
                 approvalNeeded: { pluginID in secretRouter.reviewAgain(pluginID) }

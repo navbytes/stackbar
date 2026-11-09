@@ -20,6 +20,9 @@ public struct PaletteIndex: Sendable {
             case showPanel
             /// Copies the text: a calculator answer.
             case copy(String)
+            /// A plugin's root-search row kept past its query (pinned, or
+            /// an app you open often): `query` sent to `command` finds it.
+            case remembered(command: String, rowKey: String, query: String)
         }
 
         public var pluginID: String
@@ -78,7 +81,14 @@ public struct PaletteIndex: Sendable {
             case .command(let spec): return Self.commandID(CommandKey(pluginID: pluginID, commandID: spec.id))
             case .showPanel: return "\(pluginID)|panel"
             case .copy(let text): return "\(pluginID)|copy|\(text)"
+            case .remembered(let command, let rowKey, _): return Self.rowID(pluginID: pluginID, commandID: command, rowKey: rowKey)
             }
+        }
+
+        /// The id a root-search row is used and pinned under: its key
+        /// stays put while its action ids change with every answer.
+        public static func rowID(pluginID: String, commandID: String, rowKey: String) -> String {
+            "\(pluginID)|row|\(commandID)|\(rowKey)"
         }
     }
 
@@ -183,12 +193,45 @@ public struct PaletteIndex: Sendable {
 
     /// `gh react` → the command aliased `gh` and the rest of the line, which
     /// fills its first argument (or its view's query).
+    ///
+    /// Without an alias, Raycast's "name, then the argument" works too: a
+    /// command that takes text (arguments or a view) is matched by its whole
+    /// title (`search jira ABC-123`), a keyword, or its plugin's name when
+    /// that plugin has only one such command (`jira ABC-123`). The longest
+    /// such name wins.
     public func aliasMatch(_ query: String) -> (entry: Entry, rest: String)? {
         let query = query.drop { $0 == " " }
         guard let space = query.firstIndex(of: " ") else { return nil }
         let alias = query[..<space].lowercased()
-        guard !alias.isEmpty, let entry = commands.first(where: { $0.alias == alias }) else { return nil }
-        return (entry, String(query[query.index(after: space)...]).trimmingCharacters(in: .whitespaces))
+        if !alias.isEmpty, let entry = commands.first(where: { $0.alias == alias }) {
+            return (entry, String(query[query.index(after: space)...]).trimmingCharacters(in: .whitespaces))
+        }
+        return nameMatch(String(query))
+    }
+
+    /// The command named at the start of `query`, and the text after it.
+    private func nameMatch(_ query: String) -> (entry: Entry, rest: String)? {
+        let words = query.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        guard words.count > 1 else { return nil }
+        let takers = commands.filter { entry in
+            guard case .command(let spec) = entry.kind else { return false }
+            return spec.kind == .view || !spec.arguments.isEmpty
+        }
+        guard !takers.isEmpty else { return nil }
+        let byPlugin = Dictionary(grouping: takers, by: \.pluginID)
+        // Longest name first, leaving at least one word for the argument.
+        for count in stride(from: words.count - 1, through: 1, by: -1) {
+            let name = words[..<count].joined(separator: " ").lowercased()
+            let rest = words[count...].joined(separator: " ")
+            if let entry = takers.first(where: { $0.title.lowercased() == name }) ?? takers.first(where: { $0.keywords.contains { $0.lowercased() == name } }) {
+                return (entry, rest)
+            }
+            let plugins = byPlugin.filter { $0.value.first?.pluginName.lowercased() == name }
+            if plugins.count == 1, let only = plugins.first?.value, only.count == 1 {
+                return (only[0], rest)
+            }
+        }
+        return nil
     }
 
     /// The tree's affordances the palette can press on its own: not inputs,

@@ -52,7 +52,37 @@ final class PaletteRootTests: XCTestCase {
         XCTAssertEqual(row?.command, apps.key)
         XCTAssertEqual(row?.rowKey, "safari")
         XCTAssertEqual(root.primaryTitle(section!.entries[0]), "Open App")
-        XCTAssertFalse(root.canPin(section!.entries[0]))
+        XCTAssertTrue(root.canPin(section!.entries[0]), "an app is pinned as a snapshot found again by its title")
+    }
+
+    func testAPinnedPluginRowShowsFromItsSnapshotWithNothingTyped() {
+        let apps = command("apps", "Applications", plugin: "apps", kind: .view, rootSection: "Applications")
+        let typed = build("saf", index([]), plugins: [rows(apps, ["Safari"])])
+        let safari = typed.entries[0]
+        let snapshot = typed.snapshot(safari)
+        XCTAssertEqual(snapshot?.query, "Safari")
+        XCTAssertEqual(snapshot?.id, safari.learnID, "pinned and used under one id")
+        let memory = PaletteMemory(directory: nil)
+        XCTAssertTrue(memory.toggleFavorite(safari, row: snapshot))
+        XCTAssertTrue(memory.isFavorite(safari), "the live row knows it is pinned")
+
+        let empty = PaletteRoot.build(query: "", index: index([]), ranker: PaletteRanker(query: ""), favorites: memory.favorites.ids,
+                                      remembered: memory.favoriteEntries(in: []))
+        XCTAssertEqual(empty.sections.first?.kind, .favorites)
+        let pinned = empty.entries[0]
+        XCTAssertEqual(pinned.kind, .remembered(command: "apps", rowKey: "safari", query: "Safari"))
+        XCTAssertEqual(pinned.id, safari.learnID)
+        XCTAssertTrue(empty.canPin(pinned))
+        XCTAssertTrue(memory.isFavorite(pinned), "and so does its snapshot")
+    }
+
+    func testARowAnsweringTheTextsShapeIsNotKept() {
+        let calc = CommandRegistry.Entry(pluginID: "calc", pluginName: "Calc",
+                                         spec: CommandSpec(id: "calc", title: "Calculator", kind: .view, rootSearch: true, rootPattern: "^[0-9]"))
+        let root = build("2+2", index([]), plugins: [rows(calc, ["4"])])
+        let answer = root.entries[0]
+        XCTAssertFalse(root.canPin(answer))
+        XCTAssertNil(root.snapshot(answer))
     }
 
     func testFallbacksGetTheWholeTextAndCantBePinned() {

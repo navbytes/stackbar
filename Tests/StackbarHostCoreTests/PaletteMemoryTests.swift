@@ -70,4 +70,49 @@ final class PaletteMemoryTests: XCTestCase {
         XCTAssertNil(PaletteMemory.carried("a|panel", from: "a", to: "b", carries: all))
         XCTAssertNil(PaletteMemory.carried("ab/run", from: "a", to: "b", carries: all), "another plugin whose id starts the same")
     }
+
+    private func app(_ name: String, plugin: String = "dev.t.apps") -> PaletteRememberedRows.Row {
+        PaletteRememberedRows.Row(pluginID: plugin, pluginName: "Apps", commandID: "search", rowKey: name.lowercased(), title: name,
+                                  appIcon: "com.t.\(name)", query: name)
+    }
+
+    func testAppsUsedOftenAreFrequentAndPinnedOnesAreNot() {
+        let memory = PaletteMemory(directory: nil)
+        let (safari, mail, notes) = (app("Safari"), app("Mail"), app("Notes"))
+        var file = app("Report")
+        file.appIcon = nil
+        for row in [safari, mail, notes, file] { memory.remember(row) }
+        for _ in 0..<3 { memory.chose(safari.entry, query: nil) }
+        for _ in 0..<2 { memory.chose(mail.entry, query: nil) }
+        memory.chose(notes.entry, query: nil)
+        for _ in 0..<4 { memory.chose(file.entry, query: nil) }
+        XCTAssertEqual(memory.frequentApps().map(\.title), ["Safari", "Mail"], "once isn't often, and a file isn't an app")
+        memory.toggleFavorite(safari.entry)
+        XCTAssertEqual(memory.frequentApps().map(\.title), ["Mail"])
+        XCTAssertEqual(memory.favoriteEntries(in: []).map(\.title), ["Safari"])
+    }
+
+    func testPinnedRowsAreNeverDroppedForRoomAndMoveInAHandover() {
+        let rows = PaletteRememberedRows(file: nil)
+        let pinned = app("Pinned")
+        rows.remember(pinned)
+        for index in 0..<PaletteRememberedRows.limit { rows.remember(app("App\(index)"), keeping: [pinned.id]) }
+        XCTAssertEqual(rows.all.count, PaletteRememberedRows.limit)
+        XCTAssertNotNil(rows.row(pinned.id))
+        XCTAssertNil(rows.row(app("App0").id), "the oldest unpinned row went")
+
+        let memory = PaletteMemory(directory: nil)
+        memory.toggleFavorite(pinned.entry, row: pinned)
+        memory.handOver(from: "dev.t.apps", to: "dev.t.launcher")
+        let moved = app("Pinned", plugin: "dev.t.launcher")
+        XCTAssertTrue(memory.isFavorite(moved.entry))
+        XCTAssertEqual(memory.favoriteEntries(in: []).map(\.pluginID), ["dev.t.launcher"])
+    }
+
+    func testRememberedRowsSurviveARestart() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        PaletteMemory(directory: directory).remember(app("Safari"))
+        XCTAssertEqual(PaletteMemory(directory: directory).rows.all.map(\.title), ["Safari"])
+    }
 }

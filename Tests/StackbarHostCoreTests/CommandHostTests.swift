@@ -146,6 +146,16 @@ final class PaletteCommandTests: XCTestCase {
         XCTAssertNil(index.aliasMatch("zz react"))
     }
 
+    func testANameThenTheArgumentWorksWithoutAnAlias() {
+        let search = CommandKey(pluginID: "gh", commandID: "search")
+        let index = index()
+        XCTAssertEqual(index.aliasMatch("search pull requests react native")?.entry.commandKey, search, "the whole title")
+        XCTAssertEqual(index.aliasMatch("Search Pull Requests react")?.rest, "react")
+        XCTAssertEqual(index.aliasMatch("github react")?.entry.commandKey, search, "a keyword")
+        XCTAssertNil(index.aliasMatch("refresh reviews now"), "a command that takes no text")
+        XCTAssertNil(index.aliasMatch("search pull requests"), "nothing left for the argument")
+    }
+
     func testUsageLiftsWhatWasUsed() throws {
         let index = index()
         let usage = PaletteUsage(file: nil)

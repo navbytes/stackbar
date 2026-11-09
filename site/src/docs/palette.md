@@ -5,7 +5,8 @@ group: Use Stackbar
 order: 2
 ---
 
-Press your hotkey. Before you type, it shows Favorites, Recent and Commands.
+Press your hotkey. Before you type, it shows Favorites, the apps you open
+most (Frequently Used), Recent and Commands.
 As you type, results come in sections: Applications, Files, Calculator and
 others that plugins add, then the matching commands, then plugins from the
 Store you haven't installed yet. Press Return to
@@ -20,7 +21,7 @@ run the selected result, Esc to go back or close.
 | ⌘Return | The second action, when there is one (shown in the bar at the bottom) |
 | ⌘K | Every action for the selection, with its own search |
 | ⌘1 … ⌘9 | Run the first nine results |
-| ⌘⇧F | Add the selection to Favorites, or take it off |
+| ⌘⇧F | Add the selection to Favorites, or take it off. Apps and files can be favourites too |
 | Esc | Close ⌘K, go back a step, then close |
 
 If you close the palette and open it again within a minute, it comes back
@@ -31,6 +32,12 @@ where you were. After that it starts fresh.
 Settings › Commands lists every command. Give one an alias (type `gh` for
 GitHub search, say) or a hotkey of its own that runs it without opening the
 palette. You can also press ⌘K on a command and choose **Set Alias and Hotkey…**
+An alias is saved as soon as you click away; you don't have to press Return.
+
+You don't need an alias to pass text to a command. Type its name and then
+the text, and Return opens it with the text filled in: `search pull requests
+react` or `jira ABC-123` (a plugin's name works when it has only one command
+that takes text).
 
 ## What it searches
 
