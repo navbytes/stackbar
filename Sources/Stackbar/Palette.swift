@@ -640,7 +640,7 @@ struct PaletteRow: View {
     private var subtitle: String? {
         switch entry.kind {
         case .command, .showPanel: return entry.subtitle ?? entry.pluginName
-        case .navigate, .action, .open, .copy: return entry.subtitle
+        case .navigate, .action, .open, .copy, .remembered: return entry.subtitle
         }
     }
 
@@ -649,7 +649,7 @@ struct PaletteRow: View {
         switch entry.kind {
         case .command: return "Command"
         case .showPanel: return "Panel"
-        case .navigate, .action, .open, .copy: return entry.pluginName
+        case .navigate, .action, .open, .copy, .remembered: return entry.pluginName
         }
     }
 
@@ -660,6 +660,7 @@ struct PaletteRow: View {
         case .showPanel: return "macwindow"
         case .action, .open: return "bolt"
         case .copy: return "equal"
+        case .remembered: return "app"
         }
     }
 }

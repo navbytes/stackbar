@@ -27,6 +27,9 @@ public struct PaletteRoot: Equatable, Sendable {
         public var rowKey: String
         /// The row's actions; the first is what Return does.
         public var actions: [ActionRef]
+        /// Found again by its title, so it can be pinned and kept: not a
+        /// row answering the text's shape (a sum, an issue key).
+        public var keepable = true
     }
 
     /// What one root-search command shows now: its rows, already filtered
@@ -66,10 +69,24 @@ public struct PaletteRoot: Equatable, Sendable {
         return nil
     }
 
-    /// Only what stays put can be pinned: not plugin rows, fallbacks, Store
-    /// suggestions or answers, which come and go with the query.
+    /// Only what stays put can be pinned: not fallbacks, Store suggestions
+    /// or answers, which come and go with the query. A plugin's row can,
+    /// as a snapshot found again by its title (an app, a file).
     public func canPin(_ entry: PaletteIndex.Entry) -> Bool {
-        role(of: entry) == .result
+        switch role(of: entry) {
+        case .result: return true
+        case .pluginRow(let row): return row.keepable
+        case .fallback, .storeSuggestion, .answer: return false
+        }
+    }
+
+    /// The snapshot that keeps a plugin's row past this query: to pin it,
+    /// or to list it under Frequently Used once it is used often.
+    public func snapshot(_ entry: PaletteIndex.Entry) -> PaletteRememberedRows.Row? {
+        guard let row = pluginRow(entry), row.keepable else { return nil }
+        return PaletteRememberedRows.Row(pluginID: entry.pluginID, pluginName: entry.pluginName, commandID: row.command.commandID,
+                                         rowKey: row.rowKey, title: entry.title, subtitle: entry.subtitle, symbol: entry.symbol,
+                                         appIcon: entry.appIcon, fileIcon: entry.fileIcon, query: entry.title)
     }
 
     /// Whether choosing it teaches the ranking: everything but a Store
@@ -90,6 +107,7 @@ public struct PaletteRoot: Equatable, Sendable {
             case .navigate, .showPanel, .open: return "Open"
             case .action: return "Run"
             case .copy: return "Copy Answer"
+            case .remembered: return "Open"
             }
         }
     }
@@ -110,10 +128,13 @@ public struct PaletteRoot: Equatable, Sendable {
     /// - Each plugin gives its first `pluginRowLimit` rows, as a section
     ///   under its `rootSection` title, or the plugin's name after it when
     ///   another section already has that title.
-    /// - `favorites` are pinned ids; `store` are the Store's suggestions;
+    /// - `favorites` are pinned ids, found in the index or, for a plugin's
+    ///   row, in `remembered` (its snapshots); `frequent` are apps used
+    ///   often, shown when nothing is typed; `store` are the Store's suggestions;
     ///   `fallbacks` the `.fallback()` commands to offer (none when nothing
     ///   is typed).
     public static func build(query: String, index: PaletteIndex, ranker: PaletteRanker, usage: PaletteUsage? = nil, favorites: [String] = [],
+                             remembered: [PaletteIndex.Entry] = [], frequent: [PaletteIndex.Entry] = [],
                              store: [PaletteIndex.Entry] = [], plugins: [PluginRows] = [], fallbacks: [CommandRegistry.Entry] = [],
                              isRecent: (PaletteIndex.Entry) -> Bool = { _ in false }) -> PaletteRoot {
         let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
@@ -140,8 +161,9 @@ public struct PaletteRoot: Equatable, Sendable {
                 entry.appIcon = row.appIcon
                 entry.fileIcon = row.fileIcon
                 // Action ids change with every answer; the row's key doesn't.
-                entry.rankKey = "\(command.pluginID)|row|\(command.spec.id)|\(row.key)"
-                roles[entry.id] = .pluginRow(PluginRow(command: command.key, rowKey: row.key, actions: row.actions))
+                entry.rankKey = PaletteIndex.Entry.rowID(pluginID: command.pluginID, commandID: command.spec.id, rowKey: row.key)
+                roles[entry.id] = .pluginRow(PluginRow(command: command.key, rowKey: row.key, actions: row.actions,
+                                                       keepable: command.spec.rootPattern == nil))
                 return entry
             }
             guard !entries.isEmpty else { return nil }
@@ -157,8 +179,8 @@ public struct PaletteRoot: Equatable, Sendable {
             PaletteIndex.Entry(pluginID: entry.pluginID, pluginName: entry.pluginName, title: entry.spec.title,
                                subtitle: entry.pluginName, symbol: entry.spec.symbol, kind: .command(entry.spec))
         }
-        let pinned = PaletteFavorites.entries(favorites, in: all)
-        let sections = PaletteSection.group(found, query: query, favorites: pinned, store: store, plugins: pluginSections,
+        let pinned = PaletteFavorites.entries(favorites, in: all + remembered)
+        let sections = PaletteSection.group(found, query: query, favorites: pinned, frequent: typed.isEmpty ? frequent : [], store: store, plugins: pluginSections,
                                             fallbacks: offered, ranker: ranker, resultScore: resultScore, isRecent: isRecent)
         for section in sections {
             for entry in section.entries where roles[entry.id] == nil {

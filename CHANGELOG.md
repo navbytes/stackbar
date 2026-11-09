@@ -3,6 +3,17 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Added
+- **Pin apps and files to the palette.** ⌘⇧F (or ⌘K › Add to Favorites) now works on an app, a file or any other plugin result, not only commands, so your favourite apps are one Return away before you type.
+- **Frequently Used.** With nothing typed, the palette lists the apps you open most from it, under Favorites.
+- **Type a command's name, then the text.** `search pull requests react` or `jira ABC-123` opens the command with the text filled in, without setting up an alias first.
+- Copying from any plugin now shows "Copied to Clipboard", so you know it worked.
+
+### Fixed
+- An alias in Settings › Commands is saved when you click away, not only when you press Return.
+
 ## 0.35.1
 
 ### Fixed

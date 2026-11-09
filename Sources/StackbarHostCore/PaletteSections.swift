@@ -9,7 +9,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// What a section holds. Code tells sections apart by this, never by
     /// their titles, which are for people.
     public enum Kind: Equatable, Sendable {
-        case favorites, recent, commands, panelActions
+        case favorites, frequent, recent, commands, panelActions
         case results, topHit, store, fallback
         /// A root-search command's rows.
         case plugin
@@ -19,6 +19,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
         public var title: String? {
             switch self {
             case .favorites: return "Favorites"
+            case .frequent: return "Frequently Used"
             case .recent: return "Recent"
             case .commands: return "Commands"
             case .panelActions: return "Panel Actions"
@@ -30,7 +31,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
         }
 
         /// Every fixed heading, which a plugin's section must not repeat.
-        public static let fixedTitles: Set<String> = Set([Kind.favorites, .recent, .commands, .panelActions, .results, .topHit, .store].compactMap(\.title))
+        public static let fixedTitles: Set<String> = Set([Kind.favorites, .frequent, .recent, .commands, .panelActions, .results, .topHit, .store].compactMap(\.title))
     }
 
     public var title: String
@@ -55,7 +56,8 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
 
     /// Groups `results` (already in search order) without reordering within
     /// a group. `favorites` lead an empty query, in their own order, and are
-    /// not repeated below; `store` follows a typed one. Empty groups are left
+    /// not repeated below; `frequent` (apps used often) follow them; `store`
+    /// follows a typed one. Empty groups are left
     /// out.
     ///
     /// A typed query also gets the plugins' root-search sections, ranked
@@ -65,7 +67,8 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// section; then the sections, Results among them, by their best row.
     /// `resultScore` is the first result's score (default: the ranker's).
     /// Then the Store's suggestions and the fallback commands.
-    public static func group(_ results: [PaletteIndex.Entry], query: String, favorites: [PaletteIndex.Entry] = [], store: [PaletteIndex.Entry] = [],
+    public static func group(_ results: [PaletteIndex.Entry], query: String, favorites: [PaletteIndex.Entry] = [], frequent: [PaletteIndex.Entry] = [],
+                             store: [PaletteIndex.Entry] = [],
                              plugins: [PaletteSection] = [], fallbacks: [PaletteIndex.Entry] = [], ranker: PaletteRanker? = nil,
                              resultScore: Int? = nil, recentLimit: Int = 5, isRecent: (PaletteIndex.Entry) -> Bool) -> [PaletteSection] {
         let typed = query.trimmingCharacters(in: .whitespaces)
@@ -94,11 +97,12 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
             }
             switch entry.kind {
             case .command, .showPanel: commands.append(entry)
-            case .action, .open, .navigate, .copy: actions.append(entry)
+            case .action, .open, .navigate, .copy, .remembered: actions.append(entry)
             }
         }
         return [
             PaletteSection(.favorites, entries: favorites),
+            PaletteSection(.frequent, entries: frequent.filter { !pinned.contains($0.id) }),
             PaletteSection(.recent, entries: recent),
             PaletteSection(.commands, entries: commands),
             PaletteSection(.panelActions, entries: actions),
@@ -189,9 +193,7 @@ public final class PaletteFavorites: @unchecked Sendable {
         lock.withLock {
             var seen = Set<String>()
             stored = stored.map { id in
-                guard id.hasPrefix(from + "/") else { return id }
-                let command = String(id.dropFirst(from.count + 1))
-                return carries(command) ? to + "/" + command : id
+                PaletteMemory.carried(id, from: from, to: to, carries: carries) ?? id
             }
                 .filter { seen.insert($0).inserted }
         }

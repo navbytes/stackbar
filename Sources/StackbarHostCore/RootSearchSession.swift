@@ -213,4 +213,16 @@ public final class RootSearchSession<View: RootSearchView> {
         if let ref = fresh?.actions.first(where: { $0.title == action.title }) ?? fresh?.actions.first { return .perform(ref) }
         return view.isSearching ? .perform(action) : .gone
     }
+
+    /// A kept row's primary action, from a view opened with its query to
+    /// find it again (a pinned app, a frequent one): waits up to `wait`
+    /// for the plugin's first answer. Nil when the row isn't in it.
+    public static func replay(_ view: View, key: String, wait: Duration = .seconds(3)) async -> ActionRef? {
+        let deadline = ContinuousClock.now.advanced(by: wait)
+        while view.root == nil || view.isSearching, !view.isClosed, !view.isStopped, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(25))
+        }
+        guard !view.isClosed else { return nil }
+        return rows(in: view.root, query: view.query).first { $0.key == key }?.actions.first
+    }
 }

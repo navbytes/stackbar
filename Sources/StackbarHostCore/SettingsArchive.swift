@@ -21,7 +21,7 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
     ]
 
     /// Files in the data directory that travel, by their path there.
-    static let files: Set<String> = ["command-preferences.json", "palette-favorites.json", "installed.json", "bundled.json", "core-plugins.json"]
+    static let files: Set<String> = ["command-preferences.json", "palette-favorites.json", "palette-rows.json", "installed.json", "bundled.json", "core-plugins.json"]
     /// Folders in the data directory that travel whole.
     static let folders: Set<String> = ["Plugins", "Storage"]
     static let installedRecord = "installed.json"

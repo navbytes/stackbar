@@ -199,7 +199,9 @@ final class PaletteSession {
         let key = PaletteRootCache.Key(query: query, index: palette.revision, memory: memory.revision, store: storeCount, rows: rowsStamp)
         return cache.root(for: key) {
             PaletteRoot.build(query: query, index: palette, ranker: memory.ranker(for: query),
-                              usage: memory.usage, favorites: memory.favorites.ids, store: storeEntries(), plugins: plugins,
+                              usage: memory.usage, favorites: memory.favorites.ids,
+                              remembered: memory.favorites.ids.compactMap { memory.rows.row($0)?.entry },
+                              frequent: query.isEmpty ? memory.frequentApps() : [], store: storeEntries(), plugins: plugins,
                               fallbacks: fallbackCommands()) { memory.isRecent($0) }
         }
     }
@@ -283,8 +285,15 @@ final class PaletteSession {
     }
 
     /// ⌘⇧F: pins the selected root entry to the top, or unpins it.
+    /// ⌘K's Add to Favorites (⌘⇧F) for the entry.
+    private func favoriteAction(_ entry: PaletteIndex.Entry) -> Action {
+        Action(title: isFavorite(entry) ? "Remove from Favorites" : "Add to Favorites", shortcut: "cmd+shift+f") { [weak self] in
+            self?.toggleFavorite(entry)
+        }
+    }
+
     func toggleFavorite(_ entry: PaletteIndex.Entry) {
-        model.commands.memory.toggleFavorite(entry)
+        model.commands.memory.toggleFavorite(entry, row: root.snapshot(entry))
         revision += 1
     }
 
@@ -353,6 +362,10 @@ final class PaletteSession {
         if root.learns(entry) {
             model.commands.memory.chose(entry, query: stack.isEmpty ? query : nil)
         }
+        // A plugin's row is kept, so it can show under Frequently Used.
+        if let snapshot = root.snapshot(entry) {
+            model.commands.memory.remember(snapshot)
+        }
         if let found = rootRow(entry), let primary = found.row.actions.first {
             activateRootRow(found.view, key: found.row.rowKey, action: primary)
             return
@@ -385,6 +398,37 @@ final class PaletteSession {
         case .command:
             guard let key = entry.commandKey, let command = model.commands.registry.entry(key) else { return }
             enter(command, input: root.input(for: entry, query: query, index: model.palette), source: .palette)
+        case .remembered(let command, let rowKey, let text):
+            replay(entry, command: CommandKey(pluginID: entry.pluginID, commandID: command), rowKey: rowKey, query: text)
+        }
+    }
+
+    /// A pinned or frequent plugin row: asks its command for it again by
+    /// its title, then does what Return on the live row does.
+    private func replay(_ entry: PaletteIndex.Entry, command: CommandKey, rowKey: String, query text: String) {
+        opening = true
+        openToken += 1
+        let token = openToken
+        Task {
+            let opened = await model.commands.openView(command, query: CommandQuery(text: text), context: context, recordUse: false)
+            guard case .success(let view) = opened else {
+                if token == openToken { opening = false }
+                if case .failure(let outcome) = opened, token == openToken { problem = outcome.message }
+                return
+            }
+            let action = await RootSearchSession<CommandViewModel>.replay(view, key: rowKey)
+            guard token == openToken else {
+                view.close()
+                return
+            }
+            opening = false
+            guard let action else {
+                view.close()
+                problem = "\(entry.pluginName) no longer has \(entry.title). Unpin it with ⌘⇧F."
+                return
+            }
+            perform(action, in: view)
+            view.close()
         }
     }
 
@@ -592,17 +636,14 @@ final class PaletteSession {
             // A plugin's row in the root: its own actions, as in its view.
             if let found = rootRow(entry) {
                 let view = found.view
-                return found.row.actions.map { ref in
+                var actions = found.row.actions.map { ref in
                     Action(title: ref.title, shortcut: ref.shortcut, role: ref.role) { [weak self] in self?.perform(ref, in: view) }
-                } + [resetRanking(entry)]
+                }
+                if root.canPin(entry) { actions.append(favoriteAction(entry)) }
+                return actions + [resetRanking(entry)]
             }
             var actions = [Action(title: root.primaryTitle(entry)) { [weak self] in self?.activate(entry) }]
-            if root.canPin(entry) {
-                let pinned = isFavorite(entry)
-                actions.append(Action(title: pinned ? "Remove from Favorites" : "Add to Favorites", shortcut: "cmd+shift+f") { [weak self] in
-                    self?.toggleFavorite(entry)
-                })
-            }
+            if root.canPin(entry) { actions.append(favoriteAction(entry)) }
             if let key = entry.commandKey, let command = model.commands.registry.entry(key) {
                 if command.spec.exposure == .everywhere {
                     actions.append(Action(title: "Copy Link", shortcut: "cmd+shift+c", section: "Command") { [weak self] in

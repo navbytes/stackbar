@@ -71,6 +71,7 @@ struct CommandSettingsRow: View {
     let highlighted: Bool
     @State private var alias = ""
     @State private var problem: String?
+    @FocusState private var aliasFocused: Bool
 
     private var preference: CommandPreference { center.preferences[entry.key] }
 
@@ -90,7 +91,12 @@ struct CommandSettingsRow: View {
                 TextField("Alias", text: $alias)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
-                    .onSubmit { save { $0.alias = alias } }
+                    .focused($aliasFocused)
+                    .onSubmit(saveAlias)
+                    // Clicking away or closing Settings keeps what was typed:
+                    // Return is not the only way to finish an alias.
+                    .onChange(of: aliasFocused) { _, focused in if !focused { saveAlias() } }
+                    .onDisappear(perform: saveAlias)
                 HotKeyRecorder(spec: preference.hotkey) { spec in save { $0.hotkey = spec } }
                 Toggle("", isOn: Binding(get: { preference.enabled }, set: { enabled in save { $0.enabled = enabled } }))
                     .labelsHidden()
@@ -131,6 +137,12 @@ struct CommandSettingsRow: View {
         if spec.rootSearch { caption += preference.inRootSearch ? " · answers in the palette's results" : " · kept out of the palette's results" }
         if spec.fallback { caption += preference.inRootSearch ? " · offered for any text" : " · not offered for any text" }
         return caption
+    }
+
+    private func saveAlias() {
+        let typed = alias.trimmingCharacters(in: .whitespaces)
+        guard typed != (preference.alias ?? "") else { return }
+        save { $0.alias = typed }
     }
 
     private func save(_ change: (inout CommandPreference) -> Void) {
