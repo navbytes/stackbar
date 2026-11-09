@@ -388,3 +388,19 @@ final class RunOnARealPluginTests: XCTestCase {
         await supervisor.stop()
     }
 }
+
+final class TerminalChoiceTests: XCTestCase {
+    func testAChosenTerminalIsStartedTheWayItTakesAScript() {
+        XCTAssertNil(TerminalChoice.chosen(nil), "the .command default")
+        XCTAssertNil(TerminalChoice.chosen("com.example.unknown"))
+        XCTAssertEqual(TerminalChoice.chosen("com.googlecode.iterm2")?.launch, .openFile)
+        let ghostty = TerminalChoice.chosen("com.mitchellh.ghostty")
+        XCTAssertEqual(ghostty?.arguments(running: "/tmp/x.command"), ["-e", "/bin/zsh", "-l", "/tmp/x.command"])
+        XCTAssertEqual(TerminalChoice.chosen("com.github.wez.wezterm")?.arguments(running: "/tmp/x"), ["start", "--", "/bin/zsh", "-l", "/tmp/x"])
+    }
+
+    func testDockerAndOrbStackFoldersAreSearchedLast() {
+        XCTAssertEqual(CommandResolver.searchPath.prefix(6), ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+        XCTAssertTrue(CommandResolver.searchPath.contains(NSHomeDirectory() + "/.orbstack/bin"))
+    }
+}

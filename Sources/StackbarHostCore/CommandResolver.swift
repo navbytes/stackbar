@@ -7,7 +7,10 @@ import StackbarProtocol
 /// PATH can be changed by a dotfile or point into a folder anyone can write
 /// to, and what the user approved must stay the program that runs.
 public struct CommandResolver: Sendable {
-    public static let searchPath = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    /// The system's folders, then where Docker Desktop and OrbStack keep
+    /// their `docker` when it isn't linked into /usr/local/bin.
+    public static let searchPath = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+                                    "/Applications/Docker.app/Contents/Resources/bin", NSHomeDirectory() + "/.orbstack/bin"]
     public static let standard = CommandResolver()
 
     /// Programs that run whatever they are given, flagged on the install

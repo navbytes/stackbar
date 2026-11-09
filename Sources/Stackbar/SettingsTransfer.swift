@@ -100,18 +100,21 @@ struct SettingsTransferGroup: View {
             if !summary.pluginFiles.isEmpty {
                 lines.append("Plugins: " + summary.pluginFiles.map { ($0 as NSString).deletingPathExtension }.joined(separator: ", ") + ".")
             }
-            lines.append("Plugins with the same name are replaced. Each plugin asks for its permissions again. Stackbar restarts to load them.")
+            lines.append("Merge keeps your own aliases, favourites and saved values, and the file wins where both have one. Replace puts the file's copies in their place, as when restoring a backup. Plugins with the same name are replaced either way, and each asks for its permissions again. Stackbar restarts to load them.")
             alert.informativeText = lines.joined(separator: "\n\n")
-            alert.addButton(withTitle: "Import and Restart")
+            alert.addButton(withTitle: "Merge and Restart")
+            alert.addButton(withTitle: "Replace and Restart")
             alert.addButton(withTitle: "Cancel")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            let answer = alert.runModal()
+            guard answer == .alertFirstButtonReturn || answer == .alertSecondButtonReturn else { return }
+            let replacing = answer == .alertSecondButtonReturn
             // Keep what's in memory from overwriting the imported values on quit.
             let storage = model.services.storage
             storage.flushAll()
             storage.setWritesPaused(true)
             let directory = StackbarPaths.dataDirectory
             let applied = await Task.detached(priority: .userInitiated) {
-                Result { try archive.apply(to: directory) }
+                Result { try archive.apply(to: directory, replacing: replacing) }
             }.value
             switch applied {
             case .success:

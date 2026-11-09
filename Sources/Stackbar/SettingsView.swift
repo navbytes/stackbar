@@ -238,6 +238,11 @@ struct GeneralSettings: View {
                     .disabled(toolInstalled || installingTool)
                 }
             }
+            SettingsGroup("Terminal") {
+                SettingsRow(title: "Open commands in", caption: "Where a plugin's Open in Terminal runs, such as Docker's shell or a script command.") {
+                    TerminalPicker()
+                }
+            }
             SpotlightReplacementsSection(model: model)
             SettingsTransferGroup(model: model)
             SettingsGroup("Reset") {
@@ -851,6 +856,27 @@ struct CrashReportsGroup: View {
                 .toggleStyle(TrailingSwitchStyle())
                 .onChange(of: allowed) { _, on in CrashReports.isAllowed = on }
         }
+    }
+}
+
+/// The terminals Stackbar can start that are installed, plus the default:
+/// whatever opens `.command` files.
+struct TerminalPicker: View {
+    @AppStorage(TerminalChoice.defaultsKey) private var chosen = ""
+
+    private var installed: [TerminalChoice] {
+        TerminalChoice.known.filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil }
+    }
+
+    var body: some View {
+        Picker("Open commands in", selection: $chosen) {
+            Text("Default (opens .command files)").tag("")
+            ForEach(installed) { terminal in
+                Text(terminal.name).tag(terminal.bundleID)
+            }
+        }
+        .labelsHidden()
+        .fixedSize()
     }
 }
 #endif

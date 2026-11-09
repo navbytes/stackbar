@@ -10,6 +10,11 @@ window. Write for people who use Stackbar, not for the code.
 - **Frequently Used.** With nothing typed, the palette lists the apps you open most from it, under Favorites.
 - **Type a command's name, then the text.** `search pull requests react` or `jira ABC-123` opens the command with the text filled in, without setting up an alias first.
 - Copying from any plugin now shows "Copied to Clipboard", so you know it worked.
+- **Pick your terminal.** Settings › General › Terminal sets where a plugin's Open in Terminal runs: Terminal, iTerm, Warp, Ghostty, kitty or WezTerm.
+- **Importing settings merges.** Your own aliases, favourites and plugin data stay, and the file wins where both have a value. Choose Replace to restore a backup as it was.
+- **Settings from Terminal.** `stackbarctl settings export <file> [--only commands,preferences,…]` and `stackbarctl settings import <file>` keep two Macs, or a team, on the same setup through iCloud Drive or a dotfiles repository.
+- **Private stores.** A plugin source can name its signing key (`#key=`), so its updates and withdrawals are trusted, and a token from Stackbar's secrets (`#auth=`), sent only to that store. New docs page: Run your own store.
+- Plugins that run `docker` find Docker Desktop's and OrbStack's own copy when it isn't linked into /usr/local/bin.
 
 ### Fixed
 - An alias in Settings › Commands is saved when you click away, not only when you press Return.

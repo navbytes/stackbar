@@ -182,7 +182,10 @@ final class AppModel {
     // MARK: - Store
 
     /// The indexes the store reads: the official one first.
-    var storeSources: [PluginStore.Source] { PluginStore.sources(userURLs: indexURLs) }
+    var storeSources: [PluginStore.Source] {
+        let secrets = services.secrets
+        return PluginStore.sources(userURLs: indexURLs) { name in try? secrets.secret(name) }
+    }
 
     /// Compares plugins installed from a store with the indexes: installs
     /// updates (or lists them when automatic updates are off) and moves

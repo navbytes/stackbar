@@ -46,15 +46,16 @@ struct StoreSettings: View {
                     }
                 }
             }
-            SettingsGroup("Plugin Sources", footer: "Anyone can publish an index with `stackbarctl index build`. Plugins from it run in the same sandbox and ask for the same permissions.") {
+            SettingsGroup("Plugin Sources", footer: "Anyone can publish an index with `stackbarctl index build`. Plugins from it run in the same sandbox and ask for the same permissions. Add #key=<public key> to require its signature, and #auth=<SECRET_NAME> to send a token kept in Stackbar's secrets; see Run your own store in the docs.") {
                 ForEach(model.storeSources, id: \.url) { source in
                     let name = store.catalogs.first { $0.source.url == source.url }?.index.name
                     SettingsRow(symbol: source.isOfficial ? "checkmark.seal.fill" : "shippingbox.fill", color: source.isOfficial ? .blue : .gray,
                                 title: name ?? source.url.host() ?? source.url.absoluteString,
-                                caption: source.isOfficial ? "Signed by navbytes" : source.url.absoluteString) {
+                                caption: source.isOfficial ? "Signed by navbytes"
+                                    : [source.url.absoluteString, source.publicKey == nil ? nil : "signed", source.authSecret.map { "token \($0)" }].compactMap { $0 }.joined(separator: " · ")) {
                         if !source.isOfficial {
                             Button("Remove", role: .destructive) {
-                                model.indexURLs.removeAll { $0 == source.url.absoluteString }
+                                model.indexURLs.removeAll { $0 == source.configured }
                                 Task { await store.load() }
                             }
                         }

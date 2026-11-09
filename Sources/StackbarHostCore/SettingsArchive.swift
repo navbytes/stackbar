@@ -17,7 +17,7 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
     /// The app preferences that travel. Everything else in UserDefaults stays.
     public static let defaultsKeys: Set<String> = [
         PaletteHotKey.defaultsKey, "pluginsOff", "autoUpdatePlugins", "indexURLs", "paletteCompact", "dockIconWithWindows",
-        "textExpansion", "textExpansionExcludedApps",
+        "textExpansion", "textExpansionExcludedApps", TerminalChoice.defaultsKey,
     ]
 
     /// Files in the data directory that travel, by their path there.
@@ -57,6 +57,41 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
         }
     }
 
+    /// What a settings file can carry, to export only some of it (a team
+    /// baseline of commands and preferences, say, without anyone's data).
+    public enum Part: String, CaseIterable, Sendable {
+        /// The plugins and where they came from.
+        case plugins
+        /// What each plugin saved (its lists, its settings).
+        case data
+        /// Aliases, hotkeys and which commands show.
+        case commands
+        /// Favourites and kept palette rows.
+        case palette
+        /// The app's own preferences (the palette hotkey, plugins turned off…).
+        case preferences
+
+        /// The part a data-directory path belongs to.
+        static func of(_ path: String) -> Part {
+            if path.hasPrefix("Storage/") { return .data }
+            switch path {
+            case "command-preferences.json": return .commands
+            case "palette-favorites.json", "palette-rows.json": return .palette
+            default: return .plugins
+            }
+        }
+
+        /// `plugins,commands` → those parts; nil names an unknown one.
+        public static func parse(_ list: String) -> Set<Part>? {
+            var parts = Set<Part>()
+            for name in list.split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces).lowercased() }) where !name.isEmpty {
+                guard let part = Part(rawValue: name) else { return nil }
+                parts.insert(part)
+            }
+            return parts.isEmpty ? nil : parts
+        }
+    }
+
     public var format: Int
     public var stackbarVersion: String
     public var exportedAt: Date
@@ -88,9 +123,10 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
     // MARK: Export
 
     /// Reads the setup out of `dataDirectory` and the given preferences.
-    public static func export(dataDirectory: URL, defaults: UserDefaults = .standard, now: Date = Date()) throws -> SettingsArchive {
+    public static func export(dataDirectory: URL, defaults: UserDefaults = .standard, now: Date = Date(),
+                              parts: Set<Part> = Set(Part.allCases)) throws -> SettingsArchive {
         var preferences: [String: Preference] = [:]
-        for key in defaultsKeys {
+        for key in defaultsKeys where parts.contains(.preferences) {
             switch defaults.object(forKey: key) {
             case let value as String: preferences[key] = .string(value)
             case let value as [String]: preferences[key] = .strings(value)
@@ -119,6 +155,7 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
                 files[folder + "/" + relative] = try Data(contentsOf: url)
             }
         }
+        files = files.filter { parts.contains(Part.of($0.key)) }
         return SettingsArchive(format: currentFormat, stackbarVersion: StackbarVersion.current, exportedAt: now, preferences: preferences, files: files)
     }
 
@@ -159,16 +196,22 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
         return Summary(pluginFiles: plugins, savedValues: values, preferences: preferences.count)
     }
 
-    /// Writes the files into `dataDirectory`, replacing ones with the same
-    /// name and leaving the rest, and sets the preferences. Plugins already
-    /// here that the file doesn't have stay installed.
-    public func apply(to dataDirectory: URL, defaults: UserDefaults = .standard) throws {
+    /// Writes the files into `dataDirectory` and sets the preferences.
+    /// Plugins already here that the file doesn't have stay installed.
+    ///
+    /// By default a file merges into the one here: an alias, a saved value
+    /// or a favourite the file doesn't mention stays, and the file wins
+    /// where both have one. `replacing` writes the file's copy over it
+    /// instead, as a restore from backup does.
+    public func apply(to dataDirectory: URL, defaults: UserDefaults = .standard, replacing: Bool = false) throws {
         let manager = FileManager.default
         for (path, contents) in files {
             guard Self.isAllowed(path) else { throw ArchiveError.badPath(path) }
             var data = contents
             if path == Self.installedRecord {
                 data = try Self.mergedRecords(data, into: dataDirectory)
+            } else if !replacing, path.hasSuffix(".json"), let existing = try? Data(contentsOf: dataDirectory.appendingPathComponent(path)) {
+                data = Self.merged(data, into: existing)
             }
             let url = dataDirectory.appendingPathComponent(path)
             try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -177,6 +220,28 @@ public struct SettingsArchive: Codable, Equatable, Sendable {
         for (key, value) in preferences where Self.defaultsKeys.contains(key) {
             defaults.set(value.propertyListValue, forKey: key)
         }
+    }
+
+    /// A JSON file merged into the one here: objects key by key (the
+    /// incoming value wins), lists with the incoming items this one lacks
+    /// added at the end. Anything else, or anything unreadable, is the
+    /// incoming file.
+    static func merged(_ incoming: Data, into existing: Data) -> Data {
+        guard let new = try? JSONSerialization.jsonObject(with: incoming, options: [.fragmentsAllowed]),
+              let old = try? JSONSerialization.jsonObject(with: existing, options: [.fragmentsAllowed]) else { return incoming }
+        let result: Any
+        if let new = new as? [String: Any], let old = old as? [String: Any] {
+            result = old.merging(new) { _, incoming in incoming }
+        } else if let new = new as? [Any], let old = old as? [Any] {
+            let known = Set(old.compactMap { try? JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys, .fragmentsAllowed]) })
+            result = old + new.filter { item in
+                guard let key = try? JSONSerialization.data(withJSONObject: item, options: [.sortedKeys, .fragmentsAllowed]) else { return true }
+                return !known.contains(key)
+            }
+        } else {
+            return incoming
+        }
+        return (try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])) ?? incoming
     }
 
     /// The installer keeps absolute paths. An export makes the ones inside
