@@ -2,6 +2,7 @@
 import AppKit
 import ApplicationServices
 import StackbarHostCore
+import StackbarUI
 import SwiftUI
 
 /// Marks the events the Hyper key sends, so its own listener lets them by.
