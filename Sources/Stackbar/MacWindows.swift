@@ -117,24 +117,25 @@ enum MacWindows {
     /// Every display in Accessibility's top-left coordinates. The id is the
     /// display's vendor, model and serial number, which stays the same across
     /// reboots and ports; two identical monitors without serial numbers get
-    /// `#2` and so on after the first.
+    /// `#2` and so on, left to right (`DisplayIDs`).
     static func displays() -> [DisplayInfo] {
-        let screens = NSScreen.screens
-        let mainHeight = screens.first?.frame.height ?? 0
-        var seen: [String: Int] = [:]
-        return screens.compactMap { screen in
+        let mainHeight = NSScreen.screens.first?.frame.height ?? 0
+        let screens: [(NSScreen, CGDirectDisplayID)] = NSScreen.screens.compactMap { screen in
             guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
-            let display = CGDirectDisplayID(number.uint32Value)
-            var id = "\(CGDisplayVendorNumber(display))-\(CGDisplayModelNumber(display))-\(CGDisplaySerialNumber(display))"
-            let count = seen[id, default: 0] + 1
-            seen[id] = count
-            if count > 1 { id += "#\(count)" }
+            return (screen, CGDirectDisplayID(number.uint32Value))
+        }
+        let ids = DisplayIDs.ids(screens.map { screen, display in
+            DisplayIDs.Screen(base: "\(CGDisplayVendorNumber(display))-\(CGDisplayModelNumber(display))-\(CGDisplaySerialNumber(display))",
+                              x: screen.frame.minX, y: -screen.frame.maxY)
+        })
+        return zip(screens, ids).map { pair, id in
+            let (screen, display) = pair
             return DisplayInfo(
                 id: id,
                 name: screen.localizedName,
                 frame: flipped(screen.frame, mainHeight),
                 visibleFrame: flipped(screen.visibleFrame, mainHeight),
-                isMain: screen == screens.first,
+                isMain: screen == NSScreen.screens.first,
                 isBuiltIn: CGDisplayIsBuiltin(display) != 0
             )
         }

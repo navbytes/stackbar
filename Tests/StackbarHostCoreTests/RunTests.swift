@@ -443,3 +443,13 @@ final class CommandCallTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(CommandCall.Reply.self, from: line), CommandCall.Reply(message: "ran go with x", isError: false))
     }
 }
+
+final class DisplayIDsTests: XCTestCase {
+    func testIdenticalMonitorsAreNumberedLeftToRightWhateverOrderMacOSListsThem() {
+        let left = DisplayIDs.Screen(base: "1-2-0", x: -1920, y: 0)
+        let right = DisplayIDs.Screen(base: "1-2-0", x: 1512, y: 0)
+        let laptop = DisplayIDs.Screen(base: "9-9-7", x: 0, y: 0)
+        XCTAssertEqual(DisplayIDs.ids([laptop, left, right]), ["9-9-7", "1-2-0", "1-2-0#2"])
+        XCTAssertEqual(DisplayIDs.ids([right, laptop, left]), ["1-2-0#2", "9-9-7", "1-2-0"], "listed the other way round, same ids")
+    }
+}
