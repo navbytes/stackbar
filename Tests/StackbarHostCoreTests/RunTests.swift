@@ -388,3 +388,68 @@ final class RunOnARealPluginTests: XCTestCase {
         await supervisor.stop()
     }
 }
+
+final class TerminalChoiceTests: XCTestCase {
+    func testAChosenTerminalIsStartedTheWayItTakesAScript() {
+        XCTAssertNil(TerminalChoice.chosen(nil), "the .command default")
+        XCTAssertNil(TerminalChoice.chosen("com.example.unknown"))
+        XCTAssertEqual(TerminalChoice.chosen("com.googlecode.iterm2")?.launch, .openFile)
+        let ghostty = TerminalChoice.chosen("com.mitchellh.ghostty")
+        XCTAssertEqual(ghostty?.arguments(running: "/tmp/x.command"), ["-e", "/bin/zsh", "-l", "/tmp/x.command"])
+        XCTAssertEqual(TerminalChoice.chosen("com.github.wez.wezterm")?.arguments(running: "/tmp/x"), ["start", "--", "/bin/zsh", "-l", "/tmp/x"])
+    }
+
+    func testDockerAndOrbStackFoldersAreSearchedLast() {
+        XCTAssertEqual(CommandResolver.searchPath.prefix(6), ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+        XCTAssertTrue(CommandResolver.searchPath.contains(NSHomeDirectory() + "/.orbstack/bin"))
+    }
+}
+
+final class SystemEventTests: XCTestCase {
+    func testEachEventHasItsTriggerAndReason() throws {
+        XCTAssertEqual(SystemEvent.locked.trigger, .lock)
+        XCTAssertEqual(SystemEvent.unlocked.trigger, .lock)
+        XCTAssertEqual(SystemEvent.unlocked.reason, .unlocked)
+        for event in SystemEvent.allCases {
+            XCTAssertEqual(event.reason.rawValue, event.rawValue, "refreshReason reads like the event")
+        }
+        // A manifest with the new triggers round-trips.
+        let triggers: [Trigger] = [.lock, .sleep, .frontApp, .power, .audio, .network, .volumes]
+        let data = try JSONEncoder().encode(triggers)
+        XCTAssertEqual(try JSONDecoder().decode([Trigger].self, from: data), triggers)
+        XCTAssertEqual(SystemEvent.locked.settle, .zero, "a lock is heard at once")
+    }
+}
+
+final class CommandCallTests: XCTestCase {
+    func testACallFindsItsCommandByIdOrShortName() {
+        let registry = CommandRegistry(file: nil)
+        _ = registry.update(pluginID: "io.navbytes.stackbar.plugins.pr-cockpit", pluginName: "PR Cockpit", specs: [CommandSpec(id: "refresh", title: "Refresh")])
+        XCTAssertEqual(CommandCall(plugin: "pr-cockpit", command: "refresh").entry(in: registry)?.spec.title, "Refresh")
+        XCTAssertNotNil(CommandCall(plugin: "io.navbytes.stackbar.plugins.pr-cockpit", command: "refresh").entry(in: registry))
+        XCTAssertNil(CommandCall(plugin: "cockpit", command: "refresh").entry(in: registry))
+        XCTAssertEqual(CommandCall.arguments(from: ["--arg", "q=a=b", "--arg", "n=1"]), ["q": "a=b", "n": "1"])
+        XCTAssertNil(CommandCall.arguments(from: ["--arg", "novalue"]))
+    }
+
+    func testACallRoundTripsOverTheSocket() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("c-\(UUID().uuidString.prefix(8)).sock").path
+        let server = try UnixSocketServer(path: path) { line in
+            let call = try? JSONDecoder().decode(CommandCall.self, from: line)
+            return try? JSONEncoder().encode(CommandCall.Reply(message: "ran \(call?.command ?? "?") with \(call?.arguments["q"] ?? "")", isError: false))
+        }
+        defer { server.stop() }
+        let line = try UnixSocket.request(JSONEncoder().encode(CommandCall(plugin: "p", command: "go", arguments: ["q": "x"])), to: path)
+        XCTAssertEqual(try JSONDecoder().decode(CommandCall.Reply.self, from: line), CommandCall.Reply(message: "ran go with x", isError: false))
+    }
+}
+
+final class DisplayIDsTests: XCTestCase {
+    func testIdenticalMonitorsAreNumberedLeftToRightWhateverOrderMacOSListsThem() {
+        let left = DisplayIDs.Screen(base: "1-2-0", x: -1920, y: 0)
+        let right = DisplayIDs.Screen(base: "1-2-0", x: 1512, y: 0)
+        let laptop = DisplayIDs.Screen(base: "9-9-7", x: 0, y: 0)
+        XCTAssertEqual(DisplayIDs.ids([laptop, left, right]), ["9-9-7", "1-2-0", "1-2-0#2"])
+        XCTAssertEqual(DisplayIDs.ids([right, laptop, left]), ["1-2-0#2", "9-9-7", "1-2-0"], "listed the other way round, same ids")
+    }
+}

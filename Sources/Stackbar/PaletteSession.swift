@@ -272,6 +272,17 @@ final class PaletteSession {
         return model.commands.registry.entries.filter { RootSearchGate.offersFallback($0.spec, preference: preferences[$0.key]) }
     }
 
+    /// Tab at the root: hands the typed text to the chosen fallback (Ask AI
+    /// by default). False when there's nothing to hand or no one to take it,
+    /// so Tab moves focus as usual.
+    func tabToFallback() -> Bool {
+        guard stack.isEmpty, !query.trimmingCharacters(in: .whitespaces).isEmpty,
+              let command = PaletteTabTarget.command(saved: UserDefaults.standard.string(forKey: PaletteTabTarget.defaultsKey), fallbacks: fallbackCommands()),
+              let entry = PaletteTabTarget.entry(for: command, in: root) else { return false }
+        activate(entry)
+        return true
+    }
+
     /// The live view behind a plugin's row on the root, and the row.
     private func rootRow(_ entry: PaletteIndex.Entry) -> (view: CommandViewModel, row: PaletteRoot.PluginRow)? {
         guard let row = root.pluginRow(entry), let view = rootSearch.views[row.command] else { return nil }

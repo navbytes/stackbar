@@ -67,4 +67,5 @@ Windows are in the Store and do more than Spotlight's versions.
 
 - [Install more plugins](/docs/plugins/) from the Store.
 - [Move from Raycast](/switch-from-raycast/): snippets, quicklinks and ⌘Space.
+- [Move from Spotlight](/switch-from-spotlight/), [Rectangle and rcmd](/switch-from-rectangle/) or [Hammerspoon](/switch-from-hammerspoon/).
 - [Write your first plugin](/docs/first-plugin/) in one Swift file.

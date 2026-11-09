@@ -6,10 +6,25 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Added
+- **Tab asks AI.** With text typed in the palette, Tab hands it to the Ask AI plugin (or any fallback you pick in Settings › Command Palette).
+- **Longer commands.** A plugin's run command can ask for up to ten minutes with `.timeout(_:)`, instead of 30 seconds. Script Commands uses it.
+- **More folders for commands.** Settings › Terminal adds folders such as ~/.cargo/bin to where plugins and scripts find programs, after Homebrew and the system folders.
+- **Hyper key.** Settings › General › Keyboard turns Caps Lock into ⌃⌥⇧⌘ for hotkeys, and Escape when tapped alone. No Karabiner needed.
+- **Starter sets in Welcome.** Launcher, Developer, and Windows & Keys switch on a matching group of plugins in one click.
+- **Permissions step in Welcome.** It shows whether Accessibility is allowed and asks for it in place, with a link to the Permissions page.
+- **Switch guides** for Spotlight, Rectangle and Hammerspoon users, next to the Raycast one, and a "make ⌘Space open Stackbar" path in Welcome.
 - **Pin apps and files to the palette.** ⌘⇧F (or ⌘K › Add to Favorites) now works on an app, a file or any other plugin result, not only commands, so your favourite apps are one Return away before you type.
 - **Frequently Used.** With nothing typed, the palette lists the apps you open most from it, under Favorites.
 - **Type a command's name, then the text.** `search pull requests react` or `jira ABC-123` opens the command with the text filled in, without setting up an alias first.
 - Copying from any plugin now shows "Copied to Clipboard", so you know it worked.
+- **Pick your terminal.** Settings › General › Terminal sets where a plugin's Open in Terminal runs: Terminal, iTerm, Warp, Ghostty, kitty or WezTerm.
+- **Importing settings merges.** Your own aliases, favourites and plugin data stay, and the file wins where both have a value. Choose Replace to restore a backup as it was.
+- **Settings from Terminal.** `stackbarctl settings export <file> [--only commands,preferences,…]` and `stackbarctl settings import <file>` keep two Macs, or a team, on the same setup through iCloud Drive or a dotfiles repository.
+- **Private stores.** A plugin source can name its signing key (`#key=`), so its updates and withdrawals are trusted, and a token from Stackbar's secrets (`#auth=`), sent only to that store. New docs page: Run your own store.
+- **Plugins can react to more of your Mac** (protocol 26): the screen locking or unlocking, the Mac going to sleep, another app coming to the front, switching between battery and adapter, headphones or another sound device, the network changing, and disks being mounted or ejected. For plugin authors: the `.lock`, `.sleep`, `.frontApp`, `.power`, `.audio`, `.network` and `.volumes` triggers.
+- **`stackbarctl call <plugin> <command> [--arg name=value]`** runs a command in the running app and prints its result, for scripts, cron jobs and git hooks. It asks once like a link, unless Links May Run It Without Asking is on. The palette docs now cover `stackbar://` links.
+- Two identical monitors without serial numbers are told apart by where they are arranged (left one first), not by the order macOS lists them, so window layouts saved for them come back to the right screen after a reconnect. Layouts saved before this for such a pair may need saving once more.
+- Plugins that run `docker` find Docker Desktop's and OrbStack's own copy when it isn't linked into /usr/local/bin.
 
 ### Fixed
 - An alias in Settings › Commands is saved when you click away, not only when you press Return.

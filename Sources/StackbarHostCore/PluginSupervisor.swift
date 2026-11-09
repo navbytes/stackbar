@@ -177,6 +177,12 @@ public actor PluginSupervisor {
         if manifest.triggers.contains(.apps) { send(.trigger(reason: .apps)) }
     }
 
+    /// Something the system triggers report happened (`SystemEvent`):
+    /// only plugins that asked for its trigger hear it.
+    public func system(_ event: SystemEvent) {
+        if manifest.triggers.contains(event.trigger) { send(.trigger(reason: event.reason)) }
+    }
+
     /// Reminders changed, here or on another device. Only plugins that
     /// asked for `.reminders` hear it.
     public func remindersChanged() {

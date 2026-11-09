@@ -25,8 +25,32 @@ Settings › General › Move to Another Mac › **Export…** writes one
 - Stackbar's own preferences, such as the palette hotkey.
 
 Secrets and approvals are never in the file. On the new Mac, choose
-**Import…**; Stackbar installs the plugins, restores the rest and restarts.
-Enter your tokens again and approve each plugin once.
+**Import…**, then **Merge** or **Replace**. Stackbar installs the plugins,
+restores the rest and restarts. Enter your tokens again and approve each
+plugin once.
+
+**Merge** keeps what is already on this Mac: your own aliases, favourites and
+plugin data stay, and the file wins only where both have a value. **Replace**
+puts the file's copies in their place, as when restoring a backup.
+
+## Two Macs, or a team baseline
+
+The same file works from Terminal, so you can keep it in iCloud Drive or a
+dotfiles repository. Quit Stackbar first, then:
+
+```sh
+# On the Mac you set up: only aliases, hotkeys and preferences
+stackbarctl settings export ~/Library/Mobile\ Documents/com~apple~CloudDocs/stackbar.stackbarsettings \
+  --only commands,preferences
+
+# On the other Mac (or a teammate's)
+stackbarctl settings import ~/Library/Mobile\ Documents/com~apple~CloudDocs/stackbar.stackbarsettings
+```
+
+`--only` takes any of `plugins`, `data`, `commands`, `palette` and
+`preferences`. An import merges unless you add `--replace`. Stackbar doesn't
+sync on its own: export again when you change something you want on the other
+Mac. Install the command-line tool from Settings › General first.
 
 ## Coming from Raycast
 

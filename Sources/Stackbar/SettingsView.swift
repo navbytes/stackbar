@@ -206,6 +206,9 @@ struct GeneralSettings: View {
                 SettingsRow(title: "Aliases and hotkeys", caption: "Give any command a short alias or its own shortcut.") {
                     Button("Edit…") { model.settingsTab = .commands }
                 }
+                SettingsRow(title: "Tab with text", caption: "Hands what you typed to this command, as Raycast's Tab does for AI.") {
+                    PaletteTabPicker(model: model)
+                }
                 Toggle("Compact: show only the search field until you type", isOn: $paletteCompact)
                     .toggleStyle(TrailingSwitchStyle())
                 SettingsRow(title: "Search history", caption: "The palette learns what you pick for what you type, and ranks it first next time.") {
@@ -219,6 +222,7 @@ struct GeneralSettings: View {
             } message: {
                 Text("Results go back to their default order. Recent and frecency start over; favorites and aliases stay.")
             }
+            HyperKeySettings()
             SettingsGroup("Plugins") {
                 SettingsRow(title: "Plugins folder", caption: "Drop a .swift plugin here and Stackbar builds and runs it.") {
                     Button("Show in Finder") { NSWorkspace.shared.open(StackbarPaths.pluginsDirectory) }
@@ -236,6 +240,14 @@ struct GeneralSettings: View {
                         }
                     }
                     .disabled(toolInstalled || installingTool)
+                }
+            }
+            SettingsGroup("Terminal") {
+                SettingsRow(title: "Open commands in", caption: "Where a plugin's Open in Terminal runs, such as Docker's shell or a script command.") {
+                    TerminalPicker()
+                }
+                SettingsRow(title: "More folders for commands", caption: "Plugins and scripts also find programs here, after Homebrew and the system folders. Separate folders with colons, like ~/.cargo/bin:~/.local/bin.") {
+                    CommandFoldersField()
                 }
             }
             SpotlightReplacementsSection(model: model)
@@ -851,6 +863,58 @@ struct CrashReportsGroup: View {
                 .toggleStyle(TrailingSwitchStyle())
                 .onChange(of: allowed) { _, on in CrashReports.isAllowed = on }
         }
+    }
+}
+
+/// Settings › Terminal › More folders for commands.
+struct CommandFoldersField: View {
+    @AppStorage(CommandResolver.extraFoldersKey) private var folders = ""
+
+    var body: some View {
+        TextField("~/.cargo/bin", text: $folders)
+            .frame(width: 220)
+    }
+}
+
+/// Settings › Command Palette › Tab with text: any fallback command, the
+/// default (Ask AI when installed) or nothing.
+struct PaletteTabPicker: View {
+    let model: AppModel
+    @AppStorage(PaletteTabTarget.defaultsKey) private var chosen = ""
+
+    var body: some View {
+        let fallbacks = model.commands.registry.entries.filter(\.spec.fallback)
+        let preferred = fallbacks.first { $0.key == PaletteTabTarget.preferred }
+        Picker("Tab with text", selection: $chosen) {
+            Text(preferred.map { "Default (\($0.spec.title))" } ?? "Default (Ask AI, when installed)").tag("")
+            ForEach(fallbacks, id: \.key) { entry in
+                Text("\(entry.spec.title) — \(entry.pluginName)").tag(entry.key.description)
+            }
+            Text("Nothing: move focus").tag(PaletteTabTarget.off)
+        }
+        .labelsHidden()
+        .fixedSize()
+    }
+}
+
+/// The terminals Stackbar can start that are installed, plus the default:
+/// whatever opens `.command` files.
+struct TerminalPicker: View {
+    @AppStorage(TerminalChoice.defaultsKey) private var chosen = ""
+
+    private var installed: [TerminalChoice] {
+        TerminalChoice.known.filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil }
+    }
+
+    var body: some View {
+        Picker("Open commands in", selection: $chosen) {
+            Text("Default (opens .command files)").tag("")
+            ForEach(installed) { terminal in
+                Text(terminal.name).tag(terminal.bundleID)
+            }
+        }
+        .labelsHidden()
+        .fixedSize()
     }
 }
 #endif

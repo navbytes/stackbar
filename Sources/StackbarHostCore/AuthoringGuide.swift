@@ -166,6 +166,8 @@ picker), and a selected row's `preview` shows beside the list.
 Results: `.done`, `.message(text)`, `.open(url:app:)`, `.copy(text)`,
 `.paste(text, cursorFromEnd:)` (needs `.clipboard`; puts the user's clipboard
 back afterwards and keeps the paste out of clipboard history), `.failure(text)`.
+A run command has 30 seconds; `.timeout(.seconds(120))` gives one up to ten
+minutes, for a script or a build (0.36.0).
 The host performs them under the plugin's capabilities. Ids are lowercase letters,
 digits and `-`, stable forever (aliases, hotkeys and links remember them);
 titles can change. `invocation["name"]` is nil when an argument was left
@@ -444,8 +446,13 @@ Triggers: `.launch`, `.every(.seconds(30))`, `.minutes(5)`, `.wake`,
 `.file(path: "~/x")`, `.topic(name: "t")`, `.clipboard`, `.displays` (a
 display plugged in, unplugged or rearranged; 0.15.0), `.apps` (an app opened
 or quit; 0.16.0), `.reminders` (reminders changed here or on another device;
-needs `.reminders`; 0.18.0). `Stackbar.refreshReason`
-says which one called the running `refresh()`.
+needs `.reminders`; 0.18.0). From 0.36.0: `.lock` (the screen locked or
+unlocked, screen saver included; the reason is `.locked` or `.unlocked`),
+`.sleep` (just before the Mac sleeps), `.frontApp` (another app came to the
+front), `.power` (battery or adapter), `.audio` (sound device changed),
+`.network` (Wi-Fi, cable or VPN changed) and `.volumes` (a disk mounted or
+ejected). `Stackbar.refreshReason` says which one called the running
+`refresh()`.
 
 `Manifest(..., hotkey: "cmd+shift+v")` opens the panel from anywhere.
 Add `hotkeyCommand: "search"` (minimumStackbar 0.27.0) and the hotkey opens

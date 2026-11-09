@@ -22,6 +22,7 @@ run the selected result, Esc to go back or close.
 | ⌘K | Every action for the selection, with its own search |
 | ⌘1 … ⌘9 | Run the first nine results |
 | ⌘⇧F | Add the selection to Favorites, or take it off. Apps and files can be favourites too |
+| Tab | With text typed, hands it to Ask AI when that plugin is installed, as Raycast's Quick AI does. Settings › Command Palette › Tab with text picks another fallback, such as Search Google, or none |
 | Esc | Close ⌘K, go back a step, then close |
 
 If you close the palette and open it again within a minute, it comes back
@@ -38,6 +39,31 @@ You don't need an alias to pass text to a command. Type its name and then
 the text, and Return opens it with the text filled in: `search pull requests
 react` or `jira ABC-123` (a plugin's name works when it has only one command
 that takes text).
+
+## Links and scripts
+
+Every command has a link: ⌘K › **Copy Link**, or the ⋯ menu in Settings ›
+Commands. Arguments go in the query string:
+
+```
+stackbar://commands/io.navbytes.stackbar.stay-awake/keep-awake?for=2h
+```
+
+Open it from a browser, Shortcuts, a Stream Deck or `open` in Terminal. A
+command that shows a list opens in the palette. A command that does
+something asks once (**Run Once** or **Always Allow**), unless you turned on
+**Links May Run It Without Asking** for it in Settings › Commands.
+
+From a script, `stackbarctl call` does the same and prints what happened, so
+a cron job or a git hook can wait for the result:
+
+```sh
+stackbarctl call stay-awake keep-awake --arg for=2h
+stackbarctl call stay-awake allow-sleep
+```
+
+The plugin can be its full id or the id's last part. A command a plugin
+keeps to Stackbar itself can't be started from outside.
 
 ## What it searches
 
@@ -65,13 +91,20 @@ Stackbar Command** action that takes any of them.
 ## A Hyper key
 
 Many Raycast and Hammerspoon users turn Caps Lock into a Hyper key that
-presses ⌃⌥⇧⌘ at once, so every shortcut on it is free. Stackbar doesn't remap
-Caps Lock itself, but its hotkeys take all four modifiers, so a Hyper key
-from [Karabiner-Elements](https://karabiner-elements.pqrs.org) works with
-every command hotkey and the palette's own. In Karabiner, add the
-"Change caps_lock to command+control+option+shift" rule from its complex
-modifications, then press Caps Lock with a key in Settings › Commands when
-you record a hotkey.
+presses ⌃⌥⇧⌘ at once, so every shortcut on it is free. Turn on
+**Settings › General › Keyboard › Caps Lock is a Hyper key**, then press
+Caps Lock with a key when you record a hotkey in Settings › Commands. Tapped
+alone, Caps Lock is Escape (you can switch that off).
+
+It needs Accessibility access. While it's on, Caps Lock no longer locks
+capitals; turning it off or quitting Stackbar puts Caps Lock back. Under the
+hood Stackbar remaps Caps Lock to F18 with `hidutil`, keeping any other
+remaps you made there. In a password field macOS hides keys from every app,
+so Hyper shortcuts don't fire there.
+
+Already use [Karabiner-Elements](https://karabiner-elements.pqrs.org) for
+this? Leave Stackbar's setting off: hotkeys take all four modifiers, so
+Karabiner's Hyper works with every command hotkey and the palette's own.
 
 Hotkeys can use letters, digits, punctuation (`-`, `.`, `/` and the rest of a
 US keyboard's), space, F1 to F12, the arrows, Return, Tab, Escape and Delete.

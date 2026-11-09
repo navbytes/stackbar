@@ -241,6 +241,27 @@ public enum Trigger: Codable, Hashable, Sendable {
     /// When reminders change, in any app or on any device. Needs the
     /// `.reminders` capability. Stackbar 0.18.0 and later.
     case reminders
+    /// When the screen locks or unlocks, the screen saver included
+    /// (`refreshReason` is `.locked` or `.unlocked`). Stackbar 0.36.0.
+    case lock
+    /// Just before the Mac sleeps (`.sleep`); `.wake` is when it wakes.
+    /// Stackbar 0.36.0.
+    case sleep
+    /// When another app comes to the front (`.frontApp`); read it with
+    /// `runningApps()`, which needs `.apps`. Stackbar 0.36.0.
+    case frontApp
+    /// When the Mac moves between battery and power adapter (`.power`).
+    /// Stackbar 0.36.0.
+    case power
+    /// When the sound output or input device changes, such as headphones
+    /// plugged in (`.audio`). Stackbar 0.36.0.
+    case audio
+    /// When the network changes: Wi-Fi joined or left, a cable plugged
+    /// in, VPN up or down (`.network`). Stackbar 0.36.0.
+    case network
+    /// When a disk is mounted or ejected, USB drives included
+    /// (`.volumes`). Stackbar 0.36.0.
+    case volumes
 
     public static func every(_ duration: Duration) -> Trigger {
         let (seconds, attoseconds) = duration.components

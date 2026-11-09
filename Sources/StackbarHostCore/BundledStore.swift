@@ -26,6 +26,31 @@ public struct BundledStore {
         "io.navbytes.stackbar.plugins.system-commands",
     ]).union(corePluginIDs)
 
+    /// One-click picks in the welcome window, for who you are. Each adds
+    /// to `starterPluginIDs`; a plugin the app doesn't carry is skipped.
+    public struct StarterSet: Equatable, Sendable, Identifiable {
+        public var name: String
+        public var summary: String
+        public var pluginIDs: Set<String>
+        public var id: String { name }
+    }
+
+    public static let starterSets: [StarterSet] = [
+        StarterSet(name: "Launcher", summary: "Clipboard history, quicklinks, snippets and system commands",
+                   pluginIDs: starterPluginIDs.union(["io.navbytes.stackbar.plugins.emoji"])),
+        StarterSet(name: "Developer", summary: "Pull requests, Docker, ports, processes, recent projects and scripts",
+                   pluginIDs: starterPluginIDs.union([
+                       "io.navbytes.stackbar.pr-cockpit", "io.navbytes.stackbar.plugins.docker", "io.navbytes.stackbar.plugins.ports",
+                       "io.navbytes.stackbar.plugins.kill-process", "io.navbytes.stackbar.plugins.recent-projects",
+                       "io.navbytes.stackbar.plugins.script-commands", "io.navbytes.stackbar.plugins.git-sync",
+                   ])),
+        StarterSet(name: "Windows & Keys", summary: "Snap windows, save layouts, switch apps and windows from the keyboard",
+                   pluginIDs: starterPluginIDs.union([
+                       "io.navbytes.stackbar.plugins.workspaces", "io.navbytes.stackbar.plugins.app-switcher",
+                       "io.navbytes.stackbar.plugins.window-switcher", "io.navbytes.stackbar.plugins.menu-search",
+                   ])),
+    ]
+
     /// What the welcome window offers switched on: the commands a launcher
     /// user reaches for in the first week.
     public static let starterPluginIDs: Set<String> = [

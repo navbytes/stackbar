@@ -96,6 +96,21 @@ final class PaletteRootTests: XCTestCase {
         XCTAssertTrue(build("", index, fallbacks: [web]).sections.isEmpty, "nothing typed, nothing to fall back on")
     }
 
+    func testTabHandsTextToAskAIUnlessAnotherFallbackIsChosen() {
+        let web = command("web", "Search the Web", plugin: "web", arguments: [ArgumentSpec("q")], fallback: true)
+        let ask = command("ask", "Ask AI", plugin: "io.navbytes.stackbar.plugins.ask-ai", arguments: [ArgumentSpec("prompt")], fallback: true)
+        XCTAssertNil(PaletteTabTarget.command(saved: nil, fallbacks: [web]), "no Ask AI, no hand-off: Tab moves focus")
+        XCTAssertEqual(PaletteTabTarget.command(saved: nil, fallbacks: [web, ask])?.key, ask.key)
+        XCTAssertEqual(PaletteTabTarget.command(saved: "web/web", fallbacks: [web, ask])?.key, web.key)
+        XCTAssertEqual(PaletteTabTarget.command(saved: "gone/cmd", fallbacks: [web, ask])?.key, ask.key, "a removed choice goes back to the default")
+        XCTAssertNil(PaletteTabTarget.command(saved: PaletteTabTarget.off, fallbacks: [web, ask]))
+
+        let root = build("why is the sky blue", index([]), fallbacks: [web, ask])
+        let line = PaletteTabTarget.entry(for: ask, in: root)
+        XCTAssertEqual(line?.title, "Ask AI")
+        XCTAssertEqual(line.map { root.role(of: $0) }, .fallback)
+    }
+
     func testStoreSuggestionsShowInTheStoreAndDontLearn() {
         let suggestion = PaletteIndex.Entry(pluginID: "dev.timer", pluginName: "Store", title: "Timers", kind: .open(StoreLink(pluginID: "dev.timer").url.absoluteString))
         let root = build("timers", index([]), store: [suggestion])

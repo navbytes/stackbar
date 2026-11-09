@@ -26,7 +26,7 @@ extension MacSystem {
         script += command.map(Self.quoted).joined(separator: " ") + "\n"
         try Data(script.utf8).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path)
-        let opened = await MainActor.run { NSWorkspace.shared.open(file) }
+        let opened = await Self.open(script: file)
         guard opened else {
             try? FileManager.default.removeItem(at: file)
             throw SystemServiceError("no app opens .command files; set Terminal as their default app in Finder > Get Info")
@@ -34,6 +34,32 @@ extension MacSystem {
         Task.detached {
             try? await Task.sleep(for: .seconds(60))
             try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    /// Hands the script to the terminal picked in Settings, or to whatever
+    /// opens `.command` files when none is (or it isn't installed).
+    @MainActor
+    static func open(script file: URL) async -> Bool {
+        let workspace = NSWorkspace.shared
+        guard let choice = TerminalChoice.chosen(UserDefaults.standard.string(forKey: TerminalChoice.defaultsKey)),
+              let app = workspace.urlForApplication(withBundleIdentifier: choice.bundleID) else {
+            return workspace.open(file)
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        do {
+            switch choice.launch {
+            case .openFile:
+                _ = try await workspace.open([file], withApplicationAt: app, configuration: configuration)
+            case .execute:
+                configuration.arguments = choice.arguments(running: file.path)
+                configuration.createsNewApplicationInstance = true
+                _ = try await workspace.openApplication(at: app, configuration: configuration)
+            }
+            return true
+        } catch {
+            return workspace.open(file)
         }
     }
 

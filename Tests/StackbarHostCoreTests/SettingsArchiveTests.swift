@@ -86,4 +86,73 @@ final class SettingsArchiveTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: "agentGateway"))
         XCTAssertTrue(defaults.bool(forKey: "paletteCompact"))
     }
+
+    func testAnImportMergesIntoWhatIsHereUnlessItReplaces() throws {
+        let team = try directory()
+        try write(#"{"gh/search":{"alias":"gh"},"jira/open":{"alias":"j"}}"#, "command-preferences.json", in: team)
+        try write(#"["gh/search"]"#, "palette-favorites.json", in: team)
+        try write(#"{"region":"eu"}"#, "Storage/io.t.p.json", in: team)
+        let archive = try SettingsArchive.decode(SettingsArchive.export(dataDirectory: team, defaults: defaults()).encoded())
+
+        let mine = try directory()
+        try write(#"{"jira/open":{"alias":"ji"},"todo/add":{"alias":"t"}}"#, "command-preferences.json", in: mine)
+        try write(#"["apps|row|search|safari"]"#, "palette-favorites.json", in: mine)
+        try write(#"{"items":"[1]"}"#, "Storage/io.t.p.json", in: mine)
+        try archive.apply(to: mine, defaults: defaults())
+        func json(_ path: String) throws -> Any { try JSONSerialization.jsonObject(with: Data(contentsOf: mine.appendingPathComponent(path))) }
+        let preferences = try XCTUnwrap(json("command-preferences.json") as? [String: [String: String]])
+        XCTAssertEqual(preferences["todo/add"]?["alias"], "t", "mine stays")
+        XCTAssertEqual(preferences["jira/open"]?["alias"], "j", "the file wins where both have one")
+        XCTAssertEqual(preferences["gh/search"]?["alias"], "gh")
+        XCTAssertEqual(try json("palette-favorites.json") as? [String], ["apps|row|search|safari", "gh/search"])
+        XCTAssertEqual(try json("Storage/io.t.p.json") as? [String: String], ["items": "[1]", "region": "eu"])
+
+        try archive.apply(to: mine, defaults: defaults(), replacing: true)
+        XCTAssertEqual(try json("palette-favorites.json") as? [String], ["gh/search"], "a restore replaces")
+    }
+
+    func testAnExportCanLeaveParts() throws {
+        let root = try directory()
+        try write("// plugin", "Plugins/Todo.swift", in: root)
+        try write(#"{"items":"[]"}"#, "Storage/io.navbytes.todo.json", in: root)
+        try write(#"{}"#, "command-preferences.json", in: root)
+        try write(#"[]"#, "palette-favorites.json", in: root)
+        let prefs = defaults()
+        prefs.set("cmd+space", forKey: PaletteHotKey.defaultsKey)
+        let parts = try XCTUnwrap(SettingsArchive.Part.parse("commands, preferences"))
+        let archive = try SettingsArchive.export(dataDirectory: root, defaults: prefs, parts: parts)
+        XCTAssertEqual(Set(archive.files.keys), ["command-preferences.json"])
+        XCTAssertEqual(archive.preferences.count, 1)
+        XCTAssertNil(SettingsArchive.Part.parse("commands,secrets"))
+    }
+}
+
+final class PrivateStoreTests: XCTestCase {
+    func testASourceLineCarriesItsKeyAndTokenName() throws {
+        let source = try XCTUnwrap(PluginStore.Source.parse("https://store.example.com/team/index.json#key=abc%2B%3D&auth=TEAM_STORE"))
+        XCTAssertEqual(source.url.absoluteString, "https://store.example.com/team/index.json")
+        XCTAssertEqual(source.publicKey, "abc+=")
+        XCTAssertEqual(source.authSecret, "TEAM_STORE")
+        XCTAssertEqual(source.configured, "https://store.example.com/team/index.json#key=abc%2B%3D&auth=TEAM_STORE")
+        XCTAssertNil(PluginStore.Source.parse("http://store.example.com/index.json"), "https only")
+        XCTAssertNil(PluginStore.Source.parse("https://store.example.com/index.json").flatMap(\.publicKey))
+    }
+
+    func testATokenGoesOnlyToItsStoresFolder() throws {
+        let auth = StoreAuth()
+        let index = try XCTUnwrap(URL(string: "https://store.example.com/team/index.json"))
+        auth.set([index: "t0k"])
+        XCTAssertEqual(auth.authorization(for: index), "Bearer t0k")
+        XCTAssertEqual(auth.authorization(for: URL(string: "https://store.example.com/team/Dev/Tool.stackbarplugin")!), "Bearer t0k")
+        XCTAssertNil(auth.authorization(for: URL(string: "https://store.example.com/other/x")!))
+        XCTAssertNil(auth.authorization(for: URL(string: "https://evil.example.com/team/x")!))
+        XCTAssertNil(auth.authorization(for: URL(string: "https://store.example.com:8443/team/x")!))
+    }
+
+    func testSourcesRegisterTheirTokens() {
+        let sources = PluginStore.sources(userURLs: ["https://s.example.com/index.json#auth=S", "https://s.example.com/index.json"]) { $0 == "S" ? "v" : nil }
+        XCTAssertEqual(sources.filter { !$0.isOfficial }.count, 1, "the same index once")
+        XCTAssertEqual(StoreAuth.shared.authorization(for: URL(string: "https://s.example.com/a.stackbarplugin")!), "Bearer v")
+        StoreAuth.shared.set([:])
+    }
 }

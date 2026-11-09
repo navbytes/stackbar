@@ -7,8 +7,36 @@ import StackbarProtocol
 /// PATH can be changed by a dotfile or point into a folder anyone can write
 /// to, and what the user approved must stay the program that runs.
 public struct CommandResolver: Sendable {
-    public static let searchPath = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
-    public static let standard = CommandResolver()
+    /// The system's folders, then where Docker Desktop and OrbStack keep
+    /// their `docker` when it isn't linked into /usr/local/bin.
+    public static let builtInSearchPath = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+                                           "/Applications/Docker.app/Contents/Resources/bin", NSHomeDirectory() + "/.orbstack/bin"]
+
+    /// Folders the user added in Settings (UserDefaults, one per line), such
+    /// as ~/.cargo/bin or a version manager's shims.
+    public static let extraFoldersKey = "commandSearchPath"
+
+    /// The added folders that count: absolute (after `~`), each once, and
+    /// not one Stackbar already searches.
+    public static func extraFolders(_ text: String?) -> [String] {
+        var seen = Set(builtInSearchPath)
+        return (text ?? "").split(whereSeparator: { $0 == "\n" || $0 == ":" }).compactMap { line in
+            var folder = line.trimmingCharacters(in: .whitespaces)
+            if folder == "~" || folder.hasPrefix("~/") { folder = NSHomeDirectory() + folder.dropFirst() }
+            while folder.count > 1, folder.hasSuffix("/") { folder.removeLast() }
+            guard folder.hasPrefix("/"), !folder.contains("\0"), seen.insert(folder).inserted else { return nil }
+            return folder
+        }
+    }
+
+    /// Where commands are looked for, in order. The added folders come last,
+    /// so they add programs without changing which one a name already runs
+    /// (and so what a plugin was approved to run).
+    public static var searchPath: [String] {
+        builtInSearchPath + extraFolders(UserDefaults.standard.string(forKey: extraFoldersKey))
+    }
+
+    public static var standard: CommandResolver { CommandResolver() }
 
     /// Programs that run whatever they are given, flagged on the install
     /// sheet as able to run any program.

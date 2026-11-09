@@ -1,0 +1,40 @@
+---
+import { getCollection } from 'astro:content';
+import SwitchGuide from '../components/SwitchGuide.astro';
+import { href } from '../lib/site';
+
+const plugins = await getCollection('plugins');
+/** A store plugin's page by its name, or the store when it isn't published. */
+const plugin = (name: string) => {
+  const found = plugins.find((p) => p.data.name === name);
+  return { name, url: href(found ? `/plugins/${found.data.slug}/` : '/plugins/') };
+};
+
+const description = 'Replace Rectangle and rcmd with Stackbar: the same snaps and size cycling, layouts per monitor setup, and app switching on the right ⌘ key.';
+const steps = [
+  { title: 'Install Windows', html: 'Pick <b>Windows &amp; Keys</b> in the Welcome window, or install Windows and App Switcher from the Store. Allow Accessibility when asked.' },
+  { title: 'Set your snap hotkeys', html: 'Settings › Commands lists Left Half, Right Half, the quarters, thirds, Maximize, Center, Next Display and the rest. Give them the hotkeys you used in Rectangle, arrows included. Pressing a half again cycles through two thirds and one third.' },
+  { title: 'Save a layout for each desk', html: 'Arrange your windows and run <b>Save Window Layout</b>. Star it, and it comes back by itself when you plug in that monitor setup, opening apps that aren\'t running.' },
+  { title: 'Switch apps like rcmd', html: 'App Switcher puts apps on the right ⌘ key plus a letter: right⌘S for Safari, and so on. Pick the letters in its settings.' },
+];
+const map = [
+  { from: 'Halves, quarters, thirds', stackbar: [plugin('Windows')], note: 'With size cycling and gaps' },
+  { from: 'Next and previous display', stackbar: [plugin('Windows')], note: 'Keeps the window\'s share of the screen' },
+  { from: 'Larger, smaller, center', stackbar: [plugin('Windows')] },
+  { from: 'Restore', stackbar: [plugin('Windows')], note: 'Undo Snap' },
+  { from: 'rcmd app switching', stackbar: [plugin('App Switcher')] },
+  { from: 'Window switching', stackbar: [plugin('Window Switcher')] },
+  { from: 'Not in Rectangle: layouts per monitor setup', stackbar: [plugin('Windows')] },
+];
+---
+<SwitchGuide
+  from="Rectangle"
+  path="/switch-from-rectangle/"
+  description={description}
+  headline="Same snaps."
+  highlight="Layouts that remember."
+  lede="Your Rectangle hotkeys work as commands, and Stackbar adds layouts for each monitor setup and rcmd-style app switching."
+  steps={steps}
+  mapLede="Rectangle's actions and rcmd's switching, and where they live in Stackbar."
+  map={map}
+/>

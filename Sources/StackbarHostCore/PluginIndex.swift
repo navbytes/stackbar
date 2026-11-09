@@ -359,7 +359,11 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await delegate.fetch(URLRequest(url: url, timeoutInterval: downloadIdleSeconds), on: session, limit: limit)
+            var request = URLRequest(url: url, timeoutInterval: downloadIdleSeconds)
+            if let authorization = StoreAuth.shared.authorization(for: url) {
+                request.setValue(authorization, forHTTPHeaderField: "Authorization")
+            }
+            (data, response) = try await delegate.fetch(request, on: session, limit: limit)
         } catch is BodyTooLarge {
             throw IndexError.tooLarge(url.absoluteString)
         }

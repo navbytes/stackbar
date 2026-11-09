@@ -39,6 +39,15 @@ usage:
   stackbarctl agent [<plugin>...]      runtime MCP gateway on stdio: bridges to the running
                                     app, or runs the given plugins itself when it isn't
   stackbarctl secret set|get|delete <NAME> [value]
+  stackbarctl call <plugin> <command> [--arg name=value]...
+                                    runs a command in the running app and prints its result;
+                                    like a stackbar:// link, it asks once unless the command
+                                    has Links May Run It Without Asking (Settings › Commands)
+  stackbarctl settings export <file> [--only plugins,data,commands,palette,preferences]
+                                    writes the app's setup (no secrets or approvals) to a file
+  stackbarctl settings import <file> [--replace]
+                                    merges a settings file into the app's setup (quit Stackbar
+                                    first); --replace puts the file's copies in place instead
   stackbarctl helper kit               the StackbarKit digest and protocol plugins build against here
   stackbarctl helper build <plugin.swift> --key <file> -o <binary> [--url <url>] [--cache <dir>]
                                     builds a helper to publish and prints its signed record (macOS)
@@ -703,6 +712,47 @@ case "commands", "run":
 case "render":
     guard let path = rest.first else { fail(usage) }
     await render(path, options: Array(rest.dropFirst()))
+case "call":
+    guard rest.count >= 2, !rest[0].hasPrefix("-"), !rest[1].hasPrefix("-") else { fail(usage) }
+    guard let arguments = CommandCall.arguments(from: Array(rest.dropFirst(2))) else { fail("--arg takes name=value") }
+    do {
+        let call = CommandCall(plugin: rest[0], command: rest[1], arguments: arguments)
+        let line = try UnixSocket.request(JSONEncoder().encode(call), to: StackbarPaths.commandSocket.path)
+        guard let reply = try? JSONDecoder().decode(CommandCall.Reply.self, from: line) else { fail("Stackbar sent no answer") }
+        if reply.isError { fail(reply.message ?? "failed") }
+        print(reply.message ?? "Done")
+    } catch {
+        fail("Stackbar isn't running (\(error)). Open it, then try again.")
+    }
+case "settings":
+    guard rest.count >= 2 else { fail(usage) }
+    // The app's own preferences domain, so the CLI reads and writes what it does.
+    let appDefaults = UserDefaults(suiteName: "io.navbytes.stackbar") ?? .standard
+    let file = URL(fileURLWithPath: rest[1])
+    do {
+        switch rest[0] {
+        case "export":
+            var parts = Set(SettingsArchive.Part.allCases)
+            if let index = rest.firstIndex(of: "--only") {
+                guard rest.indices.contains(index + 1), let chosen = SettingsArchive.Part.parse(rest[index + 1]) else {
+                    fail("--only takes a list of: " + SettingsArchive.Part.allCases.map(\.rawValue).joined(separator: ","))
+                }
+                parts = chosen
+            }
+            let archive = try SettingsArchive.export(dataDirectory: StackbarPaths.dataDirectory, defaults: appDefaults, parts: parts)
+            try archive.encoded().write(to: file, options: .atomic)
+            let summary = archive.summary
+            print("wrote \(file.path): \(summary.pluginFiles.count) plugin files, \(summary.savedValues) saved values, \(summary.preferences) preferences")
+        case "import":
+            let archive = try SettingsArchive.decode(Data(contentsOf: file))
+            try archive.apply(to: StackbarPaths.dataDirectory, defaults: appDefaults, replacing: rest.contains("--replace"))
+            print("imported \(file.lastPathComponent) (\(rest.contains("--replace") ? "replaced" : "merged")); open Stackbar to load it")
+        default:
+            fail(usage)
+        }
+    } catch {
+        fail("\(error)")
+    }
 case "secret":
     guard rest.count >= 2 else { fail(usage) }
     let store = StackbarPaths.defaultSecrets()

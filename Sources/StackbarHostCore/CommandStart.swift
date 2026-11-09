@@ -85,6 +85,6 @@ public enum CommandStart {
     }
 
     private static func isOutside(_ source: InvocationSource) -> Bool {
-        source == .link || source == .spotlight || source == .shortcuts
+        source == .link || source == .spotlight || source == .shortcuts || source == .cli
     }
 }

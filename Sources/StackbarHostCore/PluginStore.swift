@@ -9,11 +9,38 @@ public enum PluginStore {
         public var publicKey: String?
         /// The built-in navbytes index: listed first, can't be removed.
         public var isOfficial: Bool
+        /// The secret whose value is sent as a bearer token to this
+        /// store's host (a private store behind a login).
+        public var authSecret: String?
+        /// The line as the user added it, options included.
+        public var configured: String
 
-        public init(url: URL, publicKey: String? = nil, isOfficial: Bool = false) {
+        public init(url: URL, publicKey: String? = nil, isOfficial: Bool = false, authSecret: String? = nil, configured: String? = nil) {
             self.url = url
             self.publicKey = publicKey
             self.isOfficial = isOfficial
+            self.authSecret = authSecret
+            self.configured = configured ?? url.absoluteString
+        }
+
+        /// `https://…/index.json#key=<base64>&auth=<SECRET_NAME>`: the index
+        /// must be signed with that key (so its withdrawals count), and the
+        /// secret's value goes with every request to its host.
+        public static func parse(_ line: String) -> Source? {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let parts = trimmed.split(separator: "#", maxSplits: 1).map(String.init)
+            guard let first = parts.first, let url = URL(string: first), url.scheme == "https" || url.isFileURL, url != OfficialIndex.url else { return nil }
+            var source = Source(url: url, configured: trimmed)
+            for option in (parts.count > 1 ? parts[1] : "").split(separator: "&") {
+                let pair = option.split(separator: "=", maxSplits: 1).map(String.init)
+                guard pair.count == 2, !pair[1].isEmpty else { continue }
+                switch pair[0] {
+                case "key": source.publicKey = pair[1].removingPercentEncoding ?? pair[1]
+                case "auth": source.authSecret = pair[1]
+                default: continue
+                }
+            }
+            return source
         }
     }
 
@@ -53,15 +80,21 @@ public enum PluginStore {
     }
 
     /// The official index (when its key is known) followed by the user's own.
-    public static func sources(userURLs: [String]) -> [Source] {
+    /// `secret` reads a store's token by name; each source with one is
+    /// registered with `StoreAuth`, so its index, bundles and helpers are
+    /// fetched with it.
+    public static func sources(userURLs: [String], secret: (String) -> String? = { _ in nil }) -> [Source] {
         var result: [Source] = []
         if let key = OfficialIndex.publicKey {
             result.append(Source(url: OfficialIndex.url, publicKey: key, isOfficial: true))
         }
+        var tokens: [URL: String] = [:]
         for string in userURLs {
-            guard let url = URL(string: string), url.scheme == "https" || url.isFileURL, url != OfficialIndex.url else { continue }
-            result.append(Source(url: url))
+            guard let source = Source.parse(string), !result.contains(where: { $0.url == source.url }) else { continue }
+            if let name = source.authSecret, let token = secret(name), !token.isEmpty { tokens[source.url] = token }
+            result.append(source)
         }
+        StoreAuth.shared.set(tokens)
         return result
     }
 

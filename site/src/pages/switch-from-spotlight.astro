@@ -1,0 +1,41 @@
+---
+import { getCollection } from 'astro:content';
+import SwitchGuide from '../components/SwitchGuide.astro';
+import { href } from '../lib/site';
+
+const plugins = await getCollection('plugins');
+/** A store plugin's page by its name, or the store when it isn't published. */
+const plugin = (name: string) => {
+  const found = plugins.find((p) => p.data.name === name);
+  return { name, url: href(found ? `/plugins/${found.data.slug}/` : '/plugins/') };
+};
+
+const description = 'Replace Spotlight with Stackbar: keep ⌘Space, find apps, files and sums the same way, and add clipboard history, snippets and window snapping.';
+const steps = [
+  { title: 'Install Stackbar', html: 'Open the <a href="' + href('/download/') + '">download page</a> and drag Stackbar to Applications (or run <code>brew install --cask navbytes/tap/stackbar</code>). Applications, Calculator and File Search come installed, so it finds what Spotlight found from the first minute.' },
+  { title: 'Move Spotlight off ⌘Space', html: 'In the Welcome window choose <b>Use ⌘Space</b>, then <b>Turn Off Spotlight\'s Shortcut…</b>. In System Settings › Keyboard › Keyboard Shortcuts › Spotlight, give Spotlight ⌥⌘Space instead of turning it off, so it is still there when you want it.' },
+  { title: 'Pick a starter set', html: 'The Welcome window offers <b>Launcher</b> (clipboard history, quicklinks, snippets), <b>Developer</b> and <b>Windows &amp; Keys</b>. You can add or remove any plugin later in the Store.' },
+  { title: 'Allow Accessibility once', html: 'Moving windows and pasting need it; the palette, apps, files and sums don\'t. <a href="' + href('/docs/permissions/') + '">Permissions</a> lists what each feature asks for.' },
+];
+const map = [
+  { from: 'Apps and System Settings', stackbar: [plugin('Applications')], note: 'Installed. Pin the ones you use with ⌘⇧F' },
+  { from: 'Files and folders', stackbar: [plugin('File Search')], note: 'Installed. Uses the same Spotlight index' },
+  { from: 'Sums and conversions', stackbar: [plugin('Calculator')], note: 'Installed. Also dates: days until dec 20' },
+  { from: 'Definitions', stackbar: [plugin('Dictionary')] },
+  { from: 'Web search', stackbar: [plugin('Quicklinks')], note: 'Search Google for anything typed, plus your own searches' },
+  { from: 'Not in Spotlight: clipboard history', stackbar: [plugin('Clipboard History')] },
+  { from: 'Not in Spotlight: window snapping', stackbar: [plugin('Windows')] },
+  { from: 'Not in Spotlight: text snippets', stackbar: [plugin('Snippets')] },
+];
+---
+<SwitchGuide
+  from="Spotlight"
+  path="/switch-from-spotlight/"
+  description={description}
+  headline="Same keys."
+  highlight="More reach."
+  lede="Five minutes: give Stackbar ⌘Space, keep Spotlight on ⌥⌘Space, and you have apps, files and sums where you expect them, plus everything Spotlight never did."
+  steps={steps}
+  mapLede="What you search for in Spotlight, and where Stackbar answers it."
+  map={map}
+/>

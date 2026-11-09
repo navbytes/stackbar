@@ -1,0 +1,112 @@
+---
+import Base from '../layouts/Base.astro';
+import Button from './Button.astro';
+import Glyph from './Glyph.astro';
+import { href } from '../lib/site';
+import { breadcrumbs } from '../lib/seo';
+
+/** A "Switch from X" page: steps to move over, then where each thing lives now. */
+export interface Props {
+  /** Raycast, Spotlight… */
+  from: string;
+  path: string;
+  description: string;
+  headline: string;
+  highlight: string;
+  lede: string;
+  steps: { title: string; html: string }[];
+  mapLede: string;
+  map: { from: string; stackbar: { name: string; url?: string }[]; note?: string }[];
+}
+const { from, path, description, headline, highlight, lede, steps, mapLede, map } = Astro.props;
+const count = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'][steps.length] ?? String(steps.length);
+---
+<Base title={`Switch from ${from} to Stackbar`} description={description} jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], [`Switch from ${from}`, path]])]}>
+  <section class="hero stage">
+    <div class="wrap inner">
+      <p class="eyebrow">Switch from {from}</p>
+      <h1>{headline} <span class="gradient-text">{highlight}</span></h1>
+      <p class="lede">{lede}</p>
+      <div class="ctas">
+        <Button href={href('/download/')} size="l"><Glyph name="download" /> Download for Mac</Button>
+        <Button href={href('/compare/')} variant="ghost" size="l">Compare first</Button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head"><p class="eyebrow">{count} steps</p><h2>Moving over.</h2></div>
+      <ol class="steps">
+        {steps.map((s, i) => (
+          <li>
+            <span class="num">{i + 1}</span>
+            <div><h3>{s.title}</h3><p set:html={s.html} /></div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section map">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">What you used</p>
+        <h2>Where it lives now.</h2>
+        <p class="lede">{mapLede}</p>
+      </div>
+      <div class="scroll" role="region" aria-label={`${from} features and their Stackbar plugins`} tabindex="0">
+        <table>
+          <thead><tr><th scope="col">In {from}</th><th scope="col">In Stackbar</th><th scope="col">Notes</th></tr></thead>
+          <tbody>
+            {map.map((m) => (
+              <tr>
+                <th scope="row">{m.from}</th>
+                <td>{m.stackbar.map((s, i) => <>{i > 0 && ', '}<a href={s.url}>{s.name}</a></>)}</td>
+                <td>{m.note ?? ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap closing">
+      <h2>Missing something?</h2>
+      <p class="lede">Ask for it in <a href="https://github.com/navbytes/stackbar-plugins/issues">the plugin store's issues</a>, or write it yourself in one Swift file, with your agent's help.</p>
+      <div class="ctas">
+        <Button href={href('/docs/first-plugin/')}>Write a plugin</Button>
+        <Button href={href('/plugins/')} variant="ghost">Browse the store</Button>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero { padding-block: clamp(56px, 8vw, 104px) clamp(48px, 7vw, 88px); }
+  .inner { display: grid; gap: 20px; justify-items: start; }
+  .hero h1 { font-size: var(--step-4); font-weight: 800; letter-spacing: -0.04em; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; max-width: 880px; }
+  .steps li { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 20px; padding: 24px; border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); }
+  .num { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--brand-1); color: #fff; font: 700 var(--step-1)/1 var(--font-display); }
+  .steps h3 { font-size: var(--step-1); margin-bottom: 6px; }
+  .steps p { color: var(--ink-2); margin: 0; line-height: 1.65; }
+  .steps :global(a) { color: var(--accent); }
+  .steps :global(code) { font: 0.88em var(--font-mono); padding: 0.1em 0.35em; border-radius: 6px; background: var(--line); color: var(--ink); }
+  .steps :global(b) { color: var(--ink); }
+  .map { background: var(--page-2); }
+  .scroll { overflow-x: auto; border-radius: var(--radius-m); border: 1px solid var(--line); background: var(--card); }
+  table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: var(--step--1); }
+  th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child > * { border-bottom: 0; }
+  thead th { color: var(--ink-3); font-weight: 600; }
+  tbody th { font-weight: 600; color: var(--ink); }
+  td { color: var(--ink-2); }
+  td a { color: var(--accent); font-weight: 600; }
+  .closing { display: grid; gap: 18px; justify-items: start; }
+  .closing h2 { font-size: var(--step-3); }
+  .closing a:not([class]) { color: var(--accent); }
+</style>

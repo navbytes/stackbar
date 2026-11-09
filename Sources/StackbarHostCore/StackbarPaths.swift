@@ -46,6 +46,8 @@ public enum StackbarPaths {
     public static var ledgerFile: URL { dataDirectory.appendingPathComponent("approvals.json") }
     public static var publishersFile: URL { dataDirectory.appendingPathComponent("publishers.json") }
     public static var agentSocket: URL { dataDirectory.appendingPathComponent("agent.sock") }
+    /// Where `stackbarctl call` reaches the running app (only this user can).
+    public static var commandSocket: URL { dataDirectory.appendingPathComponent("commands.sock") }
     /// The host log. macOS: `~/Library/Logs/Stackbar/stackbar.log`.
     public static var logFile: URL {
         #if os(macOS)

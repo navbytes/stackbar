@@ -60,6 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.remindersChangedSoon()
             }
         }
+        // Lock, sleep, the front app, power, audio, network and disks.
+        systemEvents.start()
+        startCommandServer()
+        // Caps Lock as Hyper, when it's on; clears a remap a crash left.
+        MacHyperKey.shared.sync()
         // Apps opening and quitting come in bursts at login; plugins hear
         // once, half a second after the last.
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
@@ -69,6 +74,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
+    }
+
+    private lazy var systemEvents = MacSystemEvents { [weak self] event in
+        self?.model.controllers.forEach { $0.system(event) }
     }
 
     private var remindersDebounce: Task<Void, Never>?
@@ -115,6 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Helpers exit on their own when their stdin closes with the app.
         model.prepareForTermination()
+        // Caps Lock goes back to being Caps Lock.
+        MacHyperKey.shared.stop()
         // Usage and picks are saved off the main thread: let the last land.
         model.commands.memory.flush()
     }
@@ -362,27 +373,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             model.commands.carryOut(plan, for: entry, source: .link, context: context)
             return
         }
-        var preference = model.commands.preferences[link.key]
-        if !preference.linksAllowed {
-            NSApp.activate()
-            let alert = NSAlert()
-            alert.messageText = "Allow links to run \(entry.spec.title)?"
-            let details = link.arguments.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: "\n")
-            alert.informativeText = "A link asks to run \(entry.spec.title) from \(entry.pluginName)." + (details.isEmpty ? "" : "\n\n" + details) + "\n\nYou can change this later in Settings → Commands."
-            alert.addButton(withTitle: "Run Once")
-            alert.addButton(withTitle: "Always Allow")
-            alert.addButton(withTitle: "Cancel")
-            switch alert.runModal() {
-            case .alertFirstButtonReturn:
-                break
-            case .alertSecondButtonReturn:
-                preference.linksAllowed = true
-                try? model.commands.set(preference, for: link.key)
-            default:
-                return
-            }
-        }
+        guard allowsLinks(entry, arguments: link.arguments, from: "A link") else { return }
         Task { await model.commands.run(link.key, arguments: arguments, source: .link, context: context) }
+    }
+
+    /// Whether links (and `stackbarctl call`) may run the command: allowed
+    /// in Settings, or the user says so now (Run Once or Always Allow).
+    private func allowsLinks(_ entry: CommandRegistry.Entry, arguments: [String: String], from who: String) -> Bool {
+        var preference = model.commands.preferences[entry.key]
+        guard !preference.linksAllowed else { return true }
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = "Allow links to run \(entry.spec.title)?"
+        let details = arguments.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: "\n")
+        alert.informativeText = "\(who) asks to run \(entry.spec.title) from \(entry.pluginName)." + (details.isEmpty ? "" : "\n\n" + details)
+            + "\n\nAlways Allow lets links and scripts run it without asking. You can change this later in Settings → Commands."
+        alert.addButton(withTitle: "Run Once")
+        alert.addButton(withTitle: "Always Allow")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return true
+        case .alertSecondButtonReturn:
+            preference.linksAllowed = true
+            try? model.commands.set(preference, for: entry.key)
+            return true
+        default:
+            return false
+        }
+    }
+
+    // MARK: stackbarctl call
+
+    private var commandServer: UnixSocketServer?
+
+    /// Listens for `stackbarctl call` on a socket only this user can reach.
+    func startCommandServer() {
+        let path = StackbarPaths.commandSocket.path
+        try? FileManager.default.createDirectory(at: StackbarPaths.dataDirectory, withIntermediateDirectories: true)
+        commandServer = try? UnixSocketServer(path: path) { [weak self] line in
+            let reply: CommandCall.Reply
+            if let call = try? JSONDecoder().decode(CommandCall.self, from: line) {
+                reply = await self?.answer(call) ?? CommandCall.Reply(message: "Stackbar is quitting", isError: true)
+            } else {
+                reply = CommandCall.Reply(message: "not a command call", isError: true)
+            }
+            return try? JSONEncoder().encode(reply)
+        }
+    }
+
+    /// Runs the call like a link, and says what happened.
+    private func answer(_ call: CommandCall) async -> CommandCall.Reply {
+        guard let entry = call.entry(in: model.commands.registry) else {
+            return CommandCall.Reply(message: "\(call.plugin)/\(call.command) is not an installed command; stackbarctl commands lists a plugin's", isError: true)
+        }
+        let context = model.commands.captureContext(for: entry.pluginID)
+        let plan = model.commands.plan(entry, source: .cli, arguments: call.arguments)
+        switch plan {
+        case .refuse(let message):
+            return CommandCall.Reply(message: message, isError: true)
+        case .run(let arguments):
+            guard allowsLinks(entry, arguments: call.arguments, from: "A script (stackbarctl call)") else {
+                return CommandCall.Reply(message: "Not allowed. To run it without asking, turn on Links May Run It Without Asking in Settings › Commands.", isError: true)
+            }
+            model.commands.memory.used(entry.key)
+            let outcome = await model.commands.runner.run(entry.key, arguments: arguments, source: .cli, context: context)
+            return CommandCall.Reply(message: outcome.message, isError: outcome.isError)
+        default:
+            model.commands.carryOut(plan, for: entry, source: .cli, context: context)
+            return CommandCall.Reply(message: "Opened \(entry.spec.title) in Stackbar", isError: false)
+        }
     }
 
     /// `stackbar://settings[/page]` and `stackbar://store`, from a link or

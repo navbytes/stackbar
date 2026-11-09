@@ -80,7 +80,7 @@ public final class CommandRunner: Sendable {
         case .success(let found): supervisor = found
         case .failure(let outcome): return outcome
         }
-        let result = await supervisor.runCommand(key.commandID, arguments: arguments, source: source, context: context, timeout: timeout)
+        let result = await supervisor.runCommand(key.commandID, arguments: arguments, source: source, context: context, timeout: entry.spec.runTimeout(standard: timeout))
         return await perform(result, for: supervisor)
     }
 
