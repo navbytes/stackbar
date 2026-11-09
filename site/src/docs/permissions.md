@@ -25,7 +25,7 @@ There are two layers:
 
 | Permission | What needs it | Where to turn it on |
 | --- | --- | --- |
-| **Accessibility** | Moving and snapping windows (Windows), switching windows, searching menu items, pasting (Clipboard, Snippets), reading selected text, text expansion keywords, the App Switcher key layer, locking the screen | Privacy & Security › Accessibility |
+| **Accessibility** | Moving and snapping windows (Windows), switching windows, searching menu items, pasting (Clipboard, Snippets), reading selected text, text expansion keywords, the App Switcher key layer, the Hyper key, locking the screen | Privacy & Security › Accessibility |
 | **Automation** | Reading Finder's selection, browser tabs, controlling Music or Spotify. macOS asks once for each app Stackbar talks to | Privacy & Security › Automation › Stackbar |
 | **Screen Recording** | Reading the text in a part of the screen you drag over (Translate's Screen Text command) | Privacy & Security › Screen & System Audio Recording |
 | **Calendars** | Up Next reading your events, and adding events | Privacy & Security › Calendars |

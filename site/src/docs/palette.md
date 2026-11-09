@@ -90,13 +90,20 @@ Stackbar Command** action that takes any of them.
 ## A Hyper key
 
 Many Raycast and Hammerspoon users turn Caps Lock into a Hyper key that
-presses ⌃⌥⇧⌘ at once, so every shortcut on it is free. Stackbar doesn't remap
-Caps Lock itself, but its hotkeys take all four modifiers, so a Hyper key
-from [Karabiner-Elements](https://karabiner-elements.pqrs.org) works with
-every command hotkey and the palette's own. In Karabiner, add the
-"Change caps_lock to command+control+option+shift" rule from its complex
-modifications, then press Caps Lock with a key in Settings › Commands when
-you record a hotkey.
+presses ⌃⌥⇧⌘ at once, so every shortcut on it is free. Turn on
+**Settings › General › Keyboard › Caps Lock is a Hyper key**, then press
+Caps Lock with a key when you record a hotkey in Settings › Commands. Tapped
+alone, Caps Lock is Escape (you can switch that off).
+
+It needs Accessibility access. While it's on, Caps Lock no longer locks
+capitals; turning it off or quitting Stackbar puts Caps Lock back. Under the
+hood Stackbar remaps Caps Lock to F18 with `hidutil`, keeping any other
+remaps you made there. In a password field macOS hides keys from every app,
+so Hyper shortcuts don't fire there.
+
+Already use [Karabiner-Elements](https://karabiner-elements.pqrs.org) for
+this? Leave Stackbar's setting off: hotkeys take all four modifiers, so
+Karabiner's Hyper works with every command hotkey and the palette's own.
 
 Hotkeys can use letters, digits, punctuation (`-`, `.`, `/` and the rest of a
 US keyboard's), space, F1 to F12, the arrows, Return, Tab, Escape and Delete.

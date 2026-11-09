@@ -63,6 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Lock, sleep, the front app, power, audio, network and disks.
         systemEvents.start()
         startCommandServer()
+        // Caps Lock as Hyper, when it's on; clears a remap a crash left.
+        MacHyperKey.shared.sync()
         // Apps opening and quitting come in bursts at login; plugins hear
         // once, half a second after the last.
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
@@ -122,6 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Helpers exit on their own when their stdin closes with the app.
         model.prepareForTermination()
+        // Caps Lock goes back to being Caps Lock.
+        MacHyperKey.shared.stop()
         // Usage and picks are saved off the main thread: let the last land.
         model.commands.memory.flush()
     }

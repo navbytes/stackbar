@@ -6,6 +6,7 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Added
+- **Hyper key.** Settings › General › Keyboard turns Caps Lock into ⌃⌥⇧⌘ for hotkeys, and Escape when tapped alone. No Karabiner needed.
 - **Starter sets in Welcome.** Launcher, Developer, and Windows & Keys switch on a matching group of plugins in one click.
 - **Permissions step in Welcome.** It shows whether Accessibility is allowed and asks for it in place, with a link to the Permissions page.
 - **Switch guides** for Spotlight, Rectangle and Hammerspoon users, next to the Raycast one, and a "make ⌘Space open Stackbar" path in Welcome.

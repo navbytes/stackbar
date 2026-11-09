@@ -219,6 +219,7 @@ struct GeneralSettings: View {
             } message: {
                 Text("Results go back to their default order. Recent and frecency start over; favorites and aliases stay.")
             }
+            HyperKeySettings()
             SettingsGroup("Plugins") {
                 SettingsRow(title: "Plugins folder", caption: "Drop a .swift plugin here and Stackbar builds and runs it.") {
                     Button("Show in Finder") { NSWorkspace.shared.open(StackbarPaths.pluginsDirectory) }

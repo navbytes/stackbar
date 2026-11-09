@@ -12,7 +12,7 @@ const plugin = (name: string) => {
 
 const description = 'Move Hammerspoon and Karabiner habits to Stackbar: a Hyper key, hotkeys on any command, window snapping and layouts, and triggers for lock, sleep, Wi-Fi and displays, in Swift instead of Lua.';
 const steps = [
-  { title: 'Keep Karabiner for the Hyper key', html: 'Stackbar hotkeys take all four modifiers, so a Caps Lock to ⌃⌥⇧⌘ rule in Karabiner-Elements works as it does today (<a href="' + href('/docs/palette/') + '#a-hyper-key">how</a>).' },
+  { title: 'Turn on the Hyper key', html: 'Settings › General › Keyboard makes Caps Lock ⌃⌥⇧⌘, and Escape when tapped. Already have a Karabiner-Elements rule? Keep it; Stackbar hotkeys take all four modifiers (<a href="' + href('/docs/palette/') + '#a-hyper-key">how</a>).' },
   { title: 'Bind your hotkeys', html: 'Settings › Commands gives any command a hotkey, arrows and punctuation included: Hyper+H for Left Half, Hyper+T for a terminal. Window snaps, layouts, quicklinks and scripts are all commands.' },
   { title: 'Bring your scripts', html: 'Script Commands runs your shell scripts from the palette with arguments. For anything that needs a UI or reacts to the system, a plugin is one Swift file: <a href="' + href('/docs/first-plugin/') + '">Your first plugin</a>.' },
   { title: 'React to the Mac', html: 'Plugins can run on launch, a timer, wake, sleep, the screen locking, another app coming to the front, displays, power, audio devices, the network and disks being mounted.' },
@@ -35,7 +35,7 @@ const map = [
   description={description}
   headline="Your keys, your rules."
   highlight="Less Lua."
-  lede="Keep Karabiner for the Hyper key and move the rest: hotkeys, windows, scripts and watchers, with a palette on top."
+  lede="Bring the Hyper key and move the rest: hotkeys, windows, scripts and watchers, with a palette on top."
   steps={steps}
   mapLede="The Hammerspoon modules people lean on, and what does the job in Stackbar."
   map={map}
