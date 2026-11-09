@@ -14,6 +14,7 @@ window. Write for people who use Stackbar, not for the code.
 - **Importing settings merges.** Your own aliases, favourites and plugin data stay, and the file wins where both have a value. Choose Replace to restore a backup as it was.
 - **Settings from Terminal.** `stackbarctl settings export <file> [--only commands,preferences,…]` and `stackbarctl settings import <file>` keep two Macs, or a team, on the same setup through iCloud Drive or a dotfiles repository.
 - **Private stores.** A plugin source can name its signing key (`#key=`), so its updates and withdrawals are trusted, and a token from Stackbar's secrets (`#auth=`), sent only to that store. New docs page: Run your own store.
+- **Plugins can react to more of your Mac** (protocol 26): the screen locking or unlocking, the Mac going to sleep, another app coming to the front, switching between battery and adapter, headphones or another sound device, the network changing, and disks being mounted or ejected. For plugin authors: the `.lock`, `.sleep`, `.frontApp`, `.power`, `.audio`, `.network` and `.volumes` triggers.
 - Plugins that run `docker` find Docker Desktop's and OrbStack's own copy when it isn't linked into /usr/local/bin.
 
 ### Fixed

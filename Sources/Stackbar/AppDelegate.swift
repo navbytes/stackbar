@@ -60,6 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.remindersChangedSoon()
             }
         }
+        // Lock, sleep, the front app, power, audio, network and disks.
+        systemEvents.start()
         // Apps opening and quitting come in bursts at login; plugins hear
         // once, half a second after the last.
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
@@ -69,6 +71,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
+    }
+
+    private lazy var systemEvents = MacSystemEvents { [weak self] event in
+        self?.model.controllers.forEach { $0.system(event) }
     }
 
     private var remindersDebounce: Task<Void, Never>?

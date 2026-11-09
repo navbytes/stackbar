@@ -370,6 +370,10 @@ final class PluginController: Identifiable {
         Task { await supervisor?.remindersChanged() }
     }
 
+    func system(_ event: SystemEvent) {
+        Task { await supervisor?.system(event) }
+    }
+
     func restart() {
         Task {
             guard let current = supervisor else { return }

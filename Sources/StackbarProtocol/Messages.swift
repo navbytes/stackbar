@@ -36,7 +36,9 @@ public enum StackbarProtocolVersion {
     /// agent capability.
     /// 25 added `confirm` on row actions, buttons and tappables: the host
     /// asks for a second press before it sends the action.
-    public static let current = 25
+    /// 26 added the lock, sleep, frontApp, power, audio, network and volumes
+    /// triggers.
+    public static let current = 26
 }
 
 /// Host → plugin.
@@ -77,6 +79,8 @@ public enum HostMessage: Codable, Equatable, Sendable {
 
 public enum TriggerReason: String, Codable, Sendable {
     case launch, interval, wake, manual, file, topic, clipboard, displays, apps, reminders
+    /// Protocol 26: the system triggers.
+    case locked, unlocked, sleep, frontApp, power, audio, network, volumes
 }
 
 /// The value that came with an event: a toggle's new state, a slider's number.

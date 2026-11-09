@@ -404,3 +404,19 @@ final class TerminalChoiceTests: XCTestCase {
         XCTAssertTrue(CommandResolver.searchPath.contains(NSHomeDirectory() + "/.orbstack/bin"))
     }
 }
+
+final class SystemEventTests: XCTestCase {
+    func testEachEventHasItsTriggerAndReason() throws {
+        XCTAssertEqual(SystemEvent.locked.trigger, .lock)
+        XCTAssertEqual(SystemEvent.unlocked.trigger, .lock)
+        XCTAssertEqual(SystemEvent.unlocked.reason, .unlocked)
+        for event in SystemEvent.allCases {
+            XCTAssertEqual(event.reason.rawValue, event.rawValue, "refreshReason reads like the event")
+        }
+        // A manifest with the new triggers round-trips.
+        let triggers: [Trigger] = [.lock, .sleep, .frontApp, .power, .audio, .network, .volumes]
+        let data = try JSONEncoder().encode(triggers)
+        XCTAssertEqual(try JSONDecoder().decode([Trigger].self, from: data), triggers)
+        XCTAssertEqual(SystemEvent.locked.settle, .zero, "a lock is heard at once")
+    }
+}
