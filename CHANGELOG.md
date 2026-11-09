@@ -6,6 +6,9 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Added
+- **Starter sets in Welcome.** Launcher, Developer, and Windows & Keys switch on a matching group of plugins in one click.
+- **Permissions step in Welcome.** It shows whether Accessibility is allowed and asks for it in place, with a link to the Permissions page.
+- **Switch guides** for Spotlight, Rectangle and Hammerspoon users, next to the Raycast one, and a "make ⌘Space open Stackbar" path in Welcome.
 - **Pin apps and files to the palette.** ⌘⇧F (or ⌘K › Add to Favorites) now works on an app, a file or any other plugin result, not only commands, so your favourite apps are one Return away before you type.
 - **Frequently Used.** With nothing typed, the palette lists the apps you open most from it, under Favorites.
 - **Type a command's name, then the text.** `search pull requests react` or `jira ABC-123` opens the command with the text filled in, without setting up an alias first.

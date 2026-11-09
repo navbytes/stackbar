@@ -1,10 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
-import Base from '../layouts/Base.astro';
-import Button from '../components/Button.astro';
-import Glyph from '../components/Glyph.astro';
+import SwitchGuide from '../components/SwitchGuide.astro';
 import { href } from '../lib/site';
-import { breadcrumbs } from '../lib/seo';
 
 const description = 'Move from Raycast to Stackbar in ten minutes: take over ⌘Space, import your snippets and quicklinks, and find the plugin for each Raycast command you use.';
 const plugins = await getCollection('plugins');
@@ -22,112 +19,34 @@ const steps = [
   { title: 'Bring your muscle memory', html: 'Settings › Commands gives any command an alias or a hotkey, like the ones you set in Raycast, including arrows and punctuation. Using a Hyper key? Keep it in Karabiner-Elements: Stackbar hotkeys take all four modifiers (<a href="' + href('/docs/palette/') + '#a-hyper-key">how</a>). ⌘K, ⌘Return and ⌘1–9 work as you expect in the palette. <a href="' + href('/docs/permissions/') + '">Permissions</a> lists what macOS will ask for.' },
 ];
 
-type Map = { raycast: string; stackbar: { name: string; url?: string }[]; note?: string };
+type Map = { from: string; stackbar: { name: string; url?: string }[]; note?: string };
 const map: Map[] = [
-  { raycast: 'Search apps and System Settings', stackbar: [plugin('Applications')], note: 'Installed' },
-  { raycast: 'File Search', stackbar: [plugin('File Search')], note: 'Installed' },
-  { raycast: 'Calculator, currency, time zones', stackbar: [plugin('Calculator')], note: 'Installed' },
-  { raycast: 'Clipboard History', stackbar: [plugin('Clipboard History')] },
-  { raycast: 'Snippets', stackbar: [plugin('Snippets')], note: 'Paste by name, or type a keyword like ;sig in any app' },
-  { raycast: 'Quicklinks', stackbar: [plugin('Quicklinks')], note: 'Plus a library of ready-made searches' },
-  { raycast: 'Window Management', stackbar: [plugin('Windows')] },
-  { raycast: 'System commands (lock, sleep, empty Trash)', stackbar: [plugin('System Commands')] },
-  { raycast: 'Search Emoji & Symbols', stackbar: [plugin('Emoji')] },
-  { raycast: 'My Schedule, join meetings', stackbar: [plugin('Up Next')] },
-  { raycast: 'Translate', stackbar: [plugin('Translate')] },
-  { raycast: 'Switch apps and windows', stackbar: [plugin('App Switcher')] },
-  { raycast: 'GitHub, Linear and Jira extensions', stackbar: [plugin('PR Cockpit'), plugin('Linear'), plugin('Jira')] },
-  { raycast: 'Pomodoro and Caffeinate extensions', stackbar: [plugin('Pomodoro'), plugin('Stay Awake')] },
-  { raycast: 'Raycast AI', stackbar: [{ name: 'Agents and MCP', url: href('/docs/agents/') }], note: 'Your own agent uses every plugin; an Ask AI plugin with your own key is planned' },
-  { raycast: 'Writing an extension', stackbar: [{ name: 'Your first plugin', url: href('/docs/first-plugin/') }], note: 'One Swift file instead of a TypeScript project' },
+  { from: 'Search apps and System Settings', stackbar: [plugin('Applications')], note: 'Installed' },
+  { from: 'File Search', stackbar: [plugin('File Search')], note: 'Installed' },
+  { from: 'Calculator, currency, time zones', stackbar: [plugin('Calculator')], note: 'Installed' },
+  { from: 'Clipboard History', stackbar: [plugin('Clipboard History')] },
+  { from: 'Snippets', stackbar: [plugin('Snippets')], note: 'Paste by name, or type a keyword like ;sig in any app' },
+  { from: 'Quicklinks', stackbar: [plugin('Quicklinks')], note: 'Plus a library of ready-made searches' },
+  { from: 'Window Management', stackbar: [plugin('Windows')] },
+  { from: 'System commands (lock, sleep, empty Trash)', stackbar: [plugin('System Commands')] },
+  { from: 'Search Emoji & Symbols', stackbar: [plugin('Emoji')] },
+  { from: 'My Schedule, join meetings', stackbar: [plugin('Up Next')] },
+  { from: 'Translate', stackbar: [plugin('Translate')] },
+  { from: 'Switch apps and windows', stackbar: [plugin('App Switcher')] },
+  { from: 'GitHub, Linear and Jira extensions', stackbar: [plugin('PR Cockpit'), plugin('Linear'), plugin('Jira')] },
+  { from: 'Pomodoro and Caffeinate extensions', stackbar: [plugin('Pomodoro'), plugin('Stay Awake')] },
+  { from: 'Raycast AI', stackbar: [{ name: 'Agents and MCP', url: href('/docs/agents/') }], note: 'Your own agent uses every plugin; an Ask AI plugin with your own key is planned' },
+  { from: 'Writing an extension', stackbar: [{ name: 'Your first plugin', url: href('/docs/first-plugin/') }], note: 'One Swift file instead of a TypeScript project' },
 ];
 ---
-<Base title="Switch from Raycast to Stackbar" description={description} jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Switch from Raycast', '/switch-from-raycast/']])]}>
-  <section class="hero stage">
-    <div class="wrap inner">
-      <p class="eyebrow">Switch from Raycast</p>
-      <h1>Bring your setup. <span class="gradient-text">Keep your keys.</span></h1>
-      <p class="lede">About ten minutes: take over ⌘Space, import your snippets and quicklinks, and install the plugins for the commands you use.</p>
-      <div class="ctas">
-        <Button href={href('/download/')} size="l"><Glyph name="download" /> Download for Mac</Button>
-        <Button href={href('/compare/')} variant="ghost" size="l">Compare first</Button>
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="wrap">
-      <div class="section-head"><p class="eyebrow">Five steps</p><h2>Moving over.</h2></div>
-      <ol class="steps">
-        {steps.map((s, i) => (
-          <li>
-            <span class="num">{i + 1}</span>
-            <div><h3>{s.title}</h3><p set:html={s.html} /></div>
-          </li>
-        ))}
-      </ol>
-    </div>
-  </section>
-
-  <section class="section map">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">What you used</p>
-        <h2>Where it lives now.</h2>
-        <p class="lede">Raycast's built-in commands, and the extensions people install most, with the Stackbar plugin for each.</p>
-      </div>
-      <div class="scroll" role="region" aria-label="Raycast commands and their Stackbar plugins" tabindex="0">
-        <table>
-          <thead><tr><th scope="col">In Raycast</th><th scope="col">In Stackbar</th><th scope="col">Notes</th></tr></thead>
-          <tbody>
-            {map.map((m) => (
-              <tr>
-                <th scope="row">{m.raycast}</th>
-                <td>{m.stackbar.map((s, i) => <>{i > 0 && ', '}<a href={s.url}>{s.name}</a></>)}</td>
-                <td>{m.note ?? ''}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="wrap closing">
-      <h2>Missing something?</h2>
-      <p class="lede">Ask for it in <a href="https://github.com/navbytes/stackbar-plugins/issues">the plugin store's issues</a>, or write it yourself in one Swift file, with your agent's help.</p>
-      <div class="ctas">
-        <Button href={href('/docs/first-plugin/')}>Write a plugin</Button>
-        <Button href={href('/plugins/')} variant="ghost">Browse the store</Button>
-      </div>
-    </div>
-  </section>
-</Base>
-
-<style>
-  .hero { padding-block: clamp(56px, 8vw, 104px) clamp(48px, 7vw, 88px); }
-  .inner { display: grid; gap: 20px; justify-items: start; }
-  .hero h1 { font-size: var(--step-4); font-weight: 800; letter-spacing: -0.04em; }
-  .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
-  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; max-width: 880px; }
-  .steps li { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 20px; padding: 24px; border-radius: var(--radius-m); background: var(--card); border: 1px solid var(--line); }
-  .num { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--brand-1); color: #fff; font: 700 var(--step-1)/1 var(--font-display); }
-  .steps h3 { font-size: var(--step-1); margin-bottom: 6px; }
-  .steps p { color: var(--ink-2); margin: 0; line-height: 1.65; }
-  .steps :global(a) { color: var(--accent); }
-  .steps :global(code) { font: 0.88em var(--font-mono); padding: 0.1em 0.35em; border-radius: 6px; background: var(--line); color: var(--ink); }
-  .steps :global(b) { color: var(--ink); }
-  .map { background: var(--page-2); }
-  .scroll { overflow-x: auto; border-radius: var(--radius-m); border: 1px solid var(--line); background: var(--card); }
-  table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: var(--step--1); }
-  th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
-  tbody tr:last-child > * { border-bottom: 0; }
-  thead th { color: var(--ink-3); font-weight: 600; }
-  tbody th { font-weight: 600; color: var(--ink); }
-  td { color: var(--ink-2); }
-  td a { color: var(--accent); font-weight: 600; }
-  .closing { display: grid; gap: 18px; justify-items: start; }
-  .closing h2 { font-size: var(--step-3); }
-  .closing a:not([class]) { color: var(--accent); }
-</style>
+<SwitchGuide
+  from="Raycast"
+  path="/switch-from-raycast/"
+  description={description}
+  headline="Bring your setup."
+  highlight="Keep your keys."
+  lede="About ten minutes: take over ⌘Space, import your snippets and quicklinks, and install the plugins for the commands you use."
+  steps={steps}
+  mapLede="Raycast's built-in commands, and the extensions people install most, with the Stackbar plugin for each."
+  map={map}
+/>

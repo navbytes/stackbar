@@ -84,18 +84,27 @@ struct WelcomeView: View {
                     } trailing: {
                         EmptyView()
                     }
-                    SettingsGroup("Command Palette", footer: "Most people coming from Raycast or Alfred use ⌘Space.") {
+                    SettingsGroup("Command Palette", footer: "Coming from Spotlight? Use ⌘Space here, and Spotlight can keep ⌥⌘Space: System Settings › Keyboard › Keyboard Shortcuts › Spotlight. Most people coming from Raycast or Alfred use ⌘Space too.") {
                         SettingsRow(title: "Open the palette", caption: "Click to record another hotkey.") {
                             PaletteHotKeyPicker()
                         }
                     }
                     if !starters.isEmpty {
                         SettingsGroup("Start With These Plugins", footer: "Applications, Calculator and File Search are already in. Find more in the Store.") {
+                            HStack(spacing: 8) {
+                                ForEach(BundledStore.starterSets) { set in
+                                    Button(set.name) { picked = set.pluginIDs.intersection(starters.map(\.id)) }
+                                        .help(set.summary)
+                                }
+                                Spacer()
+                            }
+                            .controlSize(.small)
                             ForEach(starters, id: \.id) { manifest in
                                 starterRow(manifest)
                             }
                         }
                     }
+                    WelcomePermissions()
                     SettingsGroup("Startup") {
                         Toggle("Open Stackbar at login", isOn: $openAtLogin)
                             .toggleStyle(TrailingSwitchStyle())
@@ -157,6 +166,35 @@ struct WelcomeView: View {
 
     private func binding(_ id: String) -> Binding<Bool> {
         Binding(get: { picked.contains(id) }, set: { on in if on { picked.insert(id) } else { picked.remove(id) } })
+    }
+}
+
+/// The one permission most of Stackbar leans on, asked up front so it
+/// doesn't interrupt the first snap or paste, and a map of the rest.
+struct WelcomePermissions: View {
+    @State private var trusted = AXIsProcessTrusted()
+
+    var body: some View {
+        SettingsGroup("Permissions", footer: "Stackbar asks for anything else (Automation, Calendars, Screen Recording) only when a feature first needs it.") {
+            SettingsRow(title: "Accessibility", caption: "Moving windows, pasting from Clipboard and Snippets, text expansion, the App Switcher and menu search. Optional: the palette, apps, files and sums work without it.") {
+                if trusted {
+                    Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                } else {
+                    Button("Allow…") {
+                        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+                    }
+                }
+            }
+            SettingsRow(title: "What each permission is for", caption: "Which feature needs which, and how to take one back.") {
+                Button("Open") {
+                    if let url = URL(string: "https://stackbar.app/docs/permissions/") { NSWorkspace.shared.open(url) }
+                }
+            }
+        }
+        // Back from System Settings: show the new state.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            trusted = AXIsProcessTrusted()
+        }
     }
 }
 

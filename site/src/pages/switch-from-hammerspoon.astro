@@ -1,0 +1,42 @@
+---
+import { getCollection } from 'astro:content';
+import SwitchGuide from '../components/SwitchGuide.astro';
+import { href } from '../lib/site';
+
+const plugins = await getCollection('plugins');
+/** A store plugin's page by its name, or the store when it isn't published. */
+const plugin = (name: string) => {
+  const found = plugins.find((p) => p.data.name === name);
+  return { name, url: href(found ? `/plugins/${found.data.slug}/` : '/plugins/') };
+};
+
+const description = 'Move Hammerspoon and Karabiner habits to Stackbar: a Hyper key, hotkeys on any command, window snapping and layouts, and triggers for lock, sleep, Wi-Fi and displays, in Swift instead of Lua.';
+const steps = [
+  { title: 'Keep Karabiner for the Hyper key', html: 'Stackbar hotkeys take all four modifiers, so a Caps Lock to ⌃⌥⇧⌘ rule in Karabiner-Elements works as it does today (<a href="' + href('/docs/palette/') + '#a-hyper-key">how</a>).' },
+  { title: 'Bind your hotkeys', html: 'Settings › Commands gives any command a hotkey, arrows and punctuation included: Hyper+H for Left Half, Hyper+T for a terminal. Window snaps, layouts, quicklinks and scripts are all commands.' },
+  { title: 'Bring your scripts', html: 'Script Commands runs your shell scripts from the palette with arguments. For anything that needs a UI or reacts to the system, a plugin is one Swift file: <a href="' + href('/docs/first-plugin/') + '">Your first plugin</a>.' },
+  { title: 'React to the Mac', html: 'Plugins can run on launch, a timer, wake, sleep, the screen locking, another app coming to the front, displays, power, audio devices, the network and disks being mounted.' },
+  { title: 'Drive it from outside', html: 'Every command has a <code>stackbar://</code> link, and <code>stackbarctl call &lt;plugin&gt; &lt;command&gt;</code> runs one from a script and prints the result (<a href="' + href('/docs/palette/') + '#links-and-scripts">links and scripts</a>).' },
+];
+const map = [
+  { from: 'hs.window, grid and layouts', stackbar: [plugin('Windows')], note: 'Snaps, size cycling, displays, and layouts that come back when you dock' },
+  { from: 'hs.application switching', stackbar: [plugin('App Switcher'), plugin('Window Switcher')] },
+  { from: 'hs.hotkey', stackbar: [{ name: 'Settings › Commands', url: href('/docs/palette/') }], note: 'A hotkey on any command' },
+  { from: 'hs.caffeinate', stackbar: [plugin('Stay Awake')] },
+  { from: 'hs.pasteboard watchers', stackbar: [plugin('Clipboard History')] },
+  { from: 'hs.task and shell scripts', stackbar: [plugin('Script Commands')] },
+  { from: 'hs.screen, hs.wifi, hs.battery and other watchers', stackbar: [{ name: 'Plugin triggers', url: href('/docs/first-plugin/') }], note: 'In Swift, sandboxed, one file' },
+  { from: 'Spoons', stackbar: [{ name: 'The plugin store', url: href('/plugins/') }] },
+];
+---
+<SwitchGuide
+  from="Hammerspoon"
+  path="/switch-from-hammerspoon/"
+  description={description}
+  headline="Your keys, your rules."
+  highlight="Less Lua."
+  lede="Keep Karabiner for the Hyper key and move the rest: hotkeys, windows, scripts and watchers, with a palette on top."
+  steps={steps}
+  mapLede="The Hammerspoon modules people lean on, and what does the job in Stackbar."
+  map={map}
+/>
