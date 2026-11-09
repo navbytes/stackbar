@@ -15,6 +15,7 @@ window. Write for people who use Stackbar, not for the code.
 - **Settings from Terminal.** `stackbarctl settings export <file> [--only commands,preferences,…]` and `stackbarctl settings import <file>` keep two Macs, or a team, on the same setup through iCloud Drive or a dotfiles repository.
 - **Private stores.** A plugin source can name its signing key (`#key=`), so its updates and withdrawals are trusted, and a token from Stackbar's secrets (`#auth=`), sent only to that store. New docs page: Run your own store.
 - **Plugins can react to more of your Mac** (protocol 26): the screen locking or unlocking, the Mac going to sleep, another app coming to the front, switching between battery and adapter, headphones or another sound device, the network changing, and disks being mounted or ejected. For plugin authors: the `.lock`, `.sleep`, `.frontApp`, `.power`, `.audio`, `.network` and `.volumes` triggers.
+- **`stackbarctl call <plugin> <command> [--arg name=value]`** runs a command in the running app and prints its result, for scripts, cron jobs and git hooks. It asks once like a link, unless Links May Run It Without Asking is on. The palette docs now cover `stackbar://` links.
 - Plugins that run `docker` find Docker Desktop's and OrbStack's own copy when it isn't linked into /usr/local/bin.
 
 ### Fixed

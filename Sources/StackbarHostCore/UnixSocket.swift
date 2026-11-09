@@ -155,6 +155,31 @@ public enum UnixSocket {
         }
     }
 
+    /// Sends one line to the socket at `path` and returns the answer: the
+    /// first line that comes back, or everything until the server closes.
+    public static func request(_ line: Data, to path: String) throws -> Data {
+        let fd = makeSocket()
+        guard fd >= 0 else { throw SocketError.socket(errno) }
+        defer { close(fd) }
+        var address = try address(path)
+        let connected = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+        }
+        guard connected == 0 else { throw SocketError.connect(errno) }
+        writeAll(line + Data("\n".utf8), to: fd)
+        // Nothing more to send: the server answers, sees the end and closes.
+        shutdown(fd, Int32(SHUT_WR))
+        var reply = Data()
+        var chunk = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let count = recv(fd, &chunk, chunk.count, 0)
+            guard count > 0 else { break }
+            reply.append(contentsOf: chunk[0..<count])
+            if let newline = reply.firstIndex(of: UInt8(ascii: "\n")) { return reply[..<newline] }
+        }
+        return reply
+    }
+
     /// Connects stdin/stdout to the socket at `path` until either side closes.
     /// This is all `stackbarctl agent` does when the app is running.
     public static func bridgeStdio(to path: String) throws {

@@ -39,6 +39,10 @@ usage:
   stackbarctl agent [<plugin>...]      runtime MCP gateway on stdio: bridges to the running
                                     app, or runs the given plugins itself when it isn't
   stackbarctl secret set|get|delete <NAME> [value]
+  stackbarctl call <plugin> <command> [--arg name=value]...
+                                    runs a command in the running app and prints its result;
+                                    like a stackbar:// link, it asks once unless the command
+                                    has Links May Run It Without Asking (Settings › Commands)
   stackbarctl settings export <file> [--only plugins,data,commands,palette,preferences]
                                     writes the app's setup (no secrets or approvals) to a file
   stackbarctl settings import <file> [--replace]
@@ -708,6 +712,18 @@ case "commands", "run":
 case "render":
     guard let path = rest.first else { fail(usage) }
     await render(path, options: Array(rest.dropFirst()))
+case "call":
+    guard rest.count >= 2, !rest[0].hasPrefix("-"), !rest[1].hasPrefix("-") else { fail(usage) }
+    guard let arguments = CommandCall.arguments(from: Array(rest.dropFirst(2))) else { fail("--arg takes name=value") }
+    do {
+        let call = CommandCall(plugin: rest[0], command: rest[1], arguments: arguments)
+        let line = try UnixSocket.request(JSONEncoder().encode(call), to: StackbarPaths.commandSocket.path)
+        guard let reply = try? JSONDecoder().decode(CommandCall.Reply.self, from: line) else { fail("Stackbar sent no answer") }
+        if reply.isError { fail(reply.message ?? "failed") }
+        print(reply.message ?? "Done")
+    } catch {
+        fail("Stackbar isn't running (\(error)). Open it, then try again.")
+    }
 case "settings":
     guard rest.count >= 2 else { fail(usage) }
     // The app's own preferences domain, so the CLI reads and writes what it does.

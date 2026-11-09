@@ -39,6 +39,31 @@ the text, and Return opens it with the text filled in: `search pull requests
 react` or `jira ABC-123` (a plugin's name works when it has only one command
 that takes text).
 
+## Links and scripts
+
+Every command has a link: ⌘K › **Copy Link**, or the ⋯ menu in Settings ›
+Commands. Arguments go in the query string:
+
+```
+stackbar://commands/io.navbytes.stackbar.stay-awake/keep-awake?for=2h
+```
+
+Open it from a browser, Shortcuts, a Stream Deck or `open` in Terminal. A
+command that shows a list opens in the palette. A command that does
+something asks once (**Run Once** or **Always Allow**), unless you turned on
+**Links May Run It Without Asking** for it in Settings › Commands.
+
+From a script, `stackbarctl call` does the same and prints what happened, so
+a cron job or a git hook can wait for the result:
+
+```sh
+stackbarctl call stay-awake keep-awake --arg for=2h
+stackbarctl call stay-awake allow-sleep
+```
+
+The plugin can be its full id or the id's last part. A command a plugin
+keeps to Stackbar itself can't be started from outside.
+
 ## What it searches
 
 - **Applications** (plugin): apps and System Settings panes.

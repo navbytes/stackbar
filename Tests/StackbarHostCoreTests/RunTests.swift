@@ -420,3 +420,26 @@ final class SystemEventTests: XCTestCase {
         XCTAssertEqual(SystemEvent.locked.settle, .zero, "a lock is heard at once")
     }
 }
+
+final class CommandCallTests: XCTestCase {
+    func testACallFindsItsCommandByIdOrShortName() {
+        let registry = CommandRegistry(file: nil)
+        _ = registry.update(pluginID: "io.navbytes.stackbar.plugins.pr-cockpit", pluginName: "PR Cockpit", specs: [CommandSpec(id: "refresh", title: "Refresh")])
+        XCTAssertEqual(CommandCall(plugin: "pr-cockpit", command: "refresh").entry(in: registry)?.spec.title, "Refresh")
+        XCTAssertNotNil(CommandCall(plugin: "io.navbytes.stackbar.plugins.pr-cockpit", command: "refresh").entry(in: registry))
+        XCTAssertNil(CommandCall(plugin: "cockpit", command: "refresh").entry(in: registry))
+        XCTAssertEqual(CommandCall.arguments(from: ["--arg", "q=a=b", "--arg", "n=1"]), ["q": "a=b", "n": "1"])
+        XCTAssertNil(CommandCall.arguments(from: ["--arg", "novalue"]))
+    }
+
+    func testACallRoundTripsOverTheSocket() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("c-\(UUID().uuidString.prefix(8)).sock").path
+        let server = try UnixSocketServer(path: path) { line in
+            let call = try? JSONDecoder().decode(CommandCall.self, from: line)
+            return try? JSONEncoder().encode(CommandCall.Reply(message: "ran \(call?.command ?? "?") with \(call?.arguments["q"] ?? "")", isError: false))
+        }
+        defer { server.stop() }
+        let line = try UnixSocket.request(JSONEncoder().encode(CommandCall(plugin: "p", command: "go", arguments: ["q": "x"])), to: path)
+        XCTAssertEqual(try JSONDecoder().decode(CommandCall.Reply.self, from: line), CommandCall.Reply(message: "ran go with x", isError: false))
+    }
+}
