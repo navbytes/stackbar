@@ -37,6 +37,9 @@ extension EnvironmentValues {
     /// Drawing for `Snapshot`: AppKit-backed controls (text fields, pickers)
     /// don't render off screen, so they draw as SwiftUI look-alikes.
     @Entry public var stackbarSnapshot: Bool = false
+    /// An editor fills the space it is given (a plugin window) instead of
+    /// keeping its panel height.
+    @Entry public var stackbarEditorFills: Bool = false
     /// Draws sections as System Settings–style grouped boxes, with switches
     /// and pickers trailing each row. Set by the Settings window for a
     /// plugin's `settings` surface.
@@ -72,6 +75,7 @@ public struct NodeView: View {
     @Environment(\.stackbarSymbol) private var symbolStyle
     @Environment(\.stackbarGroupedSections) private var grouped
     @Environment(\.stackbarWidgetButton) private var widgetButton
+    @Environment(\.stackbarEditorFills) private var editorFills
 
     public init(node: ViewNode, send: @escaping SendAction) {
         self.node = node
@@ -234,6 +238,17 @@ public struct NodeView: View {
             ClockText(face: face)
                 .font(textFont(.body).monospacedDigit())
                 .foregroundStyle(tint(.primary))
+        case .editor(let editor) where snapshot || readOnly:
+            SnapshotEditor(editor: editor)
+                .frame(maxWidth: .infinity, minHeight: editorFills ? nil : editor.minHeight ?? EditorNode.defaultHeight, alignment: .topLeading)
+        case .editor(let editor):
+            #if canImport(AppKit)
+            EditorNodeView(editor: editor, send: send)
+                .frame(maxWidth: .infinity, maxHeight: editorFills ? .infinity : nil)
+                .frame(height: editorFills ? nil : editor.minHeight ?? EditorNode.defaultHeight)
+            #else
+            SnapshotEditor(editor: editor)
+            #endif
         case .spacer(let minLength):
             Spacer(minLength: minLength.map { CGFloat($0) })
         case .tappable(let content, let action, _) where readOnly && widgetButton != nil:
@@ -296,6 +311,7 @@ struct IdentifiedNode: Identifiable {
         case .section(let title, _): return "section|\(title ?? "")"
         case .textField(_, _, let action): return "field|\(action.rawValue)"
         case .slider(_, _, _, _, _, let action, _): return "slider|\(action.rawValue)"
+        case .editor(let editor): return "editor|\(editor.action.rawValue)"
         case .styled(let child, _): return name(of: child).map { "styled|" + $0 }
         default: return nil
         }

@@ -78,6 +78,43 @@ public indirect enum ViewNode: Codable, Equatable, Sendable {
     /// Children in rows of `columns` equal-width cells, filled left to right:
     /// tiles, launchers, stat blocks. Protocol 12.
     case grid(columns: Int, spacing: Double? = nil, children: [ViewNode])
+    /// Several lines of text the user edits in place, like a note. The host
+    /// owns the text while the user types and sends all of it as `.text`
+    /// after a pause and when the editor loses focus or closes. Protocol 28.
+    case editor(EditorNode)
+}
+
+/// A multiline editor (`ViewNode.editor`).
+public struct EditorNode: Codable, Equatable, Sendable {
+    /// What the plugin last saved.
+    public var text: String
+    /// What is being edited, like a note's id. A render with a different
+    /// document replaces the text (and the undo history); the same document
+    /// keeps what the user is typing.
+    public var document: String
+    public var placeholder: String?
+    /// Style Markdown as it is typed and add its editing keys (⌘B, ⌘I,
+    /// Return continues a list, ⌘Return ticks a task).
+    public var markdown: Bool?
+    /// The editor's height in the panel; in a window it fills the window.
+    public var minHeight: Double?
+    /// Take keyboard focus when shown.
+    public var focus: Bool?
+    /// Receives `.text` with the whole text.
+    public var action: ActionID
+
+    public init(text: String, document: String, placeholder: String? = nil, markdown: Bool? = nil, minHeight: Double? = nil, focus: Bool? = nil, action: ActionID) {
+        self.text = text
+        self.document = document
+        self.placeholder = placeholder
+        self.markdown = markdown
+        self.minHeight = minHeight
+        self.focus = focus
+        self.action = action
+    }
+
+    /// The panel height when the plugin gives none.
+    public static let defaultHeight: Double = 160
 }
 
 /// A form: fields, a submit button and the action it sends.
@@ -312,7 +349,7 @@ extension ViewNode {
             return children
         case .styled(let child, _), .tappable(let child, _, _):
             return [child]
-        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .clock, .spacer:
+        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .clock, .spacer, .editor:
             return []
         }
     }

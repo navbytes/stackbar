@@ -96,7 +96,7 @@ struct MenuBarNode: View {
                 ClockText(face: face)
             }
             .font(.system(size: 13).monospacedDigit())
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable, .grid, .image(.url):
+        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable, .grid, .image(.url), .editor:
             EmptyView()
         }
     }

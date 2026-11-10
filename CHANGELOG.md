@@ -3,6 +3,17 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### New
+- **Plugins can be note pads.** A plugin window can now hold a real editor: Markdown styled as you type (headings, bold, code, quotes, lists, checklists), ⌘B and ⌘I, Return continues a list, ⌘Return or a click ticks a task, and your words are saved as you go, even if you close the window mid-sentence. The new Notes plugin in the store is built on it.
+- **Windows on a hotkey.** A plugin can show or hide its own window from a command, so a hotkey (or a click on its menu-bar icon) brings it up over whatever you are doing and puts it away again.
+
+### For plugin authors
+- `TextEditor(text:document:placeholder:markdown:minHeight:focus:)` (protocol 28): the host keeps the typing and sends the whole text after a pause and on leaving. In a window it fills the window.
+- `Stackbar.showWindow(keepOnTop:)`, `hideWindow()`, `toggleWindow(keepOnTop:)` need `.window` in surfaces. `keepOnTop` is a suggestion; the user's pin wins.
+- A `.files(paths:)` folder can be read and written with FileManager inside the sandbox.
+
 ## 0.37.0
 
 ### Changed

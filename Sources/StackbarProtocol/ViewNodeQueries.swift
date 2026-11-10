@@ -20,7 +20,7 @@ extension ViewNode {
             return .tappable(transform(child), action: action, confirm: confirm)
         case .grid(let columns, let spacing, let children):
             return .grid(columns: columns, spacing: spacing, children: children.map(transform))
-        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .clock, .spacer:
+        case .text, .label, .row, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .shape, .image, .timer, .clock, .spacer, .editor:
             return self
         }
     }
@@ -43,7 +43,7 @@ extension ViewNode {
             return false
         case .stack, .styled:
             return children.allSatisfy(\.isBlankInMenuBar)
-        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable, .grid:
+        case .list, .section, .row, .button, .toggle, .divider, .textField, .picker, .slider, .link, .form, .shape, .spacer, .tappable, .grid, .editor:
             return true
         }
     }
@@ -55,6 +55,13 @@ extension ViewNode {
     public var isNothing: Bool {
         if case .stack(_, _, _, let children) = self { return children.allSatisfy(\.isNothing) }
         return false
+    }
+
+    /// Whether the tree holds an editor: a window then gives it the space
+    /// instead of scrolling the whole surface.
+    public var containsEditor: Bool {
+        if case .editor = self { return true }
+        return children.contains(where: \.containsEditor)
     }
 
     /// Whether a form in the tree shows a problem with a field: a submitted
@@ -93,6 +100,8 @@ extension ViewNode {
             return [Affordance(title: title, kind: .input(action))]
         case .form(let form):
             return [Affordance(title: form.submitTitle, kind: .input(form.action))]
+        case .editor(let editor):
+            return [Affordance(title: editor.placeholder ?? "Text", kind: .input(editor.action))]
         case .link(let title, let url):
             return [Affordance(title: title, subtitle: url, symbol: "link", kind: .open(url))]
         case .tappable(let content, let action, let confirm):
@@ -244,7 +253,7 @@ public enum RowFilter {
             case .grid:
                 guard let rows = gridRows(child) else { return nil }
                 items += rows.map(Item.row)
-            case .text, .label, .stack, .list, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .styled, .shape, .image, .timer, .clock, .spacer, .tappable:
+            case .text, .label, .stack, .list, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form, .styled, .shape, .image, .timer, .clock, .spacer, .tappable, .editor:
                 return nil
             }
         }

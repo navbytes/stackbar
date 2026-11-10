@@ -423,6 +423,55 @@ public struct Chart: StackbarView {
     }
 }
 
+/// Several lines of text edited in place, like a note. The host keeps what
+/// the user types and calls `onChange` with the whole text after a pause in
+/// typing and when the editor loses focus or closes, so save it there.
+///
+/// ```swift
+/// TextEditor(text: note.body, document: note.id, placeholder: "Start writing…", markdown: true) { text in
+///     try self.save(note.id, text)
+/// }
+/// ```
+///
+/// `document` names what is edited: render a different one (another note)
+/// and the editor shows its text; render the same one and the user's
+/// typing stays, while a changed `text` (the file changed elsewhere) shows
+/// once nothing is waiting to be sent. `markdown` styles headings, emphasis,
+/// code, quotes, lists and task boxes as they are typed and adds the keys
+/// ⌘B, ⌘I, ⇧⌘X, ⌘E, ⌘K, ⌘Return (tick a task), Return (continue a list)
+/// and Tab. In a window the editor fills the window; in the panel it is
+/// `minHeight` tall. Stackbar 0.38.0; older hosts show nothing.
+public struct TextEditor: StackbarView {
+    var text: String
+    var document: String
+    var placeholder: String?
+    var markdown: Bool
+    var minHeight: Double?
+    var focus: Bool
+    var key: String?
+    var onChange: @MainActor (String) async throws -> Void
+
+    public init(text: String, document: String = "", placeholder: String? = nil, markdown: Bool = false, minHeight: Double? = nil, focus: Bool = false, key: String? = nil, onChange: @escaping @MainActor (String) async throws -> Void) {
+        self.text = text
+        self.document = document
+        self.placeholder = placeholder
+        self.markdown = markdown
+        self.minHeight = minHeight
+        self.focus = focus
+        self.key = key
+        self.onChange = onChange
+    }
+
+    public func resolve(in context: RenderContext) -> [ViewNode] {
+        let change = onChange
+        let id = context.register("editor/\(key ?? placeholder ?? "text")") { value in
+            if case .text(let text) = value { try await change(text) }
+        }
+        return [.editor(EditorNode(text: text, document: document, placeholder: placeholder, markdown: markdown ? true : nil,
+                                   minHeight: minHeight, focus: focus ? true : nil, action: id))]
+    }
+}
+
 /// A one-line text input. `onSubmit` gets the text when the user presses return,
 /// and the field then goes back to `text`: an add field (`text: ""`) clears for
 /// the next entry, and an edit field shows whatever the plugin renders next.

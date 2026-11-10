@@ -41,7 +41,23 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         NSApp.activate()
     }
 
-    func open(_ controller: PluginController) {
+    /// A plugin's `showWindow`, `hideWindow` or `toggleWindow`.
+    func handle(_ request: WindowRequest, for controller: PluginController) {
+        switch request.action {
+        case .show:
+            open(controller, keepOnTop: request.keepOnTop)
+        case .hide:
+            close(controller.pluginID)
+        case .toggle:
+            if let window = windows[controller.pluginID], buried(controller) == nil, window.isVisible {
+                close(controller.pluginID)
+            } else {
+                open(controller, keepOnTop: request.keepOnTop)
+            }
+        }
+    }
+
+    func open(_ controller: PluginController, keepOnTop: Bool? = nil) {
         if let window = windows[controller.pluginID] {
             show(window)
             return
@@ -58,7 +74,7 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         window.setFrameAutosaveName("stackbar.window." + controller.pluginID)
         window.delegate = self
         window.center()
-        window.addTitlebarAccessoryViewController(PinAccessory(window: window, pluginID: controller.pluginID))
+        window.addTitlebarAccessoryViewController(PinAccessory(window: window, pluginID: controller.pluginID, suggested: keepOnTop ?? false))
         windows[controller.pluginID] = window
         controllers[ObjectIdentifier(window)] = controller
         controller.setVisible(.window, true)
@@ -86,39 +102,51 @@ struct PluginWindowView: View {
     let controller: PluginController
 
     var body: some View {
-        ScrollView {
-            Group {
-                if let node = controller.window ?? controller.panel {
-                    NodeView(node: node, send: controller.send)
-                } else {
-                    ProgressView()
+        Group {
+            if let node = controller.window ?? controller.panel, node.containsEditor {
+                // An editor scrolls itself and takes the window's height.
+                NodeView(node: node, send: controller.send)
+                    .environment(\.stackbarEditorFills, true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(12)
+            } else {
+                ScrollView {
+                    Group {
+                        if let node = controller.window ?? controller.panel {
+                            NodeView(node: node, send: controller.send)
+                        } else {
+                            ProgressView()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(16)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .padding(16)
         }
-        .frame(minWidth: 360, minHeight: 240)
+        .frame(minWidth: 320, minHeight: 240)
         .environment(\.stackbarImageData, AppModel.previewImages(for: controller))
         .environment(\.stackbarRemoteImage, controller.remoteImages)
     }
 }
 /// The title bar's "Keep on top" pin: a pinned window floats above other
 /// apps' windows (not over full-screen apps), for things you glance at while
-/// working, like the day's meetings during a call. Remembered per plugin; a
-/// plugin can't set it, only you.
+/// working, like the day's meetings during a call. Remembered per plugin
+/// once you set it; until then a plugin's `keepOnTop` suggestion decides.
 final class PinAccessory: NSTitlebarAccessoryViewController {
     private let pluginID: String
     private weak var target: NSWindow?
     private let button = NSButton()
 
     private var key: String { "stackbar.pinned." + pluginID }
+    private let suggested: Bool
     private var pinned: Bool {
-        get { UserDefaults.standard.bool(forKey: key) }
+        get { UserDefaults.standard.object(forKey: key) as? Bool ?? suggested }
         set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 
-    init(window: NSWindow, pluginID: String) {
+    init(window: NSWindow, pluginID: String, suggested: Bool = false) {
         self.pluginID = pluginID
+        self.suggested = suggested
         target = window
         super.init(nibName: nil, bundle: nil)
         layoutAttribute = .trailing

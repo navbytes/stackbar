@@ -40,7 +40,9 @@ public enum StackbarProtocolVersion {
     /// triggers.
     /// 27 added a command's default alias; panel affordances left the
     /// palette's main search.
-    public static let current = 27
+    /// 28 added the multiline editor node, and calls that show, hide or
+    /// toggle the plugin's window.
+    public static let current = 28
 }
 
 /// Host → plugin.
@@ -349,6 +351,32 @@ public enum HostCall: Codable, Equatable, Sendable {
     /// The folders the user chose for this plugin and hasn't removed
     /// (`[String]` as JSON, full paths). Protocol 24.
     case grantedFolders
+    /// Shows, hides or toggles the plugin's window. Needs `.window` in the
+    /// manifest's surfaces. Protocol 28.
+    case pluginWindow(WindowRequest)
+}
+
+/// What `HostCall.pluginWindow` does with the plugin's window.
+public struct WindowRequest: Codable, Equatable, Sendable {
+    public enum Action: String, Codable, Sendable {
+        /// Opens the window, or brings it to the front.
+        case show
+        /// Closes it.
+        case hide
+        /// Hides it when it is the window you are in, and shows it otherwise.
+        case toggle
+    }
+
+    public var action: Action
+    /// The plugin's suggestion that the window float above other apps'
+    /// windows. The title-bar pin is the user's: once they have set it,
+    /// their choice wins.
+    public var keepOnTop: Bool?
+
+    public init(_ action: Action, keepOnTop: Bool? = nil) {
+        self.action = action
+        self.keepOnTop = keepOnTop
+    }
 }
 
 public enum HostResult: Codable, Equatable, Sendable {

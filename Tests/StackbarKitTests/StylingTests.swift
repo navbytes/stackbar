@@ -25,6 +25,17 @@ final class StylingTests: XCTestCase {
         XCTAssertEqual(plain, [.slider(title: "Volume", value: 1, min: 0, max: 1, action: "slider/Volume")], "sends on release, as before")
     }
 
+    func testATextEditorResolvesAndSendsItsText() async throws {
+        var saved: String?
+        let context = RenderContext()
+        let nodes = TextEditor(text: "hi", document: "n1", placeholder: "Write", markdown: true, focus: true) { saved = $0 }.resolve(in: context)
+        XCTAssertEqual(nodes, [.editor(EditorNode(text: "hi", document: "n1", placeholder: "Write", markdown: true, focus: true, action: "editor/Write"))])
+        try await context.handlers["editor/Write"]?(.text("hi there"))
+        XCTAssertEqual(saved, "hi there")
+        let plain = TextEditor(text: "") { _ in }.resolve(in: RenderContext())
+        XCTAssertEqual(plain, [.editor(EditorNode(text: "", document: "", action: "editor/text"))], "plain text sends no markdown flag")
+    }
+
     func testCustomControlsResolve() async {
         let start = Date(timeIntervalSince1970: 1_000)
         let session = TimeRange(start: start, end: start.addingTimeInterval(1500))
