@@ -42,7 +42,8 @@ public enum StackbarProtocolVersion {
     /// palette's main search.
     /// 28 added the multiline editor node, and calls that show, hide or
     /// toggle the plugin's window.
-    public static let current = 28
+    /// 29 added views in row previews, drawn display-only beside the list.
+    public static let current = 29
 }
 
 /// Host → plugin.

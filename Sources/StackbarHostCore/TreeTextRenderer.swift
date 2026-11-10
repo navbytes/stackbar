@@ -47,7 +47,11 @@ public enum TreeTextRenderer {
                 }
                 line += "  <" + actions.joined(separator: ", ") + ">"
             }
-            return [line]
+            // A preview's view (protocol 29) is drawn display-only, so its
+            // controls carry no ids worth pressing.
+            guard let view = row.preview?.view else { return [line] }
+            let header = pad + "  Preview" + (row.preview?.shownView == nil ? " (over \(RowPreview.maxViewNodes) nodes: the text shows)" : "")
+            return [line, header] + lines(view, depth: depth + 2, showActions: false, now: now)
         case .badge(let text, let role):
             return [pad + "[\(text)]" + roleSuffix(role)]
         case .button(let title, _, let role, let action, let confirm):

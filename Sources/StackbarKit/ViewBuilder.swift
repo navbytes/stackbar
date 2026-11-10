@@ -57,6 +57,15 @@ public final class RenderContext {
         self.prefix = prefix
     }
 
+    /// Notes a problem the runtime logs, once per plugin run for the same
+    /// words however often the view renders.
+    func warnOnce(_ warning: String) {
+        guard Self.warnedOnce.insert(warning).inserted else { return }
+        warnings.append(warning)
+    }
+
+    private static var warnedOnce: Set<String> = []
+
     public func register(_ base: String, _ handler: @escaping Handler) -> ActionID {
         let base = prefix + base
         var id = ActionID(base)

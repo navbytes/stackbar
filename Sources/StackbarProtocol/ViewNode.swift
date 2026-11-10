@@ -249,11 +249,30 @@ public struct RowPreview: Codable, Equatable, Sendable {
     public var imageID: String?
     /// Lines under the preview, like "1,204 characters · copied 3 times".
     public var caption: String?
+    /// A view drawn in place of the text (protocol 29): a check list, a
+    /// release chain, a swatch. Hosts draw it display-only, so nothing in it
+    /// takes the keyboard from the search field, and drop one larger than
+    /// `maxViewNodes`. `text` stays what search matches and what older hosts
+    /// show.
+    public var view: ViewNode?
 
-    public init(text: String? = nil, imageID: String? = nil, caption: String? = nil) {
+    /// The most nodes a preview's view may have. Every row carries its
+    /// preview in every render, so the budget keeps lists cheap to send.
+    public static let maxViewNodes = 150
+    /// The protocol whose hosts draw `view`.
+    public static let firstViewProtocol = 29
+
+    public init(text: String? = nil, imageID: String? = nil, caption: String? = nil, view: ViewNode? = nil) {
         self.text = text
         self.imageID = imageID
         self.caption = caption
+        self.view = view
+    }
+
+    /// The view to draw: `nil` when there is none or it is over budget.
+    public var shownView: ViewNode? {
+        guard let view, view.nodeCount <= Self.maxViewNodes else { return nil }
+        return view
     }
 }
 

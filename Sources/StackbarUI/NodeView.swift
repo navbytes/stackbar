@@ -458,7 +458,7 @@ struct ListNodeView: View {
     }
 }
 
-/// The selected row's full text or image, under a searchable list.
+/// The selected row's view, full text or image, under a searchable list.
 struct PreviewPane: View {
     let preview: RowPreview
     @Environment(\.stackbarImageData) private var imageData
@@ -477,7 +477,16 @@ struct PreviewPane: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             #endif
-            if let text = preview.text, !text.isEmpty {
+            if let view = preview.shownView {
+                Group {
+                    if snapshot {
+                        PreviewNodeView(node: view)
+                    } else {
+                        ScrollView { PreviewNodeView(node: view) }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: 220, alignment: .topLeading)
+            } else if let text = preview.text, !text.isEmpty {
                 // ImageRenderer draws a scroll view empty, so a snapshot shows
                 // the first lines instead.
                 Group {
@@ -499,6 +508,25 @@ struct PreviewPane: View {
             }
         }
         .padding(.top, 4)
+    }
+}
+
+/// A row preview's view (protocol 29), drawn display-only: nothing in it
+/// takes focus from the search field or sends anything, and controls show
+/// disabled as on a widget. The row's actions and ⌘K are how to act.
+public struct PreviewNodeView: View {
+    let node: ViewNode
+
+    public init(node: ViewNode) {
+        self.node = node
+    }
+
+    public var body: some View {
+        NodeView(node: node) { _, _ in }
+            .environment(\.stackbarReadOnly, true)
+            .environment(\.stackbarWidgetButton, nil)
+            .environment(\.stackbarSelectedRow, nil)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 

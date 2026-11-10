@@ -8,6 +8,7 @@ window. Write for people who use Stackbar, not for the code.
 ### Added
 - **Plugins can be note pads.** A plugin window can now hold a real editor: Markdown styled as you type (headings, bold, code, quotes, lists, checklists), ⌘B and ⌘I, Return continues a list, ⌘Return or a click ticks a task, and your words are saved as you go, even if you close the window mid-sentence. The new Notes plugin in the store is built on it.
 - **Windows on a hotkey.** A plugin can show or hide its own window from a command, so a hotkey (or a click on its menu-bar icon) brings it up over whatever you are doing and puts it away again.
+- **Richer previews beside results.** Plugins can now show a real view in the palette's preview pane, not just text: coloured check lists, release steps, color swatches, status and details at a glance as you arrow through results.
 - **Search inside a plugin.** Type a plugin's name and press Tab, as in Spotlight: its name becomes a chip and what you type next searches only that plugin, with all its results. Esc, or Delete in the empty field, goes back. The bar at the bottom shows "Search <Plugin> ⇥" when Tab will do this; from any other row Tab still asks AI.
 
 ### Fixed
@@ -15,6 +16,7 @@ window. Write for people who use Stackbar, not for the code.
 
 ### For plugin authors
 - `TextEditor(text:document:placeholder:markdown:minHeight:focus:)` (protocol 28): the host keeps the typing and sends the whole text after a pause and on leaving. In a window it fills the window.
+- `Row.preview(text:caption:) { … }` (protocol 29) puts a view in the preview pane, drawn display-only; `PreviewDetail` and `Metadata` give it the usual shape. At most 150 nodes; `text` stays the search text and what older hosts show.
 - `Stackbar.showWindow(keepOnTop:)`, `hideWindow()`, `toggleWindow(keepOnTop:)` need `.window` in surfaces. `keepOnTop` is a suggestion; the user's pin wins.
 
 ## 0.37.0
