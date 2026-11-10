@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.38.0
 
 ### Added
 - **Plugins can be note pads.** A plugin window can now hold a real editor: Markdown styled as you type (headings, bold, code, quotes, lists, checklists), ⌘B and ⌘I, Return continues a list, ⌘Return or a click ticks a task, and your words are saved as you go, even if you close the window mid-sentence. The new Notes plugin in the store is built on it.
