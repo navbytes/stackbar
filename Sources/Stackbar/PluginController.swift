@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import StackbarHostCore
 import StackbarProtocol
+import StackbarUI
 
 /// One plugin as the UI sees it: its build, its approvals, its supervisor,
 /// and the latest trees for each surface, observable by SwiftUI and AppKit.
@@ -293,6 +294,9 @@ final class PluginController: Identifiable {
     /// press instead (the palette stays open for it).
     @discardableResult
     func press(_ action: ActionID, _ value: EventValue?) -> Bool {
+        // An editor's last words go first, to the document they were typed
+        // in; flushing sends through here again, with nothing left to flush.
+        EditorFlush.all()
         // A row action that opens one of the plugin's commands is the host's
         // to perform; the plugin never hears about it.
         for root in [panelTree, windowTree, settingsTree].compactMap({ $0 }) {

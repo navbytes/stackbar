@@ -3,6 +3,18 @@ import AppKit
 import SwiftUI
 import StackbarProtocol
 
+/// Editors on screen with typing not yet sent. The app flushes them before
+/// it sends any other press, so a click on "New Note" saves the last words
+/// to the note they were typed in, before the plugin moves on.
+@MainActor
+public enum EditorFlush {
+    static let live = NSHashTable<EditorNodeView.Coordinator>.weakObjects()
+
+    public static func all() {
+        for coordinator in live.allObjects { coordinator.flush() }
+    }
+}
+
 /// An `editor` node: an NSTextView the host owns while the user types.
 ///
 /// The text goes to the plugin 0.6 s after the last keystroke, and at once
@@ -83,6 +95,8 @@ struct EditorNodeView: NSViewRepresentable {
             self.editor = editor
             self.send = send
             sync = EditorSync(document: editor.document, text: editor.text)
+            super.init()
+            EditorFlush.live.add(self)
         }
 
         var isMarkdown: Bool { editor.markdown == true }
@@ -95,7 +109,8 @@ struct EditorNodeView: NSViewRepresentable {
             textView.placeholder = editor.placeholder
             textView.wantsFocus = editor.focus == true
             if documentChanged {
-                // What the user typed in the last document goes to the plugin first.
+                // Typing still waiting belonged to the last document, and the
+                // app sent it before the press that switched (EditorFlush).
                 pending?.cancel()
                 pending = nil
             }
