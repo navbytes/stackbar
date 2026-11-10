@@ -52,7 +52,7 @@ struct PanelView: View {
                     .textSelection(.enabled)
                 HStack {
                     Button("Try Again") { controller.reload() }
-                    Button("Edit with Claude") { Platform.editWithClaude(controller.source) }
+                    Button("Edit with \(model.pluginEditor.name)") { model.editPlugin(controller.source) }
                 }
             }
         } else if let panel = controller.panel {
@@ -161,7 +161,8 @@ struct PanelFooter: View {
                 Button("Restart Plugin") { controller.restart() }
                 Button("Rebuild") { controller.reload() }
                 Divider()
-                Button("Edit with Claude…") { Platform.editWithClaude(controller.source) }
+                Button("Edit with \(model.pluginEditor.name)…") { model.editPlugin(controller.source) }
+                Button("Copy Agent Prompt") { Platform.copyAgentPrompt(controller.source) }
                 Button("Fork…") { fork() }
                 Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([controller.source]) }
                 Divider()
@@ -190,7 +191,7 @@ struct PanelFooter: View {
     private func fork() {
         guard let copy = try? PluginFork.forkFile(controller.source, in: StackbarPaths.pluginsDirectory, name: controller.name + " Copy") else { return }
         model.add(copy)
-        Platform.editWithClaude(copy)
+        model.editPlugin(copy)
     }
 
     private var stateText: String {

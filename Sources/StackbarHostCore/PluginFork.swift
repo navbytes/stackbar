@@ -1,6 +1,6 @@
 import Foundation
 
-/// Copying a plugin to change it, and handing it to Claude Code to do so.
+/// Copying a plugin to change it. `PluginEditor` opens an agent on the copy.
 public enum PluginFork {
     /// The source with its manifest's `id:` and `name:` replaced, so the copy
     /// runs next to the original with its own storage and approvals.
@@ -24,29 +24,6 @@ public enum PluginFork {
         let id = "dev.local." + target.deletingPathExtension().lastPathComponent.lowercased()
         try fork(source, name: name, id: id).write(to: target, atomically: true, encoding: .utf8)
         return target
-    }
-
-    /// A Terminal `.command` script that opens Claude Code on the plugin with
-    /// Stackbar's authoring tools attached.
-    public static func claudeScript(for file: URL, stackbarctl: String) -> String {
-        let directory = file.deletingLastPathComponent().path
-        let prompt = "Help me change the Stackbar plugin \(file.lastPathComponent). Call the stackbar_docs tool first, then use stackbar_build, stackbar_render and stackbar_send_event to check every change."
-        return """
-        #!/bin/sh
-        # Opened by Stackbar: Claude Code on \(file.lastPathComponent), with Stackbar's authoring tools.
-        cd \(shellQuote(directory)) || exit 1
-        if ! command -v claude >/dev/null 2>&1; then
-            echo "Claude Code is not installed: https://claude.com/claude-code"
-            exit 1
-        fi
-        claude mcp get stackbar >/dev/null 2>&1 || claude mcp add stackbar -- \(shellQuote(stackbarctl)) mcp
-        exec claude \(shellQuote(prompt))
-
-        """
-    }
-
-    static func shellQuote(_ text: String) -> String {
-        "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     private static func replaceFirst(_ pattern: String, in text: String, with replacement: String) -> String {
