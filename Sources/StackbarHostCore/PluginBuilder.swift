@@ -86,14 +86,24 @@ public struct PluginBuilder: Sendable {
         public var description: String { "a newer build replaced this one" }
     }
 
-    public func build(source: URL, ticket: BuildTicket? = nil) throws -> Output {
-        let code = try Data(contentsOf: source)
+    /// Where `build` puts the binary for this source, and its target name.
+    func buildProduct(source: URL, code: Data, kit: String) -> (target: String, binary: URL) {
         // The key covers StackbarKit too: after an update of Stackbar, a plugin
         // built against the old StackbarKit must be rebuilt, not reused.
-        let kit = Self.frameworkDigest(stackbarPackage)
         let key = Self.cacheKey(code + Data("\(configuration)|\(stackbarPackage.path)|\(kit)|\(Self.layoutVersion)".utf8))
         let target = Self.targetName(source.deletingPathExtension().lastPathComponent, key: key)
-        let binary = workspace.appendingPathComponent(".build/\(configuration)/\(target)")
+        return (target, workspace.appendingPathComponent(".build/\(configuration)/\(target)"))
+    }
+
+    /// Whether `build` would find this source already compiled here.
+    public func hasCachedBuild(source: URL, code: Data) -> Bool {
+        FileManager.default.isExecutableFile(atPath: buildProduct(source: source, code: code, kit: stackbarKit).binary.path)
+    }
+
+    public func build(source: URL, ticket: BuildTicket? = nil) throws -> Output {
+        let code = try Data(contentsOf: source)
+        let kit = Self.frameworkDigest(stackbarPackage)
+        let (target, binary) = buildProduct(source: source, code: code, kit: kit)
         let sourcesDir = workspace.appendingPathComponent("Sources/\(target)", isDirectory: true)
 
         if FileManager.default.isExecutableFile(atPath: binary.path) {

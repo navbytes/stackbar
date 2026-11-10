@@ -171,7 +171,12 @@ final class AppModel {
             refreshInstalled()
         }
         commands.start()
-        for source in Self.discover() { add(source) }
+        // Right after a Stackbar update no store plugin has a helper for the
+        // new StackbarKit. Those wait for the store's prebuilt helpers rather
+        // than each being compiled here, which takes minutes.
+        let waiting = PrebuiltHelpers.missing(installed: installer.installed, builder: builder)
+        let held = Set(waiting.map { Self.normalized(URL(fileURLWithPath: $0.file)) })
+        for source in Self.discover() where !held.contains(Self.normalized(source)) { add(source) }
         let watcher = DirectoryWatcher(directory: StackbarPaths.pluginsDirectory)
         watcher.start { [weak self] change in
             Task { @MainActor in self?.apply(change) }
@@ -179,7 +184,10 @@ final class AppModel {
         self.watcher = watcher
         updateAgentGateway()
         listenForWidgetActions()
-        Task { await checkStore() }
+        Task {
+            await loadAfterFetchingHelpers(waiting)
+            await checkStore()
+        }
         storeTimer = Timer.scheduledTimer(withTimeInterval: 24 * 60 * 60, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.checkStore() }
         }
@@ -258,6 +266,35 @@ final class AppModel {
         for id in refreshed {
             if let controller = controller(for: id), case .failed = controller.state { controller.reload() }
         }
+    }
+
+    /// Loads store plugins that had no helper at launch: each as soon as its
+    /// helper arrives, and the rest (which then build here, or wait for a
+    /// helper without a compiler) once the store has nothing more or after
+    /// `limit`, so a slow network doesn't keep them out of the menu bar.
+    private func loadAfterFetchingHelpers(_ waiting: [PluginInstaller.Installed], limit: Duration = .seconds(90)) async {
+        guard !waiting.isEmpty else { return }
+        let fetch = Task {
+            let (catalogs, _) = await PluginStore.load(storeSources)
+            let builder = builder
+            let publishers = installer.publishers
+            let toolchain = await Task.detached { PluginBuilder.hasToolchain }.value
+            _ = await PrebuiltHelpers.refresh(installed: waiting, catalogs: catalogs, publishers: publishers, builder: builder, toolchain: toolchain) { record in
+                await self.add(URL(fileURLWithPath: record.file))
+            }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await fetch.value }
+            group.addTask { try? await Task.sleep(for: limit) }
+            await group.next()
+            group.cancelAll()
+        }
+        // `add` skips any already loaded.
+        for record in waiting { add(URL(fileURLWithPath: record.file)) }
+    }
+
+    private static func normalized(_ url: URL) -> URL {
+        url.resolvingSymlinksInPath().standardizedFileURL
     }
 
     func stop() async {
