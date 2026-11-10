@@ -912,7 +912,7 @@ struct PaletteTile: View {
     }
 }
 
-/// The selected row's full text or image, beside a list.
+/// The selected row's view, full text or image, beside a list.
 struct PalettePreview: View {
     let preview: RowPreview
     @Environment(\.stackbarImageData) private var imageData
@@ -927,7 +927,9 @@ struct PalettePreview: View {
                     .frame(maxWidth: .infinity, maxHeight: 220)
                     .clipShape(.rect(cornerRadius: 8))
             }
-            if let text = preview.text, !text.isEmpty {
+            if let view = preview.shownView {
+                ScrollView { PreviewNodeView(node: view) }
+            } else if let text = preview.text, !text.isEmpty {
                 ScrollView {
                     Text(text)
                         .font(.system(.callout, design: .monospaced))

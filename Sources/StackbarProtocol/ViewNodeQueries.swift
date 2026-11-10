@@ -25,6 +25,15 @@ extension ViewNode {
         }
     }
 
+    /// How many nodes the tree has, this one included. A row counts as one
+    /// node plus its accessories and its preview's view.
+    public var nodeCount: Int {
+        if case .row(let row) = self {
+            return 1 + row.accessories.reduce(0) { $0 + $1.nodeCount } + (row.preview?.view?.nodeCount ?? 0)
+        }
+        return 1 + children.reduce(0) { $0 + $1.nodeCount }
+    }
+
     /// The tree as a widget draws it: lists keep their first `maxRows`
     /// children and lose their search field. Controls stay; the widget
     /// draws them disabled.

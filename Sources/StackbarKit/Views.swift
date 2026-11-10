@@ -148,6 +148,7 @@ public struct Row: StackbarView {
     var accessories: [ViewNode] = []
     var actions: [(title: String, shortcut: String?, role: Role, handler: RenderContext.Handler?, navigate: CommandTarget?, confirm: String?)] = []
     var preview: RowPreview?
+    var previewView: ViewContent?
     var hiddenFromPalette: Bool?
 
     /// `key` defaults to the title; give one explicitly when titles can repeat
@@ -206,6 +207,20 @@ public struct Row: StackbarView {
         return copy
     }
 
+    /// A view in the preview pane while this row is selected (protocol 29):
+    /// a check list, a release chain, a color swatch. Start from
+    /// `PreviewDetail`. The host draws it display-only, so it shows things
+    /// and the row's actions and ⌘K do things: controls in it are drawn
+    /// disabled. Keep it under `RowPreview.maxViewNodes` (150) nodes, since
+    /// every row sends its preview with each render; a larger one is dropped
+    /// with a warning. `text` is still what search matches and what hosts
+    /// older than 0.38 show, so give it the same facts in words.
+    public func preview(text: String?, caption: String? = nil, @ViewBuilder view: () -> ViewContent) -> Row {
+        var copy = preview(text: text, caption: caption)
+        copy.previewView = view()
+        return copy
+    }
+
     /// Adds an action. The first one is what a click on the row does.
     ///
     /// `confirm` makes the host ask for a second press first, and says what
@@ -233,7 +248,21 @@ public struct Row: StackbarView {
             let id = action.handler.map { context.register(base, confirm: action.confirm, $0) } ?? ActionID(context.prefix + base)
             return ActionRef(id: id, title: action.title, shortcut: action.shortcut, role: action.role, navigate: action.navigate, confirm: action.confirm)
         }
-        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, fileIcon: fileIcon, accessories: accessories, actions: refs, preview: preview, hiddenFromPalette: hiddenFromPalette))]
+        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, fileIcon: fileIcon, accessories: accessories, actions: refs, preview: resolvedPreview(in: context), hiddenFromPalette: hiddenFromPalette))]
+    }
+
+    /// The preview with its view resolved, on hosts that draw one and while
+    /// it fits the budget.
+    private func resolvedPreview(in context: RenderContext) -> RowPreview? {
+        guard var preview, let previewView, (Stackbar.hostProtocol ?? StackbarProtocolVersion.current) >= RowPreview.firstViewProtocol else { return preview }
+        let nodes = previewView.resolve(in: context)
+        let node: ViewNode? = nodes.count > 1 ? .stack(axis: .vertical, spacing: 8, children: nodes) : nodes.first
+        if let node, node.nodeCount > RowPreview.maxViewNodes {
+            context.warnOnce("row \(key)'s preview view has \(node.nodeCount) nodes, over the \(RowPreview.maxViewNodes) a preview may have, so its text shows instead")
+            return preview
+        }
+        preview.view = node
+        return preview
     }
 }
 
