@@ -41,7 +41,7 @@ public enum CommandIndexing {
         let spec = entry.spec
         let summary = [entry.pluginName, spec.subtitle].compactMap { $0 }.joined(separator: " · ")
         var keywords = spec.keywords + [entry.pluginName]
-        if let alias = preferences[entry.key].alias { keywords.append(alias) }
+        if let alias = preferences[entry.key].effectiveAlias(default: spec.defaultAlias) { keywords.append(alias) }
         let score = usage?.score(entry.key.description) ?? 0
         let priority = score > 0 ? min(10, Int((log2(1 + score) * 2).rounded())) : 0
         return CommandIndexItem(

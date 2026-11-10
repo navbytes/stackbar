@@ -23,11 +23,6 @@ final class AppLinkTests: XCTestCase {
         var index = PaletteIndex()
         XCTAssertTrue(index.search("settings").isEmpty, "only the app lists its own places")
         index.includesAppEntries = true
-        let panel = ViewNode.stack(axis: .vertical, children: [
-            .button(title: "Settings", action: "button/Settings"),
-            .button(title: "Copy Path: Settings", action: "button/Copy Path"),
-        ])
-        index.update(pluginID: "files", pluginName: "File Search", panel: panel)
         let found = index.search("settings")
         XCTAssertEqual(found.first?.title, "Stackbar Settings")
         XCTAssertEqual(index.search("store").first?.title, "Plugin Store")
@@ -38,9 +33,9 @@ final class AppLinkTests: XCTestCase {
         let sections = PaletteSection.group(found, query: "settings", plugins: [files]) { _ in false }
         XCTAssertEqual(sections.map(\.title), ["Results", "Files"])
         XCTAssertEqual(sections.first?.entries.first?.title, "Stackbar Settings")
-        // A part typed: the shortest name that starts with it leads, from any source.
+        // A part typed: a file whose name starts with it may lead, and
+        // Stackbar's Settings is still listed.
         let partial = PaletteSection.group(index.search("sett"), query: "sett", plugins: [files]) { _ in false }
-        XCTAssertEqual(partial.map(\.title), ["Results", "Files"])
-        XCTAssertEqual(partial.first?.entries.first?.title, "Settings")
+        XCTAssertTrue(partial.flatMap(\.entries).contains { $0.title == "Stackbar Settings" })
     }
 }

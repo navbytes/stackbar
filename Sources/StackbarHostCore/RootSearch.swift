@@ -9,11 +9,33 @@ import StackbarProtocol
 /// keeps other text from it; the user can turn a command's root search off;
 /// and one that is slow several times in a row is left out for a while.
 public enum RootSearchGate {
-    /// Whether `text` should go to `spec`'s root search: it is a root-search
-    /// view the user hasn't turned off, and the text matches its pattern.
-    public static func accepts(_ spec: CommandSpec, text: String, preference: CommandPreference = .default) -> Bool {
-        guard spec.rootSearch, spec.kind == .view, preference.enabled, preference.inRootSearch else { return false }
-        return matches(spec, text: text)
+    /// Whether `text` should go to `entry`'s root search: it is a
+    /// root-search view, on for the main search, and the text matches its
+    /// pattern.
+    public static func accepts(_ entry: CommandRegistry.Entry, text: String, preference: CommandPreference = .default) -> Bool {
+        searches(entry.spec, preference: preference) && isOn(entry, preference: preference) && matches(entry.spec, text: text)
+    }
+
+    /// Whether the command can search from the palette at all: a
+    /// root-search view the user hasn't turned off. An alias typed before
+    /// the text (`gs stackbar`) reaches it even when it is off for the main
+    /// search, and whatever its pattern.
+    public static func searches(_ spec: CommandSpec, preference: CommandPreference = .default) -> Bool {
+        spec.rootSearch && spec.kind == .view && preference.enabled
+    }
+
+    /// Whether a root-search command answers in the main search: the
+    /// user's choice, else `defaultOn`.
+    public static func isOn(_ entry: CommandRegistry.Entry, preference: CommandPreference = .default) -> Bool {
+        preference.inRootSearch ?? defaultOn(entry)
+    }
+
+    /// On by default: the core plugins (apps, sums, files), and commands
+    /// with a root pattern, which only ever see text of their own shape.
+    /// A plugin answering any text is off until the user turns it on: a
+    /// plugin asks for the main search, the user decides.
+    public static func defaultOn(_ entry: CommandRegistry.Entry) -> Bool {
+        entry.spec.rootPattern != nil || BundledStore.corePluginIDs.contains(entry.pluginID)
     }
 
     /// Whether the whole of `text` matches the command's root pattern;
@@ -25,9 +47,10 @@ public enum RootSearchGate {
         return regex.firstMatch(in: text, options: [.anchored], range: range) != nil
     }
 
-    /// Whether `spec` is offered as a fallback for typed text.
+    /// Whether `spec` can be a fallback: one the user hasn't disabled.
+    /// Which are offered, and in what order, is `PaletteFallbacks`.
     public static func offersFallback(_ spec: CommandSpec, preference: CommandPreference = .default) -> Bool {
-        spec.fallback && preference.enabled && preference.inRootSearch
+        spec.fallback && preference.enabled
     }
 
     private static let cache = RegexCache()
@@ -111,5 +134,28 @@ public final class RootSearchBudget: @unchecked Sendable {
     /// Forgets a plugin's records, when it restarts or is updated.
     public func forget(pluginID: String) {
         lock.withLock { records = records.filter { $0.key.pluginID != pluginID } }
+    }
+}
+
+/// The fallback commands the palette offers under what was typed: the
+/// user's list in Settings, in its order, or `defaults` until they choose.
+public enum PaletteFallbacks {
+    /// Search Google and Ask AI, as Raycast starts with a web search.
+    public static let defaults: [CommandKey] = [
+        CommandKey(pluginID: "io.navbytes.stackbar.quicklinks", commandID: "web-search"),
+        CommandKey(pluginID: "io.navbytes.stackbar.plugins.ask-ai", commandID: "ask"),
+    ]
+
+    /// Offered only while fewer rows than this match what was typed.
+    public static let threshold = 3
+
+    /// The fallbacks to offer, in order, among `available` (the enabled
+    /// `.fallback()` commands). `chosen` is the user's list; unset, it is
+    /// `defaults` less any the user had turned off before lists existed.
+    public static func offered(_ available: [CommandRegistry.Entry], chosen: [CommandKey]?,
+                               preference: (CommandKey) -> CommandPreference) -> [CommandRegistry.Entry] {
+        let byKey = Dictionary(available.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        let list = chosen ?? defaults.filter { preference($0).inRootSearch != false }
+        return list.compactMap { byKey[$0] }
     }
 }

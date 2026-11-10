@@ -2,9 +2,9 @@ import Foundation
 import StackbarProtocol
 
 /// The palette's root list in titled groups, as Raycast draws it: before
-/// anything is typed, your favourites, what you used lately, then commands,
-/// then the actions plugins show on their panels; once you type, one ranked
-/// list, then matching plugins from the Store that aren't installed.
+/// anything is typed, your favourites, what you used lately, then commands;
+/// once you type, one ranked list, then fallbacks while little matches and
+/// Store plugins that aren't installed when nothing does.
 public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// What a section holds. Code tells sections apart by this, never by
     /// their titles, which are for people.
@@ -57,7 +57,7 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
     /// Groups `results` (already in search order) without reordering within
     /// a group. `favorites` lead an empty query, in their own order, and are
     /// not repeated below; `frequent` (apps used often) follow them; `store`
-    /// follows a typed one. Empty groups are left
+    /// follows a typed one when nothing else matched. Empty groups are left
     /// out.
     ///
     /// A typed query also gets the plugins' root-search sections, ranked
@@ -74,11 +74,15 @@ public struct PaletteSection: Equatable, Sendable, Identifiable {
         let typed = query.trimmingCharacters(in: .whitespaces)
         guard typed.isEmpty else {
             let ranker = ranker ?? PaletteRanker(query: typed)
-            // A fallback the search found already shows in Results.
+            // Fallbacks only while little matches, as Raycast offers them
+            // when the search comes up short; the Store only when nothing
+            // installed matches. A fallback the search found already shows
+            // in Results.
+            let matched = results.count + plugins.reduce(0) { $0 + $1.entries.count }
             let shown = Set(results.map(\.id))
-            let rest = fallbacks.filter { !shown.contains($0.id) }
+            let rest = matched < PaletteFallbacks.threshold ? fallbacks.filter { !shown.contains($0.id) } : []
             let top = rank(plugins, results: results, ranker: ranker, resultScore: resultScore)
-            return (top + [PaletteSection(.store, entries: store), PaletteSection(title: fallbackTitle(typed), kind: .fallback, entries: rest)])
+            return (top + [PaletteSection(.store, entries: matched == 0 ? store : []), PaletteSection(title: fallbackTitle(typed), kind: .fallback, entries: rest)])
                 .filter { !$0.entries.isEmpty }
         }
         let pinned = Set(favorites.map(\.id))

@@ -4,7 +4,8 @@ import StackbarProtocol
 /// What the user set for one command. These belong to the user, not the
 /// plugin, so they live with the host and survive plugin updates.
 public struct CommandPreference: Codable, Equatable, Sendable {
-    /// A word typed in the palette that jumps straight to the command.
+    /// A word typed in the palette that jumps straight to the command: nil
+    /// for the command's own default alias, "" for none.
     public var alias: String?
     /// A system-wide shortcut, spelled like a manifest hotkey.
     public var hotkey: String?
@@ -12,11 +13,11 @@ public struct CommandPreference: Codable, Equatable, Sendable {
     public var showInSpotlight: Bool
     /// Whether `stackbar://` links may run it without asking.
     public var linksAllowed: Bool
-    /// Whether a root-search command answers what is typed at the palette's
-    /// root, and a fallback command is offered under it.
-    public var inRootSearch: Bool
+    /// Whether a root-search command answers what is typed in the
+    /// palette's main search; nil for its default (`RootSearchGate.defaultOn`).
+    public var inRootSearch: Bool?
 
-    public init(alias: String? = nil, hotkey: String? = nil, enabled: Bool = true, showInSpotlight: Bool = true, linksAllowed: Bool = false, inRootSearch: Bool = true) {
+    public init(alias: String? = nil, hotkey: String? = nil, enabled: Bool = true, showInSpotlight: Bool = true, linksAllowed: Bool = false, inRootSearch: Bool? = nil) {
         self.alias = alias
         self.hotkey = hotkey
         self.enabled = enabled
@@ -25,7 +26,15 @@ public struct CommandPreference: Codable, Equatable, Sendable {
         self.inRootSearch = inRootSearch
     }
 
-    // Written by hand so preferences saved before `inRootSearch` still load.
+    private enum CodingKeys: String, CodingKey {
+        case alias, hotkey, enabled, showInSpotlight, linksAllowed, mainSearch
+        /// Before palette-root-commands: true (the default then) or false.
+        case inRootSearch
+    }
+
+    // Written by hand so preferences saved before `inRootSearch`, or with
+    // the old always-saved switch, still load: an old `true` was only ever
+    // the default then, so it loads as unset; an old `false` was a choice.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         alias = try container.decodeIfPresent(String.self, forKey: .alias)
@@ -33,17 +42,45 @@ public struct CommandPreference: Codable, Equatable, Sendable {
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         showInSpotlight = try container.decodeIfPresent(Bool.self, forKey: .showInSpotlight) ?? true
         linksAllowed = try container.decodeIfPresent(Bool.self, forKey: .linksAllowed) ?? false
-        inRootSearch = try container.decodeIfPresent(Bool.self, forKey: .inRootSearch) ?? true
+        if container.contains(.mainSearch) {
+            inRootSearch = try container.decodeIfPresent(Bool.self, forKey: .mainSearch)
+        } else {
+            inRootSearch = try container.decodeIfPresent(Bool.self, forKey: .inRootSearch) == false ? false : nil
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(alias, forKey: .alias)
+        try container.encodeIfPresent(hotkey, forKey: .hotkey)
+        try container.encode(enabled, forKey: .enabled)
+        try container.encode(showInSpotlight, forKey: .showInSpotlight)
+        try container.encode(linksAllowed, forKey: .linksAllowed)
+        try container.encodeIfPresent(inRootSearch, forKey: .mainSearch)
+    }
+
+    /// The alias in use: the user's, else the command's default; nil for
+    /// none.
+    public func effectiveAlias(default suggested: String?) -> String? {
+        switch alias {
+        case .none: return suggested
+        case .some(""): return nil
+        case .some(let alias): return alias
+        }
     }
 
     public static let `default` = CommandPreference()
 
-    /// Aliases are one word: lowercase letters, digits, `-`, `_` and `.`.
+    /// Aliases are one word: lowercase letters, digits, or symbols such
+    /// as `#` (`# 123` for pull requests).
     public static func normalizedAlias(_ text: String) -> String? {
         let alias = text.trimmingCharacters(in: .whitespaces).lowercased()
-        guard (1...24).contains(alias.count), alias.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || "-_.".unicodeScalars.contains($0) }) else { return nil }
+        guard (1...24).contains(alias.count), alias.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || aliasSymbols.unicodeScalars.contains($0) }) else { return nil }
         return alias
     }
+
+    /// The symbols an alias may use besides letters and digits.
+    public static let aliasSymbols = "-_.#@/>!:?$%&*+=~"
 }
 
 /// Command preferences and palette usage, saved in the data directory.
@@ -51,6 +88,9 @@ public final class CommandPreferences: @unchecked Sendable {
     private struct Saved: Codable {
         var commands: [CommandKey: CommandPreference] = [:]
         var spotlightEnabled = true
+        /// The fallback commands the palette offers, in order; nil for
+        /// `PaletteFallbacks.defaults`.
+        var fallbacks: [CommandKey]?
     }
 
     private let file: URL?
@@ -78,6 +118,16 @@ public final class CommandPreferences: @unchecked Sendable {
         }
     }
 
+    /// The fallback commands the user chose, in order; nil until they
+    /// choose (`PaletteFallbacks.defaults` then).
+    public var fallbacks: [CommandKey]? {
+        get { lock.withLock { saved.fallbacks } }
+        set {
+            lock.withLock { saved.fallbacks = newValue }
+            save()
+        }
+    }
+
     public var all: [CommandKey: CommandPreference] {
         lock.withLock { saved.commands }
     }
@@ -90,7 +140,7 @@ public final class CommandPreferences: @unchecked Sendable {
 
         public var description: String {
             switch self {
-            case .badAlias(let alias): return "\"\(alias)\" can't be an alias; use one word of letters, digits, - or _"
+            case .badAlias(let alias): return "\"\(alias)\" can't be an alias; use one word of letters, digits or symbols like # or -"
             case .aliasTaken(let alias, let key): return "\"\(alias)\" is already the alias of \(key)"
             case .badHotkey(let hotkey): return "\(hotkey) needs cmd, ctrl or option plus one letter, digit, space or f1...f12"
             case .hotkeyTaken(let hotkey, let owner): return "\(hotkey) is already used by \(owner)"
@@ -101,16 +151,24 @@ public final class CommandPreferences: @unchecked Sendable {
     /// Sets one command's preference after checking the alias and hotkey.
     /// `otherHotkeys` are shortcuts used elsewhere (plugin hotkeys, the
     /// palette's own), by who uses them.
-    public func set(_ preference: CommandPreference, for key: CommandKey, otherHotkeys: [String: String] = [:]) throws {
+    ///
+    /// An alias of nil keeps the command's default alias and "" has none.
+    /// `otherAliases` are the default aliases other commands use now, by
+    /// alias: a new alias may not take one.
+    public func set(_ preference: CommandPreference, for key: CommandKey, otherHotkeys: [String: String] = [:],
+                    otherAliases: [String: CommandKey] = [:]) throws {
         var preference = preference
-        if let alias = preference.alias, !alias.isEmpty {
+        if let alias = preference.alias, !alias.trimmingCharacters(in: .whitespaces).isEmpty {
             guard let normalized = CommandPreference.normalizedAlias(alias) else { throw Problem.badAlias(alias) }
             if let owner = lock.withLock({ saved.commands.first(where: { $0.key != key && $0.value.alias == normalized })?.key }) {
                 throw Problem.aliasTaken(normalized, by: owner)
             }
+            if let owner = otherAliases[normalized], owner != key {
+                throw Problem.aliasTaken(normalized, by: owner)
+            }
             preference.alias = normalized
-        } else {
-            preference.alias = nil
+        } else if preference.alias != nil {
+            preference.alias = ""
         }
         if let hotkey = preference.hotkey, !hotkey.isEmpty {
             guard let spec = HotKeySpec(hotkey) else { throw Problem.badHotkey(hotkey) }

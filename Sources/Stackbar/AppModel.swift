@@ -436,8 +436,8 @@ final class AppModel {
         palette.setCommands(commands.registry.entries, preferences: commands.preferences.all)
     }
 
-    func headlessPanelsChanged(_ controllers: [PluginController]) {
-        palette.setHeadlessPanels(controllers.map { (pluginID: $0.pluginID, name: $0.name) })
+    func panelsChanged(_ controllers: [PluginController]) {
+        palette.setPanels(controllers.map { (pluginID: $0.pluginID, name: $0.name) })
     }
 
     /// Opens a command of a plugin in the palette (a row's navigate action,

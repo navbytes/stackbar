@@ -159,10 +159,10 @@ final class PaletteCommandTests: XCTestCase {
     func testUsageLiftsWhatWasUsed() throws {
         let index = index()
         let usage = PaletteUsage(file: nil)
-        let clock = try XCTUnwrap(index.search("refresh").first { $0.pluginID == "clock" })
+        let clock = try XCTUnwrap(index.searchPanels("refresh").first { $0.pluginID == "clock" })
         for _ in 0..<20 { usage.record(clock.id) }
-        XCTAssertEqual(index.search("refresh", usage: usage).first?.id, clock.id)
-        XCTAssertEqual(index.search("", usage: usage).first?.id, clock.id)
+        XCTAssertEqual(index.searchPanels("refresh", usage: usage).first?.id, clock.id)
+        XCTAssertEqual(index.searchPanels("", usage: usage).first?.id, clock.id)
     }
 
     func testRowNavigateActionsBecomeEntries() {

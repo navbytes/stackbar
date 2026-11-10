@@ -39,10 +39,10 @@ final class PaletteSectionsTests: XCTestCase {
         XCTAssertEqual(sections.map { $0.entries.map(\.title) }, [["a1"], ["c1", "c2"]])
     }
 
-    func testStoreSuggestionsFollowATypedQuery() {
+    func testStoreSuggestionsShowOnlyWhenNothingInstalledMatches() {
         let store = [PaletteIndex.Entry(pluginID: "s", pluginName: "Store", title: "Docker", kind: .open("stackbar://store/s"))]
         let sections = PaletteSection.group([command("c1")], query: "do", store: store) { _ in false }
-        XCTAssertEqual(sections.map(\.title), ["Results", "From the Store"])
+        XCTAssertEqual(sections.map(\.title), ["Results"])
         XCTAssertEqual(PaletteSection.group([], query: "do", store: store) { _ in false }.map(\.title), ["From the Store"])
         XCTAssertEqual(PaletteSection.group([], query: "", store: store) { _ in false }, [], "no store rows before typing")
     }
@@ -146,13 +146,20 @@ final class PaletteSectionsTests: XCTestCase {
 
     func testPluginRowsFollowResultsAndFallbacksComeLast() {
         let clipboard = PaletteSection(title: "Clipboard History", entries: [action("clip")])
-        let store = [PaletteIndex.Entry(pluginID: "s", pluginName: "Store", title: "Hello", kind: .open("stackbar://store/s"))]
-        let sections = PaletteSection.group([command("c1"), command("web")], query: "hello", store: store,
+        let sections = PaletteSection.group([command("web")], query: "hello",
                                             plugins: [clipboard], fallbacks: [command("web"), command("ddg")]) { _ in false }
-        XCTAssertEqual(sections.map(\.title), ["Results", "Clipboard History", "From the Store", PaletteSection.fallbackTitle("hello")])
+        XCTAssertEqual(sections.map(\.title), ["Results", "Clipboard History", PaletteSection.fallbackTitle("hello")])
         // A fallback the search found stays in Results only.
         XCTAssertEqual(sections.last?.entries.map(\.title), ["ddg"])
         XCTAssertEqual(PaletteSection.fallbackTitle("hello"), "Use \u{201C}hello\u{201D} with")
+    }
+
+    func testFallbacksWaitUntilLittleMatches() {
+        let clipboard = PaletteSection(title: "Clipboard History", entries: [action("clip")])
+        let plenty = PaletteSection.group([command("c1"), command("c2")], query: "hello", plugins: [clipboard], fallbacks: [command("ddg")]) { _ in false }
+        XCTAssertEqual(plenty.map(\.title), ["Results", "Clipboard History"], "three rows match: no fallbacks")
+        let few = PaletteSection.group([command("c1")], query: "hello", plugins: [clipboard], fallbacks: [command("ddg")]) { _ in false }
+        XCTAssertEqual(few.last?.entries.map(\.title), ["ddg"])
     }
 
     func testFallbacksAndPluginRowsWaitForAQuery() {

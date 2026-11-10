@@ -9,33 +9,38 @@ final class SurfaceFitTests: XCTestCase {
         CommandSpec(id: id, title: id, kind: .view, rootSearch: true, fallback: fallback, rootPattern: pattern)
     }
 
+    private func entry(_ spec: CommandSpec, plugin: String = "p") -> CommandRegistry.Entry {
+        CommandRegistry.Entry(pluginID: plugin, pluginName: plugin, spec: spec)
+    }
+
     func testRootPatternMustMatchTheWholeText() {
-        let issue = view("issue", pattern: #"[A-Za-z][A-Za-z0-9]*-\d+"#)
+        let issue = entry(view("issue", pattern: #"[A-Za-z][A-Za-z0-9]*-\d+"#))
         XCTAssertTrue(RootSearchGate.accepts(issue, text: "ABC-123"))
         XCTAssertTrue(RootSearchGate.accepts(issue, text: "abc-1"))
         XCTAssertFalse(RootSearchGate.accepts(issue, text: "ABC-123 fix"), "the whole text, not a part")
         XCTAssertFalse(RootSearchGate.accepts(issue, text: "safari"))
-        XCTAssertTrue(RootSearchGate.accepts(view("apps"), text: "anything"), "no pattern takes any text")
-        XCTAssertFalse(RootSearchGate.accepts(view("bad", pattern: "(["), text: "x"), "a broken pattern takes nothing")
+        XCTAssertTrue(RootSearchGate.accepts(entry(view("apps")), text: "anything", preference: CommandPreference(inRootSearch: true)), "no pattern takes any text")
+        XCTAssertFalse(RootSearchGate.accepts(entry(view("bad", pattern: "([")), text: "x"), "a broken pattern takes nothing")
     }
 
     func testTheUserCanTurnRootSearchAndFallbacksOff() {
-        let apps = view("apps")
+        let apps = entry(view("apps"), plugin: "io.navbytes.stackbar.plugins.applications")
+        XCTAssertTrue(RootSearchGate.accepts(apps, text: "saf"))
         XCTAssertFalse(RootSearchGate.accepts(apps, text: "saf", preference: CommandPreference(inRootSearch: false)))
         XCTAssertFalse(RootSearchGate.accepts(apps, text: "saf", preference: CommandPreference(enabled: false)))
         var run = CommandSpec(id: "add", title: "Add", fallback: true)
         XCTAssertTrue(RootSearchGate.offersFallback(run))
-        XCTAssertFalse(RootSearchGate.offersFallback(run, preference: CommandPreference(inRootSearch: false)))
+        XCTAssertFalse(RootSearchGate.offersFallback(run, preference: CommandPreference(enabled: false)))
         run.fallback = false
         XCTAssertFalse(RootSearchGate.offersFallback(run))
-        XCTAssertFalse(RootSearchGate.accepts(CommandSpec(id: "r", title: "R", rootSearch: true), text: "x"), "only views search")
+        XCTAssertFalse(RootSearchGate.accepts(entry(CommandSpec(id: "r", title: "R", rootSearch: true)), text: "x", preference: CommandPreference(inRootSearch: true)), "only views search")
     }
 
     func testPreferencesSavedBeforeRootSearchStillLoad() throws {
         let old = #"{"enabled":false,"showInSpotlight":true,"linksAllowed":false,"alias":"gh"}"#
         let decoded = try JSONDecoder().decode(CommandPreference.self, from: Data(old.utf8))
         XCTAssertEqual(decoded, CommandPreference(alias: "gh", enabled: false))
-        XCTAssertTrue(decoded.inRootSearch)
+        XCTAssertNil(decoded.inRootSearch)
     }
 
     func testRootPatternsAreValidatedAndOptional() throws {

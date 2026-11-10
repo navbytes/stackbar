@@ -47,9 +47,14 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
     /// How long a run command may take, in seconds, when that is more than
     /// the host's 30 (a script, a build). At most `maxTimeout`. 0.36.0.
     public var timeout: Double?
+    /// The alias the command suggests (`gs`), which the user can change or
+    /// clear. An alias, a space and text sends the text to a root-search
+    /// command even when it is off for the main search. Protocol 27.
+    public var defaultAlias: String?
 
     public init(id: String, title: String, subtitle: String? = nil, symbol: String? = nil, keywords: [String] = [], kind: Kind = .run, arguments: [ArgumentSpec] = [], exposure: Exposure = .everywhere,
-                rootSearch: Bool = false, rootSection: String? = nil, fallback: Bool = false, rootPattern: String? = nil, timeout: Double? = nil) {
+                rootSearch: Bool = false, rootSection: String? = nil, fallback: Bool = false, rootPattern: String? = nil, timeout: Double? = nil,
+                defaultAlias: String? = nil) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -63,6 +68,7 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         self.fallback = fallback
         self.rootPattern = rootPattern
         self.timeout = timeout
+        self.defaultAlias = defaultAlias
     }
 
     // Written by hand so specs from plugins built before protocol 16, which
@@ -82,6 +88,7 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         fallback = try container.decodeIfPresent(Bool.self, forKey: .fallback) ?? false
         rootPattern = try container.decodeIfPresent(String.self, forKey: .rootPattern)
         timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
+        defaultAlias = try container.decodeIfPresent(String.self, forKey: .defaultAlias)
     }
 
     /// At most this many arguments, so their fields fit on one line.
@@ -99,6 +106,12 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
     /// At most this many commands per plugin.
     public static let maxCommands = 200
 
+    /// A default alias: 1 to 24 lowercase letters, digits, `-` or `_`.
+    /// Symbols (`#`) are left for the user to choose.
+    public static func isValidAlias(_ alias: String) -> Bool {
+        (1...24).contains(alias.count) && alias.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "-" || $0 == "_" }
+    }
+
     public static func isValidID(_ id: String) -> Bool {
         (1...64).contains(id.utf8.count) && id.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "-" }
     }
@@ -113,6 +126,9 @@ public struct CommandSpec: Codable, Equatable, Sendable, Identifiable {
         if let rootPattern {
             if !rootSearch { result.append("command \(id): a root pattern needs .rootSearch()") }
             if (try? NSRegularExpression(pattern: rootPattern)) == nil { result.append("command \(id): the root pattern \"\(rootPattern)\" is not a valid regular expression") }
+        }
+        if let defaultAlias, !Self.isValidAlias(defaultAlias) {
+            result.append("command \(id): the alias \"\(defaultAlias)\" must be one lowercase word of letters, digits, - or _")
         }
         if arguments.count > Self.maxArguments { result.append("command \(id) has \(arguments.count) arguments; at most \(Self.maxArguments)") }
         var names = Set<String>()
