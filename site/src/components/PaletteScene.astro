@@ -9,7 +9,9 @@ interface Props { label: string; }
 const { label } = Astro.props;
 
 type Row = { glyph: string; hue: string; title: string; detail?: string; kind: string; big?: boolean };
-type State = { query: string; sections: { title: string; rows: Row[] }[]; action: string };
+// `scope`: a plugin chip in the field (its name, then Tab). `preview`: the
+// pane beside the list, as a check list.
+type State = { query: string; scope?: string; sections: { title: string; rows: Row[] }[]; action: string; preview?: { title: string; items: { done: boolean; text: string }[] } };
 const states: State[] = [
   {
     query: 'term',
@@ -47,6 +49,22 @@ const states: State[] = [
       ] },
     ],
   },
+  {
+    query: 'launch',
+    scope: 'Notes',
+    action: 'Open Note',
+    sections: [
+      { title: 'Notes', rows: [
+        { glyph: 'book', hue: 'amber', title: 'Launch checklist', detail: 'Edited today', kind: 'Note' },
+        { glyph: 'book', hue: 'amber', title: 'Launch post draft', detail: 'Yesterday', kind: 'Note' },
+      ] },
+    ],
+    preview: { title: 'Launch checklist', items: [
+      { done: true, text: 'Notarize the build' },
+      { done: true, text: 'Update the appcast' },
+      { done: false, text: 'Post on the site' },
+    ] },
+  },
 ];
 ---
 <figure class="scene" role="img" aria-label={label} data-palette-scene>
@@ -54,10 +72,12 @@ const states: State[] = [
   <div class="panel" aria-hidden="true">
     <div class="field">
       <Glyph name="palette" />
+      <span class="scope" data-scope hidden={!states[0].scope}>{states[0].scope}</span>
       <span class="typed" data-typed>{states[0].query}</span><span class="caret"></span>
     </div>
     {states.map((state, i) => (
-      <div class="results" data-state={i} data-query={state.query} data-action={state.action} hidden={i !== 0}>
+      <div class:list={['results', { split: state.preview }]} data-state={i} data-query={state.query} data-scope={state.scope ?? ''} data-action={state.action} hidden={i !== 0}>
+        <div class="list">
         {state.sections.map((section) => (
           <section>
             <h3>{section.title}</h3>
@@ -70,6 +90,13 @@ const states: State[] = [
             ))}
           </section>
         ))}
+        </div>
+        {state.preview && (
+          <aside class="preview">
+            <b>{state.preview.title}</b>
+            <ul>{state.preview.items.map((item) => <li class:list={{ done: item.done }}><span class="box">{item.done ? '✓' : ''}</span>{item.text}</li>)}</ul>
+          </aside>
+        )}
       </div>
     ))}
     <div class="bar">
@@ -88,6 +115,7 @@ const states: State[] = [
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const typed = scene.querySelector<HTMLElement>('[data-typed]')!;
     const action = scene.querySelector<HTMLElement>('[data-action-label]')!;
+    const scope = scene.querySelector<HTMLElement>('[data-scope]')!;
     const states = [...scene.querySelectorAll<HTMLElement>('[data-state]')];
     let index = 0;
     let timer = 0;
@@ -100,6 +128,17 @@ const states: State[] = [
         const query = next.dataset.query!;
         // Clear, then type: results appear with the first letter, as the palette does.
         for (let n = typed.textContent!.length; n > 0; n--) { typed.textContent = typed.textContent!.slice(0, -1); await wait(28); }
+        scope.hidden = true;
+        // A scoped state: type the plugin's name, then Tab turns it into a chip.
+        const name = next.dataset.scope!;
+        if (name) {
+          for (let n = 1; n <= name.length; n++) { typed.textContent = name.slice(0, n); await wait(70 + Math.random() * 60); }
+          await wait(380);
+          typed.textContent = '';
+          scope.textContent = name;
+          scope.hidden = false;
+          await wait(320);
+        }
         for (let n = 1; n <= query.length; n++) {
           typed.textContent = query.slice(0, n);
           if (n === 1) { states.forEach((s) => (s.hidden = s !== next)); action.textContent = next.dataset.action!; }
@@ -135,6 +174,16 @@ const states: State[] = [
 
   .results { padding: 8px; min-height: 236px; }
   .results[hidden] { display: none; }
+  .results.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr); gap: 8px; }
+  .scope { padding: 4px 10px; border-radius: 8px; font-size: 0.75em; font-weight: 600; background: color-mix(in srgb, var(--kit-amber) 30%, transparent); }
+  .scope[hidden] { display: none; }
+  .preview { display: grid; align-content: start; gap: 12px; padding: 14px 16px; border-left: 1px solid #FFFFFF14; font-size: 14px; }
+  .preview b { font: 600 16px/1.2 var(--font-display); }
+  .preview ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+  .preview li { display: flex; align-items: center; gap: 9px; }
+  .preview li.done { color: var(--stage-ink-2); text-decoration: line-through; }
+  .box { display: grid; place-items: center; width: 16px; height: 16px; flex: none; border-radius: 5px; border: 1.5px solid var(--stage-ink-2); font-size: 11px; }
+  .done .box { background: var(--kit-green); border-color: var(--kit-green); color: #fff; }
   section + section { margin-top: 4px; }
   h3 { margin: 0; padding: 8px 12px 6px; font: 600 11px/1 var(--font-text); letter-spacing: 0.02em; color: var(--stage-ink-2); }
   .row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 12px; border-radius: 11px; }
@@ -156,5 +205,7 @@ const states: State[] = [
   @media (max-width: 560px) {
     .text small, .kind, .bar .act:last-child { display: none; }
     .results { min-height: 200px; }
+    .results.split { grid-template-columns: 1fr; }
+    .preview { display: none; }
   }
 </style>

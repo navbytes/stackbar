@@ -1,6 +1,6 @@
 ---
 title: The palette
-description: Search apps, files, sums and every plugin's commands from one hotkey, and make it yours with aliases, hotkeys and favourites.
+description: Search apps, files, sums and every plugin's commands from one hotkey, search inside one plugin with Tab, and make it yours with aliases, hotkeys and favourites.
 group: Use Stackbar
 order: 2
 ---
@@ -8,9 +8,13 @@ order: 2
 Press your hotkey. Before you type, it shows Favorites, the apps you open
 most (Frequently Used), Recent and Commands.
 As you type, results come in sections: Applications, Files, Calculator and
-others that plugins add, then the matching commands, then plugins from the
-Store you haven't installed yet. Press Return to
-run the selected result, Esc to go back or close.
+others that plugins add, then the matching commands. Store plugins you haven't
+installed show only when nothing you have matches. Press Return to run the
+selected result, Esc to go back or close.
+
+Like Raycast, the main search lists commands, apps, files and sums, not the
+buttons and rows on your plugins' panels. Those stay on the panel, and every
+plugin with one has an **Open <Plugin>** row to get there.
 
 ## Keys
 
@@ -22,16 +26,34 @@ run the selected result, Esc to go back or close.
 | ⌘K | Every action for the selection, with its own search |
 | ⌘1 … ⌘9 | Run the first nine results |
 | ⌘⇧F | Add the selection to Favorites, or take it off. Apps and files can be favourites too |
-| Tab | With text typed, hands it to Ask AI when that plugin is installed, as Raycast's Quick AI does. Settings › Command Palette › Tab with text picks another fallback, such as Search Google, or none |
-| Esc | Close ⌘K, go back a step, then close |
+| Tab | On a plugin's row (the bar shows "Search <Plugin> ⇥"), searches inside that plugin. Otherwise, with text typed, hands it to Ask AI when that plugin is installed, as Raycast's Quick AI does. Settings › Command Palette › Tab with text picks another fallback, such as Search Google, or none |
+| Esc | Close ⌘K, leave a plugin's search, go back a step, then close |
 
 If you close the palette and open it again within a minute, it comes back
 where you were. After that it starts fresh.
 
+## Search inside one plugin
+
+Type a plugin's name and press Tab, as in Spotlight. Its name becomes a chip
+in the field, and what you type next searches only that plugin, with all its
+results rather than the top few. Esc, or Delete in the empty field, takes you
+back to the main search.
+
+An alias does the same in one go: type the alias, a space and the text (`gs
+stackbar` for Git Sync), and only that plugin answers, even when it is off
+for the main search.
+
+## Previews
+
+When a result has more to show, a preview pane opens beside the list as you
+move through it: a copied image or text in Clipboard History, a note in Notes,
+a check list, the steps of a release, a color swatch. It is only to look at;
+Return and ⌘K still act on the row.
+
 ## Aliases and hotkeys
 
 Settings › Commands lists every command. Give one an alias (type `gh` for
-GitHub search, say) or a hotkey of its own that runs it without opening the
+GitHub search, say; a symbol such as `#` works too) or a hotkey of its own that runs it without opening the
 palette. You can also press ⌘K on a command and choose **Set Alias and Hotkey…**
 An alias is saved as soon as you click away; you don't have to press Return.
 
@@ -74,9 +96,15 @@ keeps to Stackbar itself can't be started from outside.
 - **Every installed plugin's commands.** Clipboard History, Snippets,
   Quicklinks, Windows, Emoji, System Commands and the rest add their
   own. Some take arguments, which the palette asks for after you pick them.
+- **Plugins you let answer as you type.** Settings › General › Main Search
+  lists every plugin that can add its own results, with a switch each.
+  Applications, Calculator and File Search are on, as are plugins that only
+  answer text of their own shape (`ABC-123` for Jira, `#123` for a pull
+  request). Others, like Git Sync and Recent Projects, start off.
 
-When nothing matches, fallback commands at the bottom offer to search the web
-with what you typed (Quicklinks adds these).
+When fewer than three results match, fallback commands at the bottom offer to
+use what you typed elsewhere: Search Google and Ask AI to start. Settings ›
+General › Fallbacks picks which ones show and in what order.
 
 ## Turning parts off
 

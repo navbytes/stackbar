@@ -16,7 +16,7 @@ const { category } = Astro.props;
 const plugins = (await getCollection('plugins')).filter((p) => p.data.category === category).sort(byName);
 const hue = hueOf({ category });
 ---
-<Base title={`${category} plugins for the Mac menu bar`} description={`${plugins.length} free ${category.toLowerCase()} plugins for Stackbar, the macOS menu-bar app host: ${plugins.slice(0, 3).map((p) => p.data.name).join(', ')}${plugins.length > 3 ? ' and more' : ''}.`} hue={hue} jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Plugins', '/plugins/'], [category, `/plugins/category/${categorySlug(category)}/`]]), itemList(Astro.site, plugins.map((p) => p.data))]}>
+<Base title={`${category} plugins for the Mac menu bar`} description={`${plugins.length} free ${category.toLowerCase()} plugins for Stackbar, the open source Mac launcher and menu bar: ${plugins.slice(0, 3).map((p) => p.data.name).join(', ')}${plugins.length > 3 ? ' and more' : ''}.`} hue={hue} jsonLd={[breadcrumbs(Astro.site, [['Stackbar', '/'], ['Plugins', '/plugins/'], [category, `/plugins/category/${categorySlug(category)}/`]]), itemList(Astro.site, plugins.map((p) => p.data))]}>
   <section class="section">
     <div class="wrap">
       <div class="section-head">

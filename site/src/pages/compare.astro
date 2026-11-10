@@ -1,4 +1,5 @@
 ---
+import { getCollection } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import Button from '../components/Button.astro';
 import Glyph from '../components/Glyph.astro';
@@ -7,6 +8,7 @@ import { breadcrumbs, faq as faqPage } from '../lib/seo';
 import { checked, products, rows, sources } from '../lib/compare';
 
 const description = 'Stackbar next to Raycast, Alfred and Spotlight: price, account, open source, extension language, menu bar, widgets, AI and plugin safety. With the gaps, too.';
+const plugins = await getCollection('plugins');
 const checkedOn = new Date(checked).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 const why = [
   { glyph: 'swift', title: 'One Swift file is a plugin', text: 'Type-checked by the compiler, drawn natively, tested headless with stackbarctl. No Node, no bundler, no project.' },
@@ -16,9 +18,9 @@ const why = [
 ];
 const gaps = [
   'Mac only, and only macOS 26 on Apple Silicon.',
-  'No AI of its own: the Ask AI plugin uses your own Anthropic, OpenAI or OpenRouter key, or a local model through Ollama, and your own agent can use every plugin through MCP.',
-  'A young store: about 25 plugins, against Raycast\'s thousands of extensions.',
-  'No team features or cloud sync. Settings move between Macs as one file.',
+  'No AI of its own: the Ask AI plugin uses your own Anthropic, OpenAI or OpenRouter key, your company\'s LiteLLM proxy, or a local model through Ollama, and your own agent can use every plugin through MCP.',
+  `A young store: ${plugins.length} plugins, against Raycast\'s thousands of extensions.`,
+  'No cloud sync or shared team workspace. Settings move between Macs as one file (or through a dotfiles repository with stackbarctl), and a team can run its own private store.',
 ];
 const faq = [
   { question: 'Can Stackbar replace Spotlight?', answer: 'Yes. Pick ⌘Space as the palette hotkey and turn off Spotlight\'s shortcut; Stackbar finds apps, System Settings panes, files and sums, and runs every plugin\'s commands.' },

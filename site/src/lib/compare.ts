@@ -1,6 +1,6 @@
 // The /compare/ table. Competitor facts come from their own pages (or, where
 // marked, a review), checked on `checked`. Update the date when you re-check.
-export const checked = '2026-11-05';
+export const checked = '2026-11-10';
 
 export type Tone = 'good' | 'some' | 'none';
 export type Cell = { text: string; tone: Tone };
@@ -26,10 +26,13 @@ export const rows: Row[] = [
   { label: 'Apps, files, sums', stackbar: good('Yes'), raycast: good('Yes'), alfred: good('Yes'), spotlight: good('Yes') },
   { label: 'Clipboard history', stackbar: good('Yes'), raycast: good('Yes'), alfred: some('With Powerpack'), spotlight: good('Yes') },
   { label: 'Snippets', stackbar: good('Yes, with expansion'), raycast: good('Yes, with expansion'), alfred: some('With Powerpack'), spotlight: none('No') },
+  { label: 'Notes', stackbar: good('Yes, Markdown, on a hotkey'), raycast: good('Yes'), alfred: none('No'), spotlight: none('No') },
+  { label: 'Script commands', stackbar: good('Yes, with arguments'), raycast: good('Yes'), alfred: some('With workflows'), spotlight: some('Through Shortcuts') },
+  { label: 'Hyper key', stackbar: good('Yes, Caps Lock'), raycast: good('Yes'), alfred: none('No'), spotlight: none('No') },
   { label: 'Window layouts', stackbar: good('Yes'), raycast: good('Yes'), alfred: some('With workflows'), spotlight: none('No') },
   { label: 'Live menu bar items', stackbar: good('Yes'), raycast: good('Yes'), alfred: none('No'), spotlight: none('No') },
   { label: 'Desktop widgets', stackbar: good('Yes'), raycast: none('No'), alfred: none('No'), spotlight: none('No') },
-  { label: 'Built-in AI chat', stackbar: none('No; bring your agent'), raycast: good('With paid plans'), alfred: some('With workflows'), spotlight: none('No') },
+  { label: 'Built-in AI chat', stackbar: some('Ask AI plugin, your own key or model'), raycast: good('With paid plans'), alfred: some('With workflows'), spotlight: none('No') },
   { label: 'Tools for your AI agents (MCP)', stackbar: good('Every plugin tool'), raycast: some('Uses MCP servers in its AI'), alfred: none('No'), spotlight: none('No') },
   { label: 'Plugin isolation', stackbar: good('Own sandboxed process, approved access'), raycast: some('Reviewed store'), alfred: some('Runs as you'), spotlight: good('Apps\' own sandbox') },
   { label: 'Platforms', stackbar: some('macOS 26, Apple Silicon'), raycast: good('Mac, Windows, iOS'), alfred: good('Mac'), spotlight: good('Mac') },
@@ -38,6 +41,9 @@ export const rows: Row[] = [
 export const sources = [
   { label: 'Raycast plans and pricing', url: 'https://manual.raycast.com/billing' },
   { label: 'Raycast extension API (React, TypeScript)', url: 'https://developers.raycast.com/' },
+  { label: 'Raycast Notes', url: 'https://manual.raycast.com/notes' },
+  { label: 'Raycast Script Commands', url: 'https://manual.raycast.com/script-commands' },
+  { label: 'Raycast Hyper Key', url: 'https://manual.raycast.com/hyper-key' },
   { label: 'Alfred Powerpack', url: 'https://www.alfredapp.com/shop/' },
   { label: 'Spotlight in macOS Tahoe (MacRumors)', url: 'https://www.macrumors.com/how-to/do-more-with-spotlight-in-macos-tahoe/' },
 ];

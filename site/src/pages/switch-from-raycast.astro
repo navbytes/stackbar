@@ -35,6 +35,10 @@ const map: Map[] = [
   { from: 'Switch apps and windows', stackbar: [plugin('App Switcher')] },
   { from: 'GitHub, Linear and Jira extensions', stackbar: [plugin('PR Cockpit'), plugin('Linear'), plugin('Jira')] },
   { from: 'Pomodoro and Caffeinate extensions', stackbar: [plugin('Pomodoro'), plugin('Stay Awake')] },
+  { from: 'Raycast Notes', stackbar: [plugin('Notes')], note: 'Markdown with checklists, in a window on its own hotkey' },
+  { from: 'Script Commands', stackbar: [plugin('Script Commands')], note: 'Your Raycast scripts run as they are, from ~/Script Commands' },
+  { from: 'Hyper Key', stackbar: [{ name: 'Settings › General › Keyboard', url: href('/docs/palette/') + '#a-hyper-key' }], note: 'Caps Lock as ⌃⌥⇧⌘, Escape when tapped' },
+  { from: 'Searching inside an extension', stackbar: [{ name: 'Name, then Tab', url: href('/docs/palette/') + '#search-inside-one-plugin' }], note: 'Or give the plugin an alias' },
   { from: 'Raycast AI and Quick AI', stackbar: [plugin('Ask AI'), { name: 'Agents and MCP', url: href('/docs/agents/') }], note: 'Your own key or a local model; Tab hands what you typed to it' },
   { from: 'Writing an extension', stackbar: [{ name: 'Your first plugin', url: href('/docs/first-plugin/') }], note: 'One Swift file instead of a TypeScript project' },
 ];
