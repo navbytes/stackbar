@@ -246,7 +246,7 @@ for a form to flag. Errors name the placeholder that failed.
   `.preview(text:imageID:caption:)` shows the full text or a kept clipboard
   image under the list while the row is selected; search looks through it.
 - `.preview(text:caption:) { PreviewDetail(title, subtitle:, symbol:, theme:) { Metadata("Status", pill: "2 failing", theme: .critical); Metadata("Updated", "3m ago") } }`
-  puts a view in the preview pane instead of the text (0.38.0): a check list,
+  puts a view in the preview pane instead of the text (0.39.0): a check list,
   a release chain, a swatch. It is display-only (controls show disabled), so
   act through the row's actions and ⌘K. Keep it under 150 nodes, as every row
   sends its preview with each render; a bigger one shows the text. The text
