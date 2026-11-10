@@ -48,6 +48,10 @@ Command Line Tools (`xcode-select --install`). The installer is
 [`scripts/get-stackbar.sh`](scripts/get-stackbar.sh) (`--help` for options), or
 download the zip from [Releases](https://github.com/navbytes/stackbar/releases).
 
+To run Stackbar inside a company, with your own store, signing key and Apple
+team, from a private copy that keeps merging upstream, see
+[docs/self-hosting.md](docs/self-hosting.md).
+
 ## A plugin
 
 ```swift

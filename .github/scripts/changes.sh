@@ -23,6 +23,7 @@ else
             # its own workflow (site.yml), and release.yml only runs on tags.
             site/*|openspec/*|docs/*|*.md|LICENSE|.gitignore|.github/ISSUE_TEMPLATE/* \
             |.github/workflows/site.yml|.github/workflows/release.yml|.github/workflows/benchmark.yml \
+            |.github/workflows/sync-upstream.yml \
             |scripts/get-stackbar.sh|scripts/update-homebrew-cask.sh)
                 ;;
             # What the Xcode project builds: the app, its library dependencies,
