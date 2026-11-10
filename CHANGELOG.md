@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **The palette highlight no longer skips rows.** After you typed, commands you had used recently could take the arrow keys and Return without lighting up, until the selection moved past them. Every row now shows when it is selected.
+
 ## 0.37.0
 
 ### Changed

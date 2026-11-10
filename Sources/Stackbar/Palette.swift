@@ -543,12 +543,16 @@ struct RootResults: View {
             : [:]
         ScrollViewReader { proxy in
             ScrollView {
-                // One identity per row, the entry's: the highlight and the
-                // scroll follow the entry, not its position in the list.
+                // One flat run of lines, each with its own identity: a row's
+                // is its section's and its entry's together (see
+                // `PaletteRoot.Line`), so an entry that moves from Recent to
+                // Results is drawn afresh and takes the highlight.
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(sections) { section in
-                        SectionHeader(title: section.title)
-                        ForEach(section.entries) { entry in
+                    ForEach(root.lines) { line in
+                        switch line {
+                        case .header(_, let title):
+                            SectionHeader(title: title)
+                        case .row(_, let entry):
                             PaletteRow(entry: entry, accent: session.accent(of: entry.pluginID), pluginSymbol: session.manifest(of: entry.pluginID)?.symbol,
                                        selected: entry.id == selected, number: numbers[entry.id])
                                 .contentShape(Rectangle())
@@ -560,7 +564,7 @@ struct RootResults: View {
             }
             .scrollIndicators(.never)
             .onChange(of: selected) { _, newValue in
-                if let newValue { proxy.scrollTo(newValue) }
+                if let newValue, let line = session.root.lineID(of: newValue) { proxy.scrollTo(line) }
             }
         }
         .overlay {
