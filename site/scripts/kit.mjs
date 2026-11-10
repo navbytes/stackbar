@@ -1,7 +1,8 @@
 // Reads the facts the site shares with Stackbar straight from the Swift
 // sources, so they are written once: the design-system hues, spacing and radii
 // (StackbarKit/Design.swift), the official store's URL and publisher key
-// (StackbarHostCore/OfficialIndex.swift), the app version and the app icon.
+// (Packaging/distribution.json, navbytes' own: the site never reads an
+// organization's override), the app version and the app icon.
 // Each reader fails loudly when the Swift no longer looks the way it expects,
 // rather than letting the site drift.
 import fs from 'node:fs';
@@ -40,13 +41,14 @@ export function readDesign(source = read('Sources/StackbarKit/Design.swift')) {
   return { hues, aliases, space: numberEnum(source, 'Space', file), radius: numberEnum(source, 'Radius', file) };
 }
 
-export function readStore(source = read('Sources/StackbarHostCore/OfficialIndex.swift')) {
-  const file = 'Sources/StackbarHostCore/OfficialIndex.swift';
+export function readStore(source = read('Packaging/distribution.json')) {
+  const file = 'Packaging/distribution.json';
+  const store = JSON.parse(source).store ?? {};
   return {
-    name: need(source.match(/static let name = "([^"]+)"/)?.[1], 'the store name', file),
-    indexURL: need(source.match(/static let url = URL\(string: "([^"]+)"\)/)?.[1], 'the index URL', file),
-    repository: need(source.match(/static let repository = URL\(string: "([^"]+)"\)/)?.[1], 'the repository', file),
-    publicKey: need(source.match(/static let publicKey: String\? = "([^"]+)"/)?.[1], 'the publisher key', file),
+    name: need(store.name, 'the store name', file),
+    indexURL: need(store.url, 'the index URL', file),
+    repository: need(store.repository, 'the repository', file),
+    publicKey: need(store.publicKey, 'the publisher key', file),
   };
 }
 
