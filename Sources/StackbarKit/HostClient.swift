@@ -317,6 +317,26 @@ public enum Stackbar {
         HostClient.shared.fire(.hud(message, isError: isError))
     }
 
+    /// Opens the plugin's window, or brings it to the front. Needs `.window`
+    /// in the manifest's surfaces. `keepOnTop` suggests the window float
+    /// above other apps' windows, as a note pad does; the title-bar pin is
+    /// the user's, and once they set it their choice wins. Stackbar 0.38.0.
+    public static func showWindow(keepOnTop: Bool? = nil) async throws {
+        try await ok(.pluginWindow(WindowRequest(.show, keepOnTop: keepOnTop)))
+    }
+
+    /// Closes the plugin's window. Stackbar 0.38.0.
+    public static func hideWindow() async throws {
+        try await ok(.pluginWindow(WindowRequest(.hide)))
+    }
+
+    /// Hides the plugin's window when it is the window the user is in, and
+    /// shows it otherwise: what a "Toggle Notes" command on a hotkey, or a
+    /// menu-bar click, wants. Stackbar 0.38.0.
+    public static func toggleWindow(keepOnTop: Bool? = nil) async throws {
+        try await ok(.pluginWindow(WindowRequest(.toggle, keepOnTop: keepOnTop)))
+    }
+
     /// Opens a URL or an absolute (or `~/`) path without waiting: the
     /// same rules as `open(_:with:)`, so a scheme or path the manifest
     /// declares in `.openURLs` opens here too (from 0.33.0; before, only

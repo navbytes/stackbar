@@ -1,5 +1,19 @@
 #if canImport(SwiftUI)
 import SwiftUI
+import StackbarProtocol
+
+/// An `editor` where it can't be edited: a widget, or a snapshot, which
+/// ImageRenderer can't draw an NSTextView into. Shows the text as it is.
+struct SnapshotEditor: View {
+    let editor: EditorNode
+
+    var body: some View {
+        Text(editor.text.isEmpty ? editor.placeholder ?? "" : editor.text)
+            .foregroundStyle(editor.text.isEmpty ? .secondary : .primary)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(8)
+    }
+}
 
 /// A text field as `Snapshot` draws it: AppKit's field doesn't render off
 /// screen, so a PNG would show a placeholder block instead.

@@ -33,7 +33,7 @@ public enum SurfaceParity {
     public enum Kind: String, CaseIterable, Sendable {
         case text, label, stack, list, section, row, badge, button, toggle, progress, divider
         case labeled, chart, textField, picker, slider, link, empty, form
-        case styled, shape, image, timer, clock, spacer, tappable, grid
+        case styled, shape, image, timer, clock, spacer, tappable, grid, editor
 
         public init(_ node: ViewNode) {
             switch node {
@@ -64,6 +64,7 @@ public enum SurfaceParity {
             case .spacer: self = .spacer
             case .tappable: self = .tappable
             case .grid: self = .grid
+            case .editor: self = .editor
             }
         }
     }
@@ -108,6 +109,7 @@ public enum SurfaceParity {
         case .spacer: return "Spacer"
         case .tappable: return "Content as a plain button; click sends the action; with confirm the first press arms it"
         case .grid: return "Equal-width columns, filled left to right"
+        case .editor: return "Multiline editor; sends the text after a pause and on leaving; Markdown styled and keyed when asked; fills a window"
         }
     }
 
@@ -116,7 +118,7 @@ public enum SurfaceParity {
         case .list: return "List filtered by the plugin as the user types"
         case .row: return "Row; Return = first action, ⌘K = all, navigate pushes; with confirm Return arms, Esc forgets"
         case .text, .label, .stack, .section, .badge, .button, .toggle, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .link, .empty, .form,
-             .styled, .shape, .image, .timer, .clock, .spacer, .tappable, .grid:
+             .styled, .shape, .image, .timer, .clock, .spacer, .tappable, .grid, .editor:
             return "As panel"
         }
     }
@@ -128,7 +130,7 @@ public enum SurfaceParity {
         case .stack: return "Children on one line; layered when depth"
         case .list, .section, .row, .grid: return "Hidden (panel only)"
         case .badge: return "Small capsule"
-        case .button, .toggle, .textField, .picker, .slider, .link, .form, .tappable: return "Hidden (click opens the panel)"
+        case .button, .toggle, .textField, .picker, .slider, .link, .form, .tappable, .editor: return "Hidden (click opens the panel)"
         case .progress: return "12 pt ring, timed ones animate"
         case .divider, .shape, .spacer: return "Hidden"
         case .styled: return "Child; colors and decoration ignored so the bar stays legible"
@@ -148,6 +150,7 @@ public enum SurfaceParity {
         case .button: return "Button; click sends the action through the app; with confirm it opens the panel"
         case .toggle: return "Toggle; click flips it through the app"
         case .textField, .picker, .slider, .form: return "Drawn disabled"
+        case .editor: return "Its text, read-only"
         case .tappable: return "Content as a button; click sends the action through the app; with confirm it opens the panel"
         case .link: return "Link (opens Stackbar's URL)"
         case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .timer, .clock, .spacer, .grid: return "As panel"
@@ -162,7 +165,7 @@ public enum SurfaceParity {
         // by declaring a command, and its panel opens from "Open <Plugin>".
         switch kind {
         case .row, .button, .toggle, .link, .tappable, .list, .section, .stack, .styled, .grid,
-             .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form, .shape, .image, .timer, .clock, .spacer:
+             .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form, .shape, .image, .timer, .clock, .spacer, .editor:
             return "Not listed; declare a command"
         }
     }
@@ -195,6 +198,7 @@ public enum SurfaceParity {
         case .clock: return "The time as of now, in its pattern"
         case .tappable: return "`(text) {id}`, then `[asks: …]` with confirm"
         case .grid: return "Lines, one per cell"
+        case .editor: return "`Editor {id}` then the text, indented"
         }
     }
 

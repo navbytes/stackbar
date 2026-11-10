@@ -262,6 +262,12 @@ for a form to flag. Errors name the placeholder that failed.
 - `TextField(placeholder, text:) { submitted in }`, `Picker(title, options:, selection:, style: .segmented) { choice in }`
 - `Slider(title, value:, in: 0...10, step:) { value in }` sends on release; `live: true` also sends while dragging (keep the handler cheap), `Link(title, url:)`
 - `ContentUnavailableView(title, symbol:, message:)`
+- `TextEditor(text:, document: note.id, placeholder:, markdown: true, focus: true) { text in save(text) }`
+  edits several lines in place (0.38.0). The host keeps the typing and sends the whole text after a
+  pause and when the editor loses focus or closes; save it as it comes and render it back unchanged.
+  A new `document` swaps the text; the same one keeps the user's. `markdown` styles headings,
+  emphasis, code, quotes, lists and task boxes as typed and adds ⌘B ⌘I ⇧⌘X ⌘E ⌘K, ⌘Return (tick),
+  Return (next item) and Tab. In a window it fills the window; in the panel it is `minHeight` tall.
 
 Roles: `.primary .secondary .accent .success .warning .critical`. Without
 styling the host picks colors and sizes per surface and appearance, which is
@@ -364,6 +370,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `Stackbar.publish("topic", payload)`; receive with `.topic(name:)` trigger and `func receive(topic:payload:from:)` | nothing |
 | `Stackbar.notify(title, body:, actions: [NotificationAction("Join", url:)])`, `Stackbar.alert(title, body:, actions:)` (full screen, one a minute), `Stackbar.open(url)`, `Stackbar.copy(text)` | nothing |
 | `NotificationAction("Snooze", command: "snooze", arguments: ["id": id])` is a notification button that runs one of the plugin's own commands (a view command, or one missing an argument, opens in the palette); at most 3 arguments; 0.26.0 | nothing |
+| `try await Stackbar.toggleWindow(keepOnTop: true)` hides the plugin's window when the user is in it and shows it otherwise, for a command on a hotkey or `menuBarClick`; `showWindow()`, `hideWindow()`; `keepOnTop` suggests it float, and the title-bar pin the user sets wins; 0.38.0 | `.window` in surfaces |
 | `Stackbar.hud("Copied")` (or `isError: true`) shows the HUD a command result's message shows, after a panel button or a row acts; at most 30 a minute; 0.22.0 | nothing |
 | `try await Stackbar.open(url, with: "com.apple.Safari")`; links other than https, http, mailto, tel, meeting apps and Stackbar's own `stackbar://store/<plugin-id>` and `stackbar://settings` pages (0.25.0), and files or folders, with either `open` (`Stackbar.open(url)` from 0.33.0; before, it opened only the links that need nothing) | `.openURLs(schemes: ["slack"])`; `["*"]` for any scheme and paths |
 | `try await Stackbar.run("brew", ["outdated", "--json=v2"], timeout: .seconds(120))` returns `RunResult` (status, stdout, stderr, text, truncated, timedOut); a non-zero exit is not thrown | `.run(commands: ["brew"])` |

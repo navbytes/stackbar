@@ -62,6 +62,7 @@ extension HostCall {
         case .sensors: return "reading temperatures and fans"
         case .chooseFolder: return "choosing a folder"
         case .grantedFolders: return "reading the folders you chose"
+        case .pluginWindow(let request): return "\(request.action == .hide ? "hiding" : "showing") its window"
         }
     }
 
@@ -105,7 +106,7 @@ extension HostCall {
         case .createReminderList, .saveReminder, .deleteReminder: return (.reminders, "change your reminders")
         case .storageSet, .secret, .http, .oauthToken, .publish, .notify, .alert, .playSound,
              .openURL, .open, .copy, .run, .cancelRun, .chooseFile, .saveFile, .resolveApplication, .hud,
-             .pickColor, .define, .chooseFolder, .grantedFolders:
+             .pickColor, .define, .chooseFolder, .grantedFolders, .pluginWindow:
             return nil
         }
     }
@@ -198,6 +199,7 @@ extension HostCall {
         case .pickColor: return RateBudget(.filePanels, "color pickers")
         case .activateApp, .hideApp, .focusWindow: return RateBudget(.appSwitching, "app switches")
         case .pressMenuItem: return RateBudget(.appSwitching, "menu presses")
+        case .pluginWindow: return RateBudget(.appSwitching, "window changes")
         case .saveCalendarEvent: return RateBudget(.calendarWrites, "calendar changes")
         case .openInTerminal: return RateBudget(.terminals, "terminals")
         case .recognizeText, .captureScreenText: return RateBudget(.textReads, "text reads")
@@ -243,7 +245,7 @@ extension HostCall {
              .clipboardWrite, .paste, .keepAwake, .systemStatus, .cancelRun, .context, .finderSelection,
              .resolveApplication, .windows, .runningApps, .activateApp, .hideApp, .setKeyLayer, .keyLayerStatus,
              .installedApps, .findFiles, .hud, .setExpansions, .expansionStatus, .focusWindow, .menuItems,
-             .pressMenuItem, .define, .openInTerminal, .recognizeText, .sensors, .grantedFolders:
+             .pressMenuItem, .define, .openInTerminal, .recognizeText, .sensors, .grantedFolders, .pluginWindow:
             return Self.defaultReplyTimeout
         }
     }

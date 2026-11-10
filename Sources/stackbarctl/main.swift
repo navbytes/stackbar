@@ -135,7 +135,8 @@ func makeServices() -> HostServices {
             open: { url in note("[open] \(url.absoluteString)") },
             copy: { text in note("[copy] \(text.prefix(200))") },
             secretMissing: { _, name in note("[secret] \(name) is not set; run: stackbarctl secret set \(name) <value>") },
-            system: simulatedSystem
+            system: simulatedSystem,
+            window: { _, request in note("[window] \(request.action.rawValue)" + (request.keepOnTop == true ? " (keep on top)" : "")) }
         )
     )
 }

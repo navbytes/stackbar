@@ -122,7 +122,13 @@ final class AppModel {
                 },
                 secretMissing: { pluginID, name in secretRouter.route(pluginID, name) },
                 system: MacSystem(images: Self.clipboardImages),
-                approvalNeeded: { pluginID in secretRouter.reviewAgain(pluginID) }
+                approvalNeeded: { pluginID in secretRouter.reviewAgain(pluginID) },
+                window: { pluginID, request in
+                    Task { @MainActor in
+                        guard let app = AppDelegate.shared, let controller = app.model.controller(for: pluginID) else { return }
+                        app.windows.handle(request, for: controller)
+                    }
+                }
             ),
             runs: CommandRunGate(root: StackbarPaths.runDirectory) { pluginID, line in HostLog.shared.write(.info, line, plugin: pluginID) },
             approvedCommands: { ledger.approvedCommandPaths(for: $0) },

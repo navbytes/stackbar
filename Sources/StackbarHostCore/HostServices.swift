@@ -47,6 +47,8 @@ public final class HostServices: Sendable {
         /// A declared command now resolves to another program: the plugin's
         /// approval should be shown again.
         public var approvalNeeded: @Sendable (_ pluginID: String) -> Void
+        /// Shows, hides or toggles a plugin's window.
+        public var window: @Sendable (_ pluginID: String, _ request: WindowRequest) -> Void
 
         public init(
             notify: @escaping @Sendable (HostNotification) -> Void = { _ in },
@@ -58,9 +60,11 @@ public final class HostServices: Sendable {
             copy: @escaping @Sendable (String) -> Void = { _ in },
             secretMissing: @escaping @Sendable (String, String) -> Void = { _, _ in },
             system: any SystemServices = UnsupportedSystem(),
-            approvalNeeded: @escaping @Sendable (String) -> Void = { _ in }
+            approvalNeeded: @escaping @Sendable (String) -> Void = { _ in },
+            window: @escaping @Sendable (String, WindowRequest) -> Void = { _, _ in }
         ) {
             self.approvalNeeded = approvalNeeded
+            self.window = window
             self.notify = notify
             self.alert = alert
             self.playSound = playSound
@@ -199,6 +203,11 @@ public final class HostServices: Sendable {
                 platform.notify(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
                 return .ok
             }
+
+        case .pluginWindow(let request):
+            guard granted.surfaces.contains(.window) else { return .failure("the plugin has no window; add .window to the manifest's surfaces") }
+            platform.window(granted.id, request)
+            return .ok
 
         case .hud(let message, let isError):
             let text = message.trimmingCharacters(in: .whitespacesAndNewlines)

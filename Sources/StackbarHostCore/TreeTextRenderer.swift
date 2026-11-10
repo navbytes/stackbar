@@ -118,6 +118,9 @@ public enum TreeTextRenderer {
             return [pad + range.clock(at: now, countsDown: countsDown)]
         case .clock(let face):
             return [pad + face.string(at: now)]
+        case .editor(let editor):
+            let body = editor.text.isEmpty ? [editor.placeholder ?? ""] : editor.text.components(separatedBy: "\n")
+            return [pad + "Editor" + (editor.markdown == true ? " (markdown)" : "") + tag(editor.action)] + body.map { pad + "  " + $0 }
         case .tappable(let content, let action, let confirm):
             return [pad + "(\(content.plainText))" + tag(action) + asks(confirm)]
         }
