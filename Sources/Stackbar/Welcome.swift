@@ -185,9 +185,9 @@ struct WelcomePermissions: View {
                     }
                 }
             }
-            SettingsRow(title: "What each permission is for", caption: "Which feature needs which, and how to take one back.") {
-                Button("Open") {
-                    if let url = URL(string: "https://stackbar.app/docs/permissions/") { NSWorkspace.shared.open(url) }
+            if let help = Distribution.current.links.permissionsHelp {
+                SettingsRow(title: "What each permission is for", caption: "Which feature needs which, and how to take one back.") {
+                    Button("Open") { NSWorkspace.shared.open(help) }
                 }
             }
         }

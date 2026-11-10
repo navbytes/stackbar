@@ -18,11 +18,12 @@ set -eu
 [ "$(uname)" = Darwin ] || { echo "test-no-toolchain: run this on a Mac" >&2; exit 1; }
 VERSION=$1
 shift
-INDEX=https://navbytes.github.io/stackbar-plugins/index.json
+INDEX=$(python3 "$(dirname "$0")/distribution.py" get store.url)
+REPO=${GITHUB_REPOSITORY:-navbytes/stackbar}
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-curl -fsSL -o "$WORK/Stackbar.zip" "https://github.com/navbytes/stackbar/releases/download/v$VERSION/Stackbar-$VERSION.zip"
+curl -fsSL -o "$WORK/Stackbar.zip" "https://github.com/$REPO/releases/download/v$VERSION/Stackbar-$VERSION.zip"
 ditto -x -k "$WORK/Stackbar.zip" "$WORK"
 APP="$WORK/Stackbar.app"
 spctl --assess --type execute -vv "$APP"

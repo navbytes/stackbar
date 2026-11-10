@@ -1,0 +1,23 @@
+{
+  "teamID": "59J9RQXYYP",
+  "store": {
+    "name": "Stackbar Plugins",
+    "url": "https://navbytes.github.io/stackbar-plugins/index.json",
+    "publicKey": "4dpLtXEpFXdi+6cviY/KdYuUulJPbEmCxxIK0EEN2/w=",
+    "publisher": "navbytes",
+    "repository": "https://github.com/navbytes/stackbar-plugins",
+    "website": "https://stackbar.app",
+    "authSecret": null
+  },
+  "allowUserStores": true,
+  "updates": {
+    "feed": "https://github.com/navbytes/stackbar/releases/latest/download/appcast.xml",
+    "betaFeed": "https://github.com/navbytes/stackbar/releases/download/beta/appcast.xml",
+    "manualNote": "This build doesn't update itself. Update with Homebrew (brew upgrade --cask stackbar) or download the latest release from stackbar.app."
+  },
+  "links": {
+    "website": "https://stackbar.app",
+    "permissionsHelp": "https://stackbar.app/docs/permissions/",
+    "repository": "https://github.com/navbytes/stackbar"
+  }
+}

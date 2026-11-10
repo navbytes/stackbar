@@ -25,7 +25,8 @@ final class ReleaseTests: XCTestCase {
             XCTAssertEqual(lines.count, 2, key)
             for line in lines { XCTAssertTrue(line.hasSuffix("\"\(StackbarVersion.current)\""), line) }
         }
-        XCTAssertTrue(project.contains("SUFeedURL: https://github.com/navbytes/stackbar/releases/latest/download/appcast.xml"))
+        let feed = try XCTUnwrap(Distribution.upstream.updates.feed)
+        XCTAssertTrue(project.contains("SUFeedURL: \(feed.absoluteString)"), "project.yml and Packaging/distribution.json name the same feed")
     }
 
     /// The release has no provisioning profile, so the app group must be the

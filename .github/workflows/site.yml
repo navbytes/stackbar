@@ -7,9 +7,9 @@ name: Site
 on:
   push:
     branches: [main]
-    paths: [site/**, scripts/get-stackbar.sh, Sources/StackbarKit/Design.swift, Sources/StackbarHostCore/OfficialIndex.swift, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, llms.txt, .github/workflows/site.yml]
+    paths: [site/**, scripts/get-stackbar.sh, Sources/StackbarKit/Design.swift, Packaging/distribution.json, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, llms.txt, .github/workflows/site.yml]
   pull_request:
-    paths: [site/**, scripts/get-stackbar.sh, Sources/StackbarKit/Design.swift, Sources/StackbarHostCore/OfficialIndex.swift, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, llms.txt, .github/workflows/site.yml]
+    paths: [site/**, scripts/get-stackbar.sh, Sources/StackbarKit/Design.swift, Packaging/distribution.json, Sources/StackbarHostCore/StackbarVersion.swift, Packaging/Icon/**, Examples/ClockPlugin/**, llms.txt, .github/workflows/site.yml]
   schedule:
     - cron: '17 * * * *'
   repository_dispatch:
@@ -29,8 +29,11 @@ env:
   SITE_BASE: ${{ vars.SITE_BASE || '/stackbar' }}
 
 jobs:
+  # stackbar.app is navbytes' site; an organization's copy doesn't deploy it
+  # (set vars.DEPLOY_SITE to 'true' to build it anyway).
   build:
-    runs-on: ubuntu-latest
+    if: github.repository == 'navbytes/stackbar' || vars.DEPLOY_SITE == 'true'
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     defaults:
       run:
@@ -58,7 +61,7 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
     permissions:
       pages: write

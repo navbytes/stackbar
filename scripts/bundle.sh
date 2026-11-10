@@ -26,6 +26,12 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN/Stackbar" "$APP/Contents/MacOS/"
 sed "s/@VERSION@/$VERSION/g" Packaging/Info.plist > "$APP/Contents/Info.plist"
+# The store, links and update feed of this build (Packaging/distribution.json
+# plus an organization's distribution.override.json).
+python3 scripts/distribution.py plist "$APP/Contents/Info.plist"
+ENTITLEMENTS=$(mktemp -t stackbar-entitlements)
+cp Packaging/Stackbar.entitlements "$ENTITLEMENTS"
+python3 scripts/distribution.py entitlements "$ENTITLEMENTS"
 scripts/embed-stackbarkit.sh "$APP" "$BIN"
 mkdir -p "$APP/Contents/Resources"
 cp Packaging/AppIcon.icns "$APP/Contents/Resources/"
@@ -47,7 +53,8 @@ if [ $# -gt 0 ]; then
 fi
 
 codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/stackbarctl"
-codesign --force --options runtime "$TIMESTAMP" --entitlements Packaging/Stackbar.entitlements --sign "$IDENTITY" "$APP"
+codesign --force --options runtime "$TIMESTAMP" --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP"
+rm -f "$ENTITLEMENTS"
 codesign --verify --strict "$APP"
 
 ZIP="$BUILD/Stackbar-$VERSION.zip"

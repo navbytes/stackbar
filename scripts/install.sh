@@ -28,6 +28,8 @@ APP="$DERIVED/Build/Products/Release/Stackbar.app"
 
 swift build -c release --product stackbarctl
 scripts/embed-stackbarkit.sh "$APP" "$(swift build -c release --show-bin-path)"
+# The store, links and update feed of this build (Packaging/distribution.json).
+python3 scripts/distribution.py plist "$APP/Contents/Info.plist"
 
 # Adding files invalidates the app's signature: sign stackbarctl and the app
 # again with the identity and entitlements Xcode used. The widget keeps its

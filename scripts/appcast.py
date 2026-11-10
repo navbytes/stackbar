@@ -16,11 +16,12 @@ import argparse
 import base64
 import email.utils
 import html
+import os
 import re
 import sys
 from pathlib import Path
 
-REPO = "navbytes/stackbar"
+REPO = os.environ.get("GITHUB_REPOSITORY") or "navbytes/stackbar"
 MINIMUM_MACOS = "26.0"
 ROOT = Path(__file__).resolve().parent.parent
 
