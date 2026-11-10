@@ -214,7 +214,7 @@ public struct Row: StackbarView {
     /// disabled. Keep it under `RowPreview.maxViewNodes` (150) nodes, since
     /// every row sends its preview with each render; a larger one is dropped
     /// with a warning. `text` is still what search matches and what hosts
-    /// older than 0.38 show, so give it the same facts in words.
+    /// older than 0.39 show, so give it the same facts in words.
     public func preview(text: String?, caption: String? = nil, @ViewBuilder view: () -> ViewContent) -> Row {
         var copy = preview(text: text, caption: caption)
         copy.previewView = view()
