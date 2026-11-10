@@ -71,17 +71,26 @@ enum Platform {
         #endif
     }
 
-    /// Opens Terminal with Claude Code on the plugin and Stackbar's authoring
-    /// tools attached.
-    static func editWithClaude(_ file: URL) {
-        let script = FileManager.default.temporaryDirectory.appendingPathComponent("stackbar-claude-\(UUID().uuidString.prefix(8)).command")
+    /// Opens the coding agent picked in Settings › Agents on the plugin, in
+    /// the terminal picked in Settings › General, after refreshing the
+    /// plugins folder's `AGENTS.md`.
+    static func editPlugin(_ file: URL, with editor: PluginEditor, customCommand: String) {
+        AgentNotes.write(in: file.deletingLastPathComponent(), stackbarctl: stackbarctlPath)
+        let script = FileManager.default.temporaryDirectory.appendingPathComponent("stackbar-edit-\(UUID().uuidString.prefix(8)).command")
         do {
-            try PluginFork.claudeScript(for: file, stackbarctl: stackbarctlPath).write(to: script, atomically: true, encoding: .utf8)
+            try editor.script(for: file, stackbarctl: stackbarctlPath, customCommand: customCommand).write(to: script, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
-            NSWorkspace.shared.open(script)
+            Task { _ = await MacSystem.open(script: script) }
         } catch {
             NSWorkspace.shared.open(file)
         }
+    }
+
+    /// Copies the prompt "Edit with …" starts an agent with, for an agent
+    /// started by hand or one that isn't a terminal app.
+    static func copyAgentPrompt(_ file: URL) {
+        AgentNotes.write(in: file.deletingLastPathComponent(), stackbarctl: stackbarctlPath)
+        copy(PluginEditor.prompt(for: file))
     }
 
     /// `stackbarctl` next to the app's executable in a bundle, or in the same
