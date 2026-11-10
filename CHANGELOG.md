@@ -12,7 +12,6 @@ window. Write for people who use Stackbar, not for the code.
 ### For plugin authors
 - `TextEditor(text:document:placeholder:markdown:minHeight:focus:)` (protocol 28): the host keeps the typing and sends the whole text after a pause and on leaving. In a window it fills the window.
 - `Stackbar.showWindow(keepOnTop:)`, `hideWindow()`, `toggleWindow(keepOnTop:)` need `.window` in surfaces. `keepOnTop` is a suggestion; the user's pin wins.
-- A `.files(paths:)` folder can be read and written with FileManager inside the sandbox.
 
 ## 0.37.0
 

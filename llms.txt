@@ -446,9 +446,7 @@ var panel: ViewContent {
 
 Don't use URLSession, Process or files directly: plugins run sandboxed and
 only host calls are allowed through. Errors from host calls say which
-capability to add. The one exception is a `.files(paths:)` folder: the
-sandbox lets the plugin read and write inside it with FileManager, as
-Notes does with its Markdown files.
+capability to add.
 
 Commands run by the host, never through a shell: arguments arrive exactly as
 given. A bare name is found in /opt/homebrew/bin, /usr/local/bin, /usr/bin,

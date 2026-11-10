@@ -9,10 +9,10 @@
 - [x] 1.6 StackbarKit `TextEditor`; surface parity, authoring guide + llms.txt, CHANGELOG
 
 ## 2. Plugins (stackbar-plugins, after the host release)
-- [ ] 2.1 Notes 1.0.0 (files in ~/Documents/Stackbar Notes, pins, search, Recently Deleted)
+- [ ] 2.1 Notes 1.0.0 (notes in host storage, pins, search, Recently Deleted, export as Markdown)
 
 ## 3. Mac check
 - [ ] 3.1 Hotkey toggles the Notes window above other apps; typing never jumps
 - [ ] 3.2 Markdown styling, ⌘B/⌘I, Return continues lists, ⌘Return and clicks tick tasks
-- [ ] 3.3 Closing the window mid-sentence keeps the text; an edit in another app shows up
-- [ ] 3.4 Sandboxed plugin can create and write the notes folder
+- [ ] 3.3 Closing the window mid-sentence keeps the text
+- [ ] 3.4 Notes survive a restart and an app update
