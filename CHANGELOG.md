@@ -3,10 +3,13 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.39.0
 
 ### Added
 - **Richer previews beside results.** Plugins can now show a real view in the palette's preview pane, not just text: coloured check lists, release steps, color swatches, status and details at a glance as you arrow through results.
+
+- **Edit plugins with any coding agent.** Settings › Agents › Edit Plugins With picks Claude Code, Codex, opencode, Cursor, pi or your own command. Each agent starts in the plugins folder with an AGENTS.md that tells it how to build and check plugins, and Copy Agent Prompt hands the same instructions to anything else.
+- **Run your organization's own copy.** A company can build Stackbar and its plugin store under its own name, signing and store address by adding config files, without changing the code (docs/self-hosting.md).
 
 ### For plugin authors
 - `Row.preview(text:caption:) { … }` (protocol 29) puts a view in the preview pane, drawn display-only; `PreviewDetail` and `Metadata` give it the usual shape. At most 150 nodes; `text` stays the search text and what older hosts show.
