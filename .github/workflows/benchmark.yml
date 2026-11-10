@@ -16,8 +16,10 @@ permissions:
 
 jobs:
   benchmark:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: macos-26
+    # After each release in navbytes/stackbar; an organization's copy runs it
+    # by hand, or after releases with vars.BENCHMARK_RELEASES set to 'true'.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.repository == 'navbytes/stackbar' || vars.BENCHMARK_RELEASES == 'true'))
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

@@ -11,6 +11,8 @@
 #   ZIP                 path to Stackbar-<version>.zip
 #   AUTO_UPDATES        "true" when the app updates itself (Sparkle), so
 #                       `brew upgrade` leaves it to the app
+#   HOMEBREW_TAP_REPO   the tap (default navbytes/homebrew-tap)
+#   GITHUB_REPOSITORY   where the release zip is (default navbytes/stackbar)
 # The workflow skips this step when HOMEBREW_TAP_TOKEN is not set.
 set -euo pipefail
 
@@ -18,6 +20,11 @@ set -euo pipefail
 : "${VERSION:?VERSION is required (e.g. 0.14.0)}"
 : "${ZIP:?ZIP is required}"
 [ -f "$ZIP" ] || { echo "::error::$ZIP not found" >&2; exit 1; }
+TAP_REPO="${HOMEBREW_TAP_REPO:-navbytes/homebrew-tap}"
+REPO="${GITHUB_REPOSITORY:-navbytes/stackbar}"
+HOMEPAGE="$(python3 "$(dirname "$0")/distribution.py" get links.website)"
+HOMEPAGE="${HOMEPAGE:-https://github.com/$REPO}"
+HOMEPAGE="${HOMEPAGE%/}/"
 
 sha="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
 echo "Cask target: stackbar ${VERSION} (sha256 ${sha})"
@@ -25,7 +32,7 @@ echo "Cask target: stackbar ${VERSION} (sha256 ${sha})"
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 tap="$workdir/tap"
-git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/navbytes/homebrew-tap.git" "$tap"
+git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" "$tap"
 
 branch="release/stackbar-${VERSION}"
 remote_branch="$(git -C "$tap" ls-remote --heads origin "refs/heads/$branch")"
@@ -45,11 +52,11 @@ cask "stackbar" do
   version "${VERSION}"
   sha256 "${sha}"
 
-  url "https://github.com/navbytes/stackbar/releases/download/v#{version}/Stackbar-#{version}.zip",
-      verified: "github.com/navbytes/stackbar/"
+  url "https://github.com/${REPO}/releases/download/v#{version}/Stackbar-#{version}.zip",
+      verified: "github.com/${REPO}/"
   name "Stackbar"
   desc "Launcher, menu bar and widgets you extend in Swift"
-  homepage "https://stackbar.app/"
+  homepage "${HOMEPAGE}"
 
   livecheck do
     url :url
@@ -93,11 +100,11 @@ elif [ -z "$remote_branch" ]; then
 fi
 
 export GH_TOKEN="$HOMEBREW_TAP_TOKEN"
-open_prs="$(gh pr list --repo navbytes/homebrew-tap --head "$branch" --state open --json number --jq length)"
+open_prs="$(gh pr list --repo "$TAP_REPO" --head "$branch" --state open --json number --jq length)"
 if [ "$open_prs" = 0 ]; then
-  merged_prs="$(gh pr list --repo navbytes/homebrew-tap --head "$branch" --state merged --json number --jq length)"
+  merged_prs="$(gh pr list --repo "$TAP_REPO" --head "$branch" --state merged --json number --jq length)"
   if [ "$merged_prs" = 0 ]; then
-    gh pr create --repo navbytes/homebrew-tap --base main --head "$branch" \
+    gh pr create --repo "$TAP_REPO" --base main --head "$branch" \
       --title "stackbar ${VERSION}" --body "Update the tap to the published Stackbar ${VERSION} release."
   fi
 fi

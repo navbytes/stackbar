@@ -13,8 +13,9 @@ name: Release
 #   APPLE_ID, APPLE_TEAM_ID, APPLE_NOTARY_PASSWORD   for notarytool
 #
 # Homebrew: with HOMEBREW_TAP_TOKEN (a fine-grained PAT with contents and pull
-# request write on navbytes/homebrew-tap) a notarized release also opens a PR
-# there updating Casks/stackbar.rb. Without it the step is skipped.
+# request write on the tap, navbytes/homebrew-tap or vars.HOMEBREW_TAP_REPO) a
+# notarized release also opens a PR there updating Casks/stackbar.rb. Without
+# it the step is skipped.
 #
 # Updates: with SPARKLE_PRIVATE_KEY (a base64 Ed25519 seed) the app carries
 # its public key and the release publishes a signed appcast.xml, which Sparkle
@@ -25,7 +26,12 @@ name: Release
 # (a Sentry organization auth token) the release also uploads its dSYMs to the
 # self-190/stackbar project, so crash stacks name functions instead of
 # addresses (a dry run uploads too, which checks the token). A failed upload
-# warns and doesn't stop the release.
+# warns and doesn't stop the release. vars.SENTRY_ORG and vars.SENTRY_PROJECT
+# name another Sentry project.
+#
+# An organization's own copy: the store, team and update feed come from
+# Packaging/distribution.override.json, runners from vars.MACOS_RUNNER and
+# vars.LINUX_RUNNER (docs/self-hosting.md).
 #
 # Prebuilt helpers: each release then runs helpers.yml, which starts the
 # Helpers workflow in navbytes/stackbar-plugins (needs PLUGINS_DISPATCH_TOKEN).
@@ -52,7 +58,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: macos-26
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
     timeout-minutes: 45
     env:
       HAS_CERT: ${{ secrets.APPLE_CERT_P12 != '' }}
@@ -120,13 +126,20 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           [ -d "$APP/Contents/PlugIns/StackbarWidget.appex" ]
           # The widget reads the plugin list from this group: both must claim it.
-          GROUP=$(sed -n 's/.*static let appGroup = "\(.*\)".*/\1/p' Sources/StackbarHostCore/WidgetSnapshotStore.swift)
+          GROUP=$(python3 scripts/distribution.py get appGroup)
           for bundle in "$APP" "$APP/Contents/PlugIns/StackbarWidget.appex"; do
             codesign -d --entitlements - --xml "$bundle" 2>/dev/null | grep -q "<string>$GROUP</string>" \
               || { echo "::error::$bundle does not claim the app group $GROUP"; exit 1; }
           done
           [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]
-          if [ -n "${SPARKLE_PUBLIC_KEY:-}" ]; then
+          # The app carries the distribution it was built for (the store and
+          # key navbytes' builds trust, unless an override says otherwise).
+          for key in store.url store.publicKey; do
+            /usr/libexec/PlistBuddy -c 'Print :StackbarDistribution' "$APP/Contents/Info.plist" \
+              | grep -qF "$(python3 scripts/distribution.py get $key)" \
+              || { echo "::error::the app's Info.plist does not carry $key"; exit 1; }
+          done
+          if [ -n "${SPARKLE_PUBLIC_KEY:-}" ] && [ -n "$(python3 scripts/distribution.py get updates.feed)" ]; then
             [ "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP/Contents/Info.plist")" = "$SPARKLE_PUBLIC_KEY" ]
           fi
           if [ -n "${STACKBAR_NOTARY_PROFILE:-}" ]; then
@@ -143,8 +156,8 @@ jobs:
         continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: self-190
-          SENTRY_PROJECT: stackbar
+          SENTRY_ORG: ${{ vars.SENTRY_ORG || 'self-190' }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || 'stackbar' }}
           # sentry-cli 3.8.2 from getsentry/sentry-cli's own release (linked
           # from docs.sentry.io); the same SHA-256 is in Sentry's release
           # registry. See docs/dependencies.md before bumping.
@@ -188,7 +201,9 @@ jobs:
           PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
         run: |
           TAG="v$VERSION"
-          if [ -n "${STACKBAR_NOTARY_PROFILE:-}" ]; then
+          if [ -n "${STACKBAR_NOTARY_PROFILE:-}" ] && [ "$GITHUB_REPOSITORY" != navbytes/stackbar ]; then
+            INSTALL="Signed with Developer ID and notarized. Unzip, drag **Stackbar.app** into /Applications and open it."
+          elif [ -n "${STACKBAR_NOTARY_PROFILE:-}" ]; then
             INSTALL=$(cat <<'NOTES'
           Signed with Developer ID and notarized. Install with Homebrew or the one-line installer (both also put `stackbarctl` on your PATH):
 
@@ -249,12 +264,13 @@ jobs:
           fi
 
       # Only notarized builds go to the tap: an ad-hoc one would not open.
-      - name: Update the Homebrew cask (navbytes/homebrew-tap)
+      - name: Update the Homebrew cask
         if: env.DRY_RUN != 'true' && env.HOMEBREW_TAP_TOKEN != '' && env.STACKBAR_NOTARY_PROFILE != '' && !(github.event_name == 'workflow_dispatch' && inputs.prerelease)
         env:
           VERSION: ${{ steps.version.outputs.version }}
           ZIP: build/Stackbar-${{ steps.version.outputs.version }}.zip
           AUTO_UPDATES: ${{ env.HAS_SPARKLE_KEY }}
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO || 'navbytes/homebrew-tap' }}
         run: scripts/update-homebrew-cask.sh
 
       - name: Remove the signing keychain

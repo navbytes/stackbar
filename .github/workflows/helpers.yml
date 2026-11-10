@@ -1,12 +1,13 @@
 name: Helpers
 
-# Starts the Helpers workflow in navbytes/stackbar-plugins, which builds the
+# Starts the Helpers workflow in the plugins repository (navbytes/stackbar-plugins,
+# or vars.PLUGINS_REPO, default <this owner>/stackbar-plugins), which builds the
 # store plugins against the StackbarKit of the latest releases, so a Mac
 # without Xcode can run them. Release calls this after publishing; run it from
 # the Actions tab to rebuild helpers or to check the token.
 #
 # Needs PLUGINS_DISPATCH_TOKEN, a fine-grained PAT with Actions read and write
-# on navbytes/stackbar-plugins. Without it the job does nothing.
+# on that repository. Without it the job does nothing.
 on:
   workflow_call:
     secrets:
@@ -18,18 +19,19 @@ permissions: {}
 
 jobs:
   dispatch:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     env:
       GH_TOKEN: ${{ secrets.PLUGINS_DISPATCH_TOKEN }}
+      PLUGINS_REPO: ${{ vars.PLUGINS_REPO || format('{0}/stackbar-plugins', github.repository_owner) }}
     steps:
       # A failure here should not mark a release as failed.
-      - name: Start navbytes/stackbar-plugins Helpers
+      - name: Start the plugins repository's Helpers
         continue-on-error: ${{ github.event_name != 'workflow_dispatch' }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::notice::PLUGINS_DISPATCH_TOKEN is not set; skipping"
             exit 0
           fi
-          gh workflow run helpers.yml -R navbytes/stackbar-plugins --ref main
-          echo "::notice::Started https://github.com/navbytes/stackbar-plugins/actions/workflows/helpers.yml"
+          gh workflow run helpers.yml -R "$PLUGINS_REPO" --ref main
+          echo "::notice::Started https://github.com/$PLUGINS_REPO/actions/workflows/helpers.yml"
