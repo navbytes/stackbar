@@ -154,7 +154,8 @@ small plugins that each teach one idea.
   exposes every running plugin's tools to an agent through the app.
 - **Distribution:** signed `.stackbarplugin` bundles (Ed25519, publisher pinned on
   first use), static plugin indexes, one-click fork into your own plugins
-  folder, and an "edit with Claude" script. The store lists the official
+  folder, and "Edit with …", which opens the coding agent you pick (Claude Code,
+  Codex, opencode, Cursor, pi or your own command) on a plugin. The store lists the official
   index from [navbytes/stackbar-plugins](https://github.com/navbytes/stackbar-plugins)
   first, verified against the navbytes key, hides versions that need a newer
   Stackbar or that their publisher withdrew, and updates installed plugins daily.

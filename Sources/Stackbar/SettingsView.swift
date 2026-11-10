@@ -313,7 +313,7 @@ struct AgentsSettings: View {
                     SettingsRow(symbol: "exclamationmark.triangle.fill", color: .red, title: "The agent gateway didn't start", caption: error)
                 }
             }
-            SettingsGroup("Connect Claude Code", footer: "Run this once in Terminal. Claude Code then starts Stackbar's gateway when it needs a tool.") {
+            SettingsGroup("Connect Claude Code", footer: "Run this once in Terminal. Claude Code then starts Stackbar's gateway when it needs a tool. Other MCP clients add the same command, \(Platform.stackbarctlPath) agent, as a stdio server.") {
                 HStack(alignment: .center, spacing: 10) {
                     Text(command)
                         .font(.system(.callout, design: .monospaced))
@@ -326,6 +326,7 @@ struct AgentsSettings: View {
                     }
                 }
             }
+            PluginEditorGroup(model: model)
             let offering = model.controllers.filter { !$0.tools.isEmpty }
             SettingsGroup("Tools Your Plugins Offer", footer: "Turn off any tool you don't want agents to call. Tools that return private data, like your clipboard, stay off until you turn them on.") {
                 if offering.isEmpty {
@@ -341,6 +342,42 @@ struct AgentsSettings: View {
 
 /// One plugin's tools in Settings → Agents, each with its own switch, plus
 /// the switch for agents reading its panel.
+/// Which coding agent "Edit with …" opens on a plugin.
+struct PluginEditorGroup: View {
+    @Bindable var model: AppModel
+
+    private var footer: String {
+        switch model.pluginEditor {
+        case .claudeCode, .codex:
+            return "Opens in the terminal chosen in General, in the plugin's folder, with Stackbar's authoring tools added to the agent. The folder's AGENTS.md tells any agent how to build and check a plugin."
+        case .opencode, .cursor, .pi:
+            return "Opens in the terminal chosen in General, in the plugin's folder. The agent reads the folder's AGENTS.md, which shows it how to build and check a plugin with stackbarctl."
+        case .custom:
+            return "Runs in the plugin's folder, in the terminal chosen in General. {file}, {dir}, {prompt} and {stackbarctl} are replaced, already quoted. The folder's AGENTS.md tells the agent how to build and check a plugin."
+        }
+    }
+
+    var body: some View {
+        SettingsGroup("Edit Plugins With", footer: footer) {
+            SettingsRow(title: "Coding agent", caption: "Used by Edit with \(model.pluginEditor.name) on a plugin. Copy Agent Prompt, in a plugin's ⋯ menu, works with any other.") {
+                Picker("Coding agent", selection: $model.pluginEditor) {
+                    ForEach(PluginEditor.allCases, id: \.self) { editor in
+                        Text(editor.title).tag(editor)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            if model.pluginEditor == .custom {
+                TextField("Command", text: $model.pluginEditorCommand, prompt: Text(PluginEditor.customExample))
+                    .font(.system(.callout, design: .monospaced))
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+            }
+        }
+    }
+}
+
 struct AgentToolsRow: View {
     let model: AppModel
     let controller: PluginController
@@ -684,7 +721,7 @@ struct PluginPage: View {
     private var actions: some View {
         HStack {
             Button("Rebuild") { controller.reload() }
-            Button("Edit with Claude…") { Platform.editWithClaude(controller.source) }
+            Button("Edit with \(model.pluginEditor.name)…") { model.editPlugin(controller.source) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([controller.source]) }
             Spacer()
             Button("Uninstall…", role: .destructive) { confirmingUninstall = true }

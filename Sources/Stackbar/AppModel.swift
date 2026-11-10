@@ -28,6 +28,14 @@ final class AppModel {
     }
     /// Updates the last store check found and didn't install.
     private(set) var pendingUpdates: [PluginStore.Update] = []
+    /// The coding agent "Edit with …" opens on a plugin (Settings › Agents).
+    var pluginEditor: PluginEditor {
+        didSet { UserDefaults.standard.set(pluginEditor.rawValue, forKey: PluginEditor.defaultsKey) }
+    }
+    /// The command line `PluginEditor.custom` runs.
+    var pluginEditorCommand: String {
+        didSet { UserDefaults.standard.set(pluginEditorCommand, forKey: PluginEditor.customCommandKey) }
+    }
     var agentGatewayEnabled: Bool {
         didSet {
             UserDefaults.standard.set(agentGatewayEnabled, forKey: "agentGateway")
@@ -86,6 +94,8 @@ final class AppModel {
     init() {
         indexURLs = UserDefaults.standard.stringArray(forKey: "indexURLs") ?? []
         autoUpdatePlugins = UserDefaults.standard.object(forKey: "autoUpdatePlugins") as? Bool ?? true
+        pluginEditor = UserDefaults.standard.string(forKey: PluginEditor.defaultsKey).flatMap(PluginEditor.init(rawValue:)) ?? .claudeCode
+        pluginEditorCommand = UserDefaults.standard.string(forKey: PluginEditor.customCommandKey) ?? ""
         // Off for a new Mac until the user turns it on in Settings › Agents;
         // a Mac that already ran Stackbar keeps the gateway it had (it was on
         // by default before 0.32.0).
@@ -160,8 +170,15 @@ final class AppModel {
 
     // MARK: - Plugins
 
+    /// Opens the chosen coding agent on a plugin's source.
+    func editPlugin(_ file: URL) {
+        Platform.editPlugin(file, with: pluginEditor, customCommand: pluginEditorCommand)
+    }
+
     func start() {
         try? FileManager.default.createDirectory(at: StackbarPaths.pluginsDirectory, withIntermediateDirectories: true)
+        // Any coding agent started in the plugins folder reads these.
+        AgentNotes.write(in: StackbarPaths.pluginsDirectory, stackbarctl: Platform.stackbarctlPath)
         // Refresh the examples already installed; installing new ones stays
         // the user's choice (the welcome prompt or the menu item).
         refreshInstalled()

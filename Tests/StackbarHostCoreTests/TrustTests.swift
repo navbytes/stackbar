@@ -114,12 +114,6 @@ final class ForkTests: XCTestCase {
         XCTAssertTrue(forked.contains(#"name: "My 'List'""#))
         XCTAssertTrue(forked.contains(#"Thing(id: "keep", name: "keep")"#), "only the first id and name change")
     }
-
-    func testClaudeScriptQuotesPaths() {
-        let script = PluginFork.claudeScript(for: URL(fileURLWithPath: "/Users/x/It's here/Todo.swift"), stackbarctl: "/Applications/Stackbar.app/Contents/MacOS/stackbarctl")
-        XCTAssertTrue(script.contains(#"cd '/Users/x/It'\''s here'"#))
-        XCTAssertTrue(script.contains("claude mcp add stackbar -- '/Applications/Stackbar.app/Contents/MacOS/stackbarctl' mcp"))
-    }
 }
 
 final class BundleTests: XCTestCase {
