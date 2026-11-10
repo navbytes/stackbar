@@ -24,6 +24,17 @@ calendar, secrets. The first time, and whenever a new version asks for more,
 Stackbar shows the list in plain English and waits for you. Settings ›
 Privacy & Secrets shows what each plugin can reach.
 
+A plugin that works in your code folders (Git Sync, Script Commands) asks
+you to pick each folder with an Open panel, and can run commands only there.
+Its Settings page lists the folders you chose, with **Remove**.
+
+## Things you can't undo
+
+Stopping a process, removing containers or clearing history takes a second
+press. The first press turns the button or row into "Press again to …" and
+does nothing else; after 10 seconds, or if what it would do changes, it goes
+back to normal. In the palette, Return twice runs it and Esc forgets it.
+
 ## Settings and secrets
 
 Each plugin has its own page in Settings with its options, its commands and a

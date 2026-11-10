@@ -20,7 +20,7 @@ const plugins = (await getCollection('plugins')).sort(byName);
 const showcase = ['up-next', 'pr-cockpit', 'clipboard', 'system-monitor', 'world-clock', 'app-switcher']
   .map((slug) => plugins.find((p) => p.data.slug === slug)?.data)
   .filter((p) => p !== undefined);
-const featured = ['pomodoro', 'pr-cockpit', 'system-monitor', 'clipboard', 'litellm', 'world-clock']
+const featured = ['notes', 'pr-cockpit', 'ask-ai', 'clipboard', 'pomodoro', 'world-clock']
   .map((slug) => plugins.find((p) => p.data.slug === slug))
   .filter((p) => p !== undefined);
 
@@ -34,17 +34,21 @@ const launcher = [
   { glyph: 'link', hue: 'violet', title: 'Quicklinks', text: 'Search any site by name.' },
   { glyph: 'menubar', hue: 'teal', title: 'Window layouts', text: 'Halves, thirds, quarters, by hotkey.' },
   { glyph: 'bolt', hue: 'amber', title: 'System commands', text: 'Lock, sleep, dark mode, empty Trash.' },
+  { glyph: 'agent', hue: 'cyan', title: 'Ask AI', text: 'Press Tab to ask your own model or key.' },
+  { glyph: 'book', hue: 'amber', title: 'Notes', text: 'Markdown notes in a window on a hotkey.' },
+  { glyph: 'terminal', hue: 'graphite', title: 'Script Commands', text: 'Your shell scripts, with arguments.' },
+  { glyph: 'arrows', hue: 'red', title: 'Search one plugin', text: 'Type its name, press Tab, search inside.' },
 ];
 const surfaces = [
   { glyph: 'menubar', title: 'Menu bar', text: 'Live text, symbols, progress and colour, updated as often as you like.', span: 'wide' },
-  { glyph: 'window', title: 'Panels and windows', text: 'Lists, charts, forms, gauges and tabs drawn natively, one click from the bar.' },
+  { glyph: 'window', title: 'Panels and windows', text: 'Lists, charts, forms, gauges, tabs and a live Markdown editor, drawn natively. A window can come up on its own hotkey.' },
   { glyph: 'widget', title: 'Desktop widgets', text: 'The same view as a widget on your desktop.' },
-  { glyph: 'palette', title: 'Command palette', text: 'Plugin commands with search, arguments and results, from one hotkey.' },
+  { glyph: 'palette', title: 'Command palette', text: 'Plugin commands with search, arguments and results, and a live preview beside each one.' },
   { glyph: 'agent', title: 'Tools for agents', text: 'Every plugin tool is an MCP tool, so Claude and friends can use your apps.' },
 ];
 const safety = [
   { glyph: 'shield', title: 'Its own sandbox', text: 'Every plugin runs in its own process in the App Sandbox. One crash never takes down the rest.' },
-  { glyph: 'lock', title: 'Asks first', text: 'Network hosts, files, secrets: a plugin declares what it needs, and you approve it in plain English.' },
+  { glyph: 'lock', title: 'Asks first', text: 'A plugin declares the hosts, folders and secrets it needs, and you approve them in plain English. Anything it can\'t undo takes a second press.' },
   { glyph: 'check', title: 'Signed store', text: 'Store plugins are reviewed, built in CI and signed. Stackbar checks every signature before it installs.' },
   { glyph: 'bolt', title: 'Pulled if bad', text: 'A withdrawn version is removed from every Mac that installed it, automatically.' },
 ];
@@ -63,7 +67,7 @@ const safety = [
         </div>
         <p class="fine">macOS 26 or later · Apple Silicon · MIT license</p>
       </div>
-      <PaletteScene label="Stackbar's command palette finding Terminal, answering 12 × 12 + 8, starting a focus timer and pasting a snippet" />
+      <PaletteScene label="Stackbar's command palette finding Terminal, answering 12 × 12 + 8, starting a focus timer, pasting a snippet and searching inside Notes with a preview of a checklist" />
     </div>
   </section>
 
@@ -72,7 +76,7 @@ const safety = [
       <div class="section-head">
         <p class="eyebrow">Replace Spotlight</p>
         <h2>Everything you reach for, in one place.</h2>
-        <p class="lede">Press your hotkey (⌘Space, if you like) and type. Give any command an alias or its own shortcut, and keep the ones you use most at the top.</p>
+        <p class="lede">Press your hotkey (⌘Space, or Caps Lock as a Hyper key) and type. Give any command an alias or its own shortcut, keep the ones you use most at the top, and press Tab to hand the rest to AI.</p>
       </div>
       <div class="chips">
         {launcher.map((l) => (
@@ -157,7 +161,7 @@ const safety = [
       <div class="section-head">
         <p class="eyebrow">Built for you and your AI</p>
         <h2>Describe it. Your agent ships it.</h2>
-        <p class="lede">Stackbar comes with an <code>llms.txt</code>, an authoring MCP server and a headless renderer. An agent writes the file, builds it, reads the render and fixes what it sees, without you opening the app.</p>
+        <p class="lede">Stackbar comes with an <code>llms.txt</code>, an authoring MCP server and a headless renderer. Claude Code, Codex, Cursor or any agent writes the file, builds it, reads the render and fixes what it sees, without you opening the app.</p>
         <div class="ctas"><Button href={`${repo}/blob/main/llms.txt`} variant="ghost">Read llms.txt</Button></div>
       </div>
     </div>

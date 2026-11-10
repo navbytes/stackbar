@@ -27,12 +27,17 @@ You don't need Xcode: store plugins come prebuilt.
 
 ## The first run
 
-The Welcome window asks two things:
+The Welcome window walks you through four things:
 
 - **Your hotkey.** It starts as ⌃⌥Space. Most people coming from Raycast or
   Alfred choose **Use ⌘Space**. Spotlight keeps ⌘Space until you turn its
   shortcut off, so Stackbar shows a button that opens the right place in
   System Settings. Until then, ⌃⌥Space keeps working.
+- **A starter set.** **Launcher** (clipboard history, quicklinks, snippets),
+  **Developer** and **Windows & Keys** each install a matching group of
+  plugins in one click. You can add or remove any of them later.
+- **Accessibility.** It shows whether Stackbar may move windows and paste,
+  and asks for it in place. The palette, apps, files and sums work without it.
 - **Crash reports.** Off unless you turn them on. See [Privacy](/docs/privacy/).
 
 Applications, Calculator and File Search are already installed and
@@ -57,9 +62,10 @@ Windows are in the Store and do more than Spotlight's versions.
 - **The palette:** your hotkey. Type to search; see [The palette](/docs/palette/).
 - **The menu bar:** each plugin with a menu bar item shows it there. Click it
   for its panel.
-- **Settings:** from the Stackbar menu (⌘,). General holds the hotkey and
-  moving to another Mac; Commands holds aliases and hotkeys; Store holds
-  plugins and updates.
+- **Settings:** from the Stackbar menu (⌘,). General holds the hotkey, the
+  Hyper key, which plugins answer in the main search, fallbacks, your
+  terminal and moving to another Mac; Commands holds aliases and hotkeys;
+  Store holds plugins and updates.
 - **Widgets:** plugins with a widget show up in the macOS widget gallery
   under Stackbar.
 
