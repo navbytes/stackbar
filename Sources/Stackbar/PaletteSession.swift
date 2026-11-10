@@ -78,8 +78,11 @@ final class PaletteSession {
     private(set) var shownCount = 0
     /// ⌘ is held: the first rows show their ⌘1…⌘9.
     var commandHeld = false
-    /// Nothing to come back to: no open command and nothing typed.
-    var isIdle: Bool { stack.isEmpty && query.isEmpty }
+    /// The plugin search the palette is inside: its name, then Tab, as in
+    /// Spotlight. Only its rows show until Esc, or Delete in an empty field.
+    private(set) var scope: CommandRegistry.Entry?
+    /// Nothing to come back to: no open command, no plugin search, nothing typed.
+    var isIdle: Bool { stack.isEmpty && query.isEmpty && scope == nil }
 
     /// The Settings key for compact mode: only the search field shows until
     /// the user types, like Spotlight.
@@ -119,6 +122,7 @@ final class PaletteSession {
             if case .view(let view) = stage { view.close() }
         }
         stack = []
+        scope = nil
         query = ""
         closeRootSearch()
         selection.reset()
@@ -145,6 +149,11 @@ final class PaletteSession {
         if opening {
             openToken += 1
             opening = false
+            return true
+        }
+        // Esc inside a plugin's search goes back to the main search.
+        if stack.isEmpty, scope != nil {
+            leaveScope()
             return true
         }
         guard let last = stack.popLast() else { return false }
@@ -196,7 +205,11 @@ final class PaletteSession {
         // What the palette learned is part of the key too: a reset, a pin or
         // Settings' Clear Search History reorders the root.
         let memory = model.commands.memory
-        let key = PaletteRootCache.Key(query: query, index: palette.revision, memory: memory.revision, store: storeCount, rows: rowsStamp)
+        let key = PaletteRootCache.Key(query: query, index: palette.revision, memory: memory.revision, store: storeCount, rows: rowsStamp,
+                                       scope: scope?.key)
+        if let scope {
+            return cache.root(for: key) { PaletteRoot.scoped(plugins.first { $0.command.key == scope.key }) }
+        }
         return cache.root(for: key) {
             PaletteRoot.build(query: query, index: palette, ranker: memory.ranker(for: query),
                               usage: memory.usage, favorites: memory.favorites.ids,
@@ -246,7 +259,9 @@ final class PaletteSession {
         // An alias before the text (`gs stackbar`) asks only that command,
         // with the rest, even when it is out of the main search.
         let scoped = scopedRootSearch()
-        let text = scoped.map { $0.text.isEmpty ? nil : $0.text } ?? RootSearchSession<CommandViewModel>.searchText(query, atRoot: stack.isEmpty)
+        // Inside a plugin's search an empty field still asks it, for what it
+        // lists before anything is typed; after an alias it waits for text.
+        let text = scoped.map { $0.text.isEmpty && scope == nil ? nil : $0.text } ?? RootSearchSession<CommandViewModel>.searchText(query, atRoot: stack.isEmpty)
         rootSearch.feed(text, commands: scoped.map { [$0.entry] } ?? commands.registry.entries,
                         accepts: { entry, text in
                             if let scoped { return entry.key == scoped.entry.key }
@@ -274,7 +289,9 @@ final class PaletteSession {
     /// The root-search command an alias at the start of the text names
     /// (`gs stackbar`), and the rest of the text.
     private func scopedRootSearch() -> (entry: CommandRegistry.Entry, text: String)? {
-        guard stack.isEmpty, let match = model.palette.aliasMatch(query), let key = match.entry.commandKey,
+        guard stack.isEmpty else { return nil }
+        if let scope { return (scope, query.trimmingCharacters(in: .whitespaces)) }
+        guard let match = model.palette.aliasMatch(query), let key = match.entry.commandKey,
               let entry = model.commands.registry.entry(key),
               RootSearchGate.searches(entry.spec, preference: model.commands.preferences[key]) else { return nil }
         return (entry, match.rest)
@@ -293,11 +310,45 @@ final class PaletteSession {
         return PaletteFallbacks.offered(availableFallbacks(), chosen: preferences.fallbacks) { preferences[$0] }
     }
 
+    /// The plugin search Tab on the selected row would enter: the row is a
+    /// plugin's root-search command or its Open row.
+    var scopeTarget: CommandRegistry.Entry? {
+        guard stack.isEmpty, scope == nil, let entry = selectedEntry else { return nil }
+        let commands: CommandCenter = model.commands
+        return PaletteScope.target(of: entry, commands: commands.registry.entries) { commands.preferences[$0] }
+    }
+
+    /// Tab at the root: searches inside the selected row's plugin when it
+    /// has a search, otherwise hands the text to the fallback.
+    func tab() -> Bool {
+        if let target = scopeTarget {
+            enterScope(target)
+            return true
+        }
+        return tabToFallback()
+    }
+
+    /// Searches only inside `command`, from an empty field.
+    func enterScope(_ command: CommandRegistry.Entry) {
+        scope = command
+        if query.isEmpty { feedRootSearch() } else { query = "" }
+        selection.reset()
+        problem = nil
+    }
+
+    /// Back to the main search, from an empty field.
+    func leaveScope() {
+        guard scope != nil else { return }
+        scope = nil
+        if query.isEmpty { feedRootSearch() } else { query = "" }
+        selection.reset()
+    }
+
     /// Tab at the root: hands the typed text to the chosen fallback (Ask AI
     /// by default), whether or not the root lists it now. False when there's
     /// nothing to hand or no one to take it, so Tab moves focus as usual.
     func tabToFallback() -> Bool {
-        guard stack.isEmpty, !query.trimmingCharacters(in: .whitespaces).isEmpty,
+        guard stack.isEmpty, scope == nil, !query.trimmingCharacters(in: .whitespaces).isEmpty,
               let command = PaletteTabTarget.command(saved: UserDefaults.standard.string(forKey: PaletteTabTarget.defaultsKey), fallbacks: availableFallbacks()) else { return false }
         if let entry = PaletteTabTarget.entry(for: command, in: root), root.role(of: entry) == .fallback {
             activate(entry)

@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Added
+- **Search inside a plugin.** Type a plugin's name and press Tab, as in Spotlight: its name becomes a chip and what you type next searches only that plugin, with all its results. Esc, or Delete in the empty field, goes back. The bar at the bottom shows "Search <Plugin> ⇥" when Tab will do this; from any other row Tab still asks AI.
+
 ## 0.37.0
 
 ### Changed
