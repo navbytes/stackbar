@@ -54,10 +54,46 @@ public struct PaletteRoot: Equatable, Sendable {
     /// each arrow press and redraw reads it several times.
     public let entries: [PaletteIndex.Entry]
 
+    /// One line of the root as drawn: a section's heading or one of its
+    /// rows. The list draws these, in one flat run, by `id`.
+    public enum Line: Equatable, Sendable, Identifiable {
+        case header(section: String, title: String)
+        case row(section: String, entry: PaletteIndex.Entry)
+
+        /// The line's identity in the drawn list. A row's is its section's
+        /// and its entry's together: the same entry under another heading
+        /// (Recent before you type, Results after) is another line. Keyed
+        /// by the entry alone, SwiftUI's lazy list kept the view it drew
+        /// under the old heading, so the highlight never reached the new
+        /// one while Return still ran it.
+        public var id: String {
+            switch self {
+            case .header(let section, _): return "header\u{1F}\(section)"
+            case .row(let section, let entry): return Self.rowID(section: section, entryID: entry.id)
+            }
+        }
+
+        public static func rowID(section: String, entryID: String) -> String {
+            "row\u{1F}\(section)\u{1F}\(entryID)"
+        }
+    }
+
+    /// Headings and rows in the order drawn.
+    public let lines: [Line]
+
     init(sections: [PaletteSection], roles: [String: Role]) {
         self.sections = sections
         self.roles = roles
         entries = sections.flatMap(\.entries)
+        lines = sections.flatMap { section in
+            [Line.header(section: section.id, title: section.title)] + section.entries.map { Line.row(section: section.id, entry: $0) }
+        }
+    }
+
+    /// The id of the drawn line showing `entryID`, to scroll to it: the
+    /// first section that lists it.
+    public func lineID(of entryID: String) -> String? {
+        sections.first { $0.entries.contains { $0.id == entryID } }.map { Line.rowID(section: $0.id, entryID: entryID) }
     }
 
     public func role(of entry: PaletteIndex.Entry) -> Role {
