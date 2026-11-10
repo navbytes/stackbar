@@ -308,7 +308,22 @@ struct PaletteView: View {
         HStack(spacing: 10) {
             if session.stack.isEmpty {
                 Image(systemName: "magnifyingglass").font(.title2.weight(.medium)).foregroundStyle(.secondary)
-                searchField(text: $session.query, prompt: "Search apps, files and commands, or calculate")
+                if let scope = session.scope {
+                    // Searching inside one plugin: its name as a chip, as in Spotlight.
+                    HStack(spacing: 5) {
+                        PluginIcon(symbol: session.manifest(of: scope.pluginID)?.symbol, accent: session.accent(of: scope.pluginID), size: 16)
+                        Text(scope.pluginName).lineLimit(1)
+                    }
+                    .font(.callout.weight(.medium))
+                    .padding(.leading, 4)
+                    .padding(.trailing, 8)
+                    .padding(.vertical, 3)
+                    .glassEffect(.regular.tint(.accentColor.opacity(0.35)), in: .capsule)
+                    .help("Esc or Delete goes back to the main search")
+                    .accessibilityLabel("Searching in \(scope.pluginName)")
+                }
+                // One field either way, so it keeps focus as the chip comes and goes.
+                searchField(text: $session.query, prompt: session.scope.map(PaletteScope.prompt) ?? "Search apps, files and commands, or calculate")
             } else {
                 Button {
                     _ = session.back()
@@ -387,9 +402,15 @@ struct PaletteView: View {
             session.submit()
             return .handled
         }
-        // Tab with text at the root asks AI (or the fallback picked in
-        // Settings), as in Raycast.
-        if press.key == .tab, press.modifiers.isEmpty, focus == .search, session.tabToFallback() {
+        // Tab on a plugin's search or Open row searches inside the plugin,
+        // as in Spotlight. Otherwise Tab with text at the root asks AI (or
+        // the fallback picked in Settings), as in Raycast.
+        if press.key == .tab, press.modifiers.isEmpty, focus == .search, session.tab() {
+            return .handled
+        }
+        // Delete in an empty field leaves the plugin's search.
+        if press.key == .delete, press.modifiers.isEmpty, focus == .search, session.stack.isEmpty, session.scope != nil, session.query.isEmpty {
+            session.leaveScope()
             return .handled
         }
         switch press.key {
@@ -543,12 +564,16 @@ struct RootResults: View {
             : [:]
         ScrollViewReader { proxy in
             ScrollView {
-                // One identity per row, the entry's: the highlight and the
-                // scroll follow the entry, not its position in the list.
+                // One flat run of lines, each with its own identity: a row's
+                // is its section's and its entry's together (see
+                // `PaletteRoot.Line`), so an entry that moves from Recent to
+                // Results is drawn afresh and takes the highlight.
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(sections) { section in
-                        SectionHeader(title: section.title)
-                        ForEach(section.entries) { entry in
+                    ForEach(root.lines) { line in
+                        switch line {
+                        case .header(_, let title):
+                            SectionHeader(title: title)
+                        case .row(_, let entry):
                             PaletteRow(entry: entry, accent: session.accent(of: entry.pluginID), pluginSymbol: session.manifest(of: entry.pluginID)?.symbol,
                                        selected: entry.id == selected, number: numbers[entry.id])
                                 .contentShape(Rectangle())
@@ -560,15 +585,24 @@ struct RootResults: View {
             }
             .scrollIndicators(.never)
             .onChange(of: selected) { _, newValue in
-                if let newValue { proxy.scrollTo(newValue) }
+                if let newValue, let line = session.root.lineID(of: newValue) { proxy.scrollTo(line) }
             }
         }
         .overlay {
             if sections.isEmpty {
-                Text(session.model.palette.all.allSatisfy({ $0.pluginID == PaletteIndex.appID }) ? "No plugin has any commands or actions yet." : "No matches")
+                Text(emptyText)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+extension RootResults {
+    private var emptyText: String {
+        if let scope = session.scope {
+            return session.model.controller(for: scope.pluginID)?.supervisor == nil ? "\(scope.pluginName) isn't running" : "No matches in \(scope.pluginName)"
+        }
+        return session.model.palette.all.allSatisfy({ $0.pluginID == PaletteIndex.appID }) ? "No plugin has any commands or actions yet." : "No matches"
     }
 }
 
@@ -1009,6 +1043,9 @@ struct ActionBar: View {
             Spacer(minLength: 12)
             if let primary = session.primaryTitle {
                 BarButton(title: primary, key: "↩", emphasized: true) { session.submit() }
+            }
+            if let target = session.scopeTarget {
+                BarButton(title: PaletteScope.prompt(target), key: "⇥", emphasized: false) { session.enterScope(target) }
             }
             if let secondary = session.secondaryTitle {
                 BarButton(title: secondary, key: "⌘↩", emphasized: false) { _ = session.submitSecondary() }

@@ -37,6 +37,37 @@ final class PaletteRootTests: XCTestCase {
         XCTAssertEqual(root.input(for: root.entries[0], query: "gh react", index: index), "react")
     }
 
+    /// The reported bug: "y" listed the five recent commands under Results;
+    /// Down moved through them and Return ran them, but none lit up. Drawn
+    /// by entry id alone, each row kept the view SwiftUI's lazy list had
+    /// made for it under Recent. A row's line is its section and entry.
+    func testARowMovingFromRecentToResultsIsANewLine() throws {
+        let commands = ["My GitHub Issues", "Yours to Review", "Daily Notes"].enumerated().map { command("c\($0.offset)", $0.element) }
+        let index = index(commands + [command("tube", "YouTube")])
+        let recent = Set(commands.map { PaletteIndex.Entry.commandID($0.key) })
+        let empty = PaletteRoot.build(query: "", index: index, ranker: PaletteRanker(query: "")) { recent.contains($0.id) }
+        let typed = PaletteRoot.build(query: "y", index: index, ranker: PaletteRanker(query: "y")) { recent.contains($0.id) }
+        XCTAssertEqual(empty.sections.first?.kind, .recent)
+        XCTAssertEqual(typed.sections.first?.kind, .results)
+
+        let id = PaletteIndex.Entry.commandID(commands[0].key)
+        let before = try XCTUnwrap(empty.lineID(of: id))
+        let after = try XCTUnwrap(typed.lineID(of: id))
+        XCTAssertNotEqual(before, after, "the same entry under a new heading is drawn afresh")
+        XCTAssertTrue(Set(empty.lines.map(\.id)).isDisjoint(with: typed.lines.map(\.id)), "no Results line reuses a Recent line's identity")
+
+        for root in [empty, typed] {
+            let ids = root.lines.map(\.id)
+            XCTAssertEqual(Set(ids).count, ids.count, "every line has its own identity")
+            let drawn = root.lines.compactMap { line -> String? in
+                if case .row(_, let entry) = line { return entry.id }
+                return nil
+            }
+            XCTAssertEqual(drawn, root.entries.map(\.id), "the lines draw the rows the arrows walk, in order")
+            XCTAssertTrue(root.entries.allSatisfy { root.lines.map(\.id).contains(root.lineID(of: $0.id) ?? "") }, "every row can be scrolled to")
+        }
+    }
+
     func testAnotherCommandsWholeNameBeatsTheAlias() {
         let index = index([command("cockpit", "pr cockpit"), command("search", "Search Pull Requests")], aliases: ["search": "pr"])
         XCTAssertEqual(build("pr cockpit", index).entries.first?.title, "pr cockpit")

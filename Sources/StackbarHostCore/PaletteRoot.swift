@@ -54,10 +54,46 @@ public struct PaletteRoot: Equatable, Sendable {
     /// each arrow press and redraw reads it several times.
     public let entries: [PaletteIndex.Entry]
 
+    /// One line of the root as drawn: a section's heading or one of its
+    /// rows. The list draws these, in one flat run, by `id`.
+    public enum Line: Equatable, Sendable, Identifiable {
+        case header(section: String, title: String)
+        case row(section: String, entry: PaletteIndex.Entry)
+
+        /// The line's identity in the drawn list. A row's is its section's
+        /// and its entry's together: the same entry under another heading
+        /// (Recent before you type, Results after) is another line. Keyed
+        /// by the entry alone, SwiftUI's lazy list kept the view it drew
+        /// under the old heading, so the highlight never reached the new
+        /// one while Return still ran it.
+        public var id: String {
+            switch self {
+            case .header(let section, _): return "header\u{1F}\(section)"
+            case .row(let section, let entry): return Self.rowID(section: section, entryID: entry.id)
+            }
+        }
+
+        public static func rowID(section: String, entryID: String) -> String {
+            "row\u{1F}\(section)\u{1F}\(entryID)"
+        }
+    }
+
+    /// Headings and rows in the order drawn.
+    public let lines: [Line]
+
     init(sections: [PaletteSection], roles: [String: Role]) {
         self.sections = sections
         self.roles = roles
         entries = sections.flatMap(\.entries)
+        lines = sections.flatMap { section in
+            [Line.header(section: section.id, title: section.title)] + section.entries.map { Line.row(section: section.id, entry: $0) }
+        }
+    }
+
+    /// The id of the drawn line showing `entryID`, to scroll to it: the
+    /// first section that lists it.
+    public func lineID(of entryID: String) -> String? {
+        sections.first { $0.entries.contains { $0.id == entryID } }.map { Line.rowID(section: $0.id, entryID: entryID) }
     }
 
     public func role(of entry: PaletteIndex.Entry) -> Role {
@@ -156,19 +192,7 @@ public struct PaletteRoot: Equatable, Sendable {
         var usedTitles = PaletteSection.Kind.fixedTitles
         let pluginSections = plugins.sorted { $0.command.spec.title < $1.command.spec.title }.compactMap { source -> PaletteSection? in
             let command = source.command
-            let entries = source.rows.prefix(pluginRowLimit).compactMap { row -> PaletteIndex.Entry? in
-                guard let primary = row.actions.first else { return nil }
-                let kind: PaletteIndex.Entry.Kind = primary.navigate.map { .navigate($0) } ?? .action(primary.id, value: nil)
-                var entry = PaletteIndex.Entry(pluginID: command.pluginID, pluginName: command.pluginName, title: row.title,
-                                               subtitle: row.subtitle, symbol: row.symbol ?? command.spec.symbol, kind: kind)
-                entry.appIcon = row.appIcon
-                entry.fileIcon = row.fileIcon
-                // Action ids change with every answer; the row's key doesn't.
-                entry.rankKey = PaletteIndex.Entry.rowID(pluginID: command.pluginID, commandID: command.spec.id, rowKey: row.key)
-                roles[entry.id] = .pluginRow(PluginRow(command: command.key, rowKey: row.key, actions: row.actions,
-                                                       keepable: command.spec.rootPattern == nil))
-                return entry
-            }
+            let entries = Self.entries(source, limit: pluginRowLimit, roles: &roles)
             guard !entries.isEmpty else { return nil }
             var title = command.spec.rootSection ?? command.spec.title
             if !usedTitles.insert(title).inserted {
@@ -200,6 +224,42 @@ public struct PaletteRoot: Equatable, Sendable {
     }
 }
 
+extension PaletteRoot {
+    /// Rows a plugin shows when the palette searches only it, at most.
+    public static let scopedRowLimit = 50
+
+    /// The root while the palette searches inside one plugin (its name, then
+    /// Tab, as in Spotlight): only that command's rows, under its name.
+    /// Nothing else is offered, not even fallbacks; Esc leaves.
+    public static func scoped(_ source: PluginRows?) -> PaletteRoot {
+        guard let source else { return PaletteRoot(sections: [], roles: [:]) }
+        var roles: [String: Role] = [:]
+        let entries = entries(source, limit: scopedRowLimit, roles: &roles)
+        guard !entries.isEmpty else { return PaletteRoot(sections: [], roles: [:]) }
+        let title = source.command.spec.rootSection ?? source.command.pluginName
+        return PaletteRoot(sections: [PaletteSection(title: title, entries: entries, leads: true)], roles: roles)
+    }
+
+    /// A root-search command's first `limit` rows as entries, each with its
+    /// role in `roles`.
+    static func entries(_ source: PluginRows, limit: Int, roles: inout [String: Role]) -> [PaletteIndex.Entry] {
+        let command = source.command
+        return source.rows.prefix(limit).compactMap { row -> PaletteIndex.Entry? in
+            guard let primary = row.actions.first else { return nil }
+            let kind: PaletteIndex.Entry.Kind = primary.navigate.map { .navigate($0) } ?? .action(primary.id, value: nil)
+            var entry = PaletteIndex.Entry(pluginID: command.pluginID, pluginName: command.pluginName, title: row.title,
+                                           subtitle: row.subtitle, symbol: row.symbol ?? command.spec.symbol, kind: kind)
+            entry.appIcon = row.appIcon
+            entry.fileIcon = row.fileIcon
+            // Action ids change with every answer; the row's key doesn't.
+            entry.rankKey = PaletteIndex.Entry.rowID(pluginID: command.pluginID, commandID: command.spec.id, rowKey: row.key)
+            roles[entry.id] = .pluginRow(PluginRow(command: command.key, rowKey: row.key, actions: row.actions,
+                                                   keepable: command.spec.rootPattern == nil))
+            return entry
+        }
+    }
+}
+
 /// Keeps the root built for the inputs it was built from, so the palette's
 /// body (which reads the root many times a pass) and every arrow press reuse
 /// it, and only a change in what the root is made of builds it again.
@@ -217,13 +277,16 @@ public struct PaletteRootCache {
         public var store: Int
         /// `RootSearchSession.rowsStamp`.
         public var rows: Int
+        /// The command the palette searches only, after its name and Tab.
+        public var scope: CommandKey?
 
-        public init(query: String, index: Int, memory: Int, store: Int, rows: Int) {
+        public init(query: String, index: Int, memory: Int, store: Int, rows: Int, scope: CommandKey? = nil) {
             self.query = query
             self.index = index
             self.memory = memory
             self.store = store
             self.rows = rows
+            self.scope = scope
         }
     }
 

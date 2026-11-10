@@ -142,12 +142,14 @@ final class StorageStoreTests: XCTestCase {
         // The disk recovers; a second set must not be needed for the save to land.
         try FileManager.default.removeItem(at: directory)
         try await store.set("b", "2", for: "p.one")
+        // The pending retry can land first with only "a"; wait for both.
+        let expected = ["a": "1", "b": "2"]
         var written: [String: String] = [:]
-        for _ in 0..<150 where written.isEmpty {
+        for _ in 0..<150 where written != expected {
             try await Task.sleep(for: .milliseconds(20))
             written = await StorageStore(directory: directory).snapshot(for: "p.one")
         }
-        XCTAssertEqual(written, ["a": "1", "b": "2"])
+        XCTAssertEqual(written, expected)
     }
 
     func testIDsThatLookAlikeGetTheirOwnFiles() async throws {

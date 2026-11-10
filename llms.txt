@@ -160,7 +160,10 @@ Command("issue", title: "Jira Issue").view(search: { invocation in try await sel
 clear. The alias, a space and text (`gs stackbar`) opens the command with
 the text; for a `.rootSearch()` command the text goes to its search and its
 rows lead, even while the user keeps it out of the main search. A default
-alias another command already uses is skipped (0.37.0).
+alias another command already uses is skipped (0.37.0). The user can also type
+your plugin's name and press Tab on its search or its Open row: the palette
+then searches only that command, with every row it returns (up to 50) and
+an empty search too, so list something useful before any text (0.38.0).
 
 `.fallback()` makes the command one the user can offer under the results for
 any text ("Search the web for …"): the text fills its first argument, or a
