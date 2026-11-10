@@ -284,11 +284,26 @@ extension PrebuiltHelpers {
         return nil
     }
 
+    /// The installed store plugins with neither a helper for exactly this
+    /// StackbarKit nor a build of their own, which is all of them right after
+    /// a Stackbar update. At launch these wait for `refresh` before they
+    /// load, so a Mac that can compile doesn't spend minutes rebuilding what
+    /// the store has prebuilt.
+    public static func missing(installed: [PluginInstaller.Installed], builder: PluginBuilder) -> [PluginInstaller.Installed] {
+        installed.filter { record in
+            let file = URL(fileURLWithPath: record.file)
+            guard let source = try? Data(contentsOf: file) else { return false }
+            return !builder.hasPrebuilt(sourceDigest: SHA256.hex(source), compatible: false) && !builder.hasCachedBuild(source: file, code: source)
+        }
+    }
+
     /// Fetches the missing helpers for plugins installed from a store, such
     /// as after a Stackbar update changed StackbarKit. Only for a source that
     /// is still exactly what was installed, and only signed by the key the
-    /// plugin is pinned to. Returns the ids that got one.
-    public static func refresh(installed: [PluginInstaller.Installed], catalogs: [PluginStore.Catalog], publishers: PublisherStore, builder: PluginBuilder, toolchain: Bool) async -> [String] {
+    /// plugin is pinned to. Returns the ids that got one, and tells `saved`
+    /// about each as it lands.
+    public static func refresh(installed: [PluginInstaller.Installed], catalogs: [PluginStore.Catalog], publishers: PublisherStore, builder: PluginBuilder, toolchain: Bool,
+                               saved: @Sendable (PluginInstaller.Installed) async -> Void = { _ in }) async -> [String] {
         let stackbarKit = builder.stackbarKit
         let cache = HelperIndexCache()
         var refreshed: [String] = []
@@ -306,6 +321,7 @@ extension PrebuiltHelpers {
                                                   stackbarKit: stackbarKit, compatible: compatible, cache: cache),
                   (try? save(download, in: builder.downloadedHelpers, stackbarKit: stackbarKit)) != nil else { continue }
             refreshed.append(record.id)
+            await saved(record)
         }
         return refreshed
     }

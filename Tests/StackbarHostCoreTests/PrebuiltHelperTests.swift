@@ -107,6 +107,27 @@ final class PrebuiltHelperTests: XCTestCase {
         XCTAssertEqual(try builder.build(source: source).binary, compatible, "another StackbarKit: only the compatible helper fits")
     }
 
+    func testMissingListsStorePluginsWithNothingToRunForThisStackbarKit() throws {
+        let kit = try fakeKit()
+        let builder = PluginBuilder(stackbarPackage: kit, cacheRoot: directory.appendingPathComponent("Cache"))
+        func installed(_ name: String) throws -> PluginInstaller.Installed {
+            let file = directory.appendingPathComponent("\(name).swift")
+            try Data("// \(name)".utf8).write(to: file)
+            return .init(id: "dev.t.\(name)", file: file.path, version: "1.0.0", publisher: "Pub", installedAt: Date())
+        }
+        let helped = try installed("helped"), built = try installed("built"), bare = try installed("bare"), compatible = try installed("compatible")
+        let gone = PluginInstaller.Installed(id: "dev.t.gone", file: directory.appendingPathComponent("gone.swift").path, version: "1.0.0", publisher: "Pub", installedAt: Date())
+
+        _ = try executable(PrebuiltHelpers.exactName(sourceDigest: SHA256.hex(Data("// helped".utf8)), stackbarKit: builder.stackbarKit), in: builder.downloadedHelpers)
+        _ = try executable(PrebuiltHelpers.compatibleName(sourceDigest: SHA256.hex(Data("// compatible".utf8)), protocolVersion: StackbarProtocolVersion.current), in: builder.downloadedHelpers)
+        let product = builder.buildProduct(source: URL(fileURLWithPath: built.file), code: Data("// built".utf8), kit: builder.stackbarKit).binary
+        _ = try executable(product.lastPathComponent, in: product.deletingLastPathComponent())
+        XCTAssertTrue(builder.hasCachedBuild(source: URL(fileURLWithPath: built.file), code: Data("// built".utf8)))
+
+        let missing = PrebuiltHelpers.missing(installed: [helped, built, bare, compatible, gone], builder: builder)
+        XCTAssertEqual(missing.map(\.id), ["dev.t.bare", "dev.t.compatible"], "only an exact helper or a build of its own counts; a missing file is not waited for")
+    }
+
     func testSaveNamesTheHelperForWhatItRunsOn() throws {
         let binary = Data("#!/bin/sh\n".utf8)
         let exact = PrebuiltHelpers.Download(record: record(kit: "k1"), binary: binary, exact: true)
