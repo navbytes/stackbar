@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.37.0
 
 ### Changed
 - **A cleaner main search.** Like Raycast, the palette now lists commands, apps, files and sums, not every button, toggle and row on your plugins' panels. Those stay on the panel, and every plugin has an "Open <Plugin>" row to get there.
