@@ -7,7 +7,7 @@ public enum PluginStore {
         public var url: URL
         /// When set, the index must be signed by this key.
         public var publicKey: String?
-        /// The built-in navbytes index: listed first, can't be removed.
+        /// The build's own store (`OfficialIndex`): listed first, can't be removed.
         public var isOfficial: Bool
         /// The secret whose value is sent as a bearer token to this
         /// store's host (a private store behind a login).
@@ -79,17 +79,20 @@ public enum PluginStore {
         public var withdrawn: [Withdrawn] = []
     }
 
-    /// The official index (when its key is known) followed by the user's own.
-    /// `secret` reads a store's token by name; each source with one is
-    /// registered with `StoreAuth`, so its index, bundles and helpers are
-    /// fetched with it.
-    public static func sources(userURLs: [String], secret: (String) -> String? = { _ in nil }) -> [Source] {
+    /// The official index (when its key is known) followed by the user's own,
+    /// unless the build's distribution turns those off. `secret` reads a
+    /// store's token by name; each source with one is registered with
+    /// `StoreAuth`, so its index, bundles and helpers are fetched with it.
+    public static func sources(userURLs: [String], secret: (String) -> String? = { _ in nil },
+                               distribution: Distribution = .current) -> [Source] {
         var result: [Source] = []
-        if let key = OfficialIndex.publicKey {
-            result.append(Source(url: OfficialIndex.url, publicKey: key, isOfficial: true))
-        }
         var tokens: [URL: String] = [:]
-        for string in userURLs {
+        let store = distribution.store
+        if let key = store.publicKey {
+            result.append(Source(url: store.url, publicKey: key, isOfficial: true, authSecret: store.authSecret))
+            if let name = store.authSecret, let token = secret(name), !token.isEmpty { tokens[store.url] = token }
+        }
+        for string in distribution.allowUserStores ? userURLs : [] {
             guard let source = Source.parse(string), !result.contains(where: { $0.url == source.url }) else { continue }
             if let name = source.authSecret, let token = secret(name), !token.isEmpty { tokens[source.url] = token }
             result.append(source)

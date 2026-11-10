@@ -51,7 +51,7 @@ struct StoreSettings: View {
                     let name = store.catalogs.first { $0.source.url == source.url }?.index.name
                     SettingsRow(symbol: source.isOfficial ? "checkmark.seal.fill" : "shippingbox.fill", color: source.isOfficial ? .blue : .gray,
                                 title: name ?? source.url.host() ?? source.url.absoluteString,
-                                caption: source.isOfficial ? "Signed by navbytes"
+                                caption: source.isOfficial ? "Signed by \(OfficialIndex.publisher)"
                                     : [source.url.absoluteString, source.publicKey == nil ? nil : "signed", source.authSecret.map { "token \($0)" }].compactMap { $0 }.joined(separator: " · ")) {
                         if !source.isOfficial {
                             Button("Remove", role: .destructive) {
@@ -61,12 +61,15 @@ struct StoreSettings: View {
                         }
                     }
                 }
-                HStack {
-                    TextField("Add an index URL (https://…/index.json)", text: $newIndex)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit(addIndex)
-                    Button("Add", action: addIndex)
-                        .disabled(newIndex.trimmingCharacters(in: .whitespaces).isEmpty)
+                // Some organizations' builds allow only their own store.
+                if Distribution.current.allowUserStores {
+                    HStack {
+                        TextField("Add an index URL (https://…/index.json)", text: $newIndex)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(addIndex)
+                        Button("Add", action: addIndex)
+                            .disabled(newIndex.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 }
             }
             if !store.problems.isEmpty {
@@ -107,10 +110,12 @@ struct AppUpdatesGroup: View {
             if updater.isAvailable {
                 Toggle("Check for Stackbar updates automatically", isOn: $updater.checksAutomatically)
                     .toggleStyle(TrailingSwitchStyle())
-                SettingsRow(title: "Get beta versions", caption: "Try new versions before everyone else. Betas can have rough edges; turn this off to go back to the next regular release.") {
-                    Toggle("Get beta versions", isOn: $updater.getsBetas)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
+                if Updater.betaFeed != nil {
+                    SettingsRow(title: "Get beta versions", caption: "Try new versions before everyone else. Betas can have rough edges; turn this off to go back to the next regular release.") {
+                        Toggle("Get beta versions", isOn: $updater.getsBetas)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                    }
                 }
             }
         }

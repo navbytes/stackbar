@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import Observation
+import StackbarHostCore
 #if canImport(Sparkle)
 import Sparkle
 #endif
@@ -56,7 +57,8 @@ final class Updater: NSObject {
 
     /// Whether updates come from the beta feed, which also has pre-releases.
     nonisolated static let betaKey = "betaUpdates"
-    nonisolated static let betaFeed = "https://github.com/navbytes/stackbar/releases/download/beta/appcast.xml"
+    /// Nil when the build's distribution has no beta feed.
+    nonisolated static var betaFeed: String? { Distribution.current.updates.betaFeed?.absoluteString }
 
     var getsBetas: Bool {
         get {
@@ -75,7 +77,7 @@ final class Updater: NSObject {
     }
 
     /// What Settings says when this build can't update itself.
-    static let unavailableNote = "This build doesn't update itself. Update with Homebrew (brew upgrade --cask stackbar) or download the latest release from stackbar.app."
+    static var unavailableNote: String { Distribution.current.updates.manualNote }
 
     @objc func checkForUpdates(_ sender: Any?) {
         #if canImport(Sparkle)
@@ -85,9 +87,7 @@ final class Updater: NSObject {
             return
         }
         #endif
-        if let url = URL(string: "https://github.com/navbytes/stackbar/releases/latest") {
-            NSWorkspace.shared.open(url)
-        }
+        NSWorkspace.shared.open(Distribution.current.latestReleaseURL)
     }
 }
 

@@ -66,6 +66,13 @@ fi
 if [ -n "${SENTRY_DSN:-}" ]; then
     plutil -replace SentryDSN -string "$SENTRY_DSN" "$PLIST"
 fi
+# The store, team, links and update feed of this build: Packaging/distribution.json
+# plus an organization's distribution.override.json. A build without a feed
+# loses SUPublicEDKey too, so it never checks for updates.
+python3 scripts/distribution.py plist "$PLIST" "$APP/Contents/PlugIns/StackbarWidget.appex/Contents/Info.plist"
+APP_ENTITLEMENTS=$(mktemp -t stackbar-app)
+cp Packaging/Stackbar.entitlements "$APP_ENTITLEMENTS"
+python3 scripts/distribution.py entitlements "$APP_ENTITLEMENTS"
 
 # 4. Sign inside out (Sparkle's documented order for a non-sandboxed app).
 sign() { codesign --force --options runtime $TIMESTAMP --sign "$IDENTITY" "$@"; }
@@ -82,13 +89,15 @@ for framework in "$APP"/Contents/Frameworks/*.framework "$APP"/Contents/Framewor
 done
 WIDGET_ENTITLEMENTS=$(mktemp -t stackbar-widget)
 sed 's/\$(AppIdentifierPrefix)//' Packaging/Widget.entitlements > "$WIDGET_ENTITLEMENTS"
+python3 scripts/distribution.py entitlements "$WIDGET_ENTITLEMENTS"
 sign --entitlements "$WIDGET_ENTITLEMENTS" "$APP/Contents/PlugIns/StackbarWidget.appex"
 rm -f "$WIDGET_ENTITLEMENTS"
 for helper in "$KIT"/Prebuilt/*; do
     [ -f "$helper" ] && sign "$helper"
 done
 sign "$APP/Contents/MacOS/stackbarctl"
-sign --entitlements Packaging/Stackbar.entitlements "$APP"
+sign --entitlements "$APP_ENTITLEMENTS" "$APP"
+rm -f "$APP_ENTITLEMENTS"
 codesign --verify --deep --strict "$APP"
 
 # 5. Zip, notarize, staple, zip again.

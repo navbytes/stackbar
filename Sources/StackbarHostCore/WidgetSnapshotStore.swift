@@ -32,8 +32,9 @@ public struct WidgetSnapshotStore: Sendable {
     /// `group.` id must be authorised by a profile; without one the sandboxed
     /// widget is refused the container, so it found no plugins, and the app is
     /// asked to approve access (macOS 15 app group container protection). A
-    /// team-prefixed id needs no profile.
-    public static let appGroup = "59J9RQXYYP.io.navbytes.stackbar"
+    /// team-prefixed id needs no profile. The team comes from the build's
+    /// distribution, so an organization signing with its own team gets its own group.
+    public static var appGroup: String { Distribution.current.appGroup }
 
     /// The app group's directory when the app is signed with one.
     public static func shared(appGroup: String = WidgetSnapshotStore.appGroup) -> WidgetSnapshotStore {

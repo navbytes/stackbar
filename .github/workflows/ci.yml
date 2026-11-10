@@ -21,7 +21,7 @@ jobs:
   # run everything.
   changes:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
       linux: ${{ steps.decide.outputs.linux }}
@@ -42,6 +42,15 @@ jobs:
           else
             git diff --name-only "$BASE...$HEAD" | tee /dev/stderr | .github/scripts/changes.sh
           fi | tee -a "$GITHUB_OUTPUT"
+      # An organization's build settings belong in its own copy, never here
+      # (docs/self-hosting.md).
+      - name: No distribution override upstream
+        if: github.repository == 'navbytes/stackbar'
+        run: |
+          if [ -e Packaging/distribution.override.json ]; then
+            echo "::error::Packaging/distribution.override.json is for an organization's own copy; remove it"
+            exit 1
+          fi
 
   # The plugin contract, the runtime and the supervisor are Foundation-only,
   # so the cheap Linux runner exercises all of them, including a real plugin
@@ -49,7 +58,7 @@ jobs:
   linux:
     needs: changes
     if: needs.changes.outputs.linux == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     container: swift:6.2
     timeout-minutes: 30
     steps:
@@ -65,7 +74,7 @@ jobs:
   macos:
     needs: changes
     if: needs.changes.outputs.macos == 'true'
-    runs-on: macos-26
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -83,7 +92,7 @@ jobs:
   xcode:
     needs: changes
     if: needs.changes.outputs.xcode == 'true'
-    runs-on: macos-26
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -96,7 +105,7 @@ jobs:
     name: CI ok
     if: always()
     needs: [changes, linux, macos, xcode]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - env:

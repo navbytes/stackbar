@@ -5,8 +5,8 @@
 # bundle.sh and install.sh.
 #
 # The first-party plugins live in navbytes/stackbar-plugins. Their bundles come
-# from the official store, checked against its signing key, so a new Mac gets
-# them without a network. Offline, or with STACKBAR_SKIP_BUNDLES=1, the app is
+# from this build's store (Packaging/distribution.json), checked against its
+# signing key, so a new Mac gets them without a network. Offline, or with STACKBAR_SKIP_BUNDLES=1, the app is
 # built without them and they install from the store instead.
 #
 #   scripts/embed-stackbarkit.sh <Stackbar.app> <dir with a release stackbarctl>
@@ -23,7 +23,13 @@ cp Packaging/StackbarKit-Package.swift "$KIT/Package.swift"
 cp -R Sources/StackbarProtocol Sources/StackbarKit "$KIT/Sources/"
 for example in Examples/*/*.swift; do cp "$example" "$KIT/Examples/"; done
 if [ "${STACKBAR_SKIP_BUNDLES:-0}" != 1 ]; then
-    "$BIN/stackbarctl" index fetch "$KIT/Bundles" \
-        || echo "embed: couldn't fetch the first-party plugins; they will install from the store"
+    STORE=$(python3 scripts/distribution.py get store.url)
+    STORE_KEY=$(python3 scripts/distribution.py get store.publicKey)
+    if [ -z "$STORE_KEY" ]; then
+        echo "embed: the store has no signing key; the app is built without the first-party plugins"
+    else
+        "$BIN/stackbarctl" index fetch "$KIT/Bundles" --index "$STORE" --public-key "$STORE_KEY" \
+            || echo "embed: couldn't fetch the first-party plugins; they will install from the store"
+    fi
 fi
 cp llms.txt "$APP/Contents/Resources/"

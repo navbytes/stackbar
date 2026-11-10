@@ -4,12 +4,13 @@ import Foundation
 /// macOS and `stackbarctl doctor` filled in. Nothing is sent until the user
 /// submits the issue in their browser.
 public enum ProblemReport {
-    public static let repository = "navbytes/stackbar"
+    /// The repository of this build (`Distribution.links.repository`).
+    public static var repository: URL { Distribution.current.links.repository }
 
     /// GitHub prefills an issue form's fields from query items named by the
     /// fields' ids (`.github/ISSUE_TEMPLATE/bug.yml`).
     public static func issueURL(version: String, macOS: String, doctor: String) -> URL {
-        var components = URLComponents(string: "https://github.com/\(repository)/issues/new")!
+        var components = URLComponents(url: Distribution.current.issuesURL.appendingPathComponent("new"), resolvingAgainstBaseURL: false)!
         // Long URLs fail at GitHub; doctor output is a handful of lines.
         let doctor = String(doctor.trimmingCharacters(in: .whitespacesAndNewlines).prefix(4000))
         components.queryItems = [
@@ -22,7 +23,8 @@ public enum ProblemReport {
     }
 
     /// Release notes, docs and the issue list, for the Help menu.
-    public static let releasesURL = URL(string: "https://github.com/\(repository)/releases")!
-    public static let issuesURL = URL(string: "https://github.com/\(repository)/issues")!
-    public static let docsURL = URL(string: "https://stackbar.app")!
+    public static var releasesURL: URL { Distribution.current.releasesURL }
+    public static var issuesURL: URL { Distribution.current.issuesURL }
+    /// The website, or the repository when the build has none.
+    public static var docsURL: URL { Distribution.current.links.website ?? repository }
 }
