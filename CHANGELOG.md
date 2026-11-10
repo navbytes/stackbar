@@ -5,6 +5,9 @@ window. Write for people who use Stackbar, not for the code.
 
 ## Unreleased
 
+### Added
+- **Search inside a plugin.** Type a plugin's name and press Tab, as in Spotlight: its name becomes a chip and what you type next searches only that plugin, with all its results. Esc, or Delete in the empty field, goes back. The bar at the bottom shows "Search <Plugin> ⇥" when Tab will do this; from any other row Tab still asks AI.
+
 ### Fixed
 - **The palette highlight no longer skips rows.** After you typed, commands you had used recently could take the arrow keys and Return without lighting up, until the selection moved past them. Every row now shows when it is selected.
 

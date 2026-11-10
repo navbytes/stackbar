@@ -12,10 +12,10 @@
 - [x] 1.9 Tests, authoring guide + llms.txt, surface parity, CHANGELOG
 
 ## 2. Plugins (stackbar-plugins, after the host release)
-- [ ] 2.1 Standalone panel actions become commands
-- [ ] 2.2 Default aliases for root-search plugins
-- [ ] 2.3 Version bumps, minimumStackbar, pin
+- [x] 2.1 Standalone panel actions become commands (audit: each already had one)
+- [x] 2.2 Default aliases for root-search plugins
+- [x] 2.3 Version bumps, minimumStackbar, pin (stackbar-plugins #72)
 
 ## 3. Mac check
-- [ ] 3.1 Type a few letters: only commands, apps, files, sums; no toggles
-- [ ] 3.2 `gs <repo>` shows Git Sync rows with its switch off
+- [x] 3.1 Type a few letters: only commands, apps, files, sums; no toggles
+- [x] 3.2 `gs <repo>` shows Git Sync rows with its switch off

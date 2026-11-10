@@ -192,19 +192,7 @@ public struct PaletteRoot: Equatable, Sendable {
         var usedTitles = PaletteSection.Kind.fixedTitles
         let pluginSections = plugins.sorted { $0.command.spec.title < $1.command.spec.title }.compactMap { source -> PaletteSection? in
             let command = source.command
-            let entries = source.rows.prefix(pluginRowLimit).compactMap { row -> PaletteIndex.Entry? in
-                guard let primary = row.actions.first else { return nil }
-                let kind: PaletteIndex.Entry.Kind = primary.navigate.map { .navigate($0) } ?? .action(primary.id, value: nil)
-                var entry = PaletteIndex.Entry(pluginID: command.pluginID, pluginName: command.pluginName, title: row.title,
-                                               subtitle: row.subtitle, symbol: row.symbol ?? command.spec.symbol, kind: kind)
-                entry.appIcon = row.appIcon
-                entry.fileIcon = row.fileIcon
-                // Action ids change with every answer; the row's key doesn't.
-                entry.rankKey = PaletteIndex.Entry.rowID(pluginID: command.pluginID, commandID: command.spec.id, rowKey: row.key)
-                roles[entry.id] = .pluginRow(PluginRow(command: command.key, rowKey: row.key, actions: row.actions,
-                                                       keepable: command.spec.rootPattern == nil))
-                return entry
-            }
+            let entries = Self.entries(source, limit: pluginRowLimit, roles: &roles)
             guard !entries.isEmpty else { return nil }
             var title = command.spec.rootSection ?? command.spec.title
             if !usedTitles.insert(title).inserted {
@@ -236,6 +224,42 @@ public struct PaletteRoot: Equatable, Sendable {
     }
 }
 
+extension PaletteRoot {
+    /// Rows a plugin shows when the palette searches only it, at most.
+    public static let scopedRowLimit = 50
+
+    /// The root while the palette searches inside one plugin (its name, then
+    /// Tab, as in Spotlight): only that command's rows, under its name.
+    /// Nothing else is offered, not even fallbacks; Esc leaves.
+    public static func scoped(_ source: PluginRows?) -> PaletteRoot {
+        guard let source else { return PaletteRoot(sections: [], roles: [:]) }
+        var roles: [String: Role] = [:]
+        let entries = entries(source, limit: scopedRowLimit, roles: &roles)
+        guard !entries.isEmpty else { return PaletteRoot(sections: [], roles: [:]) }
+        let title = source.command.spec.rootSection ?? source.command.pluginName
+        return PaletteRoot(sections: [PaletteSection(title: title, entries: entries, leads: true)], roles: roles)
+    }
+
+    /// A root-search command's first `limit` rows as entries, each with its
+    /// role in `roles`.
+    static func entries(_ source: PluginRows, limit: Int, roles: inout [String: Role]) -> [PaletteIndex.Entry] {
+        let command = source.command
+        return source.rows.prefix(limit).compactMap { row -> PaletteIndex.Entry? in
+            guard let primary = row.actions.first else { return nil }
+            let kind: PaletteIndex.Entry.Kind = primary.navigate.map { .navigate($0) } ?? .action(primary.id, value: nil)
+            var entry = PaletteIndex.Entry(pluginID: command.pluginID, pluginName: command.pluginName, title: row.title,
+                                           subtitle: row.subtitle, symbol: row.symbol ?? command.spec.symbol, kind: kind)
+            entry.appIcon = row.appIcon
+            entry.fileIcon = row.fileIcon
+            // Action ids change with every answer; the row's key doesn't.
+            entry.rankKey = PaletteIndex.Entry.rowID(pluginID: command.pluginID, commandID: command.spec.id, rowKey: row.key)
+            roles[entry.id] = .pluginRow(PluginRow(command: command.key, rowKey: row.key, actions: row.actions,
+                                                   keepable: command.spec.rootPattern == nil))
+            return entry
+        }
+    }
+}
+
 /// Keeps the root built for the inputs it was built from, so the palette's
 /// body (which reads the root many times a pass) and every arrow press reuse
 /// it, and only a change in what the root is made of builds it again.
@@ -253,13 +277,16 @@ public struct PaletteRootCache {
         public var store: Int
         /// `RootSearchSession.rowsStamp`.
         public var rows: Int
+        /// The command the palette searches only, after its name and Tab.
+        public var scope: CommandKey?
 
-        public init(query: String, index: Int, memory: Int, store: Int, rows: Int) {
+        public init(query: String, index: Int, memory: Int, store: Int, rows: Int, scope: CommandKey? = nil) {
             self.query = query
             self.index = index
             self.memory = memory
             self.store = store
             self.rows = rows
+            self.scope = scope
         }
     }
 
