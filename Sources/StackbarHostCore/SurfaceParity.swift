@@ -10,8 +10,8 @@ import StackbarProtocol
 /// the two disagree.
 public enum SurfaceParity {
     /// The surfaces the ledger covers: the plugin surfaces, a command's view
-    /// in the palette, plus the two the host derives (the palette from panel
-    /// rows, the agent from text).
+    /// in the palette, plus the two the host derives (the palette's main
+    /// search, which lists no panel node since 0.37.0, and the agent's text).
     public enum Column: String, CaseIterable, Sendable {
         case panel, window, settings, menuBar, widget, command, palette, agent
 
@@ -157,14 +157,13 @@ public enum SurfaceParity {
     }
 
     private static func palette(_ kind: Kind) -> String {
+        // Since 0.37.0 the main search lists commands, not panel affordances
+        // (palette-root-commands): a plugin brings an action to the palette
+        // by declaring a command, and its panel opens from "Open <Plugin>".
         switch kind {
-        case .row: return "Entry per action, searchable by title and subtitle; with confirm Return arms, Return again runs"
-        case .button: return "Entry, runs the button; with confirm Return arms, Return again runs"
-        case .toggle: return "Entry, flips the toggle"
-        case .link: return "Entry, opens the URL"
-        case .tappable: return "Entry named by its text"
-        case .list, .section, .stack, .styled, .grid: return "Searched through"
-        case .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form, .shape, .image, .timer, .clock, .spacer: return "Not listed"
+        case .row, .button, .toggle, .link, .tappable, .list, .section, .stack, .styled, .grid,
+             .text, .label, .badge, .progress, .divider, .labeled, .chart, .textField, .picker, .slider, .empty, .form, .shape, .image, .timer, .clock, .spacer:
+            return "Not listed; declare a command"
         }
     }
 

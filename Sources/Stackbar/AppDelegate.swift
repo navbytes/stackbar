@@ -152,7 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 headless[controller.id] = HeadlessPanelController(controller: controller, model: model, windows: windows)
             }
         }
-        model.headlessPanelsChanged(model.controllers.filter(\.hasHeadlessPanel))
+        model.panelsChanged(model.controllers.filter(\.opensPanelFromPalette))
         // Stackbar keeps one item of its own while no plugin draws there, so
         // Settings and the palette are always reachable.
         if inMenuBar.isEmpty {

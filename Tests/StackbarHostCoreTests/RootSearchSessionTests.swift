@@ -36,7 +36,7 @@ final class RootSearchSessionTests: XCTestCase {
         CommandRegistry.Entry(pluginID: "dev.t.\(id)", pluginName: id, spec: CommandSpec(id: id, title: id, kind: .view, rootSearch: true, rootPattern: pattern))
     }
 
-    private let accepts: (CommandRegistry.Entry, String) -> Bool = { RootSearchGate.accepts($0.spec, text: $1) }
+    private let accepts: (CommandRegistry.Entry, String) -> Bool = { RootSearchGate.accepts($0, text: $1, preference: CommandPreference(inRootSearch: true)) }
 
     /// A session whose opener hands back fake views at once, and the views.
     private func session(clock: @escaping () -> Date = Date.init) -> (RootSearchSession<FakeRootView>, () -> [FakeRootView], RootSearchSession<FakeRootView>.Opener) {

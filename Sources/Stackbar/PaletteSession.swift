@@ -202,7 +202,7 @@ final class PaletteSession {
                               usage: memory.usage, favorites: memory.favorites.ids,
                               remembered: memory.favorites.ids.compactMap { memory.rows.row($0)?.entry },
                               frequent: query.isEmpty ? memory.frequentApps() : [], store: storeEntries(), plugins: plugins,
-                              fallbacks: fallbackCommands()) { memory.isRecent($0) }
+                              fallbacks: fallbackCommands(), scoped: scopedRootSearch()?.entry.key) { memory.isRecent($0) }
         }
     }
 
@@ -243,9 +243,15 @@ final class PaletteSession {
     /// palette never starts one to search it.
     private func feedRootSearch() {
         let commands: CommandCenter = model.commands
-        let text = RootSearchSession<CommandViewModel>.searchText(query, atRoot: stack.isEmpty)
-        rootSearch.feed(text, commands: commands.registry.entries,
-                        accepts: { RootSearchGate.accepts($0.spec, text: $1, preference: commands.preferences[$0.key]) },
+        // An alias before the text (`gs stackbar`) asks only that command,
+        // with the rest, even when it is out of the main search.
+        let scoped = scopedRootSearch()
+        let text = scoped.map { $0.text.isEmpty ? nil : $0.text } ?? RootSearchSession<CommandViewModel>.searchText(query, atRoot: stack.isEmpty)
+        rootSearch.feed(text, commands: scoped.map { [$0.entry] } ?? commands.registry.entries,
+                        accepts: { entry, text in
+                            if let scoped { return entry.key == scoped.entry.key }
+                            return RootSearchGate.accepts(entry, text: text, preference: commands.preferences[entry.key])
+                        },
                         canOpen: { [model] in model.controller(for: $0.pluginID)?.supervisor != nil },
                         open: { [weak self] entry, text in
                             guard let self else { return nil }
@@ -265,21 +271,39 @@ final class PaletteSession {
         return rootSearch.rows()
     }
 
-    /// The `.fallback()` commands to offer for whatever was typed.
-    private func fallbackCommands() -> [CommandRegistry.Entry] {
-        guard stack.isEmpty else { return [] }
+    /// The root-search command an alias at the start of the text names
+    /// (`gs stackbar`), and the rest of the text.
+    private func scopedRootSearch() -> (entry: CommandRegistry.Entry, text: String)? {
+        guard stack.isEmpty, let match = model.palette.aliasMatch(query), let key = match.entry.commandKey,
+              let entry = model.commands.registry.entry(key),
+              RootSearchGate.searches(entry.spec, preference: model.commands.preferences[key]) else { return nil }
+        return (entry, match.rest)
+    }
+
+    /// Every `.fallback()` command the user hasn't disabled.
+    private func availableFallbacks() -> [CommandRegistry.Entry] {
         let preferences = model.commands.preferences
         return model.commands.registry.entries.filter { RootSearchGate.offersFallback($0.spec, preference: preferences[$0.key]) }
     }
 
+    /// The fallbacks to offer for whatever was typed: the user's list.
+    private func fallbackCommands() -> [CommandRegistry.Entry] {
+        guard stack.isEmpty else { return [] }
+        let preferences = model.commands.preferences
+        return PaletteFallbacks.offered(availableFallbacks(), chosen: preferences.fallbacks) { preferences[$0] }
+    }
+
     /// Tab at the root: hands the typed text to the chosen fallback (Ask AI
-    /// by default). False when there's nothing to hand or no one to take it,
-    /// so Tab moves focus as usual.
+    /// by default), whether or not the root lists it now. False when there's
+    /// nothing to hand or no one to take it, so Tab moves focus as usual.
     func tabToFallback() -> Bool {
         guard stack.isEmpty, !query.trimmingCharacters(in: .whitespaces).isEmpty,
-              let command = PaletteTabTarget.command(saved: UserDefaults.standard.string(forKey: PaletteTabTarget.defaultsKey), fallbacks: fallbackCommands()),
-              let entry = PaletteTabTarget.entry(for: command, in: root) else { return false }
-        activate(entry)
+              let command = PaletteTabTarget.command(saved: UserDefaults.standard.string(forKey: PaletteTabTarget.defaultsKey), fallbacks: availableFallbacks()) else { return false }
+        if let entry = PaletteTabTarget.entry(for: command, in: root), root.role(of: entry) == .fallback {
+            activate(entry)
+        } else {
+            enter(command, input: query, source: .palette)
+        }
         return true
     }
 

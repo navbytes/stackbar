@@ -131,14 +131,22 @@ var commands: [Command] {
 }
 ```
 
-Two modifiers bring a command into the palette's own results. `.rootSearch()`
+The palette's main search lists commands, as Raycast's root search does:
+your panel's buttons, toggles and rows are not in it (0.37.0). Anything worth
+reaching from the keyboard should be a command; each plugin with a panel also
+gets an "Open <Plugin>" row there.
+
+Two modifiers bring a command further into the main search. `.rootSearch()`
 on a view command runs its `search` with whatever the user types at the root
 and shows the view's top three rows as a section under the command's title,
-or `.rootSearch(section: "Applications")`. Stackbar ranks its rows with
+or `.rootSearch(section: "Applications")`. It asks for the main search; the
+user decides in Settings → General → Main Search. It is on by default for the
+core plugins (Applications, Calculator, File Search) and for a command with
+`matching:`, and off for any other plugin that answers any text (0.37.0).
+Stackbar ranks its rows with
 everything else on one scale and learns which row people pick for what they
 type, so keep each row's `key` stable; the best row of all leads, and
-sections follow by their best row. Applications, Calculator,
-File Search and Clipboard History do this; keep that search quick: one that
+sections follow by their best row. Keep that search quick: one that
 takes longer than 0.4 s three times running sits out for ten minutes. Give it
 `matching:` when it only answers text of one shape, and other text never
 reaches the plugin; a section that matched leads the results (0.21.0):
@@ -148,10 +156,17 @@ Command("issue", title: "Jira Issue").view(search: { invocation in try await sel
     .rootSearch(section: "Jira", matching: #"[A-Za-z][A-Za-z0-9]*-\d+"#)   // the whole text: ABC-123
 ```
 
-People can turn a command's root search or fallback off in Settings →
-Commands. `.fallback()`
-offers the command under the results for any text ("Search the web for …"):
-the text fills its first argument, or a view's search. A view whose list is a
+`.alias("gs")` suggests an alias, one lowercase word the user can change or
+clear. The alias, a space and text (`gs stackbar`) opens the command with
+the text; for a `.rootSearch()` command the text goes to its search and its
+rows lead, even while the user keeps it out of the main search. A default
+alias another command already uses is skipped (0.37.0).
+
+`.fallback()` makes the command one the user can offer under the results for
+any text ("Search the web for …"): the text fills its first argument, or a
+view's search. The user picks which fallbacks show, and their order, in
+Settings → General → Fallbacks (Search Google and Ask AI until they choose),
+and they show only when fewer than three rows match (0.37.0). A view whose list is a
 `Grid` of rows shows them as tiles the arrow keys move through (an emoji
 picker), and a selected row's `preview` shows beside the list.
 
@@ -221,7 +236,7 @@ for a form to flag. Errors name the placeholder that failed.
   image under the list while the row is selected; search looks through it.
 - `Row(...).appIcon("com.apple.Safari")` draws that app's icon instead of the symbol (the symbol stays as the fallback).
 - `Row(...).fileIcon(path)` draws a file or folder's Finder icon (a path from `Stackbar.findFiles`).
-- `Row(...).hiddenFromPalette()` keeps the row out of the command palette's own results; it still shows and acts in your panel. Use it on rows of your data (history, items) that would flood the palette, and offer them with a root-search command instead (minimumStackbar 0.31.0).
+- `Row(...).hiddenFromPalette()` kept a row out of the palette's own results before 0.37.0; since then no panel row is in them, so it only matters on older hosts (minimumStackbar 0.31.0).
 - Anything that loses work or data takes `confirm:`: `.action("Stop", role: .critical, confirm: "stop \(name) (pid \(pid))") { }`, and the same on `Button`, `ActionButton` and `IconButton`. The text finishes "Press again within 10 s to …". Stackbar holds the first press, says so in the HUD and to VoiceOver, redraws the control as armed and forgets it after 10 s, if the text changes, or on Esc; only a second press runs your closure, so don't keep your own armed state. A widget opens the panel for it, and `soak --press` never presses it. Write `confirm: .none` on a `.critical` action that needs none (the store checks). On hosts before 0.35.0 the kit asks itself, without the redraw.
 - `Badge(text, role:)`, `ProgressBar(label, value:, total:, style: .ring(lineWidth: 6))`, `LabeledContent(label, value:)`
 - `Chart(label, values: [Double], kind: .line|.bar|.area|.donut|.heatmap, role:, labels: ["Mon", …], unit: "h", goal: 4, highlight: 6)`

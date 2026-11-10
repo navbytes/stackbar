@@ -38,7 +38,9 @@ public enum StackbarProtocolVersion {
     /// asks for a second press before it sends the action.
     /// 26 added the lock, sleep, frontApp, power, audio, network and volumes
     /// triggers.
-    public static let current = 26
+    /// 27 added a command's default alias; panel affordances left the
+    /// palette's main search.
+    public static let current = 27
 }
 
 /// Host → plugin.

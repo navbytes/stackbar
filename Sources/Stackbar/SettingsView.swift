@@ -251,6 +251,7 @@ struct GeneralSettings: View {
                 }
             }
             SpotlightReplacementsSection(model: model)
+            MainSearchSection(model: model)
             SettingsTransferGroup(model: model)
             SettingsGroup("Reset") {
                 SettingsRow(title: "Remove all data", caption: "Moves plugins, saved data, caches and logs to the Trash, deletes Stackbar's secrets and settings, and quits.") {

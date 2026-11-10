@@ -92,7 +92,7 @@ enum Benchmark {
         let commands: CommandCenter = app.model.commands
         for entry in commands.registry.entries {
             let preference: CommandPreference = commands.preferences[entry.key]
-            let line: String = "command \(entry.key) root=\(entry.spec.rootSearch) enabled=\(preference.enabled) inRoot=\(preference.inRootSearch)"
+            let line: String = "command \(entry.key) root=\(entry.spec.rootSearch) enabled=\(preference.enabled) inRoot=\(preference.inRootSearch.map(String.init) ?? "default")"
             lines.append(line)
         }
         for controller in app.model.controllers {

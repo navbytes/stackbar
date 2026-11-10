@@ -1,12 +1,13 @@
 import Foundation
 import StackbarProtocol
 
-/// The command palette's entries: everything a user can do across every
-/// plugin, found by typing.
+/// The command palette's entries: what the main search finds by typing.
 ///
-/// Entries come from what plugins already render on their panels (rows'
-/// actions, buttons, toggles, links), so a plugin gets palette support without
-/// writing anything for it. `SurfaceParity`'s palette column says the same.
+/// That is commands, Stackbar's own places and each plugin's "Open" row,
+/// as Raycast's root search lists commands. What plugins render on their
+/// panels (rows' actions, buttons, toggles, links) is still read into
+/// `entries`, but is not searched: out of its panel it means little
+/// (palette-root-commands). `SurfaceParity`'s palette column says the same.
 public struct PaletteIndex: Sendable {
     public struct Entry: Equatable, Sendable, Identifiable {
         public enum Kind: Equatable, Sendable {
@@ -92,11 +93,12 @@ public struct PaletteIndex: Sendable {
         }
     }
 
-    /// Entries derived from panels (rows, buttons, toggles, links).
+    /// Entries derived from panels (rows, buttons, toggles, links). Kept
+    /// for what reads a panel's affordances; not searched at the root.
     public private(set) var entries: [Entry] = []
     /// Declared commands, listed before panel entries.
     public private(set) var commands: [Entry] = []
-    /// "Open <Plugin>" for plugins without a menu-bar item.
+    /// "Open <Plugin>" for each plugin with a panel.
     public private(set) var panels: [Entry] = []
     /// Goes up each time the entries change, so a search can be kept until
     /// then.
@@ -131,32 +133,56 @@ public struct PaletteIndex: Sendable {
         revision += 1
     }
 
-    /// The plugins whose panel opens from the palette, not the menu bar.
-    public mutating func setHeadlessPanels(_ plugins: [(pluginID: String, name: String)]) {
+    /// The plugins whose panel opens from the palette: every plugin with a
+    /// panel, whether it shows from the menu bar or a window.
+    public mutating func setPanels(_ plugins: [(pluginID: String, name: String)]) {
         panels = plugins.map { Entry(pluginID: $0.pluginID, pluginName: $0.name, title: "Open \($0.name)", symbol: "macwindow", kind: .showPanel) }
         revision += 1
     }
 
     /// Replaces the command entries with the registry's enabled commands.
     public mutating func setCommands(_ registry: [CommandRegistry.Entry], preferences: [CommandKey: CommandPreference]) {
+        let aliases = Self.aliases(registry, preferences: preferences)
         commands = registry.compactMap { item in
             let preference = preferences[item.key] ?? .default
             guard preference.enabled else { return nil }
             var entry = Entry(pluginID: item.pluginID, pluginName: item.pluginName, title: item.spec.title, subtitle: item.spec.subtitle, symbol: item.spec.symbol, kind: .command(item.spec))
             entry.keywords = item.spec.keywords
-            entry.alias = preference.alias
+            entry.alias = aliases[item.key]
             return entry
         }
         revision += 1
     }
 
-    /// Commands first, then Stackbar's own places, then panels to open,
-    /// then panel entries. Each id once:
-    /// a list keyed by id (the palette's) can't draw or select a duplicate,
-    /// and two links to one URL are one thing to do.
+    /// Each command's alias in use: the user's, else its default unless the
+    /// user cleared it. A default taken by a user's alias, or by a default
+    /// earlier in the registry, is skipped, so one alias names one command.
+    public static func aliases(_ registry: [CommandRegistry.Entry], preferences: [CommandKey: CommandPreference]) -> [CommandKey: String] {
+        var result: [CommandKey: String] = [:]
+        var taken = Set<String>()
+        for item in registry {
+            if let alias = preferences[item.key]?.alias, !alias.isEmpty {
+                result[item.key] = alias
+                taken.insert(alias)
+            }
+        }
+        for item in registry where result[item.key] == nil {
+            guard let alias = (preferences[item.key] ?? .default).effectiveAlias(default: item.spec.defaultAlias), taken.insert(alias).inserted else { continue }
+            result[item.key] = alias
+        }
+        return result
+    }
+
+    /// What the main search finds: commands first, then Stackbar's own
+    /// places, then each plugin's "Open" row. Each id once: a list keyed by
+    /// id (the palette's) can't draw or select a duplicate.
+    ///
+    /// Panel entries are not among them. As in Raycast, a plugin reaches the
+    /// main search through its commands; a button, toggle or row means
+    /// something only next to the panel around it (palette-root-commands).
     public var all: [Entry] {
         var seen = Set<String>()
-        return (commands + (includesAppEntries ? Self.appEntries : []) + panels + entries).filter { seen.insert($0.id).inserted }
+        return (commands + (includesAppEntries ? Self.appEntries : []) + panels).filter { seen.insert($0.id).inserted }
     }
 
     /// Entries matching `query`, best first, by `PaletteRanker`: an exact

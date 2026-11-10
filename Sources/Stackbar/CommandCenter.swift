@@ -88,8 +88,36 @@ final class CommandCenter {
         for controller in model?.controllers ?? [] {
             if let hotkey = controller.manifest?.hotkey { others[hotkey] = controller.name }
         }
-        try preferences.set(preference, for: key, otherHotkeys: others)
+        // Default aliases other commands use now: a new alias may not take one.
+        let aliases = PaletteIndex.aliases(registry.entries, preferences: preferences.all)
+        let defaults = Dictionary(aliases.filter { preferences[$0.key].alias == nil }.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
+        try preferences.set(preference, for: key, otherHotkeys: others, otherAliases: defaults)
         changed()
+    }
+
+    /// The alias a command answers to now: the user's, or its default.
+    func alias(of key: CommandKey) -> String? {
+        PaletteIndex.aliases(registry.entries, preferences: preferences.all)[key]
+    }
+
+    /// The fallback commands the palette offers, in order: the user's list,
+    /// or the defaults until they choose.
+    var fallbacks: [CommandKey] {
+        let available = registry.entries.filter { RootSearchGate.offersFallback($0.spec, preference: preferences[$0.key]) }
+        return PaletteFallbacks.offered(available, chosen: preferences.fallbacks) { preferences[$0] }.map(\.key)
+    }
+
+    /// Saves the fallback commands the palette offers, in order.
+    func setFallbacks(_ keys: [CommandKey]) {
+        preferences.fallbacks = keys
+        changed()
+    }
+
+    /// Adds a fallback at the end of the list, or takes it out.
+    func setFallback(_ key: CommandKey, offered: Bool) {
+        var list = fallbacks.filter { $0 != key }
+        if offered { list.append(key) }
+        setFallbacks(list)
     }
 
     /// The switch for all of Spotlight and Shortcuts; off empties the index.

@@ -54,7 +54,7 @@ final class PaletteCostTests: XCTestCase {
         CommandRegistry.Entry(pluginID: "dev.t.\(id)", pluginName: id, spec: CommandSpec(id: id, title: id, kind: .view, rootSearch: true))
     }
 
-    private let accepts: (CommandRegistry.Entry, String) -> Bool = { RootSearchGate.accepts($0.spec, text: $1) }
+    private let accepts: (CommandRegistry.Entry, String) -> Bool = { RootSearchGate.accepts($0, text: $1, preference: CommandPreference(inRootSearch: true)) }
 
     func testRowsStampMovesOnlyWhenWhatIsShownChanges() async {
         let session = RootSearchSession<FakeRootView>(budget: RootSearchBudget())

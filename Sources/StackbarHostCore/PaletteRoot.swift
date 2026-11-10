@@ -132,11 +132,14 @@ public struct PaletteRoot: Equatable, Sendable {
     ///   row, in `remembered` (its snapshots); `frequent` are apps used
     ///   often, shown when nothing is typed; `store` are the Store's suggestions;
     ///   `fallbacks` the `.fallback()` commands to offer (none when nothing
-    ///   is typed).
+    ///   is typed), shown while fewer than `PaletteFallbacks.threshold` rows
+    ///   match; the Store's suggestions show only when nothing does.
+    /// - `scoped` is the root-search command an alias named (`gs stackbar`):
+    ///   its rows lead.
     public static func build(query: String, index: PaletteIndex, ranker: PaletteRanker, usage: PaletteUsage? = nil, favorites: [String] = [],
                              remembered: [PaletteIndex.Entry] = [], frequent: [PaletteIndex.Entry] = [],
                              store: [PaletteIndex.Entry] = [], plugins: [PluginRows] = [], fallbacks: [CommandRegistry.Entry] = [],
-                             isRecent: (PaletteIndex.Entry) -> Bool = { _ in false }) -> PaletteRoot {
+                             scoped: CommandKey? = nil, isRecent: (PaletteIndex.Entry) -> Bool = { _ in false }) -> PaletteRoot {
         let typed = query.lowercased().trimmingCharacters(in: .whitespaces)
         // `all` rebuilds every entry's id and filters duplicates: once per build.
         let all = index.all
@@ -172,14 +175,16 @@ public struct PaletteRoot: Equatable, Sendable {
                 title += " — \(command.pluginName)"
                 usedTitles.insert(title)
             }
-            return PaletteSection(title: title, entries: entries, leads: command.spec.rootPattern != nil)
+            return PaletteSection(title: title, entries: entries, leads: command.spec.rootPattern != nil || command.key == scoped)
         }
 
         let offered = typed.isEmpty ? [] : fallbacks.map { entry in
             PaletteIndex.Entry(pluginID: entry.pluginID, pluginName: entry.pluginName, title: entry.spec.title,
                                subtitle: entry.pluginName, symbol: entry.spec.symbol, kind: .command(entry.spec))
         }
-        let pinned = PaletteFavorites.entries(favorites, in: all + remembered)
+        // A panel action pinned before the main search dropped them stays
+        // pinned: the user chose it.
+        let pinned = PaletteFavorites.entries(favorites, in: all + remembered + index.entries)
         let sections = PaletteSection.group(found, query: query, favorites: pinned, frequent: typed.isEmpty ? frequent : [], store: store, plugins: pluginSections,
                                             fallbacks: offered, ranker: ranker, resultScore: resultScore, isRecent: isRecent)
         for section in sections {

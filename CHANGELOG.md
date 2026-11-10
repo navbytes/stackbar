@@ -3,6 +3,20 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Changed
+- **A cleaner main search.** Like Raycast, the palette now lists commands, apps, files and sums, not every button, toggle and row on your plugins' panels. Those stay on the panel, and every plugin has an "Open <Plugin>" row to get there.
+- **You choose which plugins answer as you type.** Settings › General › Main Search lists every plugin that can add results, with a switch each. Applications, Calculator and File Search are on, as are plugins that only answer text of their own shape (`ABC-123`, `#123`). Others, like Git Sync and Recent Projects, start off.
+- **Aliases search one plugin.** Type a plugin's alias, a space and text (`gs stackbar`) to see only that plugin's results, even when it is off for the main search. Plugins can suggest an alias; change it or clear it in Settings. Aliases can be symbols now, like `#`.
+- **Your fallbacks, your order.** Settings › General › Fallbacks picks which "Use … with" commands show and in what order (Search Google and Ask AI to start). They show when fewer than three results match. Tab still asks AI.
+- Store suggestions show only when nothing you have installed matches.
+
+### For plugin authors
+- Panel affordances are no longer in the palette's main search: declare a command for anything worth reaching by keyboard. `.hiddenFromPalette()` has nothing left to do on 0.37.0.
+- `Command.alias("gs")` suggests a default alias (protocol 27).
+- `.rootSearch()` without `matching:` is off by default for non-core plugins; the user turns it on.
+
 ## 0.36.0
 
 ### Added

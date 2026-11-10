@@ -83,12 +83,12 @@ struct CommandSettingsRow: View {
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.spec.title)
-                    Text(Self.caption(entry.spec, preference: preference))
+                    Text(Self.caption(entry, preference: preference))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                TextField("Alias", text: $alias)
+                TextField(entry.spec.defaultAlias ?? "Alias", text: $alias)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
                     .focused($aliasFocused)
@@ -104,9 +104,14 @@ struct CommandSettingsRow: View {
                     .controlSize(.small)
                     .help("Show in the palette")
                 Menu {
+                    if entry.spec.rootSearch {
+                        Toggle("Show Results in Main Search",
+                               isOn: Binding(get: { RootSearchGate.isOn(entry, preference: preference) }, set: { shown in save { $0.inRootSearch = shown } }))
+                    }
+                    if entry.spec.fallback {
+                        Toggle("Offer as a Fallback", isOn: Binding(get: { center.fallbacks.contains(entry.key) }, set: { center.setFallback(entry.key, offered: $0) }))
+                    }
                     if entry.spec.rootSearch || entry.spec.fallback {
-                        Toggle(entry.spec.rootSearch ? "Answer What You Type in the Palette" : "Offer for Any Text in the Palette",
-                               isOn: Binding(get: { preference.inRootSearch }, set: { shown in save { $0.inRootSearch = shown } }))
                         Divider()
                     }
                     if entry.spec.exposure == .everywhere {
@@ -129,20 +134,24 @@ struct CommandSettingsRow: View {
         }
         .padding(.vertical, 2)
         .background(highlighted ? Color.accentColor.opacity(0.08) : .clear)
-        .onAppear { alias = preference.alias ?? "" }
+        .onAppear { alias = center.alias(of: entry.key) ?? "" }
     }
 
-    static func caption(_ spec: CommandSpec, preference: CommandPreference) -> String {
+    static func caption(_ entry: CommandRegistry.Entry, preference: CommandPreference) -> String {
+        let spec = entry.spec
         var caption = spec.kind == .view ? "Opens a view" : (spec.arguments.isEmpty ? "Runs" : "Runs with " + spec.arguments.map(\.placeholder).joined(separator: ", "))
-        if spec.rootSearch { caption += preference.inRootSearch ? " · answers in the palette's results" : " · kept out of the palette's results" }
-        if spec.fallback { caption += preference.inRootSearch ? " · offered for any text" : " · not offered for any text" }
+        if spec.rootSearch { caption += RootSearchGate.isOn(entry, preference: preference) ? " · answers in the main search" : " · kept out of the main search" }
+        if spec.fallback { caption += " · can be a fallback" }
         return caption
     }
 
+    /// Saves what the field holds: the default alias saves as "use the
+    /// default", an emptied field as "none" when there is a default.
     private func saveAlias() {
-        let typed = alias.trimmingCharacters(in: .whitespaces)
-        guard typed != (preference.alias ?? "") else { return }
-        save { $0.alias = typed }
+        let typed = alias.trimmingCharacters(in: .whitespaces).lowercased()
+        guard typed != (center.alias(of: entry.key) ?? "") else { return }
+        let suggested = entry.spec.defaultAlias
+        save { $0.alias = typed == suggested ? nil : (typed.isEmpty && suggested == nil ? nil : typed) }
     }
 
     private func save(_ change: (inout CommandPreference) -> Void) {

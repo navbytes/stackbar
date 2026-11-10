@@ -11,7 +11,7 @@ final class PaletteRankingTests: XCTestCase {
             .button(title: "Refresh", action: "button/refresh"),
         ]))
         index.update(pluginID: "dev", pluginName: "Dev Tools", panel: .button(title: "Reset Git Cache", action: "button/reset"))
-        let found = index.search("git")
+        let found = index.searchPanels("git")
         XCTAssertEqual(found.first?.title, "Reset Git Cache")
         XCTAssertEqual(found.count, 3, "the plugin's own rows are still found by its name")
     }
@@ -32,7 +32,7 @@ final class PaletteRankingTests: XCTestCase {
             .button(title: "Copy C", action: "button/c"),
         ]))
         for _ in 0..<5 {
-            XCTAssertEqual(index.search("copy").map(\.title), ["Copy A", "Copy B", "Copy C"])
+            XCTAssertEqual(index.searchPanels("copy").map(\.title), ["Copy A", "Copy B", "Copy C"])
         }
     }
 

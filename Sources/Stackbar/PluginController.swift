@@ -123,6 +123,12 @@ final class PluginController: Identifiable {
         isEnabled && !showsInMenuBar && manifest?.surfaces.contains(.panel) == true
     }
 
+    /// A panel the palette's "Open <Plugin>" row can show: from the menu-bar
+    /// item, or centered when there is none.
+    var opensPanelFromPalette: Bool {
+        isEnabled && manifest?.surfaces.contains(.panel) == true
+    }
+
     var isWaitingForApproval: Bool { !pendingApproval.isEmpty }
     /// Granted `.context`: commands get what the user was in.
     var readsContext: Bool { manifest?.capabilities.contains(.context) == true && !pendingApproval.contains(.context) }

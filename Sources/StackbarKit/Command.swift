@@ -83,6 +83,18 @@ public struct Command: Sendable {
         return copy
     }
 
+    /// Suggests an alias for the command, one lowercase word (`gs`), which
+    /// the user can change or clear in Settings. Typing it, a space and
+    /// text opens the command with that text; for a `.rootSearch()` command
+    /// the text goes to its search and its rows lead, even when the user
+    /// keeps it out of the main search. An alias another command already
+    /// uses is skipped. Protocol 27; older hosts ignore it.
+    public func alias(_ alias: String) -> Command {
+        var copy = self
+        copy.spec.defaultAlias = alias
+        return copy
+    }
+
     /// Offers the command under the palette's results for any text, such as
     /// "Search the web for …". The text fills the first argument, or a
     /// view's search. Protocol 16.

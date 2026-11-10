@@ -57,7 +57,7 @@ final class PaletteIndexStabilityTests: XCTestCase {
         XCTAssertTrue(index.update(pluginID: "a", pluginName: "A", panel: buttons(["One", "Two", "Four"])))
         XCTAssertGreaterThan(index.revision, revision)
         XCTAssertEqual(index.entries.map(\.title), ["One", "Two", "Four", "Three"], "a's entries stay ahead of b's")
-        XCTAssertEqual(index.search("").map(\.title), ["One", "Two", "Four", "Three"])
+        XCTAssertEqual(index.searchPanels("").map(\.title), ["One", "Two", "Four", "Three"])
     }
 
     func testSearchListsEachEntryOnce() {
@@ -66,7 +66,7 @@ final class PaletteIndexStabilityTests: XCTestCase {
             .link(title: "Docs", url: "https://example.com"),
             .link(title: "Docs", url: "https://example.com"),
         ]))
-        XCTAssertEqual(index.search("docs").count, 1)
-        XCTAssertEqual(index.search("").count, 1)
+        XCTAssertEqual(index.searchPanels("docs").count, 1)
+        XCTAssertEqual(index.searchPanels("").count, 1)
     }
 }
