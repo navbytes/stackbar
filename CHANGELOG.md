@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.39.0
 
 ### Added
 - **Richer previews beside results.** Plugins can now show a real view in the palette's preview pane, not just text: coloured check lists, release steps, color swatches, status and details at a glance as you arrow through results.
