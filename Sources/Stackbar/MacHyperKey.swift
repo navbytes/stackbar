@@ -82,13 +82,24 @@ final class MacHyperKey {
         }
     }
 
+    /// Whether Caps Lock may still be remapped by us: set when we remap it,
+    /// cleared once it is put back. Missing (first launch of a version that
+    /// keeps it) counts as maybe, so a remap an older version left is found.
+    private static let remappedKey = "hyperKeyRemapped"
+
     private func remap(_ on: Bool) {
+        let defaults = UserDefaults.standard
+        // Turning off with nothing of ours to undo: no `hidutil` run. This is
+        // every launch with the setting off, and it ran on the main thread.
+        if !on, defaults.object(forKey: Self.remappedKey) != nil, !defaults.bool(forKey: Self.remappedKey) { return }
         let current = HyperKey.mappings(fromHidutil: Self.hidutil(["property", "--get", "UserKeyMapping"]) ?? "")
         let wanted = HyperKey.mappings(current, hyper: on)
-        guard wanted != current else { return }
-        if Self.hidutil(["property", "--set", HyperKey.hidutilJSON(wanted)]) == nil {
+        if wanted != current, Self.hidutil(["property", "--set", HyperKey.hidutilJSON(wanted)]) == nil {
             HostLog.shared.write(.warning, "hyper key: hidutil could not \(on ? "remap" : "restore") Caps Lock")
+            // A failed restore is tried again next time.
+            if !on { return }
         }
+        defaults.set(on, forKey: Self.remappedKey)
     }
 
     /// `hidutil`'s output, or nil when it failed.

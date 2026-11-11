@@ -30,25 +30,53 @@ enum MacSensors {
     private static let temperatureEvent: Int64 = 15
     private static let temperatureField = Int32(15 << 16)
 
-    private static func symbol<T>(_ name: String, as type: T.Type) -> T? {
+    fileprivate static func symbol<T>(_ name: String, as type: T.Type) -> T? {
         guard let pointer = dlsym(UnsafeMutableRawPointer(bitPattern: -2), name) else { return nil }
         return unsafeBitCast(pointer, to: type)
     }
 
+    /// The HID calls, looked up once, and one event-system client kept for
+    /// the life of the app. Creating a client per reading (System Monitor
+    /// asks every few seconds) built a fresh event-system connection and
+    /// set of service clients each time, over 5,000 a day.
+    private final class TemperatureClient: @unchecked Sendable {
+        let client: CFTypeRef
+        let copyServices: CopyServices
+        let copyProperty: CopyProperty
+        let copyEvent: CopyEvent
+        let floatValue: FloatValue
+        /// Calls come from detached tasks; one reading at a time.
+        let lock = NSLock()
+
+        init?() {
+            guard let create = MacSensors.symbol("IOHIDEventSystemClientCreate", as: CreateClient.self),
+                  let setMatching = MacSensors.symbol("IOHIDEventSystemClientSetMatching", as: SetMatching.self),
+                  let copyServices = MacSensors.symbol("IOHIDEventSystemClientCopyServices", as: CopyServices.self),
+                  let copyProperty = MacSensors.symbol("IOHIDServiceClientCopyProperty", as: CopyProperty.self),
+                  let copyEvent = MacSensors.symbol("IOHIDServiceClientCopyEvent", as: CopyEvent.self),
+                  let floatValue = MacSensors.symbol("IOHIDEventGetFloatValue", as: FloatValue.self),
+                  let client = create(kCFAllocatorDefault)?.takeRetainedValue()
+            else { return nil }
+            // Apple's vendor page and its temperature sensor usage.
+            let matching = ["PrimaryUsagePage": 0xFF00, "PrimaryUsage": 5] as CFDictionary
+            _ = setMatching(client, matching)
+            self.client = client
+            self.copyServices = copyServices
+            self.copyProperty = copyProperty
+            self.copyEvent = copyEvent
+            self.floatValue = floatValue
+        }
+    }
+
+    private static let temperatureClient = TemperatureClient()
+
     /// Every HID temperature sensor, grouped the way the user thinks of them.
     static func temperatures() -> [SensorReading] {
-        guard let create = symbol("IOHIDEventSystemClientCreate", as: CreateClient.self),
-              let setMatching = symbol("IOHIDEventSystemClientSetMatching", as: SetMatching.self),
-              let copyServices = symbol("IOHIDEventSystemClientCopyServices", as: CopyServices.self),
-              let copyProperty = symbol("IOHIDServiceClientCopyProperty", as: CopyProperty.self),
-              let copyEvent = symbol("IOHIDServiceClientCopyEvent", as: CopyEvent.self),
-              let floatValue = symbol("IOHIDEventGetFloatValue", as: FloatValue.self),
-              let client = create(kCFAllocatorDefault)?.takeRetainedValue()
-        else { return [] }
-        // Apple's vendor page and its temperature sensor usage.
-        let matching = ["PrimaryUsagePage": 0xFF00, "PrimaryUsage": 5] as CFDictionary
-        _ = setMatching(client, matching)
-        guard let services = copyServices(client)?.takeRetainedValue() as? [CFTypeRef] else { return [] }
+        guard let hid = temperatureClient else { return [] }
+        hid.lock.lock()
+        defer { hid.lock.unlock() }
+        let copyProperty = hid.copyProperty, copyEvent = hid.copyEvent, floatValue = hid.floatValue
+        guard let services = hid.copyServices(hid.client)?.takeRetainedValue() as? [CFTypeRef] else { return [] }
         var groups: [String: [Double]] = [:]
         for service in services {
             guard let name = copyProperty(service, "Product" as CFString)?.takeRetainedValue() as? String,
