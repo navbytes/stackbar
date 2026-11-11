@@ -3,6 +3,12 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Stackbar starts faster.** With the Hyper key off (the default), launch no longer stops to check the keyboard's Caps Lock mapping.
+- **System Monitor's temperatures are lighter on the app.** Stackbar now keeps one connection to the Mac's temperature sensors instead of opening a new one on every reading (every few seconds while System Monitor runs).
+
 ## 0.39.0
 
 ### Added
