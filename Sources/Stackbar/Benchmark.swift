@@ -149,11 +149,16 @@ enum Benchmark {
 }
 extension PluginController {
     /// Done starting, one way or the other.
-    fileprivate var isSettled: Bool {
+    var isSettled: Bool {
         switch state {
         case .running, .failed: return true
         case .stopped, .starting, .restarting: return false
         }
+    }
+
+    var hasFailed: Bool {
+        if case .failed = state { return true }
+        return false
     }
 }
 #endif

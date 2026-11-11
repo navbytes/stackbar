@@ -1,0 +1,91 @@
+#!/bin/sh
+# Drives the built app through a new user's first minute (Sources/Stackbar/
+# AppCheck.swift): Welcome, the starter set, the palette's golden queries and
+# speed, Return, ⌘K, every Settings page and the Store, with light and dark
+# screenshots. With --upgrade it also opens a home the latest release left
+# behind, as an update does. Results and screenshots go to build/app-check/.
+#
+#   scripts/app-check.sh              a fresh Mac
+#   scripts/app-check.sh --upgrade    and an update from the latest release
+#
+# It changes this user's io.navbytes.stackbar defaults, so run it on a CI
+# runner or a spare account, not the Mac you use Stackbar on.
+set -eu
+cd "$(dirname "$0")/.."
+[ "$(uname)" = Darwin ] || { echo "app-check: run this on a Mac" >&2; exit 1; }
+UPGRADE=0
+for a in "$@"; do case $a in --upgrade) UPGRADE=1 ;; *) echo "usage: $0 [--upgrade]" >&2; exit 2 ;; esac; done
+
+OUT="$PWD/build/app-check"
+WORK=$(mktemp -d -t stackbar-app-check)
+APP=build/Stackbar.app
+DEFAULTS=io.navbytes.stackbar
+rm -rf "$OUT" && mkdir -p "$OUT"
+[ -d "$APP" ] || scripts/bundle.sh
+
+# Runs an app until it quits on its own, or kills it after $2 seconds.
+run() {
+    "$1" &
+    pid=$!
+    ( sleep "$2"; kill "$pid" 2>/dev/null ) &
+    watchdog=$!
+    wait "$pid" || true
+    kill "$watchdog" 2>/dev/null || true
+}
+
+# 1. A fresh Mac: no defaults, an empty home.
+defaults delete "$DEFAULTS" 2>/dev/null || true
+STACKBAR_HOME="$WORK/fresh" STACKBAR_APPCHECK="$OUT" run "$APP/Contents/MacOS/Stackbar" 600
+
+# 2. An update: the latest release runs first (its benchmark mode installs the
+# core plugins, approves them and quits), then this build opens its home.
+if [ "$UPGRADE" = 1 ]; then
+    mkdir -p "$WORK/old"
+    if gh release download --repo "${GITHUB_REPOSITORY:-navbytes/stackbar}" --pattern 'Stackbar-*.zip' --dir "$WORK/old" 2>"$WORK/old/download.log"; then
+        ditto -x -k "$WORK"/old/Stackbar-*.zip "$WORK/old"
+        xattr -dr com.apple.quarantine "$WORK/old/Stackbar.app" 2>/dev/null || true
+        OLD=$(plutil -extract CFBundleShortVersionString raw "$WORK/old/Stackbar.app/Contents/Info.plist")
+        echo "app-check: updating from $OLD"
+        STACKBAR_HOME="$WORK/upgrade" STACKBAR_BENCHMARK="$WORK/old/benchmark.json" run "$WORK/old/Stackbar.app/Contents/MacOS/Stackbar" 300
+        PLUGINS=$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1]))["plugins"]))' "$WORK/old/benchmark.json" 2>/dev/null || true)
+        # Someone who updates has seen Welcome already.
+        defaults write "$DEFAULTS" welcomeSeen -bool true
+        STACKBAR_HOME="$WORK/upgrade" STACKBAR_APPCHECK="$OUT" STACKBAR_APPCHECK_MODE=upgrade STACKBAR_APPCHECK_PLUGINS="$PLUGINS" \
+            run "$APP/Contents/MacOS/Stackbar" 600
+    else
+        echo "app-check: couldn't download the latest release:" >&2
+        cat "$WORK/old/download.log" >&2
+        exit 1
+    fi
+fi
+
+python3 - "$OUT" "$UPGRADE" <<'PY'
+import json, os, sys
+out, upgrade = sys.argv[1], sys.argv[2] == "1"
+files = ["results.json"] + (["upgrade.json"] if upgrade else [])
+ok = True
+lines = []
+for name in files:
+    path = os.path.join(out, name)
+    if not os.path.exists(path):
+        lines.append(f"**{name} was not written: the app quit or hung before the end.**\n")
+        ok = False
+        continue
+    report = json.load(open(path))
+    title = "Update from the latest release" if report["mode"] == "upgrade" else "A fresh Mac"
+    lines.append(f"### {title}: Stackbar {report['version']} on {report['macOS']}\n")
+    lines.append("| | Check | Detail |")
+    lines.append("|---|---|---|")
+    for check in report["checks"]:
+        mark = "✅" if check["passed"] else "❌"
+        lines.append(f"| {mark} | {check['name']} | {check['detail'].replace('|', '/')} |")
+    lines.append("")
+    ok = ok and report["passed"]
+lines.append("Screenshots are in the app-check artifact.")
+text = "\n".join(lines)
+print(text)
+summary = os.environ.get("GITHUB_STEP_SUMMARY")
+if summary:
+    open(summary, "a").write(text + "\n")
+sys.exit(0 if ok else 1)
+PY

@@ -87,6 +87,27 @@ jobs:
           [ "$(swift scripts/ed25519.swift public-key | base64 --decode | wc -c | tr -d ' ')" = 32 ]
           [ "$(swift scripts/ed25519.swift sign "$RUNNER_TEMP/archive" | base64 --decode | wc -c | tr -d ' ')" = 64 ]
 
+  # The real app, driven through a new user's first minute and through an
+  # update from the latest release (scripts/app-check.sh). It fails on a
+  # broken golden path or a blown speed budget; the screenshots, light and
+  # dark, are in the app-check artifact.
+  app:
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-26' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: scripts/bundle.sh
+      - run: scripts/app-check.sh --upgrade
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: app-check
+          path: build/app-check
+
   # The Xcode build is the one that extracts App Intents metadata (Spotlight
   # and Shortcuts) and builds the widget; this checks both, unsigned.
   xcode:
@@ -104,7 +125,7 @@ jobs:
   ok:
     name: CI ok
     if: always()
-    needs: [changes, linux, macos, xcode]
+    needs: [changes, linux, macos, app, xcode]
     runs-on: ${{ vars.LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:

@@ -26,7 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Self.shared = self
         CrashReports.startIfAllowed()
         NSApp.mainMenu = mainMenu()
-        if Benchmark.output == nil { AppHousekeeping.offerMoveIfNeeded() }
+        // A scripted run (Benchmark, AppCheck) answers no prompts.
+        let scripted = Benchmark.output != nil || AppCheck.folder != nil
+        if !scripted { AppHousekeeping.offerMoveIfNeeded() }
         if Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" {
             UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         }
@@ -34,10 +36,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.start()
         _ = palette
         syncItems()
-        if Benchmark.output == nil {
-            welcomeIfNeeded()
-        } else {
+        if Benchmark.output != nil {
             Benchmark.run(app: self, launched: Date())
+        } else if AppCheck.folder != nil {
+            AppCheck.run(app: self)
+        } else {
+            welcomeIfNeeded()
         }
 
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
