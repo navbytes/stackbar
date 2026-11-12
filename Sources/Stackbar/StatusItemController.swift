@@ -206,10 +206,19 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     private func resize() {
         hosting.invalidateIntrinsicContentSize()
-        let length = ceil(max(hosting.fittingSize.width, 22))
+        let length = StatusItemWidth.next(current: statusItem.length, fitting: hosting.fittingSize.width)
         // Setting the length lays out the whole menu bar again, even when
-        // it is the same; a bar whose text ticks rarely changes width.
-        if statusItem.length != length { statusItem.length = length }
+        // it is the same; a bar whose text ticks rarely changes width. It is
+        // set without animation: when the bar slides its items, SwiftUI
+        // draws every in-between frame of each item on the CPU, and the
+        // glyphs drawn at each of those positions stay cached for good.
+        if statusItem.length != length {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0
+                context.allowsImplicitAnimation = false
+                statusItem.length = length
+            }
+        }
         guard let button = statusItem.button else { return }
         if button.accessibilityLabel() != controller.name { button.setAccessibilityLabel(controller.name) }
         let tip = controller.menuBarClick.map { "\($0.title). Right-click for \(controller.name)." }
@@ -276,6 +285,21 @@ struct StatusItemContent: View {
                 MenuBarView(node: controller.menuBar, fallbackTitle: controller.name)
             }
         }
+    }
+}
+
+/// How wide a status item is. It grows at once, but shrinks only when the
+/// text is clearly narrower, so a reading that ticks between "9%" and "12%"
+/// doesn't make the whole menu bar shift every few seconds.
+enum StatusItemWidth {
+    static let minimum: CGFloat = 22
+    static let slack: CGFloat = 12
+
+    static func next(current: CGFloat, fitting: CGFloat) -> CGFloat {
+        let wanted = ceil(max(fitting, minimum))
+        guard current > 0 else { return wanted }
+        if wanted > current || current - wanted > slack { return wanted }
+        return current
     }
 }
 
