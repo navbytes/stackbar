@@ -38,7 +38,9 @@ final class PreviewTests: XCTestCase {
             .settled,
         ])
         await runtime.handle(.trigger(reason: .launch))
+        await runtime.waitForRefreshes()
         await runtime.handle(.trigger(reason: .interval))
+        await runtime.waitForRefreshes()
         XCTAssertEqual(plugin.refreshes, 0)
         XCTAssertEqual(plugin.items, ["a", "b", "c"])
         XCTAssertEqual(outbox.take(), [.settled, .settled], "the scene stays as the preview set it up")
@@ -51,6 +53,7 @@ final class PreviewTests: XCTestCase {
         let runtime = PluginRuntime(plugin: plugin, preview: "hero", send: Outbox().send)
         await runtime.handle(.hello(protocolVersion: 1, surfaces: [.menuBar]))
         await runtime.handle(.trigger(reason: .clipboard))
+        await runtime.waitForRefreshes()
         XCTAssertEqual(plugin.refreshes, 1)
         XCTAssertEqual(Stackbar.refreshReason, nil)
     }
@@ -60,6 +63,7 @@ final class PreviewTests: XCTestCase {
         let runtime = PluginRuntime(plugin: plugin, send: Outbox().send)
         await runtime.handle(.hello(protocolVersion: 1, surfaces: [.menuBar]))
         await runtime.handle(.trigger(reason: .launch))
+        await runtime.waitForRefreshes()
         XCTAssertEqual(plugin.refreshes, 1)
     }
 

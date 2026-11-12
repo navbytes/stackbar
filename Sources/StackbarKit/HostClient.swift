@@ -36,11 +36,31 @@ public final class HostClient: @unchecked Sendable {
     }
 
     /// Sends a call and waits at most `timeout` seconds (`nil`: for good).
+    ///
+    /// A cancelled task stops waiting at once and gets `.failure` (the
+    /// `Stackbar` calls throw `CancellationError` for it); a late answer is
+    /// dropped, and a process started by `.run` is stopped.
     func call(_ call: HostCall, timeout: Double?) async -> HostResult {
-        await withCheckedContinuation { continuation in
-            send(call, timeout: timeout) { continuation.resume(returning: $0) }
+        if Task.isCancelled { return .failure(Self.cancelled) }
+        let id = LockedBox<Int?>(nil)
+        let result = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let request = send(call, timeout: timeout) { continuation.resume(returning: $0) }
+                id.value = request
+                // Cancelled while sending, before the handler could see the id.
+                if Task.isCancelled, let request, resolve(id: request, result: .failure(Self.cancelled)) {
+                    if case .run = call { fire(.cancelRun(id: request)) }
+                }
+            }
+        } onCancel: {
+            guard let request = id.value, self.resolve(id: request, result: .failure(Self.cancelled)) else { return }
+            if case .run = call { self.fire(.cancelRun(id: request)) }
         }
+        return result
     }
+
+    /// The failure a cancelled call answers with.
+    static let cancelled = "cancelled"
 
     /// Sends a call without waiting. A failure is reported to the host's log.
     public func fire(_ call: HostCall) {
@@ -139,12 +159,13 @@ public final class HostClient: @unchecked Sendable {
         return pending.count
     }
 
-    private func send(_ call: HostCall, timeout: Double?, onResult: @escaping @Sendable (HostResult) -> Void) {
+    @discardableResult
+    private func send(_ call: HostCall, timeout: Double?, onResult: @escaping @Sendable (HostResult) -> Void) -> Int? {
         lock.lock()
         guard let sendMessage else {
             lock.unlock()
             onResult(.failure("not running inside Stackbar"))
-            return
+            return nil
         }
         let id = nextID
         nextID += 1
@@ -159,6 +180,7 @@ public final class HostClient: @unchecked Sendable {
         }
         lock.unlock()
         sendMessage(.request(id: id, call: call))
+        return id
     }
 
     private func deliver(_ message: PluginMessage) {
@@ -190,6 +212,23 @@ public struct HostError: Error, CustomStringConvertible, Sendable {
     public var message: String
     public init(_ message: String) { self.message = message }
     public var description: String { message }
+
+    /// The error for a host call's failure: `CancellationError` when the
+    /// call was dropped because its task was cancelled.
+    static func failure(_ message: String) -> any Error {
+        message == HostClient.cancelled && Task.isCancelled ? CancellationError() : HostError(message)
+    }
+}
+
+/// A value shared with a cancellation handler, which may run on any thread.
+final class LockedBox<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Value
+    init(_ value: Value) { stored = value }
+    var value: Value {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
 }
 
 /// Host services, for use in `refresh()` and action closures.
@@ -205,16 +244,38 @@ public enum Stackbar {
     @MainActor public static let storage = PluginStorage()
 
     /// Why the running `refresh()` was called: `.wake`, `.displays`, an
-    /// interval and so on. `nil` outside a refresh, and with hosts older than
-    /// Stackbar 0.15.0 for reasons they don't send.
-    @MainActor public internal(set) static var refreshReason: TriggerReason?
+    /// interval and so on. `nil` outside a refresh, in a refresh the plugin
+    /// asked for itself (`Stackbar.refresh()`), and with hosts older than
+    /// Stackbar 0.15.0 for reasons they don't send. Clicks handled while a
+    /// refresh runs see `nil`: the value belongs to the refresh's task.
+    @MainActor public static var refreshReason: TriggerReason? { currentRefreshReason }
+    @TaskLocal static var currentRefreshReason: TriggerReason?
+    @TaskLocal static var insideRefresh = false
+
+    /// Whether a `refresh()` is running. A refresh the host asks for (a
+    /// timer, a wake) runs beside clicks rather than ahead of them, and the
+    /// kit draws when one starts and when it ends, so a view can show a
+    /// spinner from this without any bookkeeping of its own.
+    @MainActor public static var isRefreshing: Bool { refreshState?() ?? false }
+    @MainActor static var refreshState: (() -> Bool)?
+
+    /// Refreshes now and returns once fresh data is in: for a Try Again
+    /// button, a changed setting, or a tool that must answer with new data.
+    /// A refresh already running is cancelled first (its host calls throw
+    /// `CancellationError`), so an older fetch never lands over a newer one,
+    /// and calls made while this one runs share it. Errors are thrown to the
+    /// caller. Prefer this to calling your own `refresh()` from an action.
+    @MainActor public static func refresh() async throws {
+        guard let refreshNow else { throw HostError("not running inside Stackbar") }
+        try await refreshNow()
+    }
+    @MainActor static var refreshNow: (() async throws -> Void)?
 
     /// Draws the plugin's surfaces and open palette views again now. The
-    /// kit draws after every message it handles, so call this only for state
-    /// that changed outside one: a fetch your `refresh()` started in a `Task`
-    /// so clicks don't wait for it (the plugin handles one message at a
-    /// time). Only what changed is sent. Needs nothing, and works with any
-    /// Stackbar: it lives in the kit, not the host.
+    /// kit draws after every message it handles and when a refresh ends, so
+    /// call this only for state that changed outside both: a fetch your own
+    /// `Task` finished, say. Only what changed is sent. Needs nothing, and
+    /// works with any Stackbar: it lives in the kit, not the host.
     @MainActor public static func redraw() { redrawHandler?() }
     @MainActor static var redrawHandler: (() -> Void)?
 
@@ -228,7 +289,7 @@ public enum Stackbar {
     public static func secret(_ name: String) async throws -> String? {
         switch await HostClient.shared.call(.secret(name: name)) {
         case .value(let value): return value
-        case .failure(let message): throw HostError(message)
+        case .failure(let message): throw HostError.failure(message)
         default: throw HostError("unexpected answer to secret(\(name))")
         }
     }
@@ -245,7 +306,7 @@ public enum Stackbar {
         }
         switch await HostClient.shared.call(.http(request)) {
         case .http(let response): return response
-        case .failure(let message): throw HostError(message)
+        case .failure(let message): throw HostError.failure(message)
         default: throw HostError("unexpected answer to \(request.method) \(request.url)")
         }
     }
@@ -283,7 +344,7 @@ public enum Stackbar {
     public static func oauthToken(_ provider: String, forceRefresh: Bool = false) async throws -> String {
         switch await HostClient.shared.call(.oauthToken(provider: provider, forceRefresh: forceRefresh)) {
         case .value(let token?): return token
-        case .failure(let message): throw HostError(message)
+        case .failure(let message): throw HostError.failure(message)
         default: throw HostError("no token for \(provider)")
         }
     }
@@ -359,7 +420,7 @@ public enum Stackbar {
     /// Schemes beyond https, http, mailto, tel and meeting links need
     /// `.openURLs(schemes:)`; files and folders need `"*"`.
     public static func open(_ url: String, with app: String?) async throws {
-        if case .failure(let message) = await HostClient.shared.call(.open(url: url, app: app)) { throw HostError(message) }
+        if case .failure(let message) = await HostClient.shared.call(.open(url: url, app: app)) { throw HostError.failure(message) }
     }
 
     public static func copy(_ text: String) {
@@ -753,7 +814,7 @@ public enum Stackbar {
     private static func value(_ call: HostCall) async throws -> String? {
         switch await HostClient.shared.call(call) {
         case .value(let value): return value
-        case .failure(let message): throw HostError(message)
+        case .failure(let message): throw HostError.failure(message)
         default: throw HostError("unexpected answer to \(call.label)")
         }
     }
@@ -761,7 +822,7 @@ public enum Stackbar {
     private static func ok(_ call: HostCall) async throws {
         switch await HostClient.shared.call(call) {
         case .ok, .value: return
-        case .failure(let message): throw HostError(message)
+        case .failure(let message): throw HostError.failure(message)
         default: throw HostError("unexpected answer to \(call.label)")
         }
     }
