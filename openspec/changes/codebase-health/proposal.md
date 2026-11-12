@@ -13,7 +13,7 @@ feature, protocol version or view, the wire format and StackbarKit's public
 API stay as they are, and the palette's ranking is untouched.
 
 ## What changes
-Ranked by value against risk. One pull request each.
+Ranked by value against risk.
 
 1. **One way to keep a JSON file.** Fourteen stores (approvals, folder
    grants, command preferences and registry, the palette's memory, install
@@ -34,6 +34,11 @@ Ranked by value against risk. One pull request each.
    lines of top-level code. The usage text, the shared set-up, `render`, the
    publishing commands and the rest each get a file; `main.swift` keeps the
    dispatch.
+5. **One table of calls waiting on a plugin.** `PluginSupervisor` kept two
+   hand-written copies of "calls waiting for an answer, each with a timeout,
+   each answered once": one for agent tools, one for run commands. Found
+   while landing the items above. `PendingCalls` is that table once, with its
+   own tests; the supervisor keeps one per kind of call.
 
 ## Left alone, and why
 - **The three keyboard listeners** (`MacKeyLayer`, `MacTextExpansion`,
@@ -50,7 +55,11 @@ Ranked by value against risk. One pull request each.
 - **Plugins.** Each store plugin is one file by design, so helpers repeated
   across plugins (number formatting, `kill`) stay. A source change there also
   means a new version of the plugin for every user, which a tidy-up doesn't
-  justify.
+  justify. Their tests are another matter: three test files carried the same
+  loopback HTTP server, which is now one (navbytes/stackbar-plugins#80).
+- **The read loops** in `PluginProcess`, `CommandRunGate` and `UnixSocket`
+  ("read a handle until it closes, a pool per read") look alike, but the pool
+  per read is there for memory, and that investigation is someone else's.
 - **The memory-leak investigation's code.** Another effort owns it.
 
 ## Impact
