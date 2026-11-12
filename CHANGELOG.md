@@ -14,7 +14,7 @@ window. Write for people who use Stackbar, not for the code.
 - **The app you named comes first.** A plugin's hidden search words no longer beat an app or command with that word in its name: "chrome" opens Google Chrome, not Search Browser Tabs; "zoom" opens zoom.us; "sleep" puts the Mac to sleep; "monitor" opens Activity Monitor. A test now checks over 100 everyday queries against the store's plugins on every change.
 - **Stackbar starts faster.** With the Hyper key off (the default), launch no longer stops to check the keyboard's Caps Lock mapping.
 - **System Monitor's temperatures are lighter on the app.** Stackbar now keeps one connection to the Mac's temperature sensors instead of opening a new one on every reading (every few seconds while System Monitor runs).
-- **Stackbar no longer grows by about 100 MB a day.** Text in the menu bar animated between readings, and items slid along whenever a reading changed width, and each in-between frame left its letters cached in memory for good. Nothing in the menu bar animates now, a timer there simply changes once a second, and a reading that ticks (System Monitor's CPU, say) keeps its width, so the menu bar no longer slides every few seconds.
+- **Stackbar no longer grows by about 100 MB a day.** Text in the menu bar animated between readings and items slid along whenever a reading changed width; each in-between frame left its letters cached in memory for good. Nothing in the menu bar animates now, a timer there simply changes once a second, and a reading that ticks (System Monitor's CPU, say) keeps its width, so the menu bar no longer slides every few seconds.
 
 ## 0.39.0
 
