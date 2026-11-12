@@ -13,4 +13,4 @@
 
 ## 3. Core plugins (workstream C)
 - [ ] 3.1 Scenario tests for the core plugins through `stackbarctl render --event`
-- [ ] 3.2 Fuzz the protocol decoders: a plugin's message never crashes the host
+- [x] 3.2 Fuzz the protocol decoders: a plugin's message never crashes the host (`DecoderFuzzTests`: mutated values, flipped bytes, views nested 100k deep; the decoder refuses deep nesting instead of overflowing)

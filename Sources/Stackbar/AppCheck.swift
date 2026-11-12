@@ -114,9 +114,13 @@ enum AppCheck {
 
     /// An older release's home: the plugins it ran are all still here.
     private static func checkUpgradedHome(_ app: AppDelegate) async {
+        // By name, as the old release's benchmark lists them.
         let expected = ProcessInfo.processInfo.environment["STACKBAR_APPCHECK_PLUGINS"]?
             .split(separator: ",").map(String.init) ?? []
-        let have = Set(app.model.controllers.map(\.pluginID))
+        // A plugin whose helper is rebuilt for the new version joins once
+        // it is ready (#183), so give them the time an update takes.
+        _ = await waitUntil(seconds: 180) { Set(expected).isSubset(of: Set(app.model.controllers.map(\.name))) }
+        let have = Set(app.model.controllers.map(\.name))
         let lost = expected.filter { !have.contains($0) }
         record("Plugins survive the update", !expected.isEmpty && lost.isEmpty, lost.isEmpty ? "\(expected.count) plugins kept" : "lost \(lost.joined(separator: ", "))")
         let welcome = app.welcomeWindow?.isVisible == true
