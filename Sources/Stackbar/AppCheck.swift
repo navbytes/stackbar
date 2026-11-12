@@ -22,8 +22,10 @@ enum AppCheck {
     /// What the golden path may cost on a CI runner, which is a slow VM. A
     /// real Mac is several times faster; these catch regressions, not noise.
     enum Budget {
+        /// The first open builds the panel and its views.
+        static let paletteFirstOpenMs = 1_000.0
         static let paletteOpenMedianMs = 100.0
-        static let paletteOpenMaxMs = 500.0
+        static let paletteOpenMaxMs = 250.0
         static let searchMs = 1_500.0
     }
 
@@ -101,9 +103,12 @@ enum AppCheck {
         }
         let before = Set(app.model.controllers.map(\.pluginID))
         app.model.installStarters(starter.pluginIDs)
-        let added = Set(app.model.controllers.map(\.pluginID)).subtracting(before)
         let available = Set(app.model.bundledStore.starters().map(\.id)).union(BundledStore.corePluginIDs)
-        let missing = starter.pluginIDs.intersection(available).subtracting(added).subtracting(before)
+        let wanted = starter.pluginIDs.intersection(available)
+        // Installed plugins join as the folder watcher sees them.
+        _ = await waitUntil(seconds: 20) { wanted.isSubset(of: Set(app.model.controllers.map(\.pluginID))) }
+        let added = Set(app.model.controllers.map(\.pluginID)).subtracting(before)
+        let missing = wanted.subtracting(added).subtracting(before)
         record("Starter set \"\(starter.name)\" installs", missing.isEmpty, missing.isEmpty ? "added \(added.sorted().joined(separator: ", "))" : "missing \(missing.sorted().joined(separator: ", "))")
     }
 
@@ -155,9 +160,11 @@ enum AppCheck {
             app.palette.hide()
             try? await Task.sleep(for: .milliseconds(200))
         }
+        let first = opens.removeFirst()
+        record("Palette opens the first time", first <= Budget.paletteFirstOpenMs, "\(first) ms (budget \(Budget.paletteFirstOpenMs))", ms: first)
         let sorted = opens.sorted()
         let median = sorted[sorted.count / 2], max = sorted.last ?? 0
-        record("Palette opens fast", median <= Budget.paletteOpenMedianMs && max <= Budget.paletteOpenMaxMs,
+        record("Palette opens fast after that", median <= Budget.paletteOpenMedianMs && max <= Budget.paletteOpenMaxMs,
                "median \(median) ms (budget \(Budget.paletteOpenMedianMs)), max \(max) ms (budget \(Budget.paletteOpenMaxMs))", ms: median)
         app.palette.toggle()
         _ = await waitUntil(seconds: 5) { app.palette.isVisible }
@@ -225,23 +232,23 @@ enum AppCheck {
         for (file, tab) in pages {
             app.showSettings(tab: tab)
             try? await Task.sleep(for: .milliseconds(400))
-            guard let window = NSApp.windows.first(where: { $0.title == "Stackbar Settings" && $0.isVisible }) else { continue }
+            guard let window = app.settingsWindow, window.isVisible else { continue }
             shown += 1
             await shoot(window, file, folder: folder)
         }
         record("Settings opens on every page", shown == pages.count, "\(shown) of \(pages.count) pages shown")
-        NSApp.windows.first { $0.title == "Stackbar Settings" }?.close()
+        app.settingsWindow?.close()
     }
 
     private static func checkStore(_ app: AppDelegate, folder: URL) async {
         app.showStore()
-        let shown = await waitUntil(seconds: 5) { NSApp.windows.contains { $0.title == "Plugin Store" && $0.isVisible } }
+        let shown = await waitUntil(seconds: 5) { app.storeWindow?.isVisible == true }
         // Let the index load and the cards draw.
         try? await Task.sleep(for: .seconds(4))
-        if let window = NSApp.windows.first(where: { $0.title == "Plugin Store" }) { await shoot(window, "store", folder: folder) }
+        if let window = app.storeWindow { await shoot(window, "store", folder: folder) }
         let listed = app.model.store.catalogs.reduce(0) { $0 + $1.index.plugins.count }
         record("Store opens and lists plugins", shown && listed > 0, "visible \(shown), \(listed) listings")
-        NSApp.windows.first { $0.title == "Plugin Store" }?.close()
+        app.storeWindow?.close()
     }
 
     // MARK: - Output

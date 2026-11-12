@@ -18,24 +18,29 @@ for a in "$@"; do case $a in --upgrade) UPGRADE=1 ;; *) echo "usage: $0 [--upgra
 
 OUT="$PWD/build/app-check"
 WORK=$(mktemp -d -t stackbar-app-check)
+touch "$WORK/.start"
 APP=build/Stackbar.app
 DEFAULTS=io.navbytes.stackbar
 rm -rf "$OUT" && mkdir -p "$OUT"
 [ -d "$APP" ] || scripts/bundle.sh
 
-# Runs an app until it quits on its own, or kills it after $2 seconds.
+# Runs an app until it quits on its own, or kills it after $2 seconds. Its
+# output goes to $OUT/$3.log, and how it ended to the console.
 run() {
-    "$1" &
+    "$1" > "$OUT/$3.log" 2>&1 &
     pid=$!
     ( sleep "$2"; kill "$pid" 2>/dev/null ) &
     watchdog=$!
-    wait "$pid" || true
+    status=0
+    wait "$pid" || status=$?
     kill "$watchdog" 2>/dev/null || true
+    wait "$watchdog" 2>/dev/null || true
+    echo "app-check: $3 ended with status $status"
 }
 
 # 1. A fresh Mac: no defaults, an empty home.
 defaults delete "$DEFAULTS" 2>/dev/null || true
-STACKBAR_HOME="$WORK/fresh" STACKBAR_APPCHECK="$OUT" run "$APP/Contents/MacOS/Stackbar" 600
+STACKBAR_HOME="$WORK/fresh" STACKBAR_APPCHECK="$OUT" run "$APP/Contents/MacOS/Stackbar" 600 fresh
 
 # 2. An update: the latest release runs first (its benchmark mode installs the
 # core plugins, approves them and quits), then this build opens its home.
@@ -46,18 +51,21 @@ if [ "$UPGRADE" = 1 ]; then
         xattr -dr com.apple.quarantine "$WORK/old/Stackbar.app" 2>/dev/null || true
         OLD=$(plutil -extract CFBundleShortVersionString raw "$WORK/old/Stackbar.app/Contents/Info.plist")
         echo "app-check: updating from $OLD"
-        STACKBAR_HOME="$WORK/upgrade" STACKBAR_BENCHMARK="$WORK/old/benchmark.json" run "$WORK/old/Stackbar.app/Contents/MacOS/Stackbar" 300
+        STACKBAR_HOME="$WORK/upgrade" STACKBAR_BENCHMARK="$WORK/old/benchmark.json" run "$WORK/old/Stackbar.app/Contents/MacOS/Stackbar" 300 old-release
         PLUGINS=$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1]))["plugins"]))' "$WORK/old/benchmark.json" 2>/dev/null || true)
         # Someone who updates has seen Welcome already.
         defaults write "$DEFAULTS" welcomeSeen -bool true
         STACKBAR_HOME="$WORK/upgrade" STACKBAR_APPCHECK="$OUT" STACKBAR_APPCHECK_MODE=upgrade STACKBAR_APPCHECK_PLUGINS="$PLUGINS" \
-            run "$APP/Contents/MacOS/Stackbar" 600
+            run "$APP/Contents/MacOS/Stackbar" 600 upgrade
     else
         echo "app-check: couldn't download the latest release:" >&2
         cat "$WORK/old/download.log" >&2
         exit 1
     fi
 fi
+
+# A crash leaves a report; keep it with the results.
+find "$HOME/Library/Logs/DiagnosticReports" -name 'Stackbar*' -newer "$WORK/.start" -exec cp {} "$OUT/" \; 2>/dev/null || true
 
 python3 - "$OUT" "$UPGRADE" <<'PY'
 import json, os, sys

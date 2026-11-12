@@ -18,8 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var items: [String: StatusItemController] = [:]
     private var headless: [String: HeadlessPanelController] = [:]
     private var emptyStateItem: NSStatusItem?
-    private var settingsWindow: NSWindow?
-    private var storeWindow: NSWindow?
+    private(set) var settingsWindow: NSWindow?
+    private(set) var storeWindow: NSWindow?
     var welcomeWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {

@@ -8,7 +8,7 @@
 - [ ] 1.5 Tick or convert the `mac-checks.md` items the app check now covers
 
 ## 2. Golden path (workstream B)
-- [ ] 2.1 Ranking golden cases in HostCore tests (query to expected top row, learned picks)
+- [x] 2.1 Ranking golden cases in HostCore tests (query to expected top row, learned picks), against the store's real commands (`scripts/palette-corpus.py`); found keywords beating app names, fixed in the ranker
 - [ ] 2.2 Leftover palette-review items: usage for root rows, selection kept on back
 
 ## 3. Core plugins (workstream C)
