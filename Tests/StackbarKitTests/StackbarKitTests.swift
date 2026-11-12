@@ -111,7 +111,24 @@ final class StackbarKitTests: XCTestCase {
         XCTAssertEqual(plugin.items, ["b"])
     }
 
-    func testFailuresAreLoggedNotFatal() async {
+    func testRedrawSendsWhatAPluginsOwnTaskChanged() async {
+        let outbox = Outbox()
+        let plugin = Counter()
+        let runtime = PluginRuntime(plugin: plugin, send: outbox.send)
+        plugin.count = 5
+        Stackbar.redraw()
+        XCTAssertEqual(outbox.take(), [], "nothing is drawn before hello")
+        await runtime.handle(.hello(protocolVersion: 1, surfaces: [.menuBar]))
+        _ = outbox.take()
+
+        plugin.count = 6
+        Stackbar.redraw()
+        XCTAssertEqual(outbox.take(), [.render(surface: .menuBar, root: .label("6", symbol: "number", role: .primary))])
+        Stackbar.redraw()
+        XCTAssertEqual(outbox.take(), [], "an unchanged surface is not sent again")
+    }
+
+        func testFailuresAreLoggedNotFatal() async {
         let outbox = Outbox()
         let plugin = Counter()
         let runtime = PluginRuntime(plugin: plugin, send: outbox.send)
