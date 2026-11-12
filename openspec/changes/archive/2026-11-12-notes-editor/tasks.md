@@ -9,7 +9,7 @@
 - [x] 1.6 StackbarKit `TextEditor`; surface parity, authoring guide + llms.txt, CHANGELOG
 
 ## 2. Plugins (stackbar-plugins, after the host release)
-- [ ] 2.1 Notes 1.0.0 (notes in host storage, pins, search, Recently Deleted, export as Markdown)
+- [x] 2.1 Notes 1.0.0 (notes in host storage, pins, search, Recently Deleted, export as Markdown) (stackbar-plugins #74)
 
 ## 3. Mac check
 - [ ] 3.1 Hotkey toggles the Notes window above other apps; typing never jumps

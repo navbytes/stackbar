@@ -182,6 +182,13 @@ notarizes when the `APPLE_CERT_P12`, `APPLE_CERT_PASSWORD`, `APPLE_ID`,
 otherwise. With `HOMEBREW_TAP_TOKEN` set as well, a notarized release opens a
 PR on navbytes/homebrew-tap that bumps `Casks/stackbar.rb`.
 
+**Cadence.** Stable ships at most once a week. A release between stable ones
+goes out with **pre-release** ticked: it reaches people who turned on Get
+beta versions, not Sparkle's stable feed or Homebrew. A stable release needs
+the `app` CI job (the real app driven through the first minute and an update
+from the last release) green on its commit, and its notes describe only what
+that job or a person checked on a Mac; anything else waits for the next week.
+
 Plugins live in `~/Library/Application Support/Stackbar/Plugins/*.swift`. All
 plugins build in one shared workspace, so StackbarKit compiles once and each new
 plugin builds in seconds. Builds are cached by content.
@@ -271,7 +278,7 @@ Still to check on a Mac:
    outgoing connections; everything else goes through the host.
    `SandboxTests` checks this in the macOS CI job.
 5. **The system services:** clipboard reads and paste (with Accessibility),
-   power assertions, battery and EventKit (`openspec/changes/fluid-plugins`).
+   power assertions, battery and EventKit (`openspec/changes/archive/2026-11-12-fluid-plugins`).
 6. **The memory gate:** `stackbarctl soak` PR Cockpit for a day, and watch the
    host in Activity Monitor.
 

@@ -8,9 +8,9 @@
 - [x] 1.5 Tests, authoring guide + llms.txt, CHANGELOG
 
 ## 2. Plugins (stackbar-plugins, after the host release)
-- [ ] 2.1 PR Cockpit: checks preview as a coloured list
-- [ ] 2.2 Color Picker: a swatch
-- [ ] 2.3 Release Radar (private): the release chain
+- [x] 2.1 PR Cockpit: checks preview as a coloured list
+- [x] 2.2 Color Picker: a swatch
+- [x] ~~2.3 Release Radar (private): the release chain~~ moved out: Release Radar is not in the public store, so it tracks this itself
 
 ## 3. Mac check
 - [ ] 3.1 Arrowing through PR Cockpit checks redraws the pane with no lag
