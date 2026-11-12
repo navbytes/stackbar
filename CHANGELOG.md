@@ -9,7 +9,7 @@ window. Write for people who use Stackbar, not for the code.
 - **`Stackbar.redraw()` for plugin authors.** A plugin can fetch in its own task, so clicks never wait behind a slow refresh, and show the result the moment it lands. It lives in the kit, so it works with any Stackbar.
 
 ### Fixed
-- **"Needs GITHUB_TOKEN" goes away when a plugin stops needing it.** Turning on PR Cockpit's Sign in with gh left the orange dot and "Needs GITHUB_TOKEN" in place until Stackbar was relaunched. A settings change or a restart of the plugin now clears it, and a secret the plugin still needs comes back on its next read.
+- **"Needs GITHUB_TOKEN" goes away when a plugin stops needing it.** Turning on PR Cockpit's Sign in with gh left the orange dot and "Needs GITHUB_TOKEN" in place until Stackbar was relaunched. A settings change, a restart or rebuild of the plugin, or turning it off now clears it, and a secret the plugin still needs comes back on its next read.
 - **The app you named comes first.** A plugin's hidden search words no longer beat an app or command with that word in its name: "chrome" opens Google Chrome, not Search Browser Tabs; "zoom" opens zoom.us; "sleep" puts the Mac to sleep; "monitor" opens Activity Monitor. A test now checks over 100 everyday queries against the store's plugins on every change.
 - **Stackbar starts faster.** With the Hyper key off (the default), launch no longer stops to check the keyboard's Caps Lock mapping.
 - **System Monitor's temperatures are lighter on the app.** Stackbar now keeps one connection to the Mac's temperature sensors instead of opening a new one on every reading (every few seconds while System Monitor runs).
