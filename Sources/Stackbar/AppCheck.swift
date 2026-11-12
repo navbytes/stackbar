@@ -273,7 +273,9 @@ enum AppCheck {
     }
 
     /// The window in light and in dark, drawn by the app itself, so it needs
-    /// no Screen Recording permission.
+    /// no Screen Recording permission. Glass the window server composites
+    /// (a sidebar, the palette's backdrop) comes out blank; the content is
+    /// what these are for.
     private static func shoot(_ window: NSWindow, _ name: String, folder: URL) async {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: appearance)
