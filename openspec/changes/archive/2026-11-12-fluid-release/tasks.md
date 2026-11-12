@@ -43,7 +43,7 @@
 - [x] 6.3 Docs site: install, first plugin in five minutes, capabilities, publishing (stackbar.app/docs)
 - [x] 6.4 Privacy statement (what crash reports contain) (site docs/privacy.md)
 - [x] 6.5 Issue templates asking for `stackbarctl doctor` (.github/ISSUE_TEMPLATE/bug.yml)
-- [ ] 6.6 VoiceOver labels in the renderers; wrap UI strings for localization
+- [x] 6.6 VoiceOver labels in the renderers (0.26.0, #120); ~~localization~~ not planned while Stackbar is English-only
 
 ## 7. Rename (after 1.4)
 
@@ -53,5 +53,5 @@
 
 ## 8. Beta
 
-- [ ] 8.1 Private beta with about 50 developers
+- [x] ~~8.1 Private beta with about 50 developers~~ moved to launch-phase-4 4.2
 - [x] 8.2 Public download (stackbar.app/download, Homebrew cask)

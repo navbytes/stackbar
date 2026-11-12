@@ -62,7 +62,7 @@
 
 ## 4. On a Mac
 
-- [ ] 4.1 The app compiles with `MacSystem` (self-hosted runner)
+- [x] 4.1 The app compiles with `MacSystem` (the macos-26 CI job builds it on every change)
 - [ ] 4.2 Clipboard History records copies, skips a 1Password copy, pastes with Accessibility granted
 - [ ] 4.3 Stay Awake shows in `pmset -g assertions` and disappears when the plugin is quit
 - [ ] 4.4 Up Next asks for calendar access once and shows real events

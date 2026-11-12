@@ -271,7 +271,7 @@ Still to check on a Mac:
    outgoing connections; everything else goes through the host.
    `SandboxTests` checks this in the macOS CI job.
 5. **The system services:** clipboard reads and paste (with Accessibility),
-   power assertions, battery and EventKit (`openspec/changes/fluid-plugins`).
+   power assertions, battery and EventKit (`openspec/changes/archive/2026-11-12-fluid-plugins`).
 6. **The memory gate:** `stackbarctl soak` PR Cockpit for a day, and watch the
    host in Activity Monitor.
 

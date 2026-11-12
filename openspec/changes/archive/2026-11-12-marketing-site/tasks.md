@@ -24,7 +24,7 @@
 - [x] 3.5 `stackbar://store/<id>` opens the plugin's page in Settings → Store (a native detail view from the index and the store's site.json, which now carries each README); "Get it in Stackbar" uses it and falls back to the install steps (Stackbar 0.15.0)
 
 ## 4. Polish
-- [ ] 4.1 Open Graph cards per plugin in its hue
-- [ ] 4.2 Lighthouse CI (95+ in all four) and a Playwright smoke at phone and desktop widths
-- [ ] 4.3 Copy pass with Naveen
+- [x] ~~4.1~~ not planned during the trust-first freeze: Open Graph cards per plugin in its hue
+- [x] ~~4.2~~ not planned during the trust-first freeze: Lighthouse CI (95+ in all four) and a Playwright smoke at phone and desktop widths
+- [x] 4.3 Copy pass with Naveen (site copy brought up to 0.39, #190)
 - [x] 4.3a Live at stackbar.navbytes.io (2026-11-01); HTTPS enforced once GitHub issues the certificate

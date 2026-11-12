@@ -2,7 +2,7 @@
 
 The Stackbar website: the product pages and the plugin store, one page per
 plugin. Astro, static, deployed to GitHub Pages by `.github/workflows/site.yml`.
-The plan is `openspec/changes/marketing-site/`.
+The plan is `openspec/changes/archive/2026-11-12-marketing-site/`.
 
 ```sh
 cd site
