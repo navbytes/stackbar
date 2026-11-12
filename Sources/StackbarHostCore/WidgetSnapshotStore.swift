@@ -47,19 +47,18 @@ public struct WidgetSnapshotStore: Sendable {
     }
 
     public func write(_ snapshot: WidgetSnapshot) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try JSONEncoder().encode(snapshot).write(to: file(snapshot.pluginID), options: .atomic)
+        try JSONFile.write(snapshot, to: file(snapshot.pluginID))
         removeLegacy(snapshot.pluginID)
     }
 
     public func read(_ pluginID: String) -> WidgetSnapshot? {
-        (try? Data(contentsOf: file(pluginID))).flatMap { try? JSONDecoder().decode(WidgetSnapshot.self, from: $0) }
+        JSONFile.read(from: file(pluginID))
     }
 
     public func all() -> [WidgetSnapshot] {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension == "json" }
-            .compactMap { (try? Data(contentsOf: $0)).flatMap { try? JSONDecoder().decode(WidgetSnapshot.self, from: $0) } }
+            .compactMap { JSONFile.read(WidgetSnapshot.self, from: $0) }
             .sorted { $0.name < $1.name }
     }
 
@@ -175,9 +174,8 @@ public struct WidgetActionInbox: Sendable {
     }
 
     public func post(_ action: WidgetAction) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let name = String(format: "%.6f", action.pressedAt.timeIntervalSince1970) + "-" + UUID().uuidString + ".json"
-        try JSONEncoder().encode(action).write(to: directory.appendingPathComponent(name), options: .atomic)
+        try JSONFile.write(action, to: directory.appendingPathComponent(name))
     }
 
     /// Every waiting press, oldest first, each removed as it is read; ones
@@ -189,7 +187,7 @@ public struct WidgetActionInbox: Sendable {
         var result: [WidgetAction] = []
         for file in files {
             defer { try? FileManager.default.removeItem(at: file) }
-            guard let data = try? Data(contentsOf: file), let action = try? JSONDecoder().decode(WidgetAction.self, from: data) else { continue }
+            guard let action = JSONFile.read(WidgetAction.self, from: file) else { continue }
             if now.timeIntervalSince(action.pressedAt) <= Self.maxAge { result.append(action) }
         }
         return result

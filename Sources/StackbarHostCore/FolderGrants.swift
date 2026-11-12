@@ -16,7 +16,7 @@ public final class FolderGrants: @unchecked Sendable {
 
     public init(file: URL?) {
         self.file = file
-        self.grants = file.flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+        self.grants = JSONFile.read(from: file) ?? [:]
     }
 
     /// Calls `body` with the plugin's id after its folders change.
@@ -93,10 +93,7 @@ public final class FolderGrants: @unchecked Sendable {
         grants[pluginID] = list
         guard let file else { return }
         do {
-            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(grants).write(to: file, options: .atomic)
+            try JSONFile.write(grants, to: file, encoder: .readable)
         } catch {
             grants[pluginID] = previous
             throw error

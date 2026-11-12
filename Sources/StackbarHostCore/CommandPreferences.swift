@@ -100,9 +100,7 @@ public final class CommandPreferences: @unchecked Sendable {
 
     public init(file: URL?) {
         self.file = file
-        if let file, let data = try? Data(contentsOf: file), let decoded = try? JSONDecoder().decode(Saved.self, from: data) {
-            saved = decoded
-        }
+        saved = JSONFile.read(from: file) ?? Saved()
     }
 
     public subscript(_ key: CommandKey) -> CommandPreference {
@@ -228,13 +226,7 @@ public final class CommandPreferences: @unchecked Sendable {
 
     private func save() {
         if let file {
-            let snapshot = lock.withLock { saved }
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-            if let data = try? encoder.encode(snapshot) {
-                try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try? data.write(to: file, options: .atomic)
-            }
+            try? JSONFile.write(lock.withLock { saved }, to: file, encoder: .readable)
         }
         onChange?()
     }
@@ -257,9 +249,7 @@ public final class PaletteUsage: @unchecked Sendable {
     public init(file: URL?, now: @escaping @Sendable () -> Date = Date.init) {
         writer = file.map(DeferredFileWriter.init)
         self.now = now
-        if let file, let data = try? Data(contentsOf: file), let decoded = try? JSONDecoder().decode([String: Use].self, from: data) {
-            uses = decoded
-        }
+        uses = JSONFile.read(from: file) ?? [:]
     }
 
     /// Records one use of the entry with this id.

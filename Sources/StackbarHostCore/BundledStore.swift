@@ -151,7 +151,7 @@ public struct BundledStore {
     /// Settings still lists what it can do and can take it back.
     @discardableResult
     public func installCore(offered: URL, approvingIn ledger: CapabilityLedger? = nil) -> [URL] {
-        var done = Set((try? JSONDecoder().decode([String].self, from: Data(contentsOf: offered))) ?? [])
+        var done = Set(JSONFile.read([String].self, from: offered) ?? [])
         // Every launch after the first: nothing to offer, so don't decode
         // and verify every carried bundle to find that out.
         guard !Self.corePluginIDs.isSubset(of: done) else { return [] }
@@ -186,7 +186,7 @@ public struct BundledStore {
     @discardableResult
     public func syncExamples(installMissing: Bool = false) -> ExampleSync {
         let manager = FileManager.default
-        var written = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: record))) ?? [:]
+        var written = JSONFile.read([String: String].self, from: record) ?? [:]
         var result = ExampleSync()
         try? manager.createDirectory(at: pluginsDirectory, withIntermediateDirectories: true)
         for source in exampleSources() {

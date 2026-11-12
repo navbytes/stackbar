@@ -167,9 +167,7 @@ public final class PaletteFavorites: @unchecked Sendable {
 
     public init(file: URL?) {
         self.file = file
-        if let file, let data = try? Data(contentsOf: file), let decoded = try? JSONDecoder().decode([String].self, from: data) {
-            stored = decoded
-        }
+        stored = JSONFile.read(from: file) ?? []
     }
 
     public var ids: [String] { lock.withLock { stored } }
@@ -217,11 +215,7 @@ public final class PaletteFavorites: @unchecked Sendable {
 
     private func save() {
         guard let file else { return }
-        let snapshot = ids
-        if let data = try? JSONEncoder().encode(snapshot) {
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: file, options: .atomic)
-        }
+        try? JSONFile.write(ids, to: file)
     }
 }
 
