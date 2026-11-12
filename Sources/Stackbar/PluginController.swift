@@ -79,7 +79,10 @@ final class PluginController: Identifiable {
     private(set) var pendingApproval: [Capability] = []
     private(set) var isNewInstall = false
     /// Declared secrets the plugin asked for that aren't set.
-    private(set) var missingSecrets: [String] = []
+    /// What "Needs X", the lock dot and the panel prompt show; the rule for
+    /// when they clear is `MissingSecrets`.
+    private(set) var missing = MissingSecrets()
+    var missingSecrets: [String] { missing.names }
     /// Counts popover openings, so searchable lists reset and take focus.
     private(set) var panelShownCount = 0
     /// Goes up each time remote images the trees name finish loading, so
@@ -231,12 +234,14 @@ final class PluginController: Identifiable {
     /// The source changed on disk: rebuild and restart, keeping the last
     /// trees on screen meanwhile.
     func reload() {
+        missing.note(.reloaded)
         Task { await load() }
     }
 
     /// Stops the helper and clears what the plugin showed, keeping its
     /// manifest so Settings can still name it.
     private func turnOff() async {
+        missing.note(.turnedOff)
         await stop()
         menuBar = nil
         panelTree = nil
@@ -319,6 +324,9 @@ final class PluginController: Identifiable {
             return false
         }
         if wasArmed { armChanged() }
+        // A setting can change what the plugin needs (PR Cockpit's "Sign in
+        // with gh" stops it reading GITHUB_TOKEN at all).
+        if found?.0 == .settings { missing.note(.settingsChanged) }
         Task { await supervisor?.event(action, value: value) }
         return true
     }
@@ -385,6 +393,7 @@ final class PluginController: Identifiable {
     }
 
     func restart() {
+        missing.note(.restarted)
         Task {
             guard let current = supervisor else { return }
             await current.stop()
@@ -395,14 +404,14 @@ final class PluginController: Identifiable {
     }
 
     func secretMissing(_ secret: String) {
-        if !missingSecrets.contains(secret) { missingSecrets.append(secret) }
+        missing.note(.asked(secret))
     }
 
     func saveSecret(_ secret: String, value: String) {
         guard let model else { return }
         do {
             try model.services.secrets.setSecret(value.trimmingCharacters(in: .whitespacesAndNewlines), for: secret)
-            missingSecrets.removeAll { $0 == secret }
+            missing.note(.saved(secret))
             refresh()
         } catch {
             problem = "could not save \(secret): \(error)"
