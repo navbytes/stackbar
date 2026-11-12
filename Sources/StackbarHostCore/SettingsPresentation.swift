@@ -251,6 +251,23 @@ public enum SettingsPresentation {
         }
     }
 
+    /// A plugin's declared secrets split for its page. `needed` are the ones
+    /// it asked for and found empty: they go at the top, in orange, under
+    /// "Needs you". The rest are listed lower down without alarm, because a
+    /// manifest declares every secret a plugin *could* use (one per AI
+    /// provider, a token it skips when signing in with gh), not ones it must
+    /// have.
+    public static func secretGroups(declared: [String], missing: [String]) -> (needed: [String], other: [String]) {
+        (declared.filter(missing.contains), declared.filter { !missing.contains($0) })
+    }
+
+    /// What a secret row says under its name.
+    public static func secretState(isSaved: Bool, isNeeded: Bool) -> (text: String, isWarning: Bool) {
+        if isSaved { return ("Saved", false) }
+        if isNeeded { return ("Needed now: the plugin asked for it and it isn't set", true) }
+        return ("Not set. Only needed if your setup uses it.", false)
+    }
+
     /// A secret and the plugins that use it, by name.
     public struct SecretUse: Equatable, Sendable {
         public var secret: String

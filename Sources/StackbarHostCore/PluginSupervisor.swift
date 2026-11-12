@@ -32,6 +32,11 @@ public actor PluginSupervisor {
         case commands([CommandSpec])
         /// An open command view's tree, for the query numbered `seq`.
         case view(session: Int, seq: Int, root: ViewNode)
+        /// The plugin finished handling a message (an event, a refresh):
+        /// `count` is how many the current helper has finished, comparable
+        /// with what `event` returns, so Settings knows when a change it sent
+        /// is done and stops saying "Applying…".
+        case settled(count: Int)
     }
 
     public nonisolated let executable: URL
@@ -147,9 +152,13 @@ public actor PluginSupervisor {
         triggerMarks[reason] = sentCount
     }
 
-    /// A user event: a click, a toggle, a filtered row.
-    public func event(_ action: ActionID, value: EventValue? = nil) {
+    /// A user event: a click, a toggle, a filtered row. Returns the
+    /// message's number: once `settled(count:)` reaches it, the plugin has
+    /// handled it (the plugin handles messages in order).
+    @discardableResult
+    public func event(_ action: ActionID, value: EventValue? = nil) -> Int {
         send(.event(action: action, value: value))
+        return sentCount
     }
 
     public func refresh() {
@@ -369,6 +378,7 @@ public actor PluginSupervisor {
             emitPluginLog(level, message)
         case .message(.settled):
             settledCount += 1
+            onUpdate(.settled(count: settledCount))
         case .message(.request(let id, let call)):
             answer(id, call, generation: eventGeneration)
         case .message(.tools(let specs)):

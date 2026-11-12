@@ -25,3 +25,4 @@
 
 ## 6. Failures you can read (workstream F)
 - [x] 6.1 Already covered, nothing new built: a plugin that fails shows "didn't build or start" with the reason and Rebuild (Settings, panel), the palette shows failure states, and Report a Problem fills in `stackbarctl doctor`
+- [x] 6.2 Plugin settings pages (Naveen picked option B, 11-12): an activity line under the header (Applying… until the plugin settles the change, the latest error with Try Again, last update), secrets the plugin asked for under "Needs you" and the rest without alarm, a filter, section links and folding for long settings surfaces (`PluginSettingsOutline`), Permissions folded, the log in Diagnostics. Host only, no protocol change. The sticky "Needs" mark itself is #200.
