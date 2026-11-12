@@ -30,6 +30,15 @@ public struct MenuBarView: View {
         .fixedSize()
         .padding(.horizontal, 4)
         .foregroundStyle(MenuBarView.tint(fallback.role))
+        // Nothing in the bar animates. The status item draws on the CPU, and
+        // text drawn mid-animation there is rasterized again at every
+        // in-between size; Core Graphics keeps each of those glyph bitmaps,
+        // so a ticking timer in the bar grew the app by 100 MB a day.
+        .contentTransition(.identity)
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
     }
 
     /// Menu-bar colors. The bar is translucent over the wallpaper, so the
@@ -87,7 +96,8 @@ struct MenuBarNode: View {
         case .image(.symbol(let symbol)):
             Image(systemName: symbol)
         case .timer(let range, let countsDown):
-            Text(timerInterval: range.start...range.end, countsDown: countsDown).font(.system(size: 13).monospacedDigit())
+            // Not `Text(timerInterval:)`, which rolls its digits each second.
+            MenuBarTimer(range: range, countsDown: countsDown)
         case .clock(let face):
             // The widest readings sit underneath, hidden, so the item keeps
             // one width as the clock ticks and the bar doesn't shift.
@@ -109,6 +119,20 @@ struct MenuBarNode: View {
         }
     }
 }
+/// A timer in the bar: plain text redrawn once a second until the range
+/// ends, with no transition between readings.
+struct MenuBarTimer: View {
+    let range: TimeRange
+    let countsDown: Bool
+
+    var body: some View {
+        TimelineView(.periodic(from: range.start, by: 1)) { context in
+            Text(range.clock(at: min(context.date, range.end), countsDown: countsDown))
+                .font(.system(size: 13).monospacedDigit())
+        }
+    }
+}
+
 /// A clock's widest readings, worked out once per pattern, zone and language
 /// rather than on every menu-bar redraw.
 @MainActor
