@@ -51,6 +51,9 @@ final class PaletteController {
 
     var isVisible: Bool { panel?.isVisible == true }
 
+    /// The palette's panel, once it has been shown.
+    var window: NSWindow? { panel }
+
     /// The hotkey the user chose (Settings › General, or the welcome window).
     static var chosenHotKey: String {
         get { PaletteHotKey.spec(stored: UserDefaults.standard.string(forKey: PaletteHotKey.defaultsKey)) }

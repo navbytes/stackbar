@@ -169,8 +169,8 @@ public struct PaletteRanker: Sendable {
     }
 
     /// How well the entry's words match, or `nil`: its title fully; its
-    /// subtitle and keywords one tier lower at half the quality, except a
-    /// keyword typed whole;
+    /// subtitle under any title with the word in it; a keyword typed whole
+    /// as a title prefix when the title has the word too, else under it;
     /// its plugin's name no better than a mid-word match, so "git" doesn't
     /// list every row of a plugin called GitHub ahead of "Reset Git Cache".
     public func textScore(_ entry: PaletteIndex.Entry) -> Int? {
@@ -184,13 +184,27 @@ public struct PaletteRanker: Sendable {
             guard let match = match.map(adjust) else { return }
             best = max(best ?? Int.min, Self.points(match.tier) + match.quality)
         }
-        consider(TextMatch.match(typed, in: entry.title))
-        // Words beside the title: a tier lower and half the quality, so a
-        // title that starts with the text beats a subtitle that is the text.
-        let aside: (TextMatch.Match) -> TextMatch.Match = { .init(tier: $0.tier.lower, quality: $0.quality / 2) }
+        let title = TextMatch.match(typed, in: entry.title)
+        consider(title)
+        // Words beside the title: a tier lower and half the quality, and
+        // never over a title with the word in it.
+        let aside: (TextMatch.Match) -> TextMatch.Match = { .init(tier: min($0.tier.lower, .initials), quality: $0.quality / 2) }
         if let subtitle = entry.subtitle { consider(TextMatch.match(typed, in: subtitle), aside) }
+        // A keyword typed whole confirms a title that has the word, as if the
+        // title started with it: "settings" opens Stackbar Settings over
+        // System Settings and a long file name starting "Settings", while
+        // "note" still opens Notes before Create Note. A keyword alone finds what the title doesn't say
+        // ("reboot" → Restart) but sits under every title with the word, so
+        // "chrome" opens Google Chrome before Search Browser Tabs.
+        let titleHasWord = title.map { $0.tier >= .wordStart } ?? false
         for keyword in entry.keywords {
-            consider(TextMatch.match(typed, in: keyword)) { $0.tier == .exact ? $0 : aside($0) }
+            consider(TextMatch.match(typed, in: keyword)) { match in
+                switch match.tier {
+                case .exact where titleHasWord: return .init(tier: .prefix, quality: title?.quality ?? 0)
+                case .exact: return .init(tier: .initials, quality: 60)
+                default: return .init(tier: min(match.tier.lower, .substring), quality: match.quality / 2)
+                }
+            }
         }
         // A root-search row's plugin name ("Applications") says nothing about the row.
         if entry.rankKey == nil {

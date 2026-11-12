@@ -1,0 +1,1792 @@
+{
+ "source": "navbytes/stackbar-plugins@bf2ad56",
+ "commands": [
+  {
+   "plugin": "io.navbytes.stackbar.plugins.docker",
+   "id": "containers",
+   "title": "Docker Containers",
+   "subtitle": null,
+   "keywords": [
+    "docker",
+    "container",
+    "compose"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.docker",
+   "id": "logs",
+   "title": "Docker Logs",
+   "subtitle": null,
+   "keywords": [
+    "docker"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.docker",
+   "id": "compose",
+   "title": "Docker Compose Projects",
+   "subtitle": null,
+   "keywords": [
+    "docker",
+    "compose",
+    "project",
+    "stack"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.docker",
+   "id": "stop-all",
+   "title": "Stop All Docker Containers",
+   "subtitle": null,
+   "keywords": [
+    "docker",
+    "stop",
+    "all"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.docker",
+   "id": "prune",
+   "title": "Remove Stopped Docker Containers",
+   "subtitle": null,
+   "keywords": [
+    "docker",
+    "prune",
+    "clean"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.git-sync",
+   "id": "repositories",
+   "title": "Search Local Repositories",
+   "subtitle": "Behind, ahead or changed, with Pull and Push",
+   "keywords": [
+    "git",
+    "repo",
+    "sync",
+    "pull"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.git-sync",
+   "id": "update-all",
+   "title": "Update All Repositories",
+   "subtitle": "Fast-forward every repository that is behind and safe to",
+   "keywords": [
+    "git",
+    "pull",
+    "sync"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.git-sync",
+   "id": "fetch-all",
+   "title": "Fetch All Repositories",
+   "subtitle": null,
+   "keywords": [
+    "git",
+    "fetch",
+    "sync"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.git-sync",
+   "id": "worktrees",
+   "title": "Search Worktrees",
+   "subtitle": "Every worktree by branch or folder",
+   "keywords": [
+    "git",
+    "worktree",
+    "branch"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.git-sync",
+   "id": "clean-up",
+   "title": "Clean Up Worktrees",
+   "subtitle": "Remove worktrees whose branch is merged",
+   "keywords": [
+    "git",
+    "worktree",
+    "prune"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.git-sync",
+   "id": "new-worktree",
+   "title": "New Git Worktree",
+   "subtitle": null,
+   "keywords": [
+    "git",
+    "worktree",
+    "branch"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.homebrew",
+   "id": "upgrade-all",
+   "title": "Upgrade All Homebrew Packages",
+   "subtitle": null,
+   "keywords": [
+    "brew",
+    "homebrew",
+    "upgrade"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.homebrew",
+   "id": "update",
+   "title": "Update Homebrew",
+   "subtitle": null,
+   "keywords": [
+    "brew",
+    "homebrew"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.homebrew",
+   "id": "outdated",
+   "title": "Outdated Homebrew Packages",
+   "subtitle": null,
+   "keywords": [
+    "brew",
+    "homebrew"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.homebrew",
+   "id": "services",
+   "title": "Homebrew Services",
+   "subtitle": null,
+   "keywords": [
+    "brew",
+    "homebrew",
+    "services",
+    "launchd",
+    "postgres",
+    "redis"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.jira",
+   "id": "my-issues",
+   "title": "My Jira Issues",
+   "subtitle": null,
+   "keywords": [
+    "jira",
+    "issue",
+    "ticket",
+    "assigned"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.jira",
+   "id": "search",
+   "title": "Search Jira",
+   "subtitle": "Text, a key like ABC-123, or a link",
+   "keywords": [
+    "jira",
+    "issue",
+    "find",
+    "ticket"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.jira",
+   "id": "issue",
+   "title": "Jira Issue by Key",
+   "subtitle": null,
+   "keywords": [
+    "jira"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.jira",
+   "id": "status",
+   "title": "Change Jira Issue Status",
+   "subtitle": null,
+   "keywords": [
+    "jira",
+    "transition",
+    "move",
+    "done",
+    "progress"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.jira",
+   "id": "comment",
+   "title": "Comment on Jira Issue",
+   "subtitle": null,
+   "keywords": [
+    "jira",
+    "comment",
+    "reply",
+    "note"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.jira",
+   "id": "create",
+   "title": "Create Jira Issue",
+   "subtitle": null,
+   "keywords": [
+    "jira",
+    "issue",
+    "new",
+    "ticket",
+    "bug"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.linear",
+   "id": "my-issues",
+   "title": "My Linear Issues",
+   "subtitle": null,
+   "keywords": [
+    "linear",
+    "issue",
+    "assigned",
+    "ticket"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.linear",
+   "id": "search",
+   "title": "Search Linear Issues",
+   "subtitle": null,
+   "keywords": [
+    "linear",
+    "issue",
+    "find"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.linear",
+   "id": "inbox",
+   "title": "Linear Inbox",
+   "subtitle": null,
+   "keywords": [
+    "linear",
+    "notifications",
+    "mentions",
+    "inbox"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.linear",
+   "id": "status",
+   "title": "Change Linear Issue Status",
+   "subtitle": null,
+   "keywords": [
+    "linear",
+    "state",
+    "move",
+    "done"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.linear",
+   "id": "priority",
+   "title": "Set Linear Issue Priority",
+   "subtitle": null,
+   "keywords": [
+    "linear",
+    "priority",
+    "urgent"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.linear",
+   "id": "comment",
+   "title": "Comment on Linear Issue",
+   "subtitle": null,
+   "keywords": [
+    "linear",
+    "comment",
+    "reply"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.linear",
+   "id": "issue",
+   "title": "Linear Issue by ID",
+   "subtitle": null,
+   "keywords": [
+    "linear"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.linear",
+   "id": "create",
+   "title": "Create Linear Issue",
+   "subtitle": null,
+   "keywords": [
+    "linear",
+    "issue",
+    "new",
+    "ticket"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "search",
+   "title": "Search Pull Requests",
+   "subtitle": "Yours and to review; type to search GitHub",
+   "keywords": [
+    "github",
+    "pr",
+    "pull request"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "review-queue",
+   "title": "Review Queue",
+   "subtitle": "Pull requests waiting on your review",
+   "keywords": [
+    "github",
+    "pr"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "open-next-review",
+   "title": "Open Next Review",
+   "subtitle": null,
+   "keywords": [
+    "github",
+    "pr"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "repos",
+   "title": "Search GitHub Repositories",
+   "subtitle": null,
+   "keywords": [
+    "github",
+    "repo",
+    "repository",
+    "gh"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "issues",
+   "title": "My GitHub Issues",
+   "subtitle": "Open issues assigned to you",
+   "keywords": [
+    "github",
+    "issue",
+    "assigned",
+    "gh"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "inbox",
+   "title": "GitHub Inbox",
+   "subtitle": "Mentions, review requests and everything GitHub notifies you about",
+   "keywords": [
+    "github",
+    "notifications",
+    "mentions",
+    "inbox",
+    "gh"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "create-issue",
+   "title": "Create GitHub Issue",
+   "subtitle": null,
+   "keywords": [
+    "github",
+    "issue",
+    "new",
+    "bug",
+    "gh"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "jump",
+   "title": "Jump to a Repository or Pull Request",
+   "subtitle": null,
+   "keywords": [
+    "github"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "checks",
+   "title": "Pull Request Checks",
+   "subtitle": null,
+   "keywords": [
+    "github",
+    "ci",
+    "checks"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "files",
+   "title": "Pull Request Files",
+   "subtitle": null,
+   "keywords": [
+    "github",
+    "diff",
+    "files"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.pr-cockpit",
+   "id": "refresh",
+   "title": "Refresh Pull Requests",
+   "subtitle": null,
+   "keywords": [
+    "github"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.ports",
+   "id": "kill-port",
+   "title": "Kill Port",
+   "subtitle": "Stop whatever is listening on a port",
+   "keywords": [
+    "port",
+    "kill",
+    "lsof",
+    "free"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.ports",
+   "id": "port",
+   "title": "Find Port",
+   "subtitle": null,
+   "keywords": [
+    "port"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.ports",
+   "id": "ports",
+   "title": "Listening Ports",
+   "subtitle": null,
+   "keywords": [
+    "port",
+    "lsof",
+    "listen",
+    "server"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.recent-projects",
+   "id": "search",
+   "title": "Search Recent Projects",
+   "subtitle": "Open a folder or workspace in your editor",
+   "keywords": [
+    "project",
+    "vscode",
+    "code",
+    "cursor",
+    "windsurf",
+    "recent",
+    "open"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.script-commands",
+   "id": "scripts",
+   "title": "Script Commands",
+   "subtitle": "Your scripts; opening this looks for new ones",
+   "keywords": [
+    "script",
+    "scripts",
+    "list",
+    "run"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.script-commands",
+   "id": "reload",
+   "title": "Reload Script Commands",
+   "subtitle": null,
+   "keywords": [
+    "script",
+    "reload",
+    "refresh"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.litellm",
+   "id": "spend",
+   "title": "LiteLLM Spend",
+   "subtitle": "Today, 7 and 30 days, the budget, and what each model cost",
+   "keywords": [
+    "litellm",
+    "llm",
+    "tokens",
+    "spend",
+    "cost",
+    "budget"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.openrouter",
+   "id": "spend",
+   "title": "OpenRouter Spend",
+   "subtitle": "Today, this week and month, credits and top models",
+   "keywords": []
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-monitor",
+   "id": "top",
+   "title": "Top Processes",
+   "subtitle": "What is using your CPU and memory",
+   "keywords": [
+    "cpu",
+    "memory",
+    "process",
+    "activity",
+    "kill",
+    "quit",
+    "slow"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.app-switcher",
+   "id": "assign",
+   "title": "Pin a Letter to an App",
+   "subtitle": "\\(triggerKey.title) \\(assignKey) and a letter does this for the app in front",
+   "keywords": [
+    "app switcher",
+    "pin",
+    "letter",
+    "rcmd"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.app-switcher",
+   "id": "clear-pins",
+   "title": "Clear App Switcher Pins",
+   "subtitle": "Every letter goes back to its app's first letter",
+   "keywords": [
+    "app switcher",
+    "pin",
+    "letter"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.ask-ai",
+   "id": "ask",
+   "title": "Ask AI",
+   "subtitle": "A question, with follow-ups",
+   "keywords": [
+    "ai",
+    "chat",
+    "claude",
+    "gpt",
+    "llm",
+    "question"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.browser-tabs",
+   "id": "tabs",
+   "title": "Search Browser Tabs",
+   "subtitle": "Switch to any open tab",
+   "keywords": [
+    "tab",
+    "browser",
+    "safari",
+    "chrome",
+    "arc",
+    "switch"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.browser-tabs",
+   "id": "bookmarks",
+   "title": "Search Bookmarks",
+   "subtitle": "From Chrome, Brave, Edge and Vivaldi",
+   "keywords": [
+    "bookmark",
+    "favorite",
+    "browser",
+    "chrome"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.calculator",
+   "id": "calculate",
+   "title": "Calculate",
+   "subtitle": "Sums, units, currencies and time zones",
+   "keywords": [
+    "math",
+    "sum",
+    "convert",
+    "units",
+    "currency",
+    "time zone"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.clipboard",
+   "id": "search",
+   "title": "Clipboard History",
+   "subtitle": "Paste anything you copied",
+   "keywords": [
+    "paste",
+    "copy",
+    "history"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.clipboard",
+   "id": "paste-plain",
+   "title": "Paste Last Copy as Plain Text",
+   "subtitle": null,
+   "keywords": [
+    "clipboard",
+    "format"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.clipboard",
+   "id": "ignore-next",
+   "title": "Ignore Next Copy",
+   "subtitle": null,
+   "keywords": [
+    "clipboard",
+    "password",
+    "secret"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.clipboard",
+   "id": "clear",
+   "title": "Clear Clipboard History",
+   "subtitle": "Keeps pinned items",
+   "keywords": [
+    "delete",
+    "wipe"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.color-picker",
+   "id": "pick",
+   "title": "Pick Color",
+   "subtitle": "Click anywhere on screen to copy its color",
+   "keywords": [
+    "color",
+    "colour",
+    "eyedropper",
+    "hex",
+    "picker"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.color-picker",
+   "id": "history",
+   "title": "Picked Colors",
+   "subtitle": "The colors you picked, to copy again",
+   "keywords": [
+    "color",
+    "colour",
+    "history",
+    "palette"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.color-picker",
+   "id": "convert",
+   "title": "Convert Color",
+   "subtitle": "Type a hex color to copy it as RGB, HSL or SwiftUI",
+   "keywords": [
+    "color",
+    "colour",
+    "hex",
+    "rgb",
+    "hsl",
+    "convert"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.dictionary",
+   "id": "define",
+   "title": "Define Word",
+   "subtitle": "Look a word up in the Mac's Dictionary",
+   "keywords": [
+    "define",
+    "dictionary",
+    "meaning",
+    "word",
+    "thesaurus"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.emoji",
+   "id": "search",
+   "title": "Search Emoji",
+   "subtitle": "Paste an emoji by name",
+   "keywords": [
+    "emoji",
+    "smiley",
+    "symbol",
+    "character"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.emoji",
+   "id": "inline",
+   "title": "Emoji by Name",
+   "subtitle": null,
+   "keywords": [
+    "emoji"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.file-search",
+   "id": "search",
+   "title": "Search Files",
+   "subtitle": "Find a file or folder by name",
+   "keywords": [
+    "file",
+    "folder",
+    "find",
+    "spotlight",
+    "document"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.music",
+   "id": "play-pause",
+   "title": "Play or Pause Music",
+   "subtitle": null,
+   "keywords": [
+    "music",
+    "spotify",
+    "play",
+    "pause"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.music",
+   "id": "next",
+   "title": "Next Track",
+   "subtitle": null,
+   "keywords": [
+    "music",
+    "spotify",
+    "skip"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.music",
+   "id": "previous",
+   "title": "Previous Track",
+   "subtitle": null,
+   "keywords": [
+    "music",
+    "spotify",
+    "back"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.music",
+   "id": "skip-forward",
+   "title": "Skip Forward 15 Seconds",
+   "subtitle": null,
+   "keywords": [
+    "music",
+    "spotify",
+    "podcast",
+    "seek"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.music",
+   "id": "skip-back",
+   "title": "Skip Back 15 Seconds",
+   "subtitle": null,
+   "keywords": [
+    "music",
+    "spotify",
+    "podcast",
+    "seek"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.music",
+   "id": "copy-track",
+   "title": "Copy Current Track",
+   "subtitle": null,
+   "keywords": [
+    "music",
+    "spotify",
+    "song",
+    "share"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.notes",
+   "id": "toggle",
+   "title": "Notes",
+   "subtitle": "Show or hide the note pad",
+   "keywords": [
+    "notes",
+    "floating",
+    "pad",
+    "scratch"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.notes",
+   "id": "new",
+   "title": "Create Note",
+   "subtitle": null,
+   "keywords": [
+    "note",
+    "new",
+    "write"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.notes",
+   "id": "search",
+   "title": "Search Notes",
+   "subtitle": "Find a note by any word in it",
+   "keywords": [
+    "note",
+    "find"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.pomodoro",
+   "id": "toggle",
+   "title": "Start or Pause Pomodoro",
+   "subtitle": null,
+   "keywords": [
+    "pomodoro",
+    "timer",
+    "focus",
+    "pause",
+    "resume",
+    "tomato"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.pomodoro",
+   "id": "start-focus",
+   "title": "Start a Focus Session",
+   "subtitle": "Optionally a length in minutes and a tag",
+   "keywords": [
+    "pomodoro",
+    "timer",
+    "focus",
+    "work",
+    "tomato"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.pomodoro",
+   "id": "start-break",
+   "title": "Take a Break",
+   "subtitle": "Optionally a length in minutes",
+   "keywords": [
+    "pomodoro",
+    "timer",
+    "break",
+    "rest",
+    "tomato"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.pomodoro",
+   "id": "skip",
+   "title": "Skip to the Next Pomodoro Session",
+   "subtitle": null,
+   "keywords": [
+    "pomodoro",
+    "timer",
+    "skip",
+    "next"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.pomodoro",
+   "id": "reset",
+   "title": "Reset Pomodoro",
+   "subtitle": null,
+   "keywords": [
+    "pomodoro",
+    "timer",
+    "reset",
+    "stop",
+    "cancel"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.quicklinks",
+   "id": "web-search",
+   "title": "Search Google",
+   "subtitle": "Search the web for what you typed",
+   "keywords": [
+    "web",
+    "google",
+    "search"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.quicklinks",
+   "id": "search",
+   "title": "Search Quicklinks",
+   "subtitle": "Open, edit or copy a quicklink",
+   "keywords": [
+    "quicklink",
+    "bookmark",
+    "url"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.quicklinks",
+   "id": "create",
+   "title": "Create Quicklink",
+   "subtitle": null,
+   "keywords": [
+    "quicklink",
+    "new",
+    "add"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.quicklinks",
+   "id": "library",
+   "title": "Browse Quicklink Library",
+   "subtitle": "\\(Self.library.count) ready-made searches, sites and folders",
+   "keywords": [
+    "quicklink",
+    "starter",
+    "add",
+    "template"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.quicklinks",
+   "id": "import",
+   "title": "Import Quicklinks",
+   "subtitle": "From a Raycast export",
+   "keywords": [
+    "quicklink",
+    "raycast"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.quicklinks",
+   "id": "export",
+   "title": "Export Quicklinks",
+   "subtitle": "To a file Raycast reads too",
+   "keywords": [
+    "quicklink",
+    "raycast",
+    "backup"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.snippets",
+   "id": "search",
+   "title": "Search Snippets",
+   "subtitle": "Paste, copy or edit a snippet",
+   "keywords": [
+    "snippet",
+    "text",
+    "paste"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.snippets",
+   "id": "create",
+   "title": "Create Snippet",
+   "subtitle": null,
+   "keywords": [
+    "snippet",
+    "new",
+    "add"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.snippets",
+   "id": "import",
+   "title": "Import Snippets",
+   "subtitle": "From Raycast, TextExpander, Espanso or Text Replacements",
+   "keywords": [
+    "snippet",
+    "raycast",
+    "textexpander",
+    "espanso",
+    "text replacements"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.snippets",
+   "id": "export",
+   "title": "Export Snippets",
+   "subtitle": "To a file Raycast reads too",
+   "keywords": [
+    "snippet",
+    "raycast",
+    "backup"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.timers",
+   "id": "start",
+   "title": "Start Timer",
+   "subtitle": "A length like 10m or 1h30, or a time like 17:45, then a name",
+   "keywords": [
+    "timer",
+    "countdown",
+    "alarm",
+    "remind"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.timers",
+   "id": "list",
+   "title": "Show Timers",
+   "subtitle": "The timers running now",
+   "keywords": [
+    "timer",
+    "countdown",
+    "running"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.timers",
+   "id": "stop-all",
+   "title": "Stop All Timers",
+   "subtitle": null,
+   "keywords": [
+    "timer",
+    "cancel",
+    "clear"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.todo",
+   "id": "add",
+   "title": "Add a Todo",
+   "subtitle": "Dates and times in the text are understood",
+   "keywords": [
+    "todo",
+    "task",
+    "remind",
+    "add",
+    "new"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.todo",
+   "id": "complete",
+   "title": "Mark a Todo Done",
+   "subtitle": null,
+   "keywords": [
+    "todo",
+    "task",
+    "done",
+    "complete",
+    "tick"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.todo",
+   "id": "snooze",
+   "title": "Snooze a Todo",
+   "subtitle": "To a time you type, or an hour or a day later",
+   "keywords": [
+    "todo",
+    "task",
+    "snooze",
+    "later",
+    "postpone"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.todo",
+   "id": "today",
+   "title": "Today's Todos",
+   "subtitle": null,
+   "keywords": [
+    "todo",
+    "task",
+    "today",
+    "list"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.todo",
+   "id": "search",
+   "title": "Search Todos",
+   "subtitle": "Every open task",
+   "keywords": [
+    "todo",
+    "task",
+    "find",
+    "search"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.translate",
+   "id": "translate",
+   "title": "Translate Selection",
+   "subtitle": "The selected text, or what you copied",
+   "keywords": []
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.translate",
+   "id": "translate-typed",
+   "title": "Translate",
+   "subtitle": "What you typed",
+   "keywords": []
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.translate",
+   "id": "translate-replace",
+   "title": "Translate and Replace Selection",
+   "subtitle": "Pastes the translation over the selected text",
+   "keywords": [
+    "translate",
+    "replace",
+    "paste",
+    "deepl",
+    "language"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.translate",
+   "id": "translate-screen",
+   "title": "Translate Text on Screen",
+   "subtitle": "Drag over any text, even in an image",
+   "keywords": [
+    "translate",
+    "screen",
+    "ocr",
+    "image",
+    "capture"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.translate",
+   "id": "open-google",
+   "title": "Translate Selection in Google Translate",
+   "subtitle": null,
+   "keywords": [
+    "translate",
+    "google"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.up-next",
+   "id": "join-next",
+   "title": "Join Next Meeting",
+   "subtitle": null,
+   "keywords": [
+    "meeting",
+    "zoom",
+    "meet",
+    "teams",
+    "call",
+    "join"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.up-next",
+   "id": "copy-next-link",
+   "title": "Copy Next Meeting Link",
+   "subtitle": null,
+   "keywords": [
+    "meeting",
+    "zoom",
+    "meet",
+    "teams",
+    "call",
+    "link"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.up-next",
+   "id": "add-event",
+   "title": "Add Calendar Event",
+   "subtitle": "Like \\",
+   "keywords": [
+    "calendar",
+    "event",
+    "meeting",
+    "new",
+    "add",
+    "schedule",
+    "create"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.up-next",
+   "id": "join-event",
+   "title": "Join Meeting",
+   "subtitle": "From a reminder or alert",
+   "keywords": []
+  },
+  {
+   "plugin": "io.navbytes.stackbar.up-next",
+   "id": "snooze",
+   "title": "Snooze Meeting Reminder",
+   "subtitle": "Remind again in five minutes",
+   "keywords": [
+    "meeting",
+    "remind",
+    "snooze",
+    "later"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.up-next",
+   "id": "agenda",
+   "title": "Today's Meetings",
+   "subtitle": null,
+   "keywords": [
+    "meeting",
+    "agenda",
+    "calendar",
+    "today",
+    "schedule"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.window-switcher",
+   "id": "switch",
+   "title": "Switch Windows",
+   "subtitle": "Bring any open window to the front",
+   "keywords": [
+    "window",
+    "switch",
+    "focus",
+    "tab"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.workspaces",
+   "id": "save",
+   "title": "Save Window Layout",
+   "subtitle": "Remember where every window is on these displays",
+   "keywords": [
+    "workspace",
+    "layout",
+    "windows",
+    "save",
+    "snapshot"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.workspaces",
+   "id": "edit",
+   "title": "Edit Window Layout",
+   "subtitle": "Take windows out of a saved layout",
+   "keywords": [
+    "workspace",
+    "layout",
+    "windows",
+    "remove"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.workspaces",
+   "id": "export",
+   "title": "Export Window Layouts",
+   "subtitle": "To a file, for a backup or another Mac",
+   "keywords": [
+    "workspace",
+    "layout",
+    "windows",
+    "backup"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.workspaces",
+   "id": "import",
+   "title": "Import Window Layouts",
+   "subtitle": "From an exported file",
+   "keywords": [
+    "workspace",
+    "layout",
+    "windows"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.workspaces",
+   "id": "restore",
+   "title": "Restore Window Layout",
+   "subtitle": "Put windows back as a layout saved them",
+   "keywords": [
+    "workspace",
+    "layout",
+    "windows",
+    "restore"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.world-clock",
+   "id": "times",
+   "title": "World Clock",
+   "subtitle": "The time in your cities",
+   "keywords": [
+    "time",
+    "zone",
+    "clock",
+    "city",
+    "timezone"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.world-clock",
+   "id": "copy-times",
+   "title": "Copy My Cities' Times",
+   "subtitle": "The time now in each of your cities",
+   "keywords": [
+    "time",
+    "zone",
+    "city",
+    "copy",
+    "schedule"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.world-clock",
+   "id": "time-in",
+   "title": "Time In a City",
+   "subtitle": "World Clock",
+   "keywords": [
+    "time",
+    "zone",
+    "city"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.applications",
+   "id": "search",
+   "title": "Search Applications",
+   "subtitle": "Open an app or a Settings pane",
+   "keywords": [
+    "app",
+    "launch",
+    "open",
+    "settings"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.kill-process",
+   "id": "search",
+   "title": "Kill Process",
+   "subtitle": "Quit or force quit a process by name",
+   "keywords": [
+    "kill",
+    "process",
+    "quit",
+    "force",
+    "cpu",
+    "memory",
+    "activity"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.menu-search",
+   "id": "search",
+   "title": "Search Menu Items",
+   "subtitle": "Choose any menu item of the app you're in",
+   "keywords": [
+    "menu",
+    "command",
+    "action",
+    "help"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.stay-awake",
+   "id": "toggle",
+   "title": "Toggle Stay Awake",
+   "subtitle": null,
+   "keywords": [
+    "awake",
+    "caffeine",
+    "amphetamine",
+    "sleep"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.stay-awake",
+   "id": "keep-awake",
+   "title": "Keep Awake For…",
+   "subtitle": "A duration like 90m or 2h, or a time like 17:30",
+   "keywords": [
+    "awake",
+    "caffeine",
+    "sleep",
+    "until"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.stay-awake",
+   "id": "allow-sleep",
+   "title": "Allow Sleep",
+   "subtitle": null,
+   "keywords": [
+    "awake",
+    "sleep",
+    "stop"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "lock-screen",
+   "title": "Lock Screen",
+   "subtitle": "Lock the Mac now",
+   "keywords": [
+    "lock",
+    "away"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "sleep",
+   "title": "Sleep",
+   "subtitle": "Put the Mac to sleep",
+   "keywords": [
+    "sleep",
+    "suspend"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "sleep-displays",
+   "title": "Sleep Displays",
+   "subtitle": "Turn the screens off",
+   "keywords": [
+    "display",
+    "screen",
+    "monitor",
+    "off"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "screen-saver",
+   "title": "Start Screen Saver",
+   "subtitle": "Start the screen saver",
+   "keywords": [
+    "screensaver"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "toggle-dark-mode",
+   "title": "Toggle Dark Mode",
+   "subtitle": "Switch between light and dark",
+   "keywords": [
+    "dark",
+    "light",
+    "appearance",
+    "theme"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "hide-other-apps",
+   "title": "Hide Other Apps",
+   "subtitle": "Hide every app but the one you're in",
+   "keywords": [
+    "hide",
+    "focus"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "eject-disks",
+   "title": "Eject All Disks",
+   "subtitle": "Eject every external disk and disk image",
+   "keywords": [
+    "eject",
+    "unmount",
+    "usb",
+    "disk"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "empty-trash",
+   "title": "Empty Trash",
+   "subtitle": "Delete what's in the Trash for good",
+   "keywords": [
+    "trash",
+    "bin",
+    "delete"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "quit-other-apps",
+   "title": "Quit Other Apps",
+   "subtitle": "Quit every app but Finder and the one you're in",
+   "keywords": [
+    "quit",
+    "close",
+    "all"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "log-out",
+   "title": "Log Out",
+   "subtitle": "Log out of this Mac",
+   "keywords": [
+    "logout",
+    "sign out"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "restart",
+   "title": "Restart",
+   "subtitle": "Restart the Mac",
+   "keywords": [
+    "reboot"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.system-commands",
+   "id": "shut-down",
+   "title": "Shut Down",
+   "subtitle": "Turn the Mac off",
+   "keywords": [
+    "shutdown",
+    "power off",
+    "turn off"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "left-half",
+   "title": "Left Half",
+   "subtitle": null,
+   "keywords": [
+    "snap",
+    "split"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "right-half",
+   "title": "Right Half",
+   "subtitle": null,
+   "keywords": [
+    "snap",
+    "split"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "top-half",
+   "title": "Top Half",
+   "subtitle": null,
+   "keywords": [
+    "snap",
+    "split"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "bottom-half",
+   "title": "Bottom Half",
+   "subtitle": null,
+   "keywords": [
+    "snap",
+    "split"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "top-left",
+   "title": "Top Left Quarter",
+   "subtitle": null,
+   "keywords": [
+    "corner",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "top-right",
+   "title": "Top Right Quarter",
+   "subtitle": null,
+   "keywords": [
+    "corner",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "bottom-left",
+   "title": "Bottom Left Quarter",
+   "subtitle": null,
+   "keywords": [
+    "corner",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "bottom-right",
+   "title": "Bottom Right Quarter",
+   "subtitle": null,
+   "keywords": [
+    "corner",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "first-third",
+   "title": "First Third",
+   "subtitle": null,
+   "keywords": [
+    "left",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "center-third",
+   "title": "Center Third",
+   "subtitle": null,
+   "keywords": [
+    "middle",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "last-third",
+   "title": "Last Third",
+   "subtitle": null,
+   "keywords": [
+    "right",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "first-two-thirds",
+   "title": "First Two Thirds",
+   "subtitle": null,
+   "keywords": [
+    "left",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "last-two-thirds",
+   "title": "Last Two Thirds",
+   "subtitle": null,
+   "keywords": [
+    "right",
+    "snap"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "maximize",
+   "title": "Maximize",
+   "subtitle": null,
+   "keywords": [
+    "fill",
+    "full",
+    "zoom"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "almost-maximize",
+   "title": "Almost Maximize",
+   "subtitle": null,
+   "keywords": [
+    "fill",
+    "large"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "center",
+   "title": "Center",
+   "subtitle": null,
+   "keywords": [
+    "middle"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "next-display",
+   "title": "Next Display",
+   "subtitle": null,
+   "keywords": [
+    "monitor",
+    "screen",
+    "move"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "previous-display",
+   "title": "Previous Display",
+   "subtitle": null,
+   "keywords": [
+    "monitor",
+    "screen",
+    "move",
+    "back"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "make-larger",
+   "title": "Make Larger",
+   "subtitle": null,
+   "keywords": [
+    "grow",
+    "bigger",
+    "resize"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "make-smaller",
+   "title": "Make Smaller",
+   "subtitle": null,
+   "keywords": [
+    "shrink",
+    "resize"
+   ]
+  },
+  {
+   "plugin": "io.navbytes.stackbar.plugins.windows",
+   "id": "undo-snap",
+   "title": "Undo Snap",
+   "subtitle": null,
+   "keywords": [
+    "restore",
+    "undo",
+    "back"
+   ]
+  }
+ ]
+}
