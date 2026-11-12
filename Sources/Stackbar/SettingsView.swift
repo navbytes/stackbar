@@ -223,7 +223,11 @@ struct GeneralSettings: View {
                 Text("Results go back to their default order. Recent and frecency start over; favorites and aliases stay.")
             }
             HyperKeySettings()
-            SettingsGroup("Plugins") {
+            SpotlightReplacementsSection(model: model)
+            MainSearchSection(model: model)
+            // What only plugin authors and terminal users change, below
+            // everything a new user looks for.
+            SettingsGroup("For Plugin Authors") {
                 SettingsRow(title: "Plugins folder", caption: "Drop a .swift plugin here and Stackbar builds and runs it.") {
                     Button("Show in Finder") { NSWorkspace.shared.open(StackbarPaths.pluginsDirectory) }
                 }
@@ -241,8 +245,6 @@ struct GeneralSettings: View {
                     }
                     .disabled(toolInstalled || installingTool)
                 }
-            }
-            SettingsGroup("Terminal") {
                 SettingsRow(title: "Open commands in", caption: "Where a plugin's Open in Terminal runs, such as Docker's shell or a script command.") {
                     TerminalPicker()
                 }
@@ -250,8 +252,6 @@ struct GeneralSettings: View {
                     CommandFoldersField()
                 }
             }
-            SpotlightReplacementsSection(model: model)
-            MainSearchSection(model: model)
             SettingsTransferGroup(model: model)
             SettingsGroup("Reset") {
                 SettingsRow(title: "Remove all data", caption: "Moves plugins, saved data, caches and logs to the Trash, deletes Stackbar's secrets and settings, and quits.") {

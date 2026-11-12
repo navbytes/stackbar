@@ -21,4 +21,7 @@
 
 ## 5. Calm down (workstream E)
 - [x] 5.1 Stable at most weekly, pre-releases between (README "Cadence")
-- [ ] 5.2 Settings: fewer toggles on the first page, by proposal to Naveen
+- [x] 5.2 Settings: fewer toggles on the first page (General keeps what a new user looks for first; plugins folder, examples, command-line tool, terminal and command folders move into one "For Plugin Authors" group at the bottom)
+
+## 6. Failures you can read (workstream F)
+- [x] 6.1 Already covered, nothing new built: a plugin that fails shows "didn't build or start" with the reason and Rebuild (Settings, panel), the palette shows failure states, and Report a Problem fills in `stackbarctl doctor`
