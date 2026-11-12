@@ -209,6 +209,15 @@ public enum Stackbar {
     /// Stackbar 0.15.0 for reasons they don't send.
     @MainActor public internal(set) static var refreshReason: TriggerReason?
 
+    /// Draws the plugin's surfaces and open palette views again now. The
+    /// kit draws after every message it handles, so call this only for state
+    /// that changed outside one: a fetch your `refresh()` started in a `Task`
+    /// so clicks don't wait for it (the plugin handles one message at a
+    /// time). Only what changed is sent. Needs nothing, and works with any
+    /// Stackbar: it lives in the kit, not the host.
+    @MainActor public static func redraw() { redrawHandler?() }
+    @MainActor static var redrawHandler: (() -> Void)?
+
     /// The protocol version the host said in `hello`; `nil` before it.
     /// Plugins rarely need it: the kit already covers the gaps it knows
     /// (an older host's missing confirmations, say).

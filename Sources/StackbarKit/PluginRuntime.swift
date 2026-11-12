@@ -36,6 +36,17 @@ public final class PluginRuntime {
         self.plugin = plugin
         self.preview = preview
         self.send = send
+        Stackbar.redrawHandler = { [weak self] in self?.redraw() }
+    }
+
+    /// Whether `hello` has come: before it there is nothing to draw on.
+    private var greeted = false
+
+    /// `Stackbar.redraw()`: draws again outside a message, for state a
+    /// plugin's own task changed. Only what changed is sent, as after a message.
+    private func redraw() {
+        guard greeted else { return }
+        render()
     }
 
     /// Handles one message; returns `false` once the plugin should exit.
@@ -48,6 +59,7 @@ public final class PluginRuntime {
             Stackbar.storage.load(preview == nil ? storage : [:])
             let declared = type(of: plugin).manifest.surfaces
             surfaces = declared.filter(offered.contains)
+            greeted = true
             send(.ready(protocolVersion: StackbarProtocolVersion.current))
             if let preview {
                 await run("preview \(preview)") { try await self.plugin.applyPreview(named: preview) }
