@@ -3,26 +3,24 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
-
-### Fixed
-- **Plugins answer clicks while they fetch.** Switching a tab or pressing a button in a plugin no longer waits for its background refresh (GitHub, Jira, Linear, Docker and the like) to finish. Every plugin gets this with the update; none has to change.
-
-### Added
-- **`Stackbar.refresh()` and `Stackbar.isRefreshing` for plugin authors.** Refresh from a Try Again button without an older fetch landing over the new one, and show a spinner while a refresh runs. Both live in the kit, so they work with any Stackbar.
-
-## 0.40.0
+## 0.40.1
 
 ### Added
 - **Plugin settings pages say what the plugin is doing.** Under the header: "Applying your change…" while a setting is being handled, the latest error in plain words with Try Again, or when it last updated. A secret the plugin actually asked for shows at the top under "Needs you"; the others it could use are no longer orange. Long settings get a filter, links to each section and sections you can fold away, for every plugin with no changes to it. Permissions are folded away, and Diagnostics shows the plugin's log with Copy Log.
+- **`Stackbar.refresh()` and `Stackbar.isRefreshing` for plugin authors.** Refresh from a Try Again button without an older fetch landing over the new one, and show a spinner while a refresh runs. Both live in the kit, so they work with any Stackbar.
 - **`Stackbar.redraw()` for plugin authors.** A plugin can fetch in its own task, so clicks never wait behind a slow refresh, and show the result the moment it lands. It lives in the kit, so it works with any Stackbar.
 
 ### Fixed
+- **Plugins answer clicks while they fetch.** Switching a tab or pressing a button in a plugin no longer waits for its background refresh (GitHub, Jira, Linear, Docker and the like) to finish. Every plugin gets this with the update; none has to change.
 - **"Needs GITHUB_TOKEN" goes away when a plugin stops needing it.** Turning on PR Cockpit's Sign in with gh left the orange dot and "Needs GITHUB_TOKEN" in place until Stackbar was relaunched. A settings change, a restart or rebuild of the plugin, or turning it off now clears it, and a secret the plugin still needs comes back on its next read.
 - **The app you named comes first.** A plugin's hidden search words no longer beat an app or command with that word in its name: "chrome" opens Google Chrome, not Search Browser Tabs; "zoom" opens zoom.us; "sleep" puts the Mac to sleep; "monitor" opens Activity Monitor. A test now checks over 100 everyday queries against the store's plugins on every change.
 - **Stackbar starts faster.** With the Hyper key off (the default), launch no longer stops to check the keyboard's Caps Lock mapping.
 - **System Monitor's temperatures are lighter on the app.** Stackbar now keeps one connection to the Mac's temperature sensors instead of opening a new one on every reading (every few seconds while System Monitor runs).
 - **Stackbar no longer grows by about 100 MB a day.** Text in the menu bar animated between readings and items slid along whenever a reading changed width; each in-between frame left its letters cached in memory for good. Nothing in the menu bar animates now, a timer there simply changes once a second, and a reading that ticks (System Monitor's CPU, say) keeps its width, so the menu bar no longer slides every few seconds.
+
+## 0.40.0
+
+A pre-release; everything in it is listed under 0.40.1.
 
 ## 0.39.0
 
