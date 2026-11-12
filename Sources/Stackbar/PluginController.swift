@@ -319,6 +319,12 @@ final class PluginController: Identifiable {
             return false
         }
         if wasArmed { armChanged() }
+        // A setting can change what the plugin needs: PR Cockpit's "Sign in
+        // with gh" stops it reading GITHUB_TOKEN at all. Nothing ever cleared
+        // a "Needs" once set, so it stayed until a relaunch. Forget them on a
+        // settings change; one the plugin still needs comes back on its next
+        // read.
+        if found?.0 == .settings, !missingSecrets.isEmpty { missingSecrets = [] }
         Task { await supervisor?.event(action, value: value) }
         return true
     }
@@ -385,6 +391,9 @@ final class PluginController: Identifiable {
     }
 
     func restart() {
+        // As after a settings change: a restarted plugin asks again for any
+        // secret it still needs.
+        missingSecrets = []
         Task {
             guard let current = supervisor else { return }
             await current.stop()
