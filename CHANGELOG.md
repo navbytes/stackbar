@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.40.0
 
 ### Added
 - **Plugin settings pages say what the plugin is doing.** Under the header: "Applying your change…" while a setting is being handled, the latest error in plain words with Try Again, or when it last updated. A secret the plugin actually asked for shows at the top under "Needs you"; the others it could use are no longer orange. Long settings get a filter, links to each section and sections you can fold away, for every plugin with no changes to it. Permissions are folded away, and Diagnostics shows the plugin's log with Copy Log.
