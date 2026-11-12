@@ -25,7 +25,8 @@ public struct MenuBarView: View {
                 if !fallback.title.isEmpty { Text(fallback.title) }
             }
         }
-        .font(.system(size: 13))
+        // Digits all the same width, so a number that ticks keeps its place.
+        .font(.system(size: 13).monospacedDigit())
         .lineLimit(1)
         .fixedSize()
         .padding(.horizontal, 4)
@@ -61,7 +62,7 @@ struct MenuBarNode: View {
     var body: some View {
         switch node {
         case .text(let string, let style, let role):
-            Text(string).font(style == .monospaced ? .system(size: 13, design: .monospaced) : .system(size: 13)).foregroundStyle(tint(role))
+            Text(string).font(style == .monospaced ? .system(size: 13, design: .monospaced) : .system(size: 13).monospacedDigit()).foregroundStyle(tint(role))
         case .label(let title, let symbol, let role):
             HStack(spacing: 3) {
                 Image(systemName: symbol)
