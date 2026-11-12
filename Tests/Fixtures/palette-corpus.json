@@ -1,5 +1,5 @@
 {
- "source": "navbytes/stackbar-plugins@cc99e1e + Clipboard 1.16.0, Docker 1.10.1",
+ "source": "navbytes/stackbar-plugins@bf2ad56",
  "commands": [
   {
    "plugin": "io.navbytes.stackbar.plugins.docker",
