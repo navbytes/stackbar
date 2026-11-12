@@ -270,7 +270,7 @@ public actor PluginSession {
         case .render(let surface, let root):
             confirmer.rendered(root, surface: surface)
             return
-        case .tools, .menuBarClick, .commands: return
+        case .tools, .menuBarClick, .commands, .settled: return
         }
         if logLines.count > maxLogLines { logLines.removeFirst(logLines.count - maxLogLines) }
     }

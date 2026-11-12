@@ -492,15 +492,22 @@ struct PrivacySettings: View {
 
 // MARK: - A plugin's page
 
-/// Everything about one plugin on one page: its own settings first, then
-/// how to reach it, what it may use, its secrets and, folded away, the
-/// details for debugging.
+/// Everything about one plugin on one page, ordered by the questions a user
+/// comes with: is it working (the activity line), what does it need from me
+/// (approval, a secret it asked for, a build problem), its own settings,
+/// then the rest: secrets it may use, folders, shortcuts and, folded away,
+/// permissions and the details for debugging.
 struct PluginPage: View {
     let controller: PluginController
     let model: AppModel
 
     @State private var confirmingUninstall = false
     @State private var showingDiagnostics = false
+    @State private var showingPermissions = false
+    /// Narrows a long settings surface to the sections that mention it.
+    @State private var filter = ""
+    /// Titles of the plugin's sections the user folded, remembered per plugin.
+    @State private var collapsed: Set<String> = []
     /// The folders the user chose for the plugin, read when the page shows.
     @State private var folders: [String] = []
 
@@ -532,6 +539,7 @@ struct PluginPage: View {
                     SettingsRow(symbol: "power", color: .gray, title: "\(controller.name) is turned off", caption: "It doesn't run, and isn't in the menu bar, the palette or widgets, until you turn it on.")
                 }
             }
+            activityLine
             if controller.isWaitingForApproval { approval }
             if let problem = controller.problem {
                 SettingsGroup {
@@ -540,16 +548,24 @@ struct PluginPage: View {
                     }
                 }
             }
+            neededSecrets
             pluginSettings
+            otherSecrets
+            chosenFolders
             shortcuts
             permissions
-            chosenFolders
-            secrets
             diagnostics
             actions
         }
-        .onAppear { folders = AppModel.folderGrants.folders(for: controller.pluginID) }
-        .onChange(of: controller.pluginID) { _, id in folders = AppModel.folderGrants.folders(for: id) }
+        .onAppear {
+            folders = AppModel.folderGrants.folders(for: controller.pluginID)
+            collapsed = PluginSettingsFolds.load(controller.pluginID)
+        }
+        .onChange(of: controller.pluginID) { _, id in
+            folders = AppModel.folderGrants.folders(for: id)
+            collapsed = PluginSettingsFolds.load(id)
+            filter = ""
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppModel.folderGrantsChanged)) { _ in
             folders = AppModel.folderGrants.folders(for: controller.pluginID)
         }
@@ -569,14 +585,71 @@ struct PluginPage: View {
         }
     }
 
+    /// Under the header: what the plugin is doing now. "Applying your
+    /// change…" while a control on this page is being handled, the latest
+    /// error with Try Again, or when it last showed something new.
+    @ViewBuilder private var activityLine: some View {
+        if controller.isEnabled, controller.problem == nil {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                if let line = controller.activity.line(now: context.date, isRunning: controller.state == .running) {
+                    SettingsGroup {
+                        SettingsRow(symbol: Self.symbol(line.kind), color: Self.color(line.kind), title: line.text, caption: line.detail) {
+                            switch line.kind {
+                            case .applying, .slow:
+                                ProgressView().controlSize(.small)
+                            case .problem where controller.activity.problem != nil:
+                                Button("Try Again") {
+                                    controller.dismissProblem()
+                                    controller.refresh()
+                                }
+                                Button("Dismiss") { controller.dismissProblem() }
+                            case .problem:
+                                Button("Restart") { controller.restart() }
+                            case .updated, .waiting:
+                                Button("Refresh Now") { controller.refresh() }
+                            }
+                        }
+                        .textSelection(.enabled)
+                    }
+                }
+            }
+        }
+    }
+
+    private static func symbol(_ kind: PluginActivity.Line.Kind) -> String {
+        switch kind {
+        case .applying, .slow: return "arrow.triangle.2.circlepath"
+        case .problem: return "exclamationmark.triangle.fill"
+        case .updated: return "checkmark.circle.fill"
+        case .waiting: return "hourglass"
+        }
+    }
+
+    private static func color(_ kind: PluginActivity.Line.Kind) -> Color {
+        switch kind {
+        case .applying, .slow: return .blue
+        case .problem: return .orange
+        case .updated: return .green
+        case .waiting: return .gray
+        }
+    }
+
     /// The plugin's own `settings` surface, drawn as grouped sections so it
-    /// reads as part of the page.
+    /// reads as part of the page. A long one (five or more sections) gets
+    /// links to each section, a filter and sections that fold.
     @ViewBuilder private var pluginSettings: some View {
         if controller.isEnabled, manifest?.surfaces.contains(.settings) == true {
             if let node = controller.settings {
-                NodeView(node: node, send: controller.send)
-                    .environment(\.stackbarRemoteImage, controller.remoteImages)
-                    .environment(\.stackbarGroupedSections, true)
+                let outline = PluginSettingsOutline(node)
+                Group {
+                    if outline.isLong {
+                        longSettings(outline)
+                    } else {
+                        NodeView(node: node, send: controller.send)
+                    }
+                }
+                .environment(\.stackbarRemoteImage, controller.remoteImages)
+                .environment(\.stackbarGroupedSections, true)
             } else if controller.state == .running {
                 SettingsGroup("Settings") {
                     Text("\(controller.name) has no settings yet.").foregroundStyle(.secondary)
@@ -585,6 +658,58 @@ struct PluginPage: View {
                 ProgressView().controlSize(.small).frame(maxWidth: .infinity)
             }
         }
+    }
+
+    @ViewBuilder private func longSettings(_ outline: PluginSettingsOutline) -> some View {
+        let parts = outline.filtered(filter)
+        SettingsOutlineBar(outline: outline, filter: $filter, allCollapsed: outline.titled.allSatisfy { collapsed.contains($0.title ?? "") }) { part in
+            setFolded(part.title, false)
+        } toggleAll: { fold in
+            collapsed = fold ? Set(outline.titled.compactMap(\.title)) : []
+            PluginSettingsFolds.save(collapsed, for: controller.pluginID)
+        }
+        if parts.isEmpty {
+            Text("No settings mention “\(filter)”.")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+        }
+        ForEach(parts, id: \.index) { part in
+            if let title = part.title, case .section(_, let children) = part.node {
+                let folded = filter.isEmpty && collapsed.contains(title)
+                VStack(alignment: .leading, spacing: 6) {
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { setFolded(title, !folded) }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .rotationEffect(.degrees(folded ? 0 : 90))
+                            Text(title).font(.subheadline.weight(.semibold))
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(folded ? "Show \(title)" : "Fold \(title) away")
+                    if !folded {
+                        NodeView(node: .section(title: nil, children: children), send: controller.send)
+                    }
+                }
+                .padding(.bottom, folded ? 6 : 0)
+                .id(PluginSettingsOutline.anchor(part.index))
+            } else {
+                NodeView(node: part.node, send: controller.send)
+                    .id(PluginSettingsOutline.anchor(part.index))
+            }
+        }
+    }
+
+    private func setFolded(_ title: String?, _ fold: Bool) {
+        guard let title else { return }
+        if fold { collapsed.insert(title) } else { collapsed.remove(title) }
+        PluginSettingsFolds.save(collapsed, for: controller.pluginID)
     }
 
     @ViewBuilder private var shortcuts: some View {
@@ -630,18 +755,30 @@ struct PluginPage: View {
         let rows = SettingsPresentation.permissions(granted: granted, pending: controller.pendingApproval)
         let hasSecrets = !(manifest?.secretNames.isEmpty ?? true)
         if !rows.isEmpty || !hasSecrets {
-            SettingsGroup("Permissions", footer: "\(controller.name) runs in its own sandbox and can use only what is listed here.") {
-                if rows.isEmpty {
-                    SettingsRow(symbol: "checkmark.shield.fill", color: .green, title: "Nothing beyond the basics", caption: "No network, files, commands, clipboard or calendar.")
-                }
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    SettingsRow(symbol: row.access.symbol, color: row.access.color, title: row.title, caption: row.detail) {
-                        if row.isPending {
-                            StatusTag(text: "Asks", color: .orange)
-                        } else {
-                            StatusTag(text: "Allowed", color: .green)
-                        }
+            SettingsGroup(footer: showingPermissions ? "\(controller.name) runs in its own sandbox and can use only what is listed here." : nil) {
+                DisclosureGroup(isExpanded: $showingPermissions) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        permissionRows(rows)
                     }
+                    .padding(.top, 8)
+                } label: {
+                    Text("Permissions")
+                    Text(rows.isEmpty ? "Nothing beyond the basics" : "\(rows.count) allowed or asked for in its sandbox").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func permissionRows(_ rows: [SettingsPresentation.PermissionRow]) -> some View {
+        if rows.isEmpty {
+            SettingsRow(symbol: "checkmark.shield.fill", color: .green, title: "Nothing beyond the basics", caption: "No network, files, commands, clipboard or calendar.")
+        }
+        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+            SettingsRow(symbol: row.access.symbol, color: row.access.color, title: row.title, caption: row.detail) {
+                if row.isPending {
+                    StatusTag(text: "Asks", color: .orange)
+                } else {
+                    StatusTag(text: "Allowed", color: .green)
                 }
             }
         }
@@ -667,14 +804,34 @@ struct PluginPage: View {
         }
     }
 
-    @ViewBuilder private var secrets: some View {
-        if let names = manifest?.secretNames, !names.isEmpty {
-            SettingsGroup("Secrets", footer: "Kept in your Keychain. Secrets are shared by name, so changing or clearing one does it for every plugin that uses it.") {
-                ForEach(names, id: \.self) { name in
-                    SecretRow(controller: controller, name: name, sharedWith: model.controllers
-                        .filter { $0 !== controller && $0.manifest?.secretNames.contains(name) == true }
-                        .map(\.name))
-                }
+    private var secretGroups: (needed: [String], other: [String]) {
+        SettingsPresentation.secretGroups(declared: manifest?.secretNames ?? [], missing: controller.missingSecrets)
+    }
+
+    private func secretRow(_ name: String, isNeeded: Bool) -> some View {
+        SecretRow(controller: controller, name: name, sharedWith: model.controllers
+            .filter { $0 !== controller && $0.manifest?.secretNames.contains(name) == true }
+            .map(\.name), isNeeded: isNeeded)
+    }
+
+    /// Secrets the plugin asked for and found empty: near the top, because
+    /// it can't do its job until they are set.
+    @ViewBuilder private var neededSecrets: some View {
+        let needed = secretGroups.needed
+        if controller.isEnabled, !needed.isEmpty {
+            SettingsGroup("Needs you", footer: "\(controller.name) asked for \(needed.count == 1 ? "this" : "these") and couldn't find \(needed.count == 1 ? "it" : "them"). Kept in your Keychain.") {
+                ForEach(needed, id: \.self) { secretRow($0, isNeeded: true) }
+            }
+        }
+    }
+
+    /// The other declared secrets. A manifest names every secret the plugin
+    /// could use, so an empty one here is not a problem.
+    @ViewBuilder private var otherSecrets: some View {
+        let other = secretGroups.other
+        if !other.isEmpty {
+            SettingsGroup(secretGroups.needed.isEmpty ? "Secrets" : "Other secrets", footer: "Kept in your Keychain and shared by name, so changing or clearing one does it for every plugin that uses it. Set only the ones your setup uses.") {
+                ForEach(other, id: \.self) { secretRow($0, isNeeded: false) }
             }
         }
     }
@@ -711,6 +868,24 @@ struct PluginPage: View {
                             Text("\(tool.name): \(tool.description)").font(.caption).textSelection(.enabled)
                         }
                     }
+                    HStack {
+                        Text("Log").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        if !controller.logs.isEmpty {
+                            Button("Copy Log") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(controller.logs.joined(separator: "\n"), forType: .string)
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                    if controller.logs.isEmpty {
+                        Text("Nothing logged since it started.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(Array(controller.logs.suffix(50).enumerated()), id: \.offset) { _, line in
+                        Text(line).font(.caption.monospaced()).foregroundStyle(line.hasPrefix("[error]") ? Color.orange : Color.primary)
+                            .textSelection(.enabled)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 8)
@@ -744,6 +919,8 @@ struct SecretRow: View {
     let sharedWith: [String]
     /// Every plugin that uses it, on the Privacy & Secrets page.
     var usedBy: [String]?
+    /// The plugin asked for it and it isn't set.
+    var isNeeded = false
 
     @State private var isSaved = false
     @State private var editing = false
@@ -756,7 +933,8 @@ struct SecretRow: View {
                 SettingsIconTile(symbol: SettingsPresentation.Access.secret.symbol, color: SettingsPresentation.Access.secret.color)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name).font(.body.monospaced())
-                    Text(isSaved ? "Saved" : "Not set").font(.caption).foregroundStyle(isSaved ? Color.secondary : Color.orange)
+                    let state = SettingsPresentation.secretState(isSaved: isSaved, isNeeded: isNeeded)
+                    Text(state.text).font(.caption).foregroundStyle(state.isWarning ? Color.orange : Color.secondary)
                     if let usedBy {
                         Text("Used by " + ListFormatter.localizedString(byJoining: usedBy)).font(.caption).foregroundStyle(.secondary)
                     } else if !sharedWith.isEmpty {

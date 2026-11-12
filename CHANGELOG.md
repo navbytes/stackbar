@@ -6,6 +6,7 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Added
+- **Plugin settings pages say what the plugin is doing.** Under the header: "Applying your change…" while a setting is being handled, the latest error in plain words with Try Again, or when it last updated. A secret the plugin actually asked for shows at the top under "Needs you"; the others it could use are no longer orange. Long settings get a filter, links to each section and sections you can fold away, for every plugin with no changes to it. Permissions are folded away, and Diagnostics shows the plugin's log with Copy Log.
 - **`Stackbar.redraw()` for plugin authors.** A plugin can fetch in its own task, so clicks never wait behind a slow refresh, and show the result the moment it lands. It lives in the kit, so it works with any Stackbar.
 
 ### Fixed

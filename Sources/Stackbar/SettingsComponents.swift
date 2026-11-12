@@ -92,14 +92,73 @@ struct SettingsPage<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                content
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    content
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 24)
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 24)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
+            // The section links on a long plugin page jump with this.
+            .environment(\.stackbarScrollTo, { key in
+                withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(key, anchor: .top) }
+            })
+        }
+    }
+}
+
+/// Above a long plugin settings surface: a filter and a link to each
+/// section, so a page of eighteen sections is one click from any of them.
+struct SettingsOutlineBar: View {
+    let outline: PluginSettingsOutline
+    @Binding var filter: String
+    let allCollapsed: Bool
+    /// Unfolds a section before jumping to it.
+    let open: (PluginSettingsOutline.Part) -> Void
+    let toggleAll: (_ fold: Bool) -> Void
+
+    @Environment(\.stackbarScrollTo) private var scrollTo
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Filter settings", text: $filter)
+                        .textFieldStyle(.plain)
+                    if !filter.isEmpty {
+                        Button { filter = "" } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                            .help("Clear the filter")
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(SettingsGroupStyle.fill, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(SettingsGroupStyle.stroke))
+                Button(allCollapsed ? "Unfold All" : "Fold All") { toggleAll(!allCollapsed) }
+                    .controlSize(.small)
+                    .disabled(!filter.isEmpty)
+            }
+            if filter.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(outline.titled, id: \.index) { part in
+                            Button(part.title ?? "") {
+                                open(part)
+                                let anchor = PluginSettingsOutline.anchor(part.index)
+                                DispatchQueue.main.async { scrollTo?(anchor) }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                }
+            }
         }
     }
 }

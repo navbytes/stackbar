@@ -83,6 +83,12 @@ final class PluginController: Identifiable {
     /// when they clear is `MissingSecrets`.
     private(set) var missing = MissingSecrets()
     var missingSecrets: [String] { missing.names }
+    /// When it last drew, its latest error, and whether a change from its
+    /// Settings page is still being handled.
+    private(set) var activity = PluginActivity()
+    /// How many messages the helper has finished; kept out of observation
+    /// because it changes on every timer tick.
+    @ObservationIgnored private var settledCount = 0
     /// Counts popover openings, so searchable lists reset and take focus.
     private(set) var panelShownCount = 0
     /// Goes up each time remote images the trees name finish loading, so
@@ -327,7 +333,11 @@ final class PluginController: Identifiable {
         // A setting can change what the plugin needs (PR Cockpit's "Sign in
         // with gh" stops it reading GITHUB_TOKEN at all).
         if found?.0 == .settings { missing.note(.settingsChanged) }
-        Task { await supervisor?.event(action, value: value) }
+        let fromSettings = found?.0 == .settings
+        Task {
+            guard let target = await supervisor?.event(action, value: value) else { return }
+            if fromSettings { activity.settingChanged(target: target, settled: settledCount, at: .now) }
+        }
         return true
     }
 
@@ -370,6 +380,11 @@ final class PluginController: Identifiable {
 
     func refresh() {
         Task { await supervisor?.refresh() }
+    }
+
+    /// The user closed the problem on the plugin's Settings page.
+    func dismissProblem() {
+        activity.dismissProblem()
     }
 
     func wake() {
@@ -473,9 +488,19 @@ final class PluginController: Identifiable {
     }
 
     private func apply(_ update: PluginSupervisor.Update) {
+        // Observed by the Settings page, so written at most once a second.
+        if case .render = update, activity.lastUpdate.map({ Date.now.timeIntervalSince($0) >= 1 }) ?? true {
+            activity.rendered(at: .now)
+        }
         switch update {
         case .state(let newState):
             if newState != state { model?.commands.pluginStateChanged(pluginID, newState) }
+            switch newState {
+            case .starting, .stopped:
+                settledCount = 0
+                activity.restarted()
+            default: break
+            }
             state = newState
         case .render(.menuBar, let root):
             menuBar = root
@@ -505,7 +530,11 @@ final class PluginController: Identifiable {
             model?.commands.commandsChanged(self, specs)
         case .view(let session, let seq, let root):
             model?.commands.received(session: session, seq: seq, root: root)
+        case .settled(let count):
+            settledCount = count
+            if activity.applyingTarget != nil { activity.settled(count: count) }
         case .log(let level, let message):
+            if level == .error { activity.logged(level, message, at: .now) }
             logs.append("[\(level.rawValue)] \(message)")
             if logs.count > 300 { logs.removeFirst(logs.count - 300) }
         }
