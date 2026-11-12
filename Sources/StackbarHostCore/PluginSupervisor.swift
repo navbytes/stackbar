@@ -77,15 +77,11 @@ public actor PluginSupervisor {
     private var watcher: PathWatch?
     private var clipboardWatcher: UUID?
     private var pendingRestart: Task<Void, Never>?
-    private var nextToolCall = 1
-    private var toolCalls: [Int: CheckedContinuation<(text: String, isError: Bool), Never>] = [:]
-    private var nextCommandCall = 1
-    private var commandCalls: [Int: CheckedContinuation<CommandResult, Never>] = [:]
-    /// Each waiting tool or command call's timeout, cancelled when it ends.
-    private var toolTimeouts: [Int: Task<Void, Never>] = [:]
-    private var commandTimeouts: [Int: Task<Void, Never>] = [:]
+    /// The tool and command calls waiting on the plugin, each with its timeout.
+    private var toolCalls = PendingCalls<(text: String, isError: Bool)>()
+    private var commandCalls = PendingCalls<CommandResult>()
     /// Timeouts still running (for tests).
-    var openCallTimeouts: Int { toolTimeouts.count + commandTimeouts.count }
+    var openCallTimeouts: Int { toolCalls.openTimeouts + commandCalls.openTimeouts }
 
     public init(executable: URL, manifest: Manifest, grantedCapabilities: [Capability]? = nil, policy: BackoffPolicy = .standard, environment: [String: String]? = nil, services: HostServices? = nil, onUpdate: @escaping @Sendable (Update) -> Void = { _ in }) {
         self.executable = executable
@@ -122,8 +118,8 @@ public actor PluginSupervisor {
         process = nil
         services?.release(pluginID: manifest.id)
         services?.storage.flush(manifest.id)
-        failToolCalls("the plugin stopped")
-        failCommandCalls("\(manifest.name) stopped")
+        toolCalls.failAll(with: ("the plugin stopped", true))
+        commandCalls.failAll(with: .failure("\(manifest.name) stopped"))
         await services?.bus.unsubscribe(manifest.id)
         setState(.stopped)
     }
@@ -196,16 +192,15 @@ public actor PluginSupervisor {
     /// Calls one of the plugin's tools and waits for its answer.
     public func callTool(_ name: String, arguments: [String: EventValue] = [:], timeout: Double = 60) async -> (text: String, isError: Bool) {
         guard state == .running, let process else { return ("\(manifest.name) is not running", true) }
-        let id = nextToolCall
-        nextToolCall += 1
+        let id = toolCalls.newID()
         let currentGeneration = generation
-        toolTimeouts[id] = Task { [weak self] in
+        toolCalls.setTimeout(Task { [weak self] in
             try? await Task.sleep(for: .seconds(timeout))
             guard !Task.isCancelled else { return }
             await self?.finishToolCall(id, text: "\(name) timed out after \(Int(timeout))s", isError: true, generation: currentGeneration)
-        }
+        }, for: id)
         return await withCheckedContinuation { continuation in
-            toolCalls[id] = continuation
+            toolCalls.wait(for: id, continuation)
             sentCount += 1
             process.send(.callTool(id: id, name: name, arguments: arguments))
         }
@@ -215,17 +210,16 @@ public actor PluginSupervisor {
     /// `context` reaches the plugin only when it was granted `.context`.
     public func runCommand(_ command: String, arguments: [String: String] = [:], source: InvocationSource, context: InvocationContext? = nil, timeout: Double = 30) async -> CommandResult {
         guard state == .running, let process else { return .failure("\(manifest.name) is not running") }
-        let id = nextCommandCall
-        nextCommandCall += 1
+        let id = commandCalls.newID()
         let currentGeneration = generation
         let context = granted.capabilities.contains(.context) ? context : nil
-        commandTimeouts[id] = Task { [weak self] in
+        commandCalls.setTimeout(Task { [weak self] in
             try? await Task.sleep(for: .seconds(timeout))
             guard !Task.isCancelled else { return }
             await self?.finishCommandCall(id, .failure("\(command) did not answer within \(Int(timeout)) seconds"), generation: currentGeneration)
-        }
+        }, for: id)
         return await withCheckedContinuation { continuation in
-            commandCalls[id] = continuation
+            commandCalls.wait(for: id, continuation)
             sentCount += 1
             process.send(.runCommand(id: id, command: command, arguments: arguments, source: source, context: context))
         }
@@ -446,31 +440,13 @@ public actor PluginSupervisor {
     }
 
     private func finishToolCall(_ id: Int, text: String, isError: Bool, generation callGeneration: Int) {
-        guard callGeneration == generation, let continuation = toolCalls.removeValue(forKey: id) else { return }
-        toolTimeouts.removeValue(forKey: id)?.cancel()
-        continuation.resume(returning: (text, isError))
+        guard callGeneration == generation else { return }
+        toolCalls.finish(id, with: (text, isError))
     }
 
     private func finishCommandCall(_ id: Int, _ result: CommandResult, generation callGeneration: Int) {
-        guard callGeneration == generation, let continuation = commandCalls.removeValue(forKey: id) else { return }
-        commandTimeouts.removeValue(forKey: id)?.cancel()
-        continuation.resume(returning: result)
-    }
-
-    private func failCommandCalls(_ reason: String) {
-        let calls = commandCalls
-        commandCalls = [:]
-        for timeout in commandTimeouts.values { timeout.cancel() }
-        commandTimeouts = [:]
-        for continuation in calls.values { continuation.resume(returning: .failure(reason)) }
-    }
-
-    private func failToolCalls(_ reason: String) {
-        let calls = toolCalls
-        toolCalls = [:]
-        for timeout in toolTimeouts.values { timeout.cancel() }
-        toolTimeouts = [:]
-        for continuation in calls.values { continuation.resume(returning: (reason, true)) }
+        guard callGeneration == generation else { return }
+        commandCalls.finish(id, with: result)
     }
 
     private func handleExit(status: Int32, generation exitGeneration: Int) {
@@ -481,8 +457,8 @@ public actor PluginSupervisor {
         process = nil
         // A crashed plugin must not keep the Mac awake; a restarted one asks again.
         services?.release(pluginID: manifest.id)
-        failToolCalls("the plugin exited")
-        failCommandCalls("\(manifest.name) exited")
+        toolCalls.failAll(with: ("the plugin exited", true))
+        commandCalls.failAll(with: .failure("\(manifest.name) exited"))
         if stopping {
             setState(.stopped)
             return
