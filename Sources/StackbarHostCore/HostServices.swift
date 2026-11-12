@@ -187,22 +187,13 @@ public final class HostServices: Sendable {
                 if declared.oauthProviders.contains(where: { $0.name == name }) { return Self.awaitingApproval(granted, "to sign in with \(name)") }
                 return .failure("OAuth provider \(name) is not declared; add .oauth(OAuthProvider(name: \"\(name)\", ...)) to the manifest's capabilities")
             }
-            do {
-                return .value(try await oauth.token(pluginID: granted.id, provider: provider, forceRefresh: forceRefresh))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await attempt { .value(try await self.oauth.token(pluginID: granted.id, provider: provider, forceRefresh: forceRefresh)) }
 
         case .publish(let topic, let payload):
             return await perform { try await self.bus.publish(topic, payload: payload, from: granted.id) }
 
         case .notify(let title, let body, let actions):
-            switch Self.checked(actions ?? []) {
-            case .failure(let message): return .failure(message)
-            case .success(let buttons):
-                platform.notify(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
-                return .ok
-            }
+            return Self.post(title: title, body: body, actions: actions ?? [], from: granted, with: platform.notify)
 
         case .pluginWindow(let request):
             guard granted.surfaces.contains(.window) else { return .failure("the plugin has no window; add .window to the manifest's surfaces") }
@@ -223,39 +214,15 @@ public final class HostServices: Sendable {
             return .ok
 
         case .alert(let title, let body, let actions):
-            switch Self.checked(actions) {
-            case .failure(let message): return .failure(message)
-            case .success(let buttons):
-                platform.alert(HostNotification(pluginID: granted.id, pluginName: granted.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
-                return .ok
-            }
+            return Self.post(title: title, body: body, actions: actions, from: granted, with: platform.alert)
 
         case .openURL(let string):
             // The same rules as `open(_:with: nil)`: the schemes and paths
             // the manifest declares, not only the ones that need nothing.
-            let url: URL
-            switch Self.openTarget(string, granted: granted) {
-            case .success(let target): url = target
-            case .failure(let message): return .failure(message.description)
-            }
-            if url.isFileURL, Self.isProgram(url) {
-                return .failure("\(url.path) is a program; open it with an app chosen explicitly")
-            }
-            platform.open(url)
-            return .ok
+            return await open(string, with: nil, granted: granted)
 
         case .open(let string, let app):
-            let url: URL
-            switch Self.openTarget(string, granted: granted) {
-            case .success(let target): url = target
-            case .failure(let message): return .failure(message.description)
-            }
-            if url.isFileURL, app == nil, Self.isProgram(url) {
-                return .failure("\(url.path) is a program; open it with an app chosen explicitly")
-            }
-            if let app { return await perform { try await self.platform.openWith(url, app) } }
-            platform.open(url)
-            return .ok
+            return await open(string, with: app, granted: granted)
 
         case .copy(let text):
             guard text.utf8.count <= 1024 * 1024 else { return .failure("text is too large to copy") }
@@ -286,7 +253,7 @@ public final class HostServices: Sendable {
             return await answer(HostReplies.calendarEvents) {
                 try await self.platform.system.calendarEvents(from: from, to: to).prefix(500).map { event -> CalendarEvent in
                     var event = event
-                    event.notes = event.notes.map { String($0.prefix(4000)) }
+                    event.notes = Self.cut(notes: event.notes)
                     return event
                 }
             }
@@ -306,7 +273,7 @@ public final class HostServices: Sendable {
             return await answer(HostReplies.reminders) {
                 try await self.platform.system.reminders(query).prefix(ReminderQuery.limit).map { reminder -> Reminder in
                     var reminder = reminder
-                    reminder.notes = reminder.notes.map { String($0.prefix(4000)) }
+                    reminder.notes = Self.cut(notes: reminder.notes)
                     return reminder
                 }
             }
@@ -316,7 +283,7 @@ public final class HostServices: Sendable {
                 return .failure("a reminder needs a title")
             }
             var reminder = reminder
-            reminder.notes = reminder.notes.map { String($0.prefix(4000)) }
+            reminder.notes = Self.cut(notes: reminder.notes)
             return await answer(HostReplies.saveReminder) { try await self.platform.system.saveReminder(reminder, fields: fields) }
 
         case .deleteReminder(let reminderID):
@@ -336,22 +303,18 @@ public final class HostServices: Sendable {
             return await answer(HostReplies.finderSelection) { try await self.platform.system.finderSelection() }
 
         case .chooseFile(let types):
-            do {
-                guard let file = try await platform.system.chooseFile(types: types, for: granted.name) else { return .value(nil) }
+            return await attempt {
+                guard let file = try await self.platform.system.chooseFile(types: types, for: granted.name) else { return .value(nil) }
                 guard file.data.count <= ChosenFile.maxBytes else { return .failure("\(file.name) is larger than 5 MB") }
                 return HostReplies.chooseFile.result(file)
-            } catch {
-                return .failure("\(error)")
             }
 
         case .chooseFolder(let prompt, let start):
-            do {
+            return await attempt {
                 let startPath = start.map { NSString(string: $0).expandingTildeInPath }
-                guard let path = try await platform.system.chooseFolder(prompt: prompt, startingAt: startPath, for: granted.name) else { return .value(nil) }
-                let granted = try folderGrants.add(path, for: granted.id)
-                return HostReplies.chooseFolder.result(ChosenFolder(path: granted, name: (granted as NSString).lastPathComponent))
-            } catch {
-                return .failure("\(error)")
+                guard let path = try await self.platform.system.chooseFolder(prompt: prompt, startingAt: startPath, for: granted.name) else { return .value(nil) }
+                let folder = try self.folderGrants.add(path, for: granted.id)
+                return HostReplies.chooseFolder.result(ChosenFolder(path: folder, name: (folder as NSString).lastPathComponent))
             }
 
         case .grantedFolders:
@@ -360,11 +323,7 @@ public final class HostServices: Sendable {
         case .saveFile(let name, let data):
             guard data.count <= ChosenFile.maxBytes else { return .failure("files saved this way are at most 5 MB") }
             let safe = (name as NSString).lastPathComponent
-            do {
-                return .value(try await platform.system.saveFile(name: safe.isEmpty ? "Untitled" : safe, data: data, for: granted.name))
-            } catch {
-                return .failure("\(error)")
-            }
+            return await attempt { .value(try await self.platform.system.saveFile(name: safe.isEmpty ? "Untitled" : safe, data: data, for: granted.name)) }
 
         case .resolveApplication(let nameOrPath):
             return .value(await platform.system.resolveApplication(nameOrPath))
@@ -441,33 +400,69 @@ public final class HostServices: Sendable {
         }
     }
 
-    /// The value as its call's reply, or the error in words.
-    private func answer<Value>(_ reply: HostReply<Value>, _ body: () async throws -> Value) async -> HostResult {
+    /// What the work answers, or its error in words: the one place a thrown
+    /// error becomes the failure a plugin reads.
+    private func attempt(_ body: () async throws -> HostResult) async -> HostResult {
         do {
-            return reply.result(try await body())
+            return try await body()
         } catch {
             return .failure("\(error)")
         }
+    }
+
+    /// The value as its call's reply, or the error in words.
+    private func answer<Value>(_ reply: HostReply<Value>, _ body: () async throws -> Value) async -> HostResult {
+        await attempt { reply.result(try await body()) }
     }
 
     /// A value that may be nothing (a picker the user closed) as its call's
     /// reply, or the error in words.
     private func answer<Value>(_ reply: HostReply<Value>, _ body: () async throws -> Value?) async -> HostResult {
-        do {
-            return reply.result(ifAny: try await body())
-        } catch {
-            return .failure("\(error)")
-        }
+        await attempt { reply.result(ifAny: try await body()) }
     }
 
     /// `.ok` once the work is done, or the error in words.
     private func perform(_ body: () async throws -> Void) async -> HostResult {
-        do {
+        await attempt {
             try await body()
             return .ok
-        } catch {
-            return .failure("\(error)")
         }
+    }
+
+    /// `open` and `openURL`: what the manifest lets the plugin open
+    /// (`openTarget`), in the app it chose or the default one. A program
+    /// only opens in an app chosen explicitly.
+    private func open(_ text: String, with app: String?, granted: Manifest) async -> HostResult {
+        let url: URL
+        switch Self.openTarget(text, granted: granted) {
+        case .success(let target): url = target
+        case .failure(let message): return .failure(message.description)
+        }
+        guard let app else {
+            if url.isFileURL, Self.isProgram(url) {
+                return .failure("\(url.path) is a program; open it with an app chosen explicitly")
+            }
+            platform.open(url)
+            return .ok
+        }
+        return await perform { try await self.platform.openWith(url, app) }
+    }
+
+    /// `notify` and `alert`: the plugin's words cut to size and its buttons
+    /// checked, handed to whichever of the two shows it.
+    private static func post(title: String, body: String?, actions: [NotificationAction], from plugin: Manifest, with show: (HostNotification) -> Void) -> HostResult {
+        switch checked(actions) {
+        case .failure(let message): return .failure(message)
+        case .success(let buttons):
+            show(HostNotification(pluginID: plugin.id, pluginName: plugin.name, title: String(title.prefix(200)), body: body.map { String($0.prefix(1000)) }, actions: buttons))
+            return .ok
+        }
+    }
+
+    /// An event's or a reminder's notes, at most 4,000 characters, both on
+    /// the way to the plugin and on the way to the system.
+    private static func cut(notes: String?) -> String? {
+        notes.map { String($0.prefix(4000)) }
     }
 
     private func run(_ request: RunRequest, id: Int, granted: Manifest, declared: Manifest, emit: (@Sendable (HostMessage) -> Void)?) async -> HostResult {
@@ -612,7 +607,6 @@ public final class HostServices: Sendable {
     }
 }
 
-/// At most `limit` events per key in a sliding window of `per` seconds.
 extension HostServices {
     /// What is wrong with a rate-limited call's arguments, checked before
     /// its budget.
@@ -626,39 +620,5 @@ extension HostServices {
             return placements.count <= WindowPlacement.maxPerCall ? nil : "at most \(WindowPlacement.maxPerCall) windows at a time"
         default: return nil
         }
-    }
-}
-
-final class RateLimiter: @unchecked Sendable {
-    private let limit: Int
-    private let window: Double
-    private let lock = NSLock()
-    private var events: [String: [Date]] = [:]
-
-    init(limit: Int, per window: Double) {
-        self.limit = limit
-        self.window = window
-    }
-
-    /// The refusal once `key` has used up its calls: "too many sounds; at
-    /// most 10 a minute". `what` names the calls in the plural.
-    func refusal(_ key: String, _ what: String, now: Date = Date()) -> HostResult? {
-        guard !allow(key, now: now) else { return nil }
-        let count = limit == 1 ? "one" : "\(limit)"
-        let span = window == 60 ? "a minute" : "every \(Int(window)) seconds"
-        return .failure("too many \(what); at most \(count) \(span)")
-    }
-
-    func allow(_ key: String, now: Date = Date()) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        var recent = (events[key] ?? []).filter { now.timeIntervalSince($0) < window }
-        guard recent.count < limit else {
-            events[key] = recent
-            return false
-        }
-        recent.append(now)
-        events[key] = recent
-        return true
     }
 }
