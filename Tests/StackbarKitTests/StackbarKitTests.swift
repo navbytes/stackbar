@@ -96,6 +96,8 @@ final class StackbarKitTests: XCTestCase {
         _ = outbox.take()
 
         await runtime.handle(.trigger(reason: .interval))
+
+        await runtime.waitForRefreshes()
         XCTAssertEqual(plugin.refreshes, 1)
         XCTAssertEqual(outbox.take(), [.settled], "an unchanged render is not sent again")
 
@@ -137,6 +139,7 @@ final class StackbarKitTests: XCTestCase {
 
         plugin.shouldFail = true
         let afterTrigger = await runtime.handle(.trigger(reason: .manual))
+        await runtime.waitForRefreshes()
         XCTAssertTrue(afterTrigger)
         guard case .log(.error, let message) = outbox.take().first else { return XCTFail("expected an error log") }
         XCTAssertTrue(message.contains("refresh failed"))
@@ -252,11 +255,12 @@ final class StackbarKitTests: XCTestCase {
         var request: Int?
         for _ in 0..<200 where request == nil {
             try? await Task.sleep(for: .milliseconds(5))
-            if case .request(let id, .secret("S"))? = outbox.take().first { request = id }
+            for case .request(let id, .secret("S")) in outbox.take() { request = id }
         }
         guard let request else { return XCTFail("no secret request") }
         HostClient.shared.resolve(id: request, result: .value("shh"))
         _ = await refresh.value
+        await runtime.waitForRefreshes()
         XCTAssertTrue(outbox.take().contains(.render(surface: .menuBar, root: .text("shh", style: .body, role: .primary))))
 
         await runtime.handle(.callTool(id: 9, name: "greet", arguments: ["name": .text("Naveen")]))
@@ -375,6 +379,7 @@ final class ConfirmKitTests: XCTestCase {
         let runtime = PluginRuntime(plugin: Twins(), send: outbox.send)
         await runtime.handle(.hello(protocolVersion: StackbarProtocolVersion.current, surfaces: [.panel]))
         await runtime.handle(.trigger(reason: .manual))
+        await runtime.waitForRefreshes()
         let warnings = outbox.take().filter { if case .log(.warning, _) = $0 { return true } else { return false } }
         XCTAssertEqual(warnings.count, 1)
     }

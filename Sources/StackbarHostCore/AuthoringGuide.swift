@@ -66,9 +66,17 @@ off until the user turns it on, and so does agents reading the plugin's
 panel (0.21.0).
 
 State is ordinary properties. After `refresh()`, an action, a tool call or a
-topic message, Stackbar re-renders and sends only surfaces that changed. Code
-never runs concurrently with itself, so no locks. Throwing from `refresh()`
-logs the error and keeps the last render.
+topic message, Stackbar re-renders and sends only surfaces that changed. All
+plugin code runs on the main actor, so no locks. Messages are handled one at a
+time, except that a refresh a trigger starts runs in the background: a click
+or a palette search during a slow fetch is handled at once, so state can
+change at an `await` inside `refresh()`. At most one refresh runs; triggers
+during one fold into a single follow-up. From a button (Try Again, a changed
+setting) call `try await Stackbar.refresh()`, not your own `refresh()`: it
+cancels a running refresh first, so an older fetch never lands over a newer
+one, and throws the refresh's error to you. A cancelled refresh's host calls
+throw `CancellationError`; let it propagate (don't show it as an error).
+Throwing from `refresh()` logs the error and keeps the last render.
 
 Keep the panel for doing things: it opens many times a day. Preferences
 people set once go in `settings`, which Stackbar shows on the plugin's page in
@@ -380,7 +388,8 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `NotificationAction("Snooze", command: "snooze", arguments: ["id": id])` is a notification button that runs one of the plugin's own commands (a view command, or one missing an argument, opens in the palette); at most 3 arguments; 0.26.0 | nothing |
 | `try await Stackbar.toggleWindow(keepOnTop: true)` hides the plugin's window when the user is in it and shows it otherwise, for a command on a hotkey or `menuBarClick`; `showWindow()`, `hideWindow()`; `keepOnTop` suggests it float, and the title-bar pin the user sets wins; 0.38.0 | `.window` in surfaces |
 | `Stackbar.hud("Copied")` (or `isError: true`) shows the HUD a command result's message shows, after a panel button or a row acts; at most 30 a minute; 0.22.0 | nothing |
-| `Stackbar.redraw()` draws the surfaces and open palette views again now, for state your own `Task` changed outside a message (a fetch `refresh()` started so clicks don't wait behind it); only what changed is sent; in the kit, so any Stackbar | nothing |
+| `try await Stackbar.refresh()` refreshes now, cancelling a running refresh, and returns once fresh data is in; `Stackbar.isRefreshing` is true while a refresh runs (the kit draws when one starts and ends, so a spinner needs nothing else); in the kit, so any Stackbar | nothing |
+| `Stackbar.redraw()` draws the surfaces and open palette views again now, for state your own `Task` changed outside a message and a refresh; only what changed is sent; in the kit, so any Stackbar | nothing |
 | `try await Stackbar.open(url, with: "com.apple.Safari")`; links other than https, http, mailto, tel, meeting apps and Stackbar's own `stackbar://store/<plugin-id>` and `stackbar://settings` pages (0.25.0), and files or folders, with either `open` (`Stackbar.open(url)` from 0.33.0; before, it opened only the links that need nothing) | `.openURLs(schemes: ["slack"])`; `["*"]` for any scheme and paths |
 | `try await Stackbar.run("brew", ["outdated", "--json=v2"], timeout: .seconds(120))` returns `RunResult` (status, stdout, stderr, text, truncated, timedOut); a non-zero exit is not thrown | `.run(commands: ["brew"])` |
 | `try await Stackbar.openInTerminal(["docker", "exec", "-it", id, "sh"], title: "web")` opens the user's terminal app running that program; the host quotes every word, so nothing is read as shell; at most 5 a minute; 0.26.0 | `.terminal` |

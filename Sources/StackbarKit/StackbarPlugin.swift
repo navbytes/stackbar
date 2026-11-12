@@ -89,8 +89,7 @@ extension StackbarPlugin {
         let runtime = PluginRuntime(plugin: Self(), preview: preview, send: transport.send)
         let mailbox = transport.incoming()
         while let entry = await mailbox.next() {
-            if await !runtime.handle(entry.message) { break }
-            for _ in 0..<entry.absorbed { transport.send(.settled) }
+            if await !runtime.handle(entry.message, absorbed: entry.absorbed) { break }
         }
     }
 }

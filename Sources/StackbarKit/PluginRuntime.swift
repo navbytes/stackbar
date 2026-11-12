@@ -1,11 +1,16 @@
 /// Runs one plugin against the host's messages.
 ///
-/// Messages are handled strictly in order, one at a time, so plugin code never
-/// runs concurrently with itself and needs no locking: a refresh finishes
-/// before the click that arrived during it is handled. The cost is that a slow
-/// `refresh()` delays events; plugins should keep refreshes short. Host call
-/// responses bypass this queue (see `HostClient`), so awaiting the host inside
-/// a refresh is fine.
+/// Messages are handled in order, one at a time, with one exception: a
+/// refresh the host asks for (`trigger`) runs in the background, so a click
+/// or a palette search that arrives while it waits on the network is handled
+/// at once instead of after it. Everything runs on the main actor, so plugin
+/// code still needs no locking; it only has to expect that state can change
+/// at an `await` inside `refresh()`. At most one refresh runs: triggers that
+/// arrive during one fold into a single follow-up, and `Stackbar.refresh()`
+/// replaces a running one (cancelling it) rather than racing it. A trigger is
+/// `settled` when its refresh has finished, so the host's count of handled
+/// messages stays honest. Previews keep the old order: they never refresh.
+/// Host call responses bypass this queue (see `HostClient`).
 @MainActor
 public final class PluginRuntime {
     public typealias Send = @Sendable (PluginMessage) -> Void
@@ -24,6 +29,22 @@ public final class PluginRuntime {
     /// and triggers then re-render without refreshing.
     private let preview: String?
 
+    /// The refresh running now, if any.
+    private var refreshing: Refresh?
+    /// Triggers that arrived during `refreshing`, folded into one follow-up:
+    /// the newest reason and how many messages it answers.
+    private var followUp: (reason: TriggerReason, settles: Int)?
+    private var nextRefreshID = 0
+
+    private typealias RefreshTask = Task<Result<Void, any Error>, Never>
+
+    private struct Refresh {
+        var id: Int
+        var task: RefreshTask
+        /// The `settled` messages owed once it finishes.
+        var settles: Int
+    }
+
     private struct OpenView {
         var command: String
         var invocation: CommandInvocation
@@ -37,6 +58,8 @@ public final class PluginRuntime {
         self.preview = preview
         self.send = send
         Stackbar.redrawHandler = { [weak self] in self?.redraw() }
+        Stackbar.refreshState = { [weak self] in self?.refreshing != nil }
+        Stackbar.refreshNow = { [weak self] in try await self?.refreshNow() }
     }
 
     /// Whether `hello` has come: before it there is nothing to draw on.
@@ -50,8 +73,112 @@ public final class PluginRuntime {
     }
 
     /// Handles one message; returns `false` once the plugin should exit.
+    /// `absorbed` counts the messages the mailbox folded into this one, each
+    /// still owed a `settled`.
     @discardableResult
-    public func handle(_ message: HostMessage) async -> Bool {
+    public func handle(_ message: HostMessage, absorbed: Int = 0) async -> Bool {
+        if case .trigger(let reason) = message, preview == nil || reason == .clipboard {
+            startRefresh(reason: reason, settles: 1 + absorbed)
+            return true
+        }
+        let goOn = await handleInOrder(message)
+        for _ in 0..<absorbed { send(.settled) }
+        return goOn
+    }
+
+    /// Waits until no refresh is running or waiting (tests, and a clean exit).
+    public func waitForRefreshes() async {
+        while let running = refreshing { _ = await running.task.value }
+    }
+
+    // MARK: Refreshes
+
+    /// A trigger: starts a refresh, or folds into the follow-up of the one
+    /// running.
+    private func startRefresh(reason: TriggerReason, settles: Int) {
+        if refreshing != nil {
+            followUp = (reason, (followUp?.settles ?? 0) + settles)
+            return
+        }
+        launch(reason: reason, settles: settles, after: nil)
+    }
+
+    /// `Stackbar.refresh()`: replaces whatever runs or waits with a refresh
+    /// that starts now, and waits for it to finish.
+    private func refreshNow() async throws {
+        // Called from inside a refresh: that refresh is the fresh one, and
+        // waiting on a replacement that waits on it would never end.
+        if Stackbar.insideRefresh { return }
+        var settles = followUp?.settles ?? 0
+        followUp = nil
+        let previous = refreshing
+        if let previous {
+            previous.task.cancel()
+            settles += previous.settles
+        }
+        var task = launch(reason: nil, settles: settles, after: previous?.task)
+        // Another `Stackbar.refresh()` may replace this one in turn; the
+        // caller wants fresh data, so it waits for the one that replaced it.
+        while true {
+            let result = await task.value
+            if case .failure(let error) = result, error is CancellationError, let newer = refreshing?.task, newer != task {
+                task = newer
+                continue
+            }
+            try result.get()
+            return
+        }
+    }
+
+    /// Runs `plugin.refresh()` in its own task, after `previous` has wound
+    /// down so two refreshes never interleave. The task ends after
+    /// `finished`, so awaiting it means the refresh is drawn and settled.
+    @discardableResult
+    private func launch(reason: TriggerReason?, settles: Int, after previous: RefreshTask?) -> RefreshTask {
+        nextRefreshID += 1
+        let id = nextRefreshID
+        let task = Task { [weak self, plugin] () -> Result<Void, any Error> in
+            if let previous { _ = await previous.value }
+            var result: Result<Void, any Error> = .failure(CancellationError())
+            if !Task.isCancelled {
+                result = await Stackbar.$insideRefresh.withValue(true) {
+                    await Stackbar.$currentRefreshReason.withValue(reason) {
+                        do {
+                            try await plugin.refresh()
+                            return .success(())
+                        } catch {
+                            return .failure(error)
+                        }
+                    }
+                }
+            }
+            self?.finished(id: id, result: result)
+            return result
+        }
+        refreshing = Refresh(id: id, task: task, settles: settles)
+        // A replacement draws when it ends; drawing now would show the
+        // cancelled one's half-way state.
+        if previous == nil { render() }
+        return task
+    }
+
+    private func finished(id: Int, result: Result<Void, any Error>) {
+        guard let done = refreshing, done.id == id else { return } // replaced
+        refreshing = nil
+        if case .failure(let error) = result, !(error is CancellationError) {
+            send(.log(level: .error, message: "refresh failed: \(error)"))
+        }
+        render()
+        for _ in 0..<done.settles { send(.settled) }
+        if let next = followUp {
+            followUp = nil
+            launch(reason: next.reason, settles: next.settles, after: nil)
+        }
+    }
+
+    // MARK: Messages
+
+    private func handleInOrder(_ message: HostMessage) async -> Bool {
         switch message {
         case .hello(let hostProtocol, let offered, let storage):
             Stackbar.hostProtocol = hostProtocol
@@ -68,13 +195,8 @@ public final class PluginRuntime {
         // A preview's scene stays put: timers, wakes and the like only
         // re-render. A copy is something the user did, like an event, so
         // it still reaches the plugin (`stackbarctl render --copy`).
-        case .trigger(let reason) where preview != nil && reason != .clipboard:
-            render()
-        case .trigger(let reason):
-            Stackbar.refreshReason = reason
-            await run("refresh") { try await self.plugin.refresh() }
-            Stackbar.refreshReason = nil
-            render()
+        case .trigger:
+            render() // a preview's trigger; the rest refresh in the background
         case .event(let action, let value):
             guard let handler = handler(for: action) else {
                 send(.log(level: .warning, message: "no handler for action \(action)"))

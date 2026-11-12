@@ -3,6 +3,14 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Plugins answer clicks while they fetch.** Switching a tab or pressing a button in a plugin no longer waits for its background refresh (GitHub, Jira, Linear, Docker and the like) to finish. Every plugin gets this with the update; none has to change.
+
+### Added
+- **`Stackbar.refresh()` and `Stackbar.isRefreshing` for plugin authors.** Refresh from a Try Again button without an older fetch landing over the new one, and show a spinner while a refresh runs. Both live in the kit, so they work with any Stackbar.
+
 ## 0.40.0
 
 ### Added
