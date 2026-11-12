@@ -485,11 +485,10 @@ public final class PluginInstaller: @unchecked Sendable {
     }
 
     private func load() -> [Installed] {
-        (try? Data(contentsOf: recordFile)).flatMap { try? JSONDecoder.ledger.decode([Installed].self, from: $0) } ?? []
+        JSONFile.read(from: recordFile, decoder: .ledger) ?? []
     }
 
     private func save(_ records: [Installed]) throws {
-        try FileManager.default.createDirectory(at: recordFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder.ledger.encode(records).write(to: recordFile, options: .atomic)
+        try JSONFile.write(records, to: recordFile, encoder: .ledger)
     }
 }

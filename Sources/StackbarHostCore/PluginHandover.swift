@@ -26,11 +26,7 @@ public final class PluginHandover: @unchecked Sendable {
 
     public init(file: URL?) {
         self.file = file
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        if let file, let data = try? Data(contentsOf: file), let decoded = try? decoder.decode([Record].self, from: data) {
-            records = decoded
-        }
+        records = JSONFile.read(from: file, decoder: .ledger) ?? []
     }
 
     public var all: [Record] { lock.withLock { records } }
@@ -78,13 +74,8 @@ public final class PluginHandover: @unchecked Sendable {
     private func save() {
         guard let file else { return }
         lock.withLock {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-            encoder.dateEncodingStrategy = .iso8601
             do {
-                let data = try encoder.encode(records)
-                try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try data.write(to: file, options: .atomic)
+                try JSONFile.write(records, to: file, encoder: .ledger)
             } catch {
                 HostLog.shared.write(.error, "could not save plugin hand-overs to \(file.lastPathComponent): \(error)")
             }

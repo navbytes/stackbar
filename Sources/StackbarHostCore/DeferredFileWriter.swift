@@ -41,7 +41,6 @@ final class DeferredFileWriter: @unchecked Sendable {
             return latest
         }
         guard let data = encode?() else { return }
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: file, options: .atomic)
+        try? JSONFile.write(data, to: file)
     }
 }

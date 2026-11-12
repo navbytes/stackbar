@@ -41,7 +41,7 @@ public final class CapabilityLedger: @unchecked Sendable {
     public init(file: URL, resolver: CommandResolver = .standard) {
         self.file = file
         self.resolver = resolver
-        self.approvals = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder.ledger.decode([String: Approval].self, from: $0) } ?? [:]
+        self.approvals = JSONFile.read(from: file, decoder: .ledger) ?? [:]
     }
 
     public func approval(for pluginID: String) -> Approval? {
@@ -113,24 +113,6 @@ public final class CapabilityLedger: @unchecked Sendable {
     }
 
     private func save() throws {
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder.ledger.encode(approvals).write(to: file, options: .atomic)
-    }
-}
-
-extension JSONEncoder {
-    static var ledger: JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }
-}
-
-extension JSONDecoder {
-    static var ledger: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
+        try JSONFile.write(approvals, to: file, encoder: .ledger)
     }
 }

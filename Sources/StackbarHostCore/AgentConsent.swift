@@ -20,9 +20,7 @@ public final class AgentConsent: @unchecked Sendable {
 
     public init(file: URL?) {
         self.file = file
-        if let file, let data = try? Data(contentsOf: file), let decoded = try? JSONDecoder().decode([String: [String: Bool]].self, from: data) {
-            saved = decoded
-        }
+        saved = JSONFile.read(from: file) ?? [:]
     }
 
     /// Whether agents may call `tool` of a plugin whose tools are `specs`.
@@ -51,10 +49,6 @@ public final class AgentConsent: @unchecked Sendable {
 
     private func save() {
         guard let file else { return }
-        let snapshot = lock.withLock { saved }
-        if let data = try? JSONEncoder().encode(snapshot) {
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: file, options: .atomic)
-        }
+        try? JSONFile.write(lock.withLock { saved }, to: file)
     }
 }

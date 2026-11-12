@@ -72,7 +72,7 @@ public final class CommandRegistry: @unchecked Sendable {
     /// `file` nil keeps everything in memory (for tests and `stackbarctl`).
     public init(file: URL?) {
         self.file = file
-        if let file, let data = try? Data(contentsOf: file), let saved = try? JSONDecoder().decode([String: Plugin].self, from: data) {
+        if let saved: [String: Plugin] = JSONFile.read(from: file) {
             plugins = saved
             order = saved.keys.sorted()
         }
@@ -162,12 +162,7 @@ public final class CommandRegistry: @unchecked Sendable {
 
     private func save() {
         guard let file else { return }
-        let snapshot = lock.withLock { plugins }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        guard let data = try? encoder.encode(snapshot) else { return }
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: file, options: .atomic)
+        try? JSONFile.write(lock.withLock { plugins }, to: file, encoder: .readable)
     }
 }
 

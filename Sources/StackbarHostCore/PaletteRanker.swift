@@ -21,9 +21,7 @@ public final class PalettePicks: @unchecked Sendable {
     public init(file: URL?, now: @escaping @Sendable () -> Date = Date.init) {
         writer = file.map(DeferredFileWriter.init)
         self.now = now
-        if let file, let data = try? Data(contentsOf: file), let decoded = try? JSONDecoder().decode([String: [String: Pick]].self, from: data) {
-            picks = decoded
-        }
+        picks = JSONFile.read(from: file) ?? [:]
     }
 
     static func normalize(_ query: String) -> String {

@@ -50,8 +50,7 @@ public final class FileSecretStore: SecretStore, @unchecked Sendable {
         defer { lock.unlock() }
         var values = try load()
         values[name] = value
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(values).write(to: file, options: .atomic)
+        try JSONFile.write(values, to: file)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
 

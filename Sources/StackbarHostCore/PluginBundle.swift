@@ -145,7 +145,7 @@ public final class PublisherStore: @unchecked Sendable {
 
     public init(file: URL) {
         self.file = file
-        self.pins = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode([String: PluginBundle.Publisher].self, from: $0) } ?? [:]
+        self.pins = JSONFile.read(from: file) ?? [:]
     }
 
     public func publisher(for pluginID: String) -> PluginBundle.Publisher? {
@@ -163,15 +163,14 @@ public final class PublisherStore: @unchecked Sendable {
                 return
             }
             pins[bundle.manifest.id] = bundle.publisher
-            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder.ledger.encode(pins).write(to: file, options: .atomic)
+            try JSONFile.write(pins, to: file, encoder: .ledger)
         }
     }
 
     public func forget(_ pluginID: String) throws {
         try lock.withLock {
             pins[pluginID] = nil
-            try JSONEncoder.ledger.encode(pins).write(to: file, options: .atomic)
+            try JSONFile.write(pins, to: file, encoder: .ledger)
         }
     }
 }
