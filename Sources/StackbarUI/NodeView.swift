@@ -426,7 +426,7 @@ struct ListNodeView: View {
     }
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
-        guard !readOnly else { return .ignored }
+        guard !readOnly, !TextComposition.isComposing else { return .ignored }
         switch press.key {
         case .downArrow where press.modifiers.isDisjoint(with: [.command, .option, .control]):
             move(1)

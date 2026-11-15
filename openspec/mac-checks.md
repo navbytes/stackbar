@@ -29,6 +29,7 @@ open an issue for what fails.
 6. **Menu bar.** Left click on Stay Awake's cup toggles it (`pmset -g assertions`), right click opens the panel; Up Next asks for Calendar once and Join opens a call; a full-screen alert shows over a full-screen app (fluid-plugins).
 7. **Settings and Store.** The gear and ⌘, open the right plugin's page; a toggle takes effect at once; a hotkey recorded there works; the glass in both sidebars; install, Update All and uninstall from the Store window (plugin-settings, settings-redesign, store-window).
 8. **Destructive actions.** Restart from the palette asks a second time, then expires; VoiceOver reads it (confirm-destructive-actions).
+9. **Input methods and other people's files.** With Japanese (Romaji) or Pinyin on, type in the palette and in a plugin's Filter field: ↑/↓ pick a candidate and Return confirms it, without moving or running a row; after confirming, ↑/↓ move the list again. A second Chrome profile's bookmarks show in Search Bookmarks with its name; Zed's recent projects show while Zed is open; Cursor still lists its projects (raycast-top-issues).
 
 Items that need an account or setup this pass doesn't have (PR Cockpit tokens,
 Git Sync remotes, signing and Keychain, the Spotlight spike, each coding
@@ -221,3 +222,11 @@ Plan: [`archive/2026-11-12-usage-charts`](changes/archive/2026-11-12-usage-chart
 Plan: [`archive/2026-11-15-codebase-health`](changes/archive/2026-11-15-codebase-health/)
 
 - [ ] One event-tap lifecycle for `MacKeyLayer`, `MacTextExpansion` and `MacHyperKey`: a refactor that needs a Mac with Accessibility granted to try (hotkeys, text expansion and the Hyper key still fire after it)
+
+## raycast-top-issues
+
+From the check of Raycast's top issues (15 Nov 2026, `/mnt/project-files/raycast-top-issues/report.md`): stackbar #209, stackbar-plugins #86.
+
+- [ ] 1 Japanese or Chinese input in the palette search and a plugin's Filter field: ↑/↓/Tab/Return go to the input method while it composes, and to the palette once the text is confirmed
+- [ ] 2 Browser Tabs 1.3.0: after the re-approval, Search Bookmarks shows bookmarks from a second Chrome (or Brave/Edge) profile, with the profile's name in the row
+- [ ] 3 Recent Projects 1.6.0: Zed's recent folders show (with Zed running, its database open), Return opens them in Zed; VS Code, Cursor and Windsurf still list theirs
