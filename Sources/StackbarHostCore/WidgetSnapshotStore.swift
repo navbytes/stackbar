@@ -52,13 +52,13 @@ public struct WidgetSnapshotStore: Sendable {
     }
 
     public func read(_ pluginID: String) -> WidgetSnapshot? {
-        JSONFile.read(from: file(pluginID))
+        JSONFile.read(from: file(pluginID), setAside: false)
     }
 
     public func all() -> [WidgetSnapshot] {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension == "json" }
-            .compactMap { JSONFile.read(WidgetSnapshot.self, from: $0) }
+            .compactMap { JSONFile.read(WidgetSnapshot.self, from: $0, setAside: false) }
             .sorted { $0.name < $1.name }
     }
 
@@ -187,7 +187,7 @@ public struct WidgetActionInbox: Sendable {
         var result: [WidgetAction] = []
         for file in files {
             defer { try? FileManager.default.removeItem(at: file) }
-            guard let action = JSONFile.read(WidgetAction.self, from: file) else { continue }
+            guard let action = JSONFile.read(WidgetAction.self, from: file, setAside: false) else { continue }
             if now.timeIntervalSince(action.pressedAt) <= Self.maxAge { result.append(action) }
         }
         return result

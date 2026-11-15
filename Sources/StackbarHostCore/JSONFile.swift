@@ -7,9 +7,33 @@ import Foundation
 enum JSONFile {
     /// The file's value, or nil when there is no file, it can't be read or
     /// it isn't this type. A store then starts empty.
-    static func read<Value: Decodable>(_ type: Value.Type = Value.self, from file: URL?, decoder: JSONDecoder = JSONDecoder()) -> Value? {
+    ///
+    /// A file that is there but can't be decoded (damaged, or written by a
+    /// newer Stackbar before going back to an older one) is moved aside to
+    /// `<name>.corrupt-<seconds>` first, as `StorageStore` does, so the
+    /// store's next save can't overwrite the approvals, aliases or install
+    /// records it held. `setAside: false` leaves it, for files that are
+    /// deleted after reading anyway.
+    static func read<Value: Decodable>(_ type: Value.Type = Value.self, from file: URL?, decoder: JSONDecoder = JSONDecoder(), setAside: Bool = true) -> Value? {
         guard let file, let data = try? Data(contentsOf: file) else { return nil }
-        return try? decoder.decode(type, from: data)
+        do {
+            return try decoder.decode(type, from: data)
+        } catch {
+            if setAside { moveAside(file) }
+            return nil
+        }
+    }
+
+    /// Moves an undecodable file out of the way and says where it went.
+    private static func moveAside(_ file: URL, now: Date = Date()) {
+        let aside = file.appendingPathExtension("corrupt-\(Int(now.timeIntervalSince1970))")
+        do {
+            try? FileManager.default.removeItem(at: aside)
+            try FileManager.default.moveItem(at: file, to: aside)
+            HostLog.shared.write(.error, "\(file.lastPathComponent) was unreadable and was moved to \(aside.lastPathComponent); starting it empty")
+        } catch {
+            HostLog.shared.write(.error, "\(file.lastPathComponent) was unreadable and couldn't be moved aside: \(error.localizedDescription)")
+        }
     }
 
     /// Writes the value in one step (the old file stays until the new one
