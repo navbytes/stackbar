@@ -6,7 +6,7 @@ import StackbarProtocol
 /// macOS 26 install and a developer add, and the commands of the store's
 /// everyday plugins. Each case is what someone switching from Spotlight or
 /// Raycast expects after a few letters and Return
-/// (openspec/changes/trust-first, task 2.1).
+/// (openspec/changes/archive/2026-11-15-trust-first, task 2.1).
 ///
 /// A change to the ranker that moves one of these is a change users feel:
 /// fix the ranker, or change the case here on purpose and say why.

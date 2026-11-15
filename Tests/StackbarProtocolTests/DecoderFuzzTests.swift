@@ -3,7 +3,7 @@ import XCTest
 
 /// A plugin's line must never crash the host, however wrong it is: every
 /// line from a helper goes through `LineCodec.decode(PluginMessage.self)`
-/// in the host process (openspec/changes/trust-first, task 3.2). These feed
+/// in the host process (openspec/changes/archive/2026-11-15-trust-first, task 3.2). These feed
 /// it mutated, extreme and deeply nested messages; a trap or a stack
 /// overflow fails the whole test run, so passing means none happened.
 final class DecoderFuzzTests: XCTestCase {
