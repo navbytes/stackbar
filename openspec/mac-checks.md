@@ -23,7 +23,7 @@ open an issue for what fails.
 
 1. **Update and first launch.** Check for Updates from the previous stable; it installs and relaunches (launch-phase-2 4.2). Plugins, hotkeys and notes are still there (notes-editor 3.4, plugin-handover 3.2).
 2. **⌘Space.** Take it over from Spotlight, then give it back (launch-phase-1 3.2).
-3. **Palette keys.** An argument field, a command hotkey, the hotkey of a plugin waiting for approval, a `stackbar://` link, a hidden menu-bar item (plugin-commands 4.8, first-minute 4.6). "git sync" Tab, "what is swift" Tab (palette-scope). Arrow through PR Cockpit checks with the preview open; Return and ⌘K still act on the row (preview-views).
+3. **Palette keys.** An argument field, a command hotkey, a command of a plugin waiting for approval, from the palette and its hotkey, a `stackbar://` link, a hidden menu-bar item (plugin-commands 4.8, first-minute 4.6). "git sync" Tab, "what is swift" Tab (palette-scope). Arrow through PR Cockpit checks with the preview open; Return and ⌘K still act on the row (preview-views).
 4. **Apps and files on this Mac.** Simulator, an app in ~/Applications and one on another drive; a file in iCloud Drive and in Dropbox (first-minute 4.1, 4.3).
 5. **Keyboard listeners.** `;sig` in TextEdit, Slack and Terminal but not a password field; ⌘⇧V in TextEdit opens Clipboard History at the cursor, ↓↓ Return pastes, a 1Password copy is skipped; ⌃⌥← / ⌃⌥→ snap windows; a Karabiner Hyper key fires a hotkey (snippets, fluid-plugins 4.2/4.6/4.14, first-minute 4.4/4.5).
 6. **Menu bar.** Left click on Stay Awake's cup toggles it (`pmset -g assertions`), right click opens the panel; Up Next asks for Calendar once and Join opens a call; a full-screen alert shows over a full-screen app (fluid-plugins).
@@ -142,8 +142,7 @@ Plan: [`archive/2026-11-12-first-minute`](changes/archive/2026-11-12-first-minut
 - [x] 4.2 CI: on a fresh home `saf`, `calendar`, `terminal` and `12*12` come first and File Search answers the same first search, with no approval asked
 - [ ] 4.3 A file in iCloud Drive and one in Dropbox show in File Search
 - [ ] 4.4 ⌃⌥← and ⌃⌥→ as Windows hotkeys, 30 snaps in a minute
-- [x] 4.6 (part) CI: a waiting plugin's command from the palette asks, Return allows it, and it opens
-- [ ] 4.6 The same from the command's hotkey
+- [ ] 4.6 A plugin waiting for approval: run its command from the palette, Allow, and it runs; the same from its hotkey (not in CI: a fresh home has no waiting plugin whose commands are known yet)
 - [ ] 4.5 A Karabiner Hyper key records and fires a command hotkey
 
 ## fluid-1-0

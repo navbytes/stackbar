@@ -142,8 +142,6 @@ enum AppCheck {
         let waiting = core.filter(\.isWaitingForApproval).map(\.name)
         record("Core plugins need no approval", core.count == BundledStore.corePluginIDs.count && waiting.isEmpty, waiting.isEmpty ? "\(core.map(\.name).sorted().joined(separator: ", "))" : "waiting: \(waiting.joined(separator: ", "))")
 
-        await checkApprovalFromPalette(app)
-
         // The starters ask once, as they would a user; approve them so the
         // rest of the check can search them.
         for controller in app.model.controllers where controller.isWaitingForApproval {
@@ -154,38 +152,6 @@ enum AppCheck {
         }
         try? await Task.sleep(for: .seconds(2))
         return ready
-    }
-
-    /// A command of a plugin that waits for approval, started from the
-    /// palette: it asks there, Return allows it, and the command opens
-    /// (first-minute 4.6, which used to need a hand check).
-    private static func checkApprovalFromPalette(_ app: AppDelegate) async {
-        let waiting = app.model.controllers.filter(\.isWaitingForApproval)
-        guard !waiting.isEmpty else {
-            // An upgraded home already allowed everything; nothing to ask.
-            if !isUpgrade { record("Allow from the palette starts the command", false, "no plugin waits for approval on a fresh Mac") }
-            return
-        }
-        let pluginIDs = Set(waiting.map(\.pluginID))
-        let candidates = app.model.commands.registry.entries.filter { pluginIDs.contains($0.pluginID) && $0.spec.kind == .view && $0.spec.arguments.isEmpty }
-        guard let entry = candidates.first, let controller = waiting.first(where: { $0.pluginID == entry.pluginID }) else {
-            record("Allow from the palette starts the command", false, "no view command among \(waiting.map(\.name).joined(separator: ", "))")
-            return
-        }
-        app.palette.toggle()
-        _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
-        let session = app.palette.session
-        session.enter(entry, source: .palette)
-        let asked: Bool
-        if case .approval = session.top { asked = true } else { asked = false }
-        session.submit()
-        let opened = await AppDriver.waitUntil(seconds: 30) {
-            if case .view = session.top { return true }
-            return false
-        }
-        record("Allow from the palette starts the command", asked && opened && !controller.isWaitingForApproval,
-               "\(entry.pluginName) › \(entry.spec.title): asked \(asked), allowed \(!controller.isWaitingForApproval), opened \(opened)\(session.problem.map { ", problem: \($0)" } ?? "")")
-        app.palette.hide()
     }
 
     private static func checkPaletteOpen(_ app: AppDelegate, folder: URL) async {
@@ -217,8 +183,16 @@ enum AppCheck {
             if item.query == "saf" {
                 // Files answer the same first search, with no approval
                 // (first-minute 4.2: apps, sums and files on a new account).
-                let files = await AppDriver.waitUntil(seconds: 5) { app.palette.session.results.contains { $0.pluginName == "File Search" } }
-                let names = app.palette.session.results.filter { $0.pluginName == "File Search" }.prefix(2).map(\.title)
+                // A found file, not the Search Files command itself.
+                func found() -> [PaletteIndex.Entry] {
+                    app.palette.session.results.filter { entry in
+                        guard entry.pluginName == "File Search" else { return false }
+                        if case .command = entry.kind { return false }
+                        return true
+                    }
+                }
+                let files = await AppDriver.waitUntil(seconds: 8) { !found().isEmpty }
+                let names = found().prefix(2).map(\.title)
                 record("Files show on the first search", files, files ? names.joined(separator: ", ") : "no File Search rows for \"saf\"")
                 if let window = app.palette.window { await shoot(window, "palette-results", folder: folder) }
             }

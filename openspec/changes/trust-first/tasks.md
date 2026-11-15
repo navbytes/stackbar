@@ -5,7 +5,7 @@
 - [x] 1.2 Upgrade mode: the latest release's home opened by this build
 - [x] 1.3 `scripts/app-check.sh` and the `app` job in `ci.yml`
 - [x] 1.4 Green on macos-26; budgets tuned from the first runs (first open 1 s, then median 100 ms and max 250 ms; a search 1.5 s)
-- [x] 1.5 Tick or convert the `mac-checks.md` items the app check now covers: 9 ticked or cut to their hand-only part (new checks: Allow from the palette, files on the first search, ⎋ keeps the row); the rest is one owner's pass at the top of `mac-checks.md`
+- [x] 1.5 Tick or convert the `mac-checks.md` items the app check now covers: 9 ticked or cut to their hand-only part (new checks: files on the first search, ⎋ keeps the row); the rest is one owner's pass at the top of `mac-checks.md`
 
 ## 2. Golden path (workstream B)
 - [x] 2.1 Ranking golden cases in HostCore tests (query to expected top row, learned picks), against the store's real commands (`scripts/palette-corpus.py`); found keywords beating app names, fixed in the ranker
