@@ -5,14 +5,14 @@
 - [x] 1.2 Upgrade mode: the latest release's home opened by this build
 - [x] 1.3 `scripts/app-check.sh` and the `app` job in `ci.yml`
 - [x] 1.4 Green on macos-26; budgets tuned from the first runs (first open 1 s, then median 100 ms and max 250 ms; a search 1.5 s)
-- [ ] 1.5 Tick or convert the `mac-checks.md` items the app check now covers
+- [x] 1.5 Tick or convert the `mac-checks.md` items the app check now covers: 9 ticked or cut to their hand-only part (new checks: files on the first search, ⎋ keeps the row); the rest is one owner's pass at the top of `mac-checks.md`
 
 ## 2. Golden path (workstream B)
 - [x] 2.1 Ranking golden cases in HostCore tests (query to expected top row, learned picks), against the store's real commands (`scripts/palette-corpus.py`); found keywords beating app names, fixed in the ranker
-- [ ] 2.2 Leftover palette-review items: usage for root rows, selection kept on back
+- [x] 2.2 Leftover palette-review items: usage for root rows (already recorded since 0.32 by `PaletteMemory.chose`), selection kept on back (`StagedSelection`; the app check presses ⎋ out of a command and checks the row)
 
 ## 3. Core plugins (workstream C)
-- [ ] 3.1 Scenario tests for the core plugins through `stackbarctl render --event`
+- [x] 3.1 Scenario tests for the core plugins, driven through the host as the palette does (`PluginSession` in stackbar-plugins `Tests/PluginTests`): Applications and File Search (stackbar-plugins#85), Calculator golden sums and System Commands (#79), Clipboard, Snippets, Windows and Quicklinks (their existing suites)
 - [x] 3.2 Fuzz the protocol decoders: a plugin's message never crashes the host (`DecoderFuzzTests`: mutated values, flipped bytes, views nested 100k deep; the decoder refuses deep nesting instead of overflowing)
 
 ## 4. Finish or close open plans (workstream D)

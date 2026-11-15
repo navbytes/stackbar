@@ -42,3 +42,34 @@ public struct ListSelection: Equatable, Sendable {
         query = ""
     }
 }
+
+/// The selection of each list the palette has stacked up: opening a command
+/// keeps the line you were on underneath, and Esc brings it back, as Finder
+/// and Raycast do, instead of starting the list again at its first line.
+public struct StagedSelection: Equatable, Sendable {
+    /// The selection of the list on top.
+    public var current = ListSelection()
+    private var below: [ListSelection] = []
+
+    public init() {}
+
+    /// How many lists are kept underneath the one on top.
+    public var depth: Int { below.count }
+
+    /// A new list goes on top, starting on its first line.
+    public mutating func push() {
+        below.append(current)
+        current.reset()
+    }
+
+    /// The list on top went away: the one under it gets its line back.
+    public mutating func pop() {
+        current = below.popLast() ?? ListSelection()
+    }
+
+    /// Back to one list, on its first line.
+    public mutating func clear() {
+        below = []
+        current.reset()
+    }
+}

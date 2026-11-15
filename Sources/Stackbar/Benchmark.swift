@@ -25,42 +25,33 @@ enum Benchmark {
             var report: [String: Any] = [
                 "version": StackbarVersion.current,
                 "macOS": ProcessInfo.processInfo.operatingSystemVersionString,
-                "launchMs": ms(launched.timeIntervalSince(processStart)),
+                "launchMs": AppDriver.ms(launched.timeIntervalSince(processStart)),
             ]
-            let ready = await waitUntil(seconds: 60) { !app.model.controllers.isEmpty && app.model.controllers.allSatisfy(\.isSettled) }
+            let ready = await AppDriver.waitUntil(seconds: 60) { !app.model.controllers.isEmpty && app.model.controllers.allSatisfy(\.isSettled) }
             report["plugins"] = app.model.controllers.map(\.name).sorted()
-            report["pluginsReadyMs"] = ready ? ms(Date().timeIntervalSince(processStart)) : NSNull()
+            report["pluginsReadyMs"] = ready ? AppDriver.ms(Date().timeIntervalSince(processStart)) : NSNull()
             // A fresh home has nothing approved yet. Approve what the core
             // plugins ask for, as a user does once, so search can answer.
             for controller in app.model.controllers where controller.isWaitingForApproval {
                 controller.approve()
             }
-            _ = await waitUntil(seconds: 30) { app.model.controllers.allSatisfy { !$0.isWaitingForApproval && $0.isSettled } }
+            _ = await AppDriver.waitUntil(seconds: 30) { app.model.controllers.allSatisfy { !$0.isWaitingForApproval && $0.isSettled } }
             try? await Task.sleep(for: .seconds(2))
 
-            var opens: [Double] = []
-            for _ in 0..<10 {
-                let start = Date()
-                app.palette.toggle()
-                _ = await waitUntil(seconds: 5) { app.palette.isVisible }
-                await nextFrame()
-                opens.append(ms(Date().timeIntervalSince(start)))
-                app.palette.hide()
-                try? await Task.sleep(for: .milliseconds(300))
-            }
+            let opens = await AppDriver.paletteOpens(app, pause: .milliseconds(300))
             report["paletteOpenMs"] = summary(opens)
 
             var searches: [String: Any] = [:]
             var misses: [String: [String]] = [:]
             for (query, expected) in [("calendar", "Calendar"), ("12*12", "144"), ("terminal", "Terminal")] {
                 app.palette.toggle()
-                _ = await waitUntil(seconds: 5) { app.palette.isVisible }
+                _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
                 let start = Date()
                 app.palette.session.query = query
-                let found = await waitUntil(seconds: 5) {
+                let found = await AppDriver.waitUntil(seconds: 5) {
                     app.palette.session.results.contains { $0.title.contains(expected) || ($0.subtitle ?? "").contains(expected) }
                 }
-                searches[query] = found ? ms(Date().timeIntervalSince(start)) : NSNull()
+                searches[query] = found ? AppDriver.ms(Date().timeIntervalSince(start)) : NSNull()
                 if !found {
                     // What the palette showed instead, to see why.
                     misses[query] = missDetail(app)
@@ -102,29 +93,10 @@ enum Benchmark {
         return lines
     }
 
-    private static func ms(_ seconds: TimeInterval) -> Double { (seconds * 10_000).rounded() / 10 }
-
     private static func summary(_ values: [Double]) -> [String: Double] {
         let sorted = values.sorted()
         guard !sorted.isEmpty else { return [:] }
         return ["median": sorted[sorted.count / 2], "min": sorted[0], "max": sorted[sorted.count - 1]]
-    }
-
-    /// Polls every 10 ms on the main actor.
-    private static func waitUntil(seconds: Double, _ condition: () -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(seconds)
-        while Date() < deadline {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return condition()
-    }
-
-    /// After AppKit has drawn: the next pass of the run loop.
-    private static func nextFrame() async {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.main.async { continuation.resume() }
-        }
     }
 
     /// When this process started, from the kernel.

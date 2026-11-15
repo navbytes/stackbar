@@ -73,6 +73,7 @@ enum AppCheck {
                 await checkSearches(app, folder: folder)
                 await checkReturn(app)
                 await checkActions(app, folder: folder)
+                await checkBack(app)
             }
             if !isUpgrade {
                 await checkSettings(app, folder: folder)
@@ -89,7 +90,7 @@ enum AppCheck {
     /// clipped strip), and the default starter set installs.
     private static func checkWelcome(_ app: AppDelegate, folder: URL) async {
         app.welcomeIfNeeded()
-        let shown = await waitUntil(seconds: 5) { app.welcomeWindow?.isVisible == true }
+        let shown = await AppDriver.waitUntil(seconds: 5) { app.welcomeWindow?.isVisible == true }
         let height = app.welcomeWindow?.contentView?.frame.height ?? 0
         record("Welcome shows on a fresh Mac", shown && height >= 300, "visible \(shown), content height \(Int(height)) pt")
         if let window = app.welcomeWindow { await shoot(window, "welcome", folder: folder) }
@@ -106,7 +107,7 @@ enum AppCheck {
         let available = Set(app.model.bundledStore.starters().map(\.id)).union(BundledStore.corePluginIDs)
         let wanted = starter.pluginIDs.intersection(available)
         // Installed plugins join as the folder watcher sees them.
-        _ = await waitUntil(seconds: 20) { wanted.isSubset(of: Set(app.model.controllers.map(\.pluginID))) }
+        _ = await AppDriver.waitUntil(seconds: 20) { wanted.isSubset(of: Set(app.model.controllers.map(\.pluginID))) }
         let added = Set(app.model.controllers.map(\.pluginID)).subtracting(before)
         let missing = wanted.subtracting(added).subtracting(before)
         record("Starter set \"\(starter.name)\" installs", missing.isEmpty, missing.isEmpty ? "added \(added.sorted().joined(separator: ", "))" : "missing \(missing.sorted().joined(separator: ", "))")
@@ -119,7 +120,7 @@ enum AppCheck {
             .split(separator: ",").map(String.init) ?? []
         // A plugin whose helper is rebuilt for the new version joins once
         // it is ready (#183), so give them the time an update takes.
-        _ = await waitUntil(seconds: 180) { Set(expected).isSubset(of: Set(app.model.controllers.map(\.name))) }
+        _ = await AppDriver.waitUntil(seconds: 180) { Set(expected).isSubset(of: Set(app.model.controllers.map(\.name))) }
         let have = Set(app.model.controllers.map(\.name))
         let lost = expected.filter { !have.contains($0) }
         record("Plugins survive the update", !expected.isEmpty && lost.isEmpty, lost.isEmpty ? "\(expected.count) plugins kept" : "lost \(lost.joined(separator: ", "))")
@@ -131,11 +132,11 @@ enum AppCheck {
     /// for an approval: they answer on the first search.
     private static func checkPlugins(_ app: AppDelegate) async -> Bool {
         let start = Date()
-        let settled = await waitUntil(seconds: 240) {
+        let settled = await AppDriver.waitUntil(seconds: 240) {
             !app.model.controllers.isEmpty && app.model.controllers.allSatisfy { $0.isSettled || $0.isWaitingForApproval }
         }
         let failed = app.model.controllers.filter(\.hasFailed).map(\.name)
-        record("Plugins start", settled && failed.isEmpty, settled ? (failed.isEmpty ? "\(app.model.controllers.count) running" : "failed: \(failed.joined(separator: ", "))") : "still starting: \(app.model.controllers.filter { !$0.isSettled }.map(\.name).joined(separator: ", "))", ms: ms(since: start))
+        record("Plugins start", settled && failed.isEmpty, settled ? (failed.isEmpty ? "\(app.model.controllers.count) running" : "failed: \(failed.joined(separator: ", "))") : "still starting: \(app.model.controllers.filter { !$0.isSettled }.map(\.name).joined(separator: ", "))", ms: AppDriver.ms(since: start))
 
         let core = app.model.controllers.filter { BundledStore.corePluginIDs.contains($0.pluginID) }
         let waiting = core.filter(\.isWaitingForApproval).map(\.name)
@@ -146,7 +147,7 @@ enum AppCheck {
         for controller in app.model.controllers where controller.isWaitingForApproval {
             _ = controller.approve()
         }
-        let ready = await waitUntil(seconds: 120) {
+        let ready = await AppDriver.waitUntil(seconds: 120) {
             app.model.controllers.allSatisfy { !$0.isWaitingForApproval && $0.isSettled }
         }
         try? await Task.sleep(for: .seconds(2))
@@ -154,16 +155,7 @@ enum AppCheck {
     }
 
     private static func checkPaletteOpen(_ app: AppDelegate, folder: URL) async {
-        var opens: [Double] = []
-        for _ in 0..<10 {
-            let start = Date()
-            app.palette.toggle()
-            _ = await waitUntil(seconds: 5) { app.palette.isVisible }
-            await nextFrame()
-            opens.append(ms(since: start))
-            app.palette.hide()
-            try? await Task.sleep(for: .milliseconds(200))
-        }
+        var opens = await AppDriver.paletteOpens(app, pause: .milliseconds(200))
         let first = opens.removeFirst()
         record("Palette opens the first time", first <= Budget.paletteFirstOpenMs, "\(first) ms (budget \(Budget.paletteFirstOpenMs))", ms: first)
         let sorted = opens.sorted()
@@ -171,7 +163,7 @@ enum AppCheck {
         record("Palette opens fast after that", median <= Budget.paletteOpenMedianMs && max <= Budget.paletteOpenMaxMs,
                "median \(median) ms (budget \(Budget.paletteOpenMedianMs)), max \(max) ms (budget \(Budget.paletteOpenMaxMs))", ms: median)
         app.palette.toggle()
-        _ = await waitUntil(seconds: 5) { app.palette.isVisible }
+        _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
         if let window = app.palette.window { await shoot(window, "palette-empty", folder: folder) }
         app.palette.hide()
     }
@@ -180,15 +172,30 @@ enum AppCheck {
     private static func checkSearches(_ app: AppDelegate, folder: URL) async {
         for item in golden {
             app.palette.toggle()
-            _ = await waitUntil(seconds: 5) { app.palette.isVisible }
+            _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
             let start = Date()
             app.palette.session.query = item.query
-            let found = await waitUntil(seconds: Budget.searchMs / 1_000 * 3) { matches(app.palette.session.selectedEntry, item.top) }
-            let took = ms(since: start)
+            let found = await AppDriver.waitUntil(seconds: Budget.searchMs / 1_000 * 3) { matches(app.palette.session.selectedEntry, item.top) }
+            let took = AppDriver.ms(since: start)
             let top = app.palette.session.results.prefix(3).map { $0.title }.joined(separator: " | ")
             record("\"\(item.query)\" puts \(item.top) first", found && took <= Budget.searchMs,
                    found ? "\(took) ms (budget \(Budget.searchMs))" : "top rows: \(top)", ms: found ? took : nil)
-            if item.query == "saf", let window = app.palette.window { await shoot(window, "palette-results", folder: folder) }
+            if item.query == "saf" {
+                // Files answer the same first search, with no approval
+                // (first-minute 4.2: apps, sums and files on a new account).
+                // A found file, not the Search Files command itself.
+                func found() -> [PaletteIndex.Entry] {
+                    app.palette.session.results.filter { entry in
+                        guard entry.pluginName == "File Search" else { return false }
+                        if case .command = entry.kind { return false }
+                        return true
+                    }
+                }
+                let files = await AppDriver.waitUntil(seconds: 8) { !found().isEmpty }
+                let names = found().prefix(2).map(\.title)
+                record("Files show on the first search", files, files ? names.joined(separator: ", ") : "no File Search rows for \"saf\"")
+                if let window = app.palette.window { await shoot(window, "palette-results", folder: folder) }
+            }
             app.palette.hide()
             try? await Task.sleep(for: .milliseconds(200))
         }
@@ -199,12 +206,12 @@ enum AppCheck {
     private static func checkReturn(_ app: AppDelegate) async {
         NSPasteboard.general.clearContents()
         app.palette.toggle()
-        _ = await waitUntil(seconds: 5) { app.palette.isVisible }
+        _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
         app.palette.session.query = "12*12"
-        _ = await waitUntil(seconds: 5) { matches(app.palette.session.selectedEntry, "144") }
+        _ = await AppDriver.waitUntil(seconds: 5) { matches(app.palette.session.selectedEntry, "144") }
         app.palette.session.submit()
-        let copied = await waitUntil(seconds: 5) { NSPasteboard.general.string(forType: .string)?.contains("144") == true }
-        let closed = await waitUntil(seconds: 2) { !app.palette.isVisible }
+        let copied = await AppDriver.waitUntil(seconds: 5) { NSPasteboard.general.string(forType: .string)?.contains("144") == true }
+        let closed = await AppDriver.waitUntil(seconds: 2) { !app.palette.isVisible }
         record("Return on a sum copies it and closes", copied && closed,
                "clipboard \(NSPasteboard.general.string(forType: .string) ?? "empty"), palette closed \(closed)")
         app.palette.hide()
@@ -213,9 +220,9 @@ enum AppCheck {
     /// ⌘K lists actions for the selected row, and ⎋ closes it again.
     private static func checkActions(_ app: AppDelegate, folder: URL) async {
         app.palette.toggle()
-        _ = await waitUntil(seconds: 5) { app.palette.isVisible }
+        _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
         app.palette.session.query = "calendar"
-        _ = await waitUntil(seconds: 5) { matches(app.palette.session.selectedEntry, "Calendar") }
+        _ = await AppDriver.waitUntil(seconds: 5) { matches(app.palette.session.selectedEntry, "Calendar") }
         app.palette.session.toggleActions()
         let shown = app.palette.session.showingActions && !app.palette.session.actions.isEmpty
         let titles = app.palette.session.actions.prefix(4).map(\.title).joined(separator: ", ")
@@ -225,6 +232,40 @@ enum AppCheck {
         record("⌘K shows actions, ⎋ closes them", shown && closedActions, "actions: \(titles); ⎋ closed them \(closedActions)")
         app.palette.hide()
         record("⎋ hides the palette", !app.palette.isVisible, "visible \(app.palette.isVisible)")
+    }
+
+    /// ⎋ out of a command puts the root back on the row that opened it,
+    /// not on its first line (a palette-review leftover).
+    private static func checkBack(_ app: AppDelegate) async {
+        app.palette.toggle()
+        _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
+        let session = app.palette.session
+        session.query = "search"
+        // A view command below the first row, so going back has a line to keep.
+        func viewCommand() -> Int? {
+            session.results.indices.dropFirst().first { index in
+                if case .command(let spec) = session.results[index].kind { return spec.kind == .view && spec.arguments.isEmpty }
+                return false
+            }
+        }
+        _ = await AppDriver.waitUntil(seconds: 5) { viewCommand() != nil }
+        guard let index = viewCommand() else {
+            record("⎋ from a command keeps the row it opened", false, "no view command below the first row for \"search\": \(session.results.prefix(5).map(\.title))")
+            app.palette.hide()
+            return
+        }
+        session.move(index)
+        let chosen = session.selectedEntry
+        session.submit()
+        let opened = await AppDriver.waitUntil(seconds: 10) {
+            if case .view = session.top { return true }
+            return false
+        }
+        let backed = session.back()
+        let kept = session.selectedEntry?.id == chosen?.id
+        record("⎋ from a command keeps the row it opened", opened && backed && kept,
+               "opened \(chosen?.title ?? "nothing") \(opened), back on \(session.selectedEntry?.title ?? "nothing")")
+        app.palette.hide()
     }
 
     private static func checkSettings(_ app: AppDelegate, folder: URL) async {
@@ -246,7 +287,7 @@ enum AppCheck {
 
     private static func checkStore(_ app: AppDelegate, folder: URL) async {
         app.showStore()
-        let shown = await waitUntil(seconds: 5) { app.storeWindow?.isVisible == true }
+        let shown = await AppDriver.waitUntil(seconds: 5) { app.storeWindow?.isVisible == true }
         // Let the index load and the cards draw.
         try? await Task.sleep(for: .seconds(4))
         if let window = app.storeWindow { await shoot(window, "store", folder: folder) }
@@ -284,7 +325,7 @@ enum AppCheck {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: appearance)
             try? await Task.sleep(for: .milliseconds(400))
-            await nextFrame()
+            await AppDriver.nextFrame()
             guard let view = window.contentView?.superview ?? window.contentView,
                   let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
             view.cacheDisplay(in: view.bounds, to: rep)
@@ -304,23 +345,6 @@ enum AppCheck {
 
     private static func name(_ title: String) -> String {
         title.lowercased().split { !$0.isLetter && !$0.isNumber }.joined(separator: "-")
-    }
-
-    private static func ms(since start: Date) -> Double { (Date().timeIntervalSince(start) * 10_000).rounded() / 10 }
-
-    private static func waitUntil(seconds: Double, _ condition: () -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(seconds)
-        while Date() < deadline {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return condition()
-    }
-
-    private static func nextFrame() async {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.main.async { continuation.resume() }
-        }
     }
 }
 #endif
