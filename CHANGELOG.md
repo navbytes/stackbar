@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **Esc goes back to the row you came from.** Leaving a command with Esc used to put the palette back on its first result; it now returns to the row that opened the command, at every level.
+
 ## 0.40.1
 
 ### Added

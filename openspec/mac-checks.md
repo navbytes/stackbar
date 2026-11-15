@@ -183,3 +183,9 @@ Plan: [`archive/2026-11-12-spotlight-commands`](changes/archive/2026-11-12-spotl
 Plan: [`archive/2026-11-12-usage-charts`](changes/archive/2026-11-12-usage-charts/)
 
 - [ ] 1.7 Look at the panel on a Mac (stackbarctl render --png)
+
+## codebase-health
+
+Plan: [`archive/2026-11-15-codebase-health`](changes/archive/2026-11-15-codebase-health/)
+
+- [ ] One event-tap lifecycle for `MacKeyLayer`, `MacTextExpansion` and `MacHyperKey`: a refactor that needs a Mac with Accessibility granted to try (hotkeys, text expansion and the Hyper key still fire after it)

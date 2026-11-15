@@ -10,8 +10,9 @@ rewriting, so they landed together.
 - [x] 5 `PendingCalls`: the supervisor's tool and command calls share one table of waiting calls and timeouts
 - [x] 6 stackbar-plugins: the Jira, GitHub and LiteLLM tests share one loopback HTTP stub (navbytes/stackbar-plugins#80, tests only)
 
-## Waiting for someone at a Mac
-Not started; see "Left alone" in the proposal.
+- [x] 7 `AppDriver`: `AppCheck` and `Benchmark` share `waitUntil`, `nextFrame` and the palette open timing (the app check job runs both paths on macos-26)
 
-- [ ] One event-tap lifecycle for `MacKeyLayer`, `MacTextExpansion` and `MacHyperKey` (needs Accessibility to try)
-- [ ] `AppCheck` and `Benchmark` share `waitUntil` and the open-time measurement
+## Waiting for someone at a Mac
+Moved to `openspec/mac-checks.md` when this change was archived.
+
+- One event-tap lifecycle for `MacKeyLayer`, `MacTextExpansion` and `MacHyperKey` (needs Accessibility to try)

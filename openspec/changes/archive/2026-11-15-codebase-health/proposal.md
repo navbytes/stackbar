@@ -47,8 +47,8 @@ Ranked by value against risk.
   and tried on a Mac with Accessibility granted, and the app check in CI does
   not reach it. It needs a hand check, so it waits for someone at a Mac.
 - **`AppCheck` and `Benchmark`** share a `waitUntil` and the open-time
-  measurement. Small, app-only, and the app check is the freeze's safety net;
-  not worth disturbing now.
+  measurement. Left at first; done later as `AppDriver`, since the app check
+  job in CI runs both code paths.
 - **The large SwiftUI files** (`NodeView`, `Palette`, `SettingsView`). They
   are long but each is one view family; splitting them is churn that can't be
   compiled off a Mac.

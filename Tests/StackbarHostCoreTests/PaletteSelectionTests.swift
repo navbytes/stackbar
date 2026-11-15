@@ -40,6 +40,33 @@ final class ListSelectionTests: XCTestCase {
         selection.reset()
         XCTAssertEqual(selection.selected(in: ["c", "a", "b"], query: "x"), "c")
     }
+
+    /// Palette-review leftover: Esc out of a command used to put the root
+    /// back on its first line, losing the row you came from.
+    func testGoingBackRestoresTheLineUnderneath() {
+        var stages = StagedSelection()
+        let root = ["safari", "slack", "spotify"]
+        stages.current.move(2, in: root, query: "s")
+        stages.push()
+        XCTAssertEqual(stages.depth, 1)
+        let view = ["one", "two"]
+        XCTAssertEqual(stages.current.selected(in: view, query: ""), "one", "a new stage starts on its first line")
+        stages.current.move(1, in: view, query: "")
+        stages.push()
+        stages.pop()
+        XCTAssertEqual(stages.current.selected(in: view, query: ""), "two", "each stage keeps its own line")
+        stages.pop()
+        XCTAssertEqual(stages.current.selected(in: root, query: "s"), "spotify", "the root is back on the row it opened")
+        XCTAssertEqual(stages.current.selected(in: ["safari", "slack"], query: "s"), "safari", "gone meanwhile: the first line")
+        stages.pop()
+        XCTAssertEqual(stages.current.selected(in: root, query: "s"), "safari", "nothing below: the first line")
+
+        stages.current.move(1, in: root, query: "s")
+        stages.push()
+        stages.clear()
+        XCTAssertEqual(stages.depth, 0)
+        XCTAssertEqual(stages.current.selected(in: root, query: "s"), "safari", "a reset forgets every stage")
+    }
 }
 
 final class PaletteIndexStabilityTests: XCTestCase {

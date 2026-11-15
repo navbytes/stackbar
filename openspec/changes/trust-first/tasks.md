@@ -9,7 +9,7 @@
 
 ## 2. Golden path (workstream B)
 - [x] 2.1 Ranking golden cases in HostCore tests (query to expected top row, learned picks), against the store's real commands (`scripts/palette-corpus.py`); found keywords beating app names, fixed in the ranker
-- [ ] 2.2 Leftover palette-review items: usage for root rows, selection kept on back
+- [x] 2.2 Leftover palette-review items: usage for root rows (already recorded since 0.32 by `PaletteMemory.chose`), selection kept on back (`StagedSelection`; the app check presses ⎋ out of a command and checks the row)
 
 ## 3. Core plugins (workstream C)
 - [ ] 3.1 Scenario tests for the core plugins through `stackbarctl render --event`

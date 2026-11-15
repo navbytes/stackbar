@@ -57,7 +57,12 @@ final class PaletteSession {
     }
     /// The selected root entry, or the selected row of a list view, by id:
     /// it stays on its line while the list reorders under it.
-    private(set) var selection = ListSelection()
+    private(set) var selection: ListSelection {
+        get { selections.current }
+        set { selections.current = newValue }
+    }
+    /// `selection`, with the line each stage below was on, for Esc.
+    private var selections = StagedSelection()
     private(set) var stack: [Stage] = []
     /// The argument fields' values while a run command waits for them.
     var argumentValues: [String: String] = [:]
@@ -125,7 +130,7 @@ final class PaletteSession {
         scope = nil
         query = ""
         closeRootSearch()
-        selection.reset()
+        selections.clear()
         cache.clear()
         argumentValues = [:]
         showingActions = false
@@ -158,7 +163,8 @@ final class PaletteSession {
         }
         guard let last = stack.popLast() else { return false }
         if case .view(let view) = last { view.close() }
-        selection.reset()
+        // The list underneath is back on the line it was on.
+        selections.pop()
         problem = nil
         argumentValues = [:]
         return true
@@ -518,6 +524,13 @@ final class PaletteSession {
         }
     }
 
+    /// A stage on top, starting on its first line; the line below is kept
+    /// for when Esc comes back to it.
+    private func push(_ stage: Stage) {
+        stack.append(stage)
+        selections.push()
+    }
+
     /// Starts a command from inside the palette, by `CommandStart`'s plan.
     func enter(_ entry: CommandRegistry.Entry, arguments: [String: String] = [:], input: String = "", source: InvocationSource) {
         carryOut(model.commands.plan(entry, source: source, arguments: arguments, input: input), for: entry, source: source)
@@ -531,8 +544,7 @@ final class PaletteSession {
         // A plugin that waits for approval is asked about here, in the
         // palette, instead of failing and sending the user to Settings.
         if plan.starts, model.controller(for: entry.pluginID)?.isWaitingForApproval == true {
-            stack.append(.approval(entry, plan: plan, source: source))
-            selection.reset()
+            push(.approval(entry, plan: plan, source: source))
             return
         }
         switch plan {
@@ -542,7 +554,7 @@ final class PaletteSession {
             run(entry, arguments, source: source)
         case .ask(let arguments):
             argumentValues = arguments
-            stack.append(.arguments(entry, source: source))
+            push(.arguments(entry, source: source))
         case .openView(let query):
             opening = true
             openToken += 1
@@ -559,8 +571,7 @@ final class PaletteSession {
                 switch opened {
                 case .success(let view):
                     view.onFinished = { [weak self] in self?.finish() }
-                    stack.append(.view(view))
-                    selection.reset()
+                    push(.view(view))
                 case .failure(let outcome):
                     problem = outcome.message
                 }
@@ -583,6 +594,7 @@ final class PaletteSession {
             await granted?.value
             guard case .approval(let current, _, _) = top, current.key == entry.key else { return }
             stack.removeLast()
+            selections.pop()
             if controller.isWaitingForApproval {
                 problem = controller.problem ?? "\(entry.pluginName) is still waiting for approval"
                 return
