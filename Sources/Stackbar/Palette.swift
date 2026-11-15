@@ -391,6 +391,9 @@ struct PaletteView: View {
     // MARK: Keys
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
+        // While an input method is composing, its candidates take the arrows,
+        // Tab and Return (raycast/extensions#3504).
+        if TextComposition.isComposing { return .ignored }
         let plain = press.modifiers.isDisjoint(with: [.command, .option, .control])
         // In a grid list the arrows move by a whole line up and down, and
         // left and right move one tile.

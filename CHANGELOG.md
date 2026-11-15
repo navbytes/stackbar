@@ -6,6 +6,7 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Fixed
+- **Typing Japanese, Chinese or Korean in the palette works.** While an input method was composing, ↑ and ↓ moved the palette's selection instead of choosing a candidate, and Tab left for Ask AI. The palette and plugins' Filter fields now leave every key to the input method until the text is confirmed.
 - **Esc goes back to the row you came from.** Leaving a command with Esc used to put the palette back on its first result; it now returns to the row that opened the command, at every level.
 - **A settings file Stackbar can't read is kept, not overwritten.** If a file such as plugin approvals, command aliases and hotkeys, folder grants or the installed-plugin list was damaged, or was written by a newer Stackbar before you went back to an older one, Stackbar started it empty and the next save replaced it. It is now moved aside as `<name>.corrupt-<time>` and the log says so, so what it held can be put back.
 
