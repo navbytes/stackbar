@@ -12,7 +12,7 @@
 - [x] 2.2 Leftover palette-review items: usage for root rows (already recorded since 0.32 by `PaletteMemory.chose`), selection kept on back (`StagedSelection`; the app check presses ⎋ out of a command and checks the row)
 
 ## 3. Core plugins (workstream C)
-- [ ] 3.1 Scenario tests for the core plugins through `stackbarctl render --event`
+- [x] 3.1 Scenario tests for the core plugins, driven through the host as the palette does (`PluginSession` in stackbar-plugins `Tests/PluginTests`): Applications and File Search (stackbar-plugins#85), Calculator golden sums and System Commands (#79), Clipboard, Snippets, Windows and Quicklinks (their existing suites)
 - [x] 3.2 Fuzz the protocol decoders: a plugin's message never crashes the host (`DecoderFuzzTests`: mutated values, flipped bytes, views nested 100k deep; the decoder refuses deep nesting instead of overflowing)
 
 ## 4. Finish or close open plans (workstream D)
