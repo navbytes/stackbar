@@ -214,7 +214,14 @@ enum AppCheck {
             let top = app.palette.session.results.prefix(3).map { $0.title }.joined(separator: " | ")
             record("\"\(item.query)\" puts \(item.top) first", found && took <= Budget.searchMs,
                    found ? "\(took) ms (budget \(Budget.searchMs))" : "top rows: \(top)", ms: found ? took : nil)
-            if item.query == "saf", let window = app.palette.window { await shoot(window, "palette-results", folder: folder) }
+            if item.query == "saf" {
+                // Files answer the same first search, with no approval
+                // (first-minute 4.2: apps, sums and files on a new account).
+                let files = await AppDriver.waitUntil(seconds: 5) { app.palette.session.results.contains { $0.pluginName == "File Search" } }
+                let names = app.palette.session.results.filter { $0.pluginName == "File Search" }.prefix(2).map(\.title)
+                record("Files show on the first search", files, files ? names.joined(separator: ", ") : "no File Search rows for \"saf\"")
+                if let window = app.palette.window { await shoot(window, "palette-results", folder: folder) }
+            }
             app.palette.hide()
             try? await Task.sleep(for: .milliseconds(200))
         }
