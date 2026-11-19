@@ -140,7 +140,7 @@ final class AppModel {
                     }
                 }
             ),
-            runs: CommandRunGate(root: StackbarPaths.runDirectory) { pluginID, line in HostLog.shared.write(.info, line, plugin: pluginID) },
+            runs: CommandRunGate(root: StackbarPaths.runDirectory) { pluginID, level, line in HostLog.shared.write(level, line, plugin: pluginID) },
             approvedCommands: { ledger.approvedCommandPaths(for: $0) },
             folderGrants: Self.folderGrants
         )

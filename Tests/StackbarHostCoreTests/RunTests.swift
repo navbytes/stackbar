@@ -185,6 +185,20 @@ final class CommandRunGateTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(started), 5, "the background sleep held the pipe open")
     }
 
+    func testTimedOutRunLogsAsWarning() async throws {
+        final class Levels: @unchecked Sendable {
+            private let lock = NSLock()
+            private var list: [LogLevel] = []
+            func add(_ level: LogLevel) { lock.withLock { list.append(level) } }
+            var all: [LogLevel] { lock.withLock { list } }
+        }
+        let levels = Levels()
+        let gate = CommandRunGate(root: root) { _, level, _ in levels.add(level) }
+        let result = try await run(gate, "sleep", ["30"], timeout: 0.2)
+        XCTAssertTrue(result.timedOut)
+        XCTAssertEqual(levels.all, [.warning])
+    }
+
     func testOutputIsCutAtTheLimit() async throws {
         var limits = CommandRunGate.Limits()
         limits.maxOutput = 1000

@@ -74,14 +74,14 @@ public final class CommandRunGate: @unchecked Sendable {
     public let root: URL
     public let resolver: CommandResolver
     public let limits: Limits
-    private let log: @Sendable (_ pluginID: String, _ line: String) -> Void
+    private let log: @Sendable (_ pluginID: String, _ level: LogLevel, _ line: String) -> Void
     private let lock = NSLock()
     private var active: [String: [Int: Run]] = [:]
     private var records: [String: [Record]] = [:]
 
     /// `root` holds each plugin's folder (`<root>/<id>`), its default
     /// working directory, and the `tmp` folder inside it.
-    public init(root: URL, resolver: CommandResolver = .standard, limits: Limits = Limits(), log: @escaping @Sendable (String, String) -> Void = { _, _ in }) {
+    public init(root: URL, resolver: CommandResolver = .standard, limits: Limits = Limits(), log: @escaping @Sendable (String, LogLevel, String) -> Void = { _, _, _ in }) {
         self.root = root
         self.resolver = resolver
         self.limits = limits
@@ -284,7 +284,9 @@ public final class CommandRunGate: @unchecked Sendable {
             records[pluginID] = list
         }
         let how = result.timedOut ? "timed out" : (run.wasCancelled ? "cancelled" : "exit \(result.status)")
-        log(pluginID, "ran \(path) (\(arguments) arguments): \(how) in \(String(format: "%.2f", result.duration))s, \(record.stdoutBytes) + \(record.stderrBytes) bytes")
+        // Stalls are what `grep WARN` should find in the host log.
+        let level: LogLevel = (result.timedOut || result.duration >= 2) ? .warning : .info
+        log(pluginID, level, "ran \(path) (\(arguments) arguments): \(how) in \(String(format: "%.2f", result.duration))s, \(record.stdoutBytes) + \(record.stderrBytes) bytes")
     }
 }
 
