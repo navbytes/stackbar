@@ -76,6 +76,11 @@ public enum StackbarPaths {
         return ChainedSecretStore(includeEnvironment ? [primary, EnvironmentSecretStore()] : [primary])
     }
 
+    /// argv[0] is a bare name when a PATH symlink started the process; the loader knows the real path.
+    static var executableURL: URL {
+        (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments.first ?? "")).resolvingSymlinksInPath()
+    }
+
     /// The package that provides StackbarKit to plugin builds: `STACKBAR_PACKAGE`,
     /// then a copy bundled next to the running executable
     /// (`../Resources/StackbarKit` in an app bundle), then the source checkout this
@@ -84,7 +89,7 @@ public enum StackbarPaths {
         if let override = ProcessInfo.processInfo.environment["STACKBAR_PACKAGE"] {
             return URL(fileURLWithPath: override)
         }
-        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        let executable = executableURL
         let bundled = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources/StackbarKit", isDirectory: true)
         if FileManager.default.fileExists(atPath: bundled.appendingPathComponent("Package.swift").path) {
             return bundled

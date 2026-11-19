@@ -95,7 +95,7 @@ public struct Distribution: Codable, Equatable, Sendable {
     /// is the upstream build.
     public static let current: Distribution = {
         if let found = from(info: Bundle.main.infoDictionary) { return found }
-        let executable = URL(fileURLWithPath: CommandLine.arguments.first ?? "").resolvingSymlinksInPath()
+        let executable = StackbarPaths.executableURL
         let plist = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Info.plist")
         if executable.deletingLastPathComponent().lastPathComponent == "MacOS",
            let data = try? Data(contentsOf: plist),
