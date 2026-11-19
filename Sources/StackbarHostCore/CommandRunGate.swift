@@ -284,8 +284,8 @@ public final class CommandRunGate: @unchecked Sendable {
             records[pluginID] = list
         }
         let how = result.timedOut ? "timed out" : (run.wasCancelled ? "cancelled" : "exit \(result.status)")
-        // Stalls are what `grep WARN` should find in the host log.
-        let level: LogLevel = (result.timedOut || result.duration >= 2) ? .warning : .info
+        // Stalls are what `grep WARN` should find; a stream the plugin cancels isn't one.
+        let level: LogLevel = result.timedOut || (!run.wasCancelled && result.duration >= 2) ? .warning : .info
         log(pluginID, level, "ran \(path) (\(arguments) arguments): \(how) in \(String(format: "%.2f", result.duration))s, \(record.stdoutBytes) + \(record.stderrBytes) bytes")
     }
 }

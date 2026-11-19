@@ -71,8 +71,6 @@ public actor PluginSupervisor {
     /// `sentCount` right after the last timer and file triggers, so a new one
     /// is skipped while the plugin hasn't got to the previous one yet.
     private var triggerMarks: [TriggerReason: Int] = [:]
-    /// When each message `send` counted went out, by its number, until its `settled` comes back.
-    private var sentAt: [Int: ContinuousClock.Instant] = [:]
 
     private var process: PluginProcess?
     private var generation = 0
@@ -140,9 +138,7 @@ public actor PluginSupervisor {
         guard state == .running || state == .starting, let process else { return }
         switch message {
         case .response, .shutdown: break
-        default:
-            sentCount += 1
-            sentAt[sentCount] = ContinuousClock.now
+        default: sentCount += 1
         }
         process.send(message)
     }
@@ -287,7 +283,6 @@ public actor PluginSupervisor {
         menuBarClick = nil
         sentCount = startupMessageCount
         triggerMarks = [:]
-        sentAt = [:]
         consumer = Task { [weak self] in
             for await event in events {
                 await self?.handle(event, generation: current)
@@ -383,9 +378,6 @@ public actor PluginSupervisor {
             emitPluginLog(level, message)
         case .message(.settled):
             settledCount += 1
-            if let sent = sentAt.removeValue(forKey: settledCount), ContinuousClock.now - sent >= .seconds(2) {
-                HostLog.shared.write(.warning, "a message from the host took \((ContinuousClock.now - sent).components.seconds)s to settle", plugin: manifest.id)
-            }
             onUpdate(.settled(count: settledCount))
         case .message(.request(let id, let call)):
             answer(id, call, generation: eventGeneration)
