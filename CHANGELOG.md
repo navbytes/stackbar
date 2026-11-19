@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.41.0
 
 ### Added
 - **The palette shows when a plugin is still loading.** The loading bar under the search field now stays on while a plugin fetches fresh data behind the list it shows, not only while it answers what you typed, so a list that may be out of date never looks finished.
