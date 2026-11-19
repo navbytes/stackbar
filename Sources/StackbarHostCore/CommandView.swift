@@ -62,10 +62,16 @@ public struct CommandView: Sendable {
     /// `root` as the palette draws it: an armed action says "Press again".
     /// Before the first answer, the placeholder.
     public var shownRoot: ViewNode? { root.map { confirmer.decorate($0, surface: nil) } ?? placeholder }
+    /// The plugin said it is still fetching behind its newest tree
+    /// (protocol 30): the palette keeps its loading bar over the rows.
+    public private(set) var pluginIsUpdating = false
     /// Showing last time's tree: its rows wait for the first answer.
     public var isShowingPlaceholder: Bool { root == nil && placeholder != nil }
     /// Waiting for the plugin to answer the newest query.
     public var isSearching: Bool { isWaitingForPlugin || (!isStopped && !isClosed && state.isSearching) }
+    /// Anything to show the loading bar for: an answer on its way, or the
+    /// plugin fetching behind the one shown.
+    public var isLoading: Bool { isSearching || (pluginIsUpdating && canAct) }
     /// Whether an action can reach the plugin now. After a close the plugin
     /// has no handler for the view's actions.
     public var canAct: Bool { !isClosed && !isWaitingForPlugin && !isStopped }
@@ -85,11 +91,12 @@ public struct CommandView: Sendable {
     }
 
     /// The plugin sent a tree for this view.
-    public mutating func received(seq: Int, root: ViewNode) -> Received {
+    public mutating func received(seq: Int, root: ViewNode, loading: Bool = false) -> Received {
         guard !isClosed else { return Received() }
         let (show, next) = state.received(seq: seq, root: root)
         var result = Received(shown: show, sends: next.map { [Self.send($0)] } ?? [])
         guard show else { return result }
+        pluginIsUpdating = loading
         answers += 1
         placeholder = nil
         problem = nil
@@ -137,6 +144,7 @@ public struct CommandView: Sendable {
         guard !isClosed else { return [] }
         switch plugin {
         case .restarting:
+            pluginIsUpdating = false
             isWaitingForPlugin = true
             isStopped = false
             submitting = false
@@ -166,6 +174,7 @@ public struct CommandView: Sendable {
     }
 
     private mutating func stop(_ message: String) {
+        pluginIsUpdating = false
         isWaitingForPlugin = false
         isStopped = true
         submitting = false

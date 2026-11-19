@@ -30,8 +30,9 @@ public actor PluginSupervisor {
         case menuBarClick(MenuBarClick?)
         /// The plugin's commands changed.
         case commands([CommandSpec])
-        /// An open command view's tree, for the query numbered `seq`.
-        case view(session: Int, seq: Int, root: ViewNode)
+        /// An open command view's tree, for the query numbered `seq`, and
+        /// whether the plugin is still fetching behind it.
+        case view(session: Int, seq: Int, root: ViewNode, loading: Bool)
         /// The plugin finished handling a message (an event, a refresh):
         /// `count` is how many the current helper has finished, comparable
         /// with what `event` returns, so Settings knows when a change it sent
@@ -399,9 +400,9 @@ public actor PluginSupervisor {
             onUpdate(.commands(specs))
         case .message(.commandResult(let id, let result)):
             finishCommandCall(id, result, generation: eventGeneration)
-        case .message(.view(let session, let seq, let root)):
+        case .message(.view(let session, let seq, let root, let loading)):
             if let slow = slowAnswers.answered(session: session, seq: seq) { onUpdate(.log(.warning, slow)) }
-            onUpdate(.view(session: session, seq: seq, root: withinLimits(root)))
+            onUpdate(.view(session: session, seq: seq, root: withinLimits(root), loading: loading == true))
         case .stderr(let line):
             emitPluginLog(.debug, line)
         case .undecodable(let line):

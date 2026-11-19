@@ -43,7 +43,9 @@ public enum StackbarProtocolVersion {
     /// 28 added the multiline editor node, and calls that show, hide or
     /// toggle the plugin's window.
     /// 29 added views in row previews, drawn display-only beside the list.
-    public static let current = 29
+    /// 30 added `loading` on a view's answer (the plugin is still fetching
+    /// behind what it shows) and hidden search keywords on rows.
+    public static let current = 30
 }
 
 /// Host → plugin.
@@ -124,8 +126,10 @@ public enum PluginMessage: Codable, Equatable, Sendable {
     /// The answer to `runCommand`.
     case commandResult(id: Int, result: CommandResult)
     /// An open view's tree, for the query with `seq`. Also sent unasked after
-    /// an action or refresh changed what an open view shows.
-    case view(session: Int, seq: Int, root: ViewNode)
+    /// an action or refresh changed what an open view shows. `loading` is
+    /// true while the plugin still fetches behind what it shows, so the
+    /// palette keeps its loading bar (protocol 30; older plugins omit it).
+    case view(session: Int, seq: Int, root: ViewNode, loading: Bool? = nil)
 }
 
 /// A plugin's left-click action on its status item, like starting or

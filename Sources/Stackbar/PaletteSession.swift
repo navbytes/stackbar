@@ -427,7 +427,7 @@ final class PaletteSession {
     /// A plugin is working: a view opening, or a view searching.
     var isLoading: Bool {
         if opening { return true }
-        if case .view(let view) = top { return view.isSearching }
+        if case .view(let view) = top { return view.isLoading }
         return false
     }
 

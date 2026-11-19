@@ -143,20 +143,24 @@ A search runs in the background, like a refresh: a click, Return or Esc in
 the view is handled while it waits, a newer query cancels it (a cancelled
 `Stackbar` call throws `CancellationError`), and closing the view cancels it.
 The view keeps showing its last answer until the search returns. Keep
-`search` quick anyway: the user sees "Searching…" until it does. Filter the
-data you already hold and answer; when it may be out of date, fetch fresh in
-your own `Task` and call `Stackbar.redraw()` when it lands. Await a load only
-the first time, when there is nothing to show yet:
+`search` quick anyway: the palette shows its loading bar until it does.
+Answer from the data you already hold, and fetch fresh behind it.
+`Stackbar.cached` does that: only the first call for a key waits, and a
+value older than `maxAge` is returned at once while it fetches again in the
+background, with the loading bar on, and draws when it lands:
 
 ```swift
-.view(search: { invocation in
-    self.query = invocation.text
-    if self.loadedAt == nil { try await self.load() }      // first open: nothing to show
-    else if self.loadedAt!.timeIntervalSinceNow < -30, self.reloading == nil {
-        self.reloading = Task { try? await self.load(); self.reloading = nil; Stackbar.redraw() }
-    }
-}) { _ in List(self.items.filter { $0.matches(self.query) }) { … } }
+.view(search: { _ in
+    try await Stackbar.cached("containers", maxAge: 5) { self.containers = try await self.listContainers() }
+}) { invocation in List(searchable: true) { ForEach(self.containers) { … } } }
 ```
+
+For a fetch of your own, wrap it so the bar shows while it runs:
+`Task { try? await Stackbar.updating { try await Stackbar.refresh() } }`.
+`Stackbar.invalidateCache("containers")` makes the next call wait for fresh
+data (after a setting changed). In a `List(searchable: true)` the palette
+filters rows itself as the user types; `Row(...).keywords([url, path])`
+adds words it matches without showing them (0.41.0).
 
 The palette's main search lists commands, as Raycast's root search does:
 your panel's buttons, toggles and rows are not in it (0.37.0). Anything worth
@@ -400,6 +404,7 @@ Action ids come from content: `button/<title>`, `toggle/<title>`,
 | `try await Stackbar.toggleWindow(keepOnTop: true)` hides the plugin's window when the user is in it and shows it otherwise, for a command on a hotkey or `menuBarClick`; `showWindow()`, `hideWindow()`; `keepOnTop` suggests it float, and the title-bar pin the user sets wins; 0.38.0 | `.window` in surfaces |
 | `Stackbar.hud("Copied")` (or `isError: true`) shows the HUD a command result's message shows, after a panel button or a row acts; at most 30 a minute; 0.22.0 | nothing |
 | `try await Stackbar.refresh()` refreshes now, cancelling a running refresh, and returns once fresh data is in; `Stackbar.isRefreshing` is true while a refresh runs (the kit draws when one starts and ends, so a spinner needs nothing else); in the kit, so any Stackbar | nothing |
+| `try await Stackbar.cached("key", maxAge: 30) { … }` runs the fetch only when nothing is cached, and refetches a stale value in the background while returning it; `Stackbar.updating { … }` shows the palette's loading bar over the plugin's views while it runs, and `Stackbar.isUpdating` says whether one does; `cachedValue`, `cacheError`, `invalidateCache`; in the kit (the bar needs 0.41.0) | nothing |
 | `Stackbar.redraw()` draws the surfaces and open palette views again now, for state your own `Task` changed outside a message and a refresh; only what changed is sent; in the kit, so any Stackbar | nothing |
 | `try await Stackbar.open(url, with: "com.apple.Safari")`; links other than https, http, mailto, tel, meeting apps and Stackbar's own `stackbar://store/<plugin-id>` and `stackbar://settings` pages (0.25.0), and files or folders, with either `open` (`Stackbar.open(url)` from 0.33.0; before, it opened only the links that need nothing) | `.openURLs(schemes: ["slack"])`; `["*"]` for any scheme and paths |
 | `try await Stackbar.run("brew", ["outdated", "--json=v2"], timeout: .seconds(120))` returns `RunResult` (status, stdout, stderr, text, truncated, timedOut); a non-zero exit is not thrown | `.run(commands: ["brew"])` |

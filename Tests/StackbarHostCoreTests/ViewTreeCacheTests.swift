@@ -64,3 +64,39 @@ final class ViewTreeCacheTests: XCTestCase {
         XCTAssertNil(cache.tree(for: key), "a form is never drawn from old data")
     }
 }
+
+/// Protocol 30: the plugin's own "still fetching" flag and hidden keywords.
+final class ViewLoadingTests: XCTestCase {
+    func testThePluginsLoadingFlagKeepsTheBarAfterItAnswers() {
+        var view = CommandView(session: 1, pluginName: "P", query: CommandQuery())
+        _ = view.open()
+        XCTAssertTrue(view.isLoading, "waiting for the first answer")
+        _ = view.received(seq: 1, root: .list(children: []), loading: true)
+        XCTAssertFalse(view.isSearching)
+        XCTAssertTrue(view.isLoading, "answered, but the plugin is still fetching behind it")
+        _ = view.received(seq: 1, root: .list(children: []), loading: false)
+        XCTAssertFalse(view.isLoading)
+        _ = view.received(seq: 1, root: .list(children: []), loading: true)
+        _ = view.pluginState(.failed("boom"))
+        XCTAssertFalse(view.isLoading, "a stopped plugin fetches nothing")
+    }
+
+    func testSearchableListsMatchHiddenKeywordsBelowWhatRowsShow() {
+        let rows: [ViewNode] = [
+            .row(RowNode(key: "1", title: "Inbox", keywords: ["https://mail.example.com/inbox"])),
+            .row(RowNode(key: "2", title: "example notes")),
+            .row(RowNode(key: "3", title: "Docs")),
+        ]
+        let kept = RowFilter.filter(rows, query: "example").compactMap { node -> String? in
+            if case .row(let row) = node { return row.key } else { return nil }
+        }
+        XCTAssertEqual(kept, ["2", "1"], "a shown match ranks above a hidden one; no match is dropped")
+    }
+
+    func testOldMessagesWithoutLoadingStillDecode() throws {
+        let old = #"{"view":{"session":1,"seq":2,"root":{"list":{"searchable":false,"children":[]}}}}"#
+        let message = try JSONDecoder().decode(PluginMessage.self, from: Data(old.utf8))
+        guard case .view(1, 2, _, let loading) = message else { return XCTFail("expected a view") }
+        XCTAssertNil(loading)
+    }
+}

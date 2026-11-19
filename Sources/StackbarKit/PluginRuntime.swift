@@ -68,6 +68,8 @@ public final class PluginRuntime {
         /// The newest seq answered, which draws use while a search runs.
         var answered: Int?
         var lastRoot: ViewNode?
+        /// The `loading` last sent with it (`Stackbar.isUpdating`).
+        var lastLoading = false
         var handlers: [ActionID: RenderContext.Handler] = [:]
     }
 
@@ -386,6 +388,7 @@ public final class PluginRuntime {
     }
 
     private func renderViews(forcing forced: Int?) {
+        let loading = Stackbar.isUpdating
         for session in views.keys.sorted() {
             guard var view = views[session] else { continue }
             let context = RenderContext(prefix: "view/\(session)/")
@@ -400,9 +403,10 @@ public final class PluginRuntime {
             // A search still running owes the host its answer: until then
             // draws go out as updates to the last answer, or not at all.
             let seq = searches[session] == nil ? view.seq : view.answered
-            if let seq, root != view.lastRoot || session == forced {
+            if let seq, root != view.lastRoot || loading != view.lastLoading || session == forced {
                 view.lastRoot = root
-                send(.view(session: session, seq: seq, root: root))
+                view.lastLoading = loading
+                send(.view(session: session, seq: seq, root: root, loading: loading ? true : nil))
             }
             views[session] = view
         }

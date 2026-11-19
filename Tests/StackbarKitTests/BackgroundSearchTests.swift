@@ -71,7 +71,7 @@ final class BackgroundSearchTests: XCTestCase {
 
     private func views(_ messages: [PluginMessage]) -> [(seq: Int, titles: [String])] {
         messages.compactMap { message in
-            guard case .view(_, let seq, let root) = message else { return nil }
+            guard case .view(_, let seq, let root, _) = message else { return nil }
             guard case .list(_, let rows) = root else { return (seq, []) }
             return (seq, rows.compactMap { if case .row(let row) = $0 { return row.title } else { return nil } })
         }

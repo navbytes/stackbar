@@ -80,7 +80,7 @@ final class CommandTests: XCTestCase {
     }
 
     private func views(_ messages: [PluginMessage]) -> [(session: Int, seq: Int, root: ViewNode)] {
-        messages.compactMap { if case .view(let session, let seq, let root) = $0 { return (session, seq, root) } else { return nil } }
+        messages.compactMap { if case .view(let session, let seq, let root, _) = $0 { return (session, seq, root) } else { return nil } }
     }
 
     func testCommandsAreSentAfterReadyAndWhenTheyChange() async {
