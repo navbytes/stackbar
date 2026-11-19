@@ -847,6 +847,9 @@ struct CommandViewBody: View {
                     Text(view.isSearching ? "Searching…" : "No results").foregroundStyle(.secondary)
                 }
             }
+            // Last time's list, until the plugin answers: dimmed, as it may
+            // have changed since.
+            .opacity(view.isShowingPlaceholder ? 0.55 : 1)
         }
     }
 
@@ -884,6 +887,9 @@ struct CommandViewBody: View {
                     Text(view.isSearching ? "Searching…" : "No results").foregroundStyle(.secondary)
                 }
             }
+            // Last time's list, until the plugin answers: dimmed, as it may
+            // have changed since.
+            .opacity(view.isShowingPlaceholder ? 0.55 : 1)
         }
     }
 }

@@ -6,6 +6,7 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Fixed
+- **Plugin searches open full.** Opening a plugin's search in the palette again (Browser Tabs, Docker, PR Cockpit and the like) shows the list it had last time straight away, instead of an empty palette while the plugin looks again; the fresh list replaces it when it lands. Press Return on a row before then and it runs on that same row once the fresh list is in. Every plugin gets this with the update.
 - **Plugins answer clicks and Return while they search.** In a plugin's palette view, picking a row or pressing Return no longer waits for the search behind it (a slow API, a browser with many tabs) to finish, and typing a newer query or leaving the view stops the old search instead of letting it finish first. Every plugin gets this with the update; none has to change.
 - **`stackbarctl render` works on installed plugins.** Run from your PATH (the installer's link), stackbarctl looked for StackbarKit in the folder Stackbar was built in instead of the copy inside the app, so building any plugin failed with "the package at '/Users/runner/work/stackbar/stackbar' cannot be accessed".
 - **The log names slow plugins.** When a plugin takes a second or more to answer the palette, the log says which command it was and how long it took, and a command a plugin runs is logged only when it is slow, fails or times out. Before, every run was logged, so a plugin that checks something every few seconds filled the log within hours and pushed out the lines that mattered.

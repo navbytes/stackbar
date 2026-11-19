@@ -710,8 +710,39 @@ final class PaletteSession {
             problem = view.problem ?? "\(view.entry.pluginName) isn't running"
             return
         }
+        // Last time's list, drawn while the plugin searches: its rows belong
+        // to an older session, so run the same row once the answer is in.
+        if view.isShowingPlaceholder {
+            if let key = view.root?.rows.first(where: { $0.actions.contains { $0.id == action.id } })?.key {
+                performWhenAnswered(action, key: key, in: view)
+            }
+            return
+        }
         guard view.perform(action.id) else { return }
         finish()
+    }
+
+    /// Waits (a few seconds at most) for a view's first answer, then runs
+    /// the action of the same title on the row with `key` in it.
+    private func performWhenAnswered(_ action: ActionRef, key: String, in view: CommandViewModel) {
+        let shown = shownCount
+        Task { @MainActor [weak self] in
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while view.isShowingPlaceholder, view.canAct, ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+            guard let self, self.shownCount == shown, !view.isClosed else { return }
+            guard !view.isShowingPlaceholder else {
+                self.problem = view.canAct ? "\(view.entry.pluginName) is still loading. Press Return again." : (view.problem ?? "\(view.entry.pluginName) isn't running")
+                return
+            }
+            let fresh = view.root?.rows.first { $0.key == key }
+            guard let ref = fresh?.actions.first(where: { $0.title == action.title }) ?? fresh?.actions.first else {
+                self.problem = "That result is gone now."
+                return
+            }
+            self.perform(ref, in: view)
+        }
     }
 
     /// Any other control in a view (a button, a field, a form): sent, and the
