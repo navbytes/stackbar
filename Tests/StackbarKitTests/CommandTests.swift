@@ -127,6 +127,7 @@ final class CommandTests: XCTestCase {
         let (plugin, runtime, outbox) = await start()
         _ = outbox.take()
         await runtime.handle(.openView(session: 7, command: "search", query: CommandQuery(text: "ap"), seq: 1, context: nil))
+        await runtime.waitForRefreshes()
         var sent = views(outbox.take())
         XCTAssertEqual(sent.count, 1)
         XCTAssertEqual(sent[0].session, 7)
@@ -139,6 +140,7 @@ final class CommandTests: XCTestCase {
 
         // Same tree for a new query is still sent, so the host can clear "Searching…".
         await runtime.handle(.updateView(session: 7, query: CommandQuery(text: "ap"), seq: 2))
+        await runtime.waitForRefreshes()
         sent = views(outbox.take())
         XCTAssertEqual(sent.map(\.seq), [2])
 
@@ -161,6 +163,7 @@ final class CommandTests: XCTestCase {
         let (plugin, runtime, outbox) = await start()
         _ = outbox.take()
         await runtime.handle(.openView(session: 1, command: "new", query: CommandQuery(), seq: 1, context: nil))
+        await runtime.waitForRefreshes()
         guard case .form(let form) = views(outbox.take()).first?.root else { return XCTFail("expected a form") }
         XCTAssertEqual(form.fields.map(\.name), ["name", "ripe"])
         XCTAssertEqual(form.submitTitle, "Add")
