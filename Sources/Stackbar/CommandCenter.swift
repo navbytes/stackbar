@@ -29,6 +29,8 @@ final class CommandCenter {
     @ObservationIgnored private var hotKeys: [CommandKey: (spec: String, hotKey: HotKey)] = [:]
     @ObservationIgnored private var views: [Int: CommandViewModel] = [:]
     @ObservationIgnored private var nextSession = 1
+    /// The list each view command showed last, drawn while it opens again.
+    @ObservationIgnored private var viewTrees = ViewTreeCache()
     @ObservationIgnored private let indexer = CommandSpotlightIndexer()
     /// How quickly each root search answers; a slow one sits out a while.
     @ObservationIgnored let rootBudget = RootSearchBudget()
@@ -292,8 +294,15 @@ final class CommandCenter {
         if recordUse { memory.used(key) }
         let session = nextSession
         nextSession += 1
-        let view = CommandViewModel(session: session, entry: entry, supervisor: supervisor, query: query, context: context) { [weak self] in
+        // Root search opens views the user didn't choose and draws only a
+        // few rows: last time's list is for a view the user opened.
+        let treeKey = ViewTreeCache.Key(command: key, query: query)
+        let placeholder = recordUse ? viewTrees.tree(for: treeKey) : nil
+        let view = CommandViewModel(session: session, entry: entry, supervisor: supervisor, query: query, context: context, placeholder: placeholder) { [weak self] in
             self?.views[session] = nil
+        }
+        if recordUse {
+            view.onAnswer = { [weak self] root in self?.viewTrees.remember(root, for: treeKey) }
         }
         views[session] = view
         view.start()
@@ -309,7 +318,10 @@ final class CommandCenter {
     /// with the old process, so they wait and open again once it runs.
     /// Failed or stopped: they say so, instead of spinning forever.
     func pluginStateChanged(_ pluginID: String, _ state: PluginSupervisor.State) {
-        if case .restarting = state { rootBudget.forget(pluginID: pluginID) }
+        if case .restarting = state {
+            rootBudget.forget(pluginID: pluginID)
+            viewTrees.forget(pluginID: pluginID) // it may have been updated
+        }
         for view in views.values where view.entry.pluginID == pluginID { view.pluginState(state) }
     }
 
@@ -385,6 +397,10 @@ final class CommandViewModel: Identifiable {
 
     /// Runs when a submitted form comes back without errors.
     @ObservationIgnored var onFinished: (() -> Void)?
+    /// Runs with each answer to the query the view opened with, to keep it
+    /// for next time (`ViewTreeCache`).
+    @ObservationIgnored var onAnswer: ((ViewNode) -> Void)?
+    @ObservationIgnored private let openedWith: CommandQuery
     @ObservationIgnored private var view: CommandView
     @ObservationIgnored private let supervisor: PluginSupervisor
     /// What the user was in when the view was opened.
@@ -394,6 +410,9 @@ final class CommandViewModel: Identifiable {
     var isClosed: Bool { view.isClosed }
     /// Whether an action can reach the plugin now.
     var canAct: Bool { view.canAct }
+    /// Showing last time's list until the plugin answers: its rows can't be
+    /// sent yet.
+    var isShowingPlaceholder: Bool { view.isShowingPlaceholder }
     /// Stopped or failed: nothing will answer.
     var isStopped: Bool { view.isStopped }
     /// Messages to the plugin go out in order: an action before the close
@@ -402,7 +421,8 @@ final class CommandViewModel: Identifiable {
     /// Drops an armed confirmation when its window passes.
     @ObservationIgnored private var confirmExpiry: Task<Void, Never>?
 
-    init(session: Int, entry: CommandRegistry.Entry, supervisor: PluginSupervisor, query: CommandQuery, context: InvocationContext? = nil, onClose: @escaping () -> Void) {
+    init(session: Int, entry: CommandRegistry.Entry, supervisor: PluginSupervisor, query: CommandQuery, context: InvocationContext? = nil,
+         placeholder: ViewNode? = nil, onClose: @escaping () -> Void) {
         id = session
         self.entry = entry
         self.supervisor = supervisor
@@ -411,7 +431,9 @@ final class CommandViewModel: Identifiable {
         self.query = query.text
         let arguments = CommandStart.filled(entry.spec, query.arguments)
         self.arguments = arguments
-        view = CommandView(session: session, pluginName: entry.pluginName, query: CommandQuery(text: query.text, arguments: arguments))
+        openedWith = CommandQuery(text: query.text, arguments: arguments)
+        view = CommandView(session: session, pluginName: entry.pluginName, query: openedWith, placeholder: placeholder)
+        root = view.shownRoot
     }
 
     func start() {
@@ -428,6 +450,7 @@ final class CommandViewModel: Identifiable {
             self.root = view.shownRoot ?? root
             answers = view.answers
             answeredAt = Date()
+            if !view.isSearching, view.query == openedWith { onAnswer?(root) }
         }
         deliver(result.sends)
         if result.finished { onFinished?() }

@@ -45,17 +45,25 @@ public struct CommandView: Sendable {
     /// The view's own "press again" (`ActionConfirmer`), apart from the
     /// panel's.
     public private(set) var confirmer = ActionConfirmer()
+    /// The tree this command showed last time (`ViewTreeCache`), drawn until
+    /// the plugin's first answer so the view opens full instead of empty.
+    /// Its actions belong to an older session: nothing in it can be sent.
+    public private(set) var placeholder: ViewNode?
 
-    public init(session: Int, pluginName: String, query: CommandQuery) {
+    public init(session: Int, pluginName: String, query: CommandQuery, placeholder: ViewNode? = nil) {
         self.session = session
         self.pluginName = pluginName
         self.query = query
+        self.placeholder = placeholder
         state = ViewSessionState(session: session, query: query)
     }
 
     public var root: ViewNode? { state.root }
     /// `root` as the palette draws it: an armed action says "Press again".
-    public var shownRoot: ViewNode? { root.map { confirmer.decorate($0, surface: nil) } }
+    /// Before the first answer, the placeholder.
+    public var shownRoot: ViewNode? { root.map { confirmer.decorate($0, surface: nil) } ?? placeholder }
+    /// Showing last time's tree: its rows wait for the first answer.
+    public var isShowingPlaceholder: Bool { root == nil && placeholder != nil }
     /// Waiting for the plugin to answer the newest query.
     public var isSearching: Bool { isWaitingForPlugin || (!isStopped && !isClosed && state.isSearching) }
     /// Whether an action can reach the plugin now. After a close the plugin
@@ -83,6 +91,7 @@ public struct CommandView: Sendable {
         var result = Received(shown: show, sends: next.map { [Self.send($0)] } ?? [])
         guard show else { return result }
         answers += 1
+        placeholder = nil
         problem = nil
         confirmer.rendered(root, surface: nil)
         if submitting {
@@ -96,7 +105,7 @@ public struct CommandView: Sendable {
     /// press (show its prompt, send nothing); `.send` means go on to
     /// `perform`. A view that can't act holds nothing.
     public mutating func confirm(_ action: ActionID, now: Date = Date()) -> ActionConfirmer.Outcome {
-        guard canAct else { return .send }
+        guard canAct, !isShowingPlaceholder else { return .send }
         return confirmer.press(action, surface: nil, in: root, now: now)
     }
 
@@ -115,7 +124,7 @@ public struct CommandView: Sendable {
     /// An action inside the view. A submitted form (`.fields`) waits for its
     /// answer, which says whether it finished.
     public mutating func perform(_ action: ActionID, _ value: EventValue? = nil) -> [Send] {
-        guard canAct else { return [] }
+        guard canAct, !isShowingPlaceholder else { return [] }
         if case .fields = value { submitting = true }
         return [.event(action, value)]
     }
