@@ -6,6 +6,8 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Fixed
+- **`stackbarctl render` works on installed plugins.** Run from your PATH (the installer's link), stackbarctl looked for StackbarKit in the folder Stackbar was built in instead of the copy inside the app, so building any plugin failed with "the package at '/Users/runner/work/stackbar/stackbar' cannot be accessed".
+- **The log names slow plugins.** When a plugin takes a second or more to answer the palette, the log says which command it was and how long it took, and a command a plugin runs is logged only when it is slow, fails or times out. Before, every run was logged, so a plugin that checks something every few seconds filled the log within hours and pushed out the lines that mattered.
 - **Typing Japanese, Chinese or Korean in the palette works.** While an input method was composing, ↑ and ↓ moved the palette's selection instead of choosing a candidate, and Tab left for Ask AI. The palette and plugins' Filter fields now leave every key to the input method until the text is confirmed.
 - **Esc goes back to the row you came from.** Leaving a command with Esc used to put the palette back on its first result; it now returns to the row that opened the command, at every level.
 - **A settings file Stackbar can't read is kept, not overwritten.** If a file such as plugin approvals, command aliases and hotkeys, folder grants or the installed-plugin list was damaged, or was written by a newer Stackbar before you went back to an older one, Stackbar started it empty and the next save replaced it. It is now moved aside as `<name>.corrupt-<time>` and the log says so, so what it held can be put back.

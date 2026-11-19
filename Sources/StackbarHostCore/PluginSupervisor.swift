@@ -46,6 +46,7 @@ public actor PluginSupervisor {
     private let services: HostServices?
     private var inFlight = 0
     private var logBudget = LogBudget()
+    private var slowAnswers = SlowAnswers()
     private let onUpdate: @Sendable (Update) -> Void
     /// The capabilities the user approved; host calls are checked against
     /// these, not against whatever the manifest asks for.
@@ -237,14 +238,17 @@ public actor PluginSupervisor {
     /// Opens a command view. Its trees arrive as `.view` updates.
     public func openView(session: Int, command: String, query: CommandQuery, seq: Int, context: InvocationContext? = nil) {
         let context = granted.capabilities.contains(.context) ? context : nil
+        slowAnswers.opened(session: session, command: command, seq: seq)
         send(.openView(session: session, command: command, query: query, seq: seq, context: context))
     }
 
     public func updateView(session: Int, query: CommandQuery, seq: Int) {
+        slowAnswers.updated(session: session, seq: seq)
         send(.updateView(session: session, query: query, seq: seq))
     }
 
     public func closeView(session: Int) {
+        slowAnswers.closed(session: session)
         send(.closeView(session: session))
     }
 
@@ -259,6 +263,7 @@ public actor PluginSupervisor {
     private func spawn() async {
         generation += 1
         let current = generation
+        slowAnswers.reset()
         setState(.starting)
         let storage = await services?.storage.snapshot(for: manifest.id) ?? [:]
         guard current == generation, !stopping else { return }
@@ -395,6 +400,7 @@ public actor PluginSupervisor {
         case .message(.commandResult(let id, let result)):
             finishCommandCall(id, result, generation: eventGeneration)
         case .message(.view(let session, let seq, let root)):
+            if let slow = slowAnswers.answered(session: session, seq: seq) { onUpdate(.log(.warning, slow)) }
             onUpdate(.view(session: session, seq: seq, root: withinLimits(root)))
         case .stderr(let line):
             emitPluginLog(.debug, line)
