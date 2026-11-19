@@ -226,9 +226,13 @@ public struct RowNode: Codable, Equatable, Sendable {
     /// For data rows (clipboard history) that would flood the palette.
     /// Protocol 22.
     public var hiddenFromPalette: Bool?
+    /// Words a searchable list matches but doesn't show: a tab's full
+    /// address, a file's path, an alias. Protocol 30.
+    public var keywords: [String]?
 
     public init(key: String, title: String, subtitle: String? = nil, symbol: String? = nil, appIcon: String? = nil, fileIcon: String? = nil,
-                accessories: [ViewNode] = [], actions: [ActionRef] = [], preview: RowPreview? = nil, hiddenFromPalette: Bool? = nil) {
+                accessories: [ViewNode] = [], actions: [ActionRef] = [], preview: RowPreview? = nil, hiddenFromPalette: Bool? = nil,
+                keywords: [String]? = nil) {
         self.key = key
         self.title = title
         self.subtitle = subtitle
@@ -239,6 +243,7 @@ public struct RowNode: Codable, Equatable, Sendable {
         self.actions = actions
         self.preview = preview
         self.hiddenFromPalette = hiddenFromPalette
+        self.keywords = keywords
     }
 }
 

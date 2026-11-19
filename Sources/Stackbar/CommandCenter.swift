@@ -310,8 +310,8 @@ final class CommandCenter {
     }
 
     /// A plugin sent a tree for one of its views.
-    func received(session: Int, seq: Int, root: ViewNode) {
-        views[session]?.received(seq: seq, root: root)
+    func received(session: Int, seq: Int, root: ViewNode, loading: Bool = false) {
+        views[session]?.received(seq: seq, root: root, loading: loading)
     }
 
     /// The plugin's process changed state. Restarting: its views are gone
@@ -388,6 +388,9 @@ final class CommandViewModel: Identifiable {
     }
     private(set) var root: ViewNode?
     private(set) var isSearching = true
+    /// Searching, or the plugin fetching behind what it shows: the palette's
+    /// loading bar.
+    private(set) var isLoading = true
     private(set) var problem: String?
     /// Counts the trees shown, so root search filters rows once per answer.
     /// Observed: a list that reads only this redraws when an answer arrives.
@@ -444,8 +447,8 @@ final class CommandViewModel: Identifiable {
         deliver(view.change(CommandQuery(text: query, arguments: arguments)))
     }
 
-    func received(seq: Int, root: ViewNode) {
-        let result = view.received(seq: seq, root: root)
+    func received(seq: Int, root: ViewNode, loading: Bool = false) {
+        let result = view.received(seq: seq, root: root, loading: loading)
         if result.shown {
             self.root = view.shownRoot ?? root
             answers = view.answers
@@ -507,6 +510,7 @@ final class CommandViewModel: Identifiable {
     private func deliver(_ sends: [CommandView.Send]) {
         problem = view.problem
         isSearching = view.isSearching
+        isLoading = view.isLoading
         guard !sends.isEmpty else { return }
         let session = id
         let command = entry.spec.id

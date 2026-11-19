@@ -5,6 +5,10 @@ window. Write for people who use Stackbar, not for the code.
 
 ## Unreleased
 
+### Added
+- **The palette shows when a plugin is still loading.** The loading bar under the search field now stays on while a plugin fetches fresh data behind the list it shows, not only while it answers what you typed, so a list that may be out of date never looks finished.
+- **`Stackbar.cached`, `Stackbar.updating` and row keywords for plugin authors.** `cached` shows what a plugin already has at once and fetches fresh in the background; `updating` turns the palette's loading bar on while your own fetch runs; `Row(...).keywords([...])` lets a searchable list match words it doesn't show, such as a tab's full address. Plugins use protocol 30.
+
 ### Fixed
 - **Plugin searches open full.** Opening a plugin's search in the palette again (Browser Tabs, Docker, PR Cockpit and the like) shows the list it had last time straight away, instead of an empty palette while the plugin looks again; the fresh list replaces it when it lands. Press Return on a row before then and it runs on that same row once the fresh list is in. Every plugin gets this with the update.
 - **Plugins answer clicks and Return while they search.** In a plugin's palette view, picking a row or pressing Return no longer waits for the search behind it (a slow API, a browser with many tabs) to finish, and typing a newer query or leaving the view stops the old search instead of letting it finish first. Every plugin gets this with the update; none has to change.

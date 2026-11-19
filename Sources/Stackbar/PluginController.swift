@@ -528,8 +528,8 @@ final class PluginController: Identifiable {
         case .commands(let specs):
             commands = specs
             model?.commands.commandsChanged(self, specs)
-        case .view(let session, let seq, let root):
-            model?.commands.received(session: session, seq: seq, root: root)
+        case .view(let session, let seq, let root, let loading):
+            model?.commands.received(session: session, seq: seq, root: root, loading: loading)
         case .settled(let count):
             settledCount = count
             if activity.applyingTarget != nil { activity.settled(count: count) }

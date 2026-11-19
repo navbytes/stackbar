@@ -262,8 +262,8 @@ public actor PluginSession {
                 let sends = commandViews[session]?.pluginState(state) ?? []
                 if !sends.isEmpty { Task { await self.deliver(sends, session: session) } }
             }
-        case .view(let session, let seq, let root):
-            guard let result = commandViews[session]?.received(seq: seq, root: root) else { return }
+        case .view(let session, let seq, let root, let loading):
+            guard let result = commandViews[session]?.received(seq: seq, root: root, loading: loading) else { return }
             if result.finished { finishedForms.insert(session) }
             if !result.sends.isEmpty { Task { await self.deliver(result.sends, session: session) } }
             return

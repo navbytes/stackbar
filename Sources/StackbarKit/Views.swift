@@ -150,6 +150,7 @@ public struct Row: StackbarView {
     var preview: RowPreview?
     var previewView: ViewContent?
     var hiddenFromPalette: Bool?
+    var keywords: [String]?
 
     /// `key` defaults to the title; give one explicitly when titles can repeat
     /// or change (an id from your data is ideal).
@@ -183,6 +184,18 @@ public struct Row: StackbarView {
     public func hiddenFromPalette(_ hidden: Bool = true) -> Row {
         var copy = self
         copy.hiddenFromPalette = hidden ? true : nil
+        return copy
+    }
+
+    /// Words a searchable list (`List(searchable: true)`) matches without
+    /// showing them: a tab's full address, a file's path, an alias. The
+    /// palette filters on them as the user types, with no round trip to the
+    /// plugin. Up to 20 words of 1,000 characters each. Stackbar 0.41.0 and
+    /// later; older hosts ignore them.
+    public func keywords(_ words: [String]) -> Row {
+        var copy = self
+        let kept = words.prefix(20).map { String($0.prefix(1_000)) }
+        copy.keywords = kept.isEmpty ? nil : Array(kept)
         return copy
     }
 
@@ -248,7 +261,7 @@ public struct Row: StackbarView {
             let id = action.handler.map { context.register(base, confirm: action.confirm, $0) } ?? ActionID(context.prefix + base)
             return ActionRef(id: id, title: action.title, shortcut: action.shortcut, role: action.role, navigate: action.navigate, confirm: action.confirm)
         }
-        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, fileIcon: fileIcon, accessories: accessories, actions: refs, preview: resolvedPreview(in: context), hiddenFromPalette: hiddenFromPalette))]
+        return [.row(RowNode(key: key, title: title, subtitle: subtitle, symbol: symbol, appIcon: appIcon, fileIcon: fileIcon, accessories: accessories, actions: refs, preview: resolvedPreview(in: context), hiddenFromPalette: hiddenFromPalette, keywords: keywords))]
     }
 
     /// The preview with its view resolved, on hosts that draw one and while

@@ -220,7 +220,9 @@ public enum RowFilter {
             let title = TextMatch.score(query, in: row.title)
             let subtitle = row.subtitle.flatMap { TextMatch.score(query, in: $0) }.map { $0 - 50 }
             let preview = row.preview?.text.flatMap { $0.lowercased().contains(query.lowercased()) ? 300 : nil }
-            return [title, subtitle, preview].compactMap { $0 }.max()
+            // Hidden words rank below what the row shows, as a subtitle does.
+            let keyword = row.keywords?.compactMap { TextMatch.score(query, in: $0) }.max().map { $0 - 60 }
+            return [title, subtitle, preview, keyword].compactMap { $0 }.max()
         }
     }
 
