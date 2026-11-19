@@ -80,16 +80,34 @@ public enum StackbarPaths {
     /// then a copy bundled next to the running executable
     /// (`../Resources/StackbarKit` in an app bundle), then the source checkout this
     /// binary was built from.
-    public static func stackbarPackage(sourceFile: String = #filePath) -> URL {
+    ///
+    /// The executable is found from the running process, not `argv[0]`: run
+    /// as `stackbarctl` from PATH (the installer's `~/.local/bin` link),
+    /// `argv[0]` is the bare name, which resolved against the current folder
+    /// and missed the bundled copy, so plugin builds looked for the CI
+    /// checkout the release was built in.
+    public static func stackbarPackage(sourceFile: String = #filePath, executable: URL? = runningExecutable) -> URL {
         if let override = ProcessInfo.processInfo.environment["STACKBAR_PACKAGE"] {
             return URL(fileURLWithPath: override)
         }
-        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-        let bundled = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources/StackbarKit", isDirectory: true)
-        if FileManager.default.fileExists(atPath: bundled.appendingPathComponent("Package.swift").path) {
-            return bundled
-        }
+        if let executable, let bundled = bundledPackage(beside: executable) { return bundled }
         // Sources/StackbarHostCore/StackbarPaths.swift → the package root.
         return URL(fileURLWithPath: sourceFile).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    /// This process's executable as a full path.
+    public static var runningExecutable: URL? {
+        if let url = Bundle.main.executableURL { return url }
+        let argument = CommandLine.arguments.first ?? ""
+        return argument.contains("/") ? URL(fileURLWithPath: argument) : nil
+    }
+
+    /// The StackbarKit copy an app bundle carries beside its executable
+    /// (`Contents/MacOS/stackbarctl` → `Contents/Resources/StackbarKit`),
+    /// following a link to the executable first.
+    static func bundledPackage(beside executable: URL) -> URL? {
+        let executable = executable.resolvingSymlinksInPath()
+        let bundled = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources/StackbarKit", isDirectory: true)
+        return FileManager.default.fileExists(atPath: bundled.appendingPathComponent("Package.swift").path) ? bundled : nil
     }
 }

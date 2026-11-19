@@ -283,8 +283,22 @@ public final class CommandRunGate: @unchecked Sendable {
             if list.count > 50 { list.removeFirst(list.count - 50) }
             records[pluginID] = list
         }
+        // Only runs worth a look reach the log: slow, timed out, cancelled
+        // or failing. A plugin that polls every few seconds wrote a line a
+        // run, rolled the log within hours, and buried the slow runs this is
+        // for. Every run stays in `recentRuns` (the plugin's Settings page).
+        guard Self.isNotable(record) else { return }
         let how = result.timedOut ? "timed out" : (run.wasCancelled ? "cancelled" : "exit \(result.status)")
-        log(pluginID, "ran \(path) (\(arguments) arguments): \(how) in \(String(format: "%.2f", result.duration))s, \(record.stdoutBytes) + \(record.stderrBytes) bytes")
+        let slow = record.duration >= Self.slowRun ? "slow: " : ""
+        log(pluginID, "\(slow)ran \(path) (\(arguments) arguments): \(how) in \(String(format: "%.2f", result.duration))s, \(record.stdoutBytes) + \(record.stderrBytes) bytes")
+    }
+
+    /// A run this long is logged even when it succeeds.
+    public static let slowRun: Double = 1
+
+    /// Whether a finished run goes to the log.
+    public static func isNotable(_ record: Record) -> Bool {
+        record.duration >= slowRun || record.timedOut || record.cancelled || record.status != 0
     }
 }
 
