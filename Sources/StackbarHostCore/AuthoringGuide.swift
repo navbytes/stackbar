@@ -147,6 +147,25 @@ var commands: [Command] {
 }
 ```
 
+A search runs in the background, like a refresh: a click, Return or Esc in
+the view is handled while it waits, a newer query cancels it (a cancelled
+`Stackbar` call throws `CancellationError`), and closing the view cancels it.
+The view keeps showing its last answer until the search returns. Keep
+`search` quick anyway: the user sees "Searching…" until it does. Filter the
+data you already hold and answer; when it may be out of date, fetch fresh in
+your own `Task` and call `Stackbar.redraw()` when it lands. Await a load only
+the first time, when there is nothing to show yet:
+
+```swift
+.view(search: { invocation in
+    self.query = invocation.text
+    if self.loadedAt == nil { try await self.load() }      // first open: nothing to show
+    else if self.loadedAt!.timeIntervalSinceNow < -30, self.reloading == nil {
+        self.reloading = Task { try? await self.load(); self.reloading = nil; Stackbar.redraw() }
+    }
+}) { _ in List(self.items.filter { $0.matches(self.query) }) { … } }
+```
+
 The palette's main search lists commands, as Raycast's root search does:
 your panel's buttons, toggles and rows are not in it (0.37.0). Anything worth
 reaching from the keyboard should be a command; each plugin with a panel also

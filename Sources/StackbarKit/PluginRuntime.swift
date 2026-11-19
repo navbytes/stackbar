@@ -1,15 +1,20 @@
 /// Runs one plugin against the host's messages.
 ///
-/// Messages are handled in order, one at a time, with one exception: a
-/// refresh the host asks for (`trigger`) runs in the background, so a click
-/// or a palette search that arrives while it waits on the network is handled
+/// Messages are handled in order, one at a time, with two exceptions: a
+/// refresh the host asks for (`trigger`) and a command view's search
+/// (`openView`, `updateView`) run in the background, so a click, a Return or
+/// a palette search that arrives while one waits on the network is handled
 /// at once instead of after it. Everything runs on the main actor, so plugin
 /// code still needs no locking; it only has to expect that state can change
 /// at an `await` inside `refresh()`. At most one refresh runs: triggers that
 /// arrive during one fold into a single follow-up, and `Stackbar.refresh()`
 /// replaces a running one (cancelling it) rather than racing it. A trigger is
 /// `settled` when its refresh has finished, so the host's count of handled
-/// messages stays honest. Previews keep the old order: they never refresh.
+/// messages stays honest. A search answers with its view and settles when it
+/// ends; a newer query for the same view cancels it and runs once it has
+/// wound down, and closing the view cancels it. While it runs, other draws
+/// of that view go out under the last answered seq, so the host never takes
+/// a half-searched tree as the answer. Previews keep the old order.
 /// Host call responses bypass this queue (see `HostClient`).
 @MainActor
 public final class PluginRuntime {
@@ -36,6 +41,17 @@ public final class PluginRuntime {
     private var followUp: (reason: TriggerReason, settles: Int)?
     private var nextRefreshID = 0
 
+    /// Searches running now, by view session.
+    private var searches: [Int: Search] = [:]
+    private var nextSearchID = 0
+
+    private struct Search {
+        var id: Int
+        var task: Task<Void, Never>
+        /// The `settled` messages owed once it finishes.
+        var settles: Int
+    }
+
     private typealias RefreshTask = Task<Result<Void, any Error>, Never>
 
     private struct Refresh {
@@ -49,6 +65,8 @@ public final class PluginRuntime {
         var command: String
         var invocation: CommandInvocation
         var seq: Int
+        /// The newest seq answered, which draws use while a search runs.
+        var answered: Int?
         var lastRoot: ViewNode?
         var handlers: [ActionID: RenderContext.Handler] = [:]
     }
@@ -81,14 +99,71 @@ public final class PluginRuntime {
             startRefresh(reason: reason, settles: 1 + absorbed)
             return true
         }
+        if preview == nil {
+            switch message {
+            case .openView(let session, let command, let query, let seq, let context):
+                let invocation = CommandInvocation(text: query.text, arguments: query.arguments, source: .palette, context: context)
+                views[session] = OpenView(command: command, invocation: invocation, seq: seq)
+                startSearch(session, settles: 1 + absorbed)
+                return true
+            case .updateView(let session, let query, let seq):
+                guard var view = views[session] else { break }
+                view.invocation.text = query.text
+                view.invocation.arguments = query.arguments
+                view.seq = seq
+                views[session] = view
+                startSearch(session, settles: 1 + absorbed)
+                return true
+            default:
+                break
+            }
+        }
         let goOn = await handleInOrder(message)
         for _ in 0..<absorbed { send(.settled) }
         return goOn
     }
 
-    /// Waits until no refresh is running or waiting (tests, and a clean exit).
+    /// Waits until no refresh or search is running or waiting (tests, and a
+    /// clean exit).
     public func waitForRefreshes() async {
-        while let running = refreshing { _ = await running.task.value }
+        while true {
+            if let running = refreshing {
+                _ = await running.task.value
+            } else if let search = searches.values.first {
+                await search.task.value
+            } else {
+                return
+            }
+        }
+    }
+
+    // MARK: Searches
+
+    /// Searches a view in the background, after any search of the same view
+    /// has wound down (cancelled: its query is out of date), so a plugin's
+    /// `search` never runs twice at once for one view.
+    private func startSearch(_ session: Int, settles: Int) {
+        let previous = searches[session]
+        previous?.task.cancel()
+        nextSearchID += 1
+        let id = nextSearchID
+        let task = Task { [weak self] in
+            if let previous { await previous.task.value }
+            if !Task.isCancelled { await self?.searchView(session) }
+            self?.searchFinished(session: session, id: id)
+        }
+        searches[session] = Search(id: id, task: task, settles: settles + (previous?.settles ?? 0))
+    }
+
+    private func searchFinished(session: Int, id: Int) {
+        guard let done = searches[session], done.id == id else { return } // replaced
+        searches[session] = nil
+        if var view = views[session], !done.task.isCancelled {
+            view.answered = view.seq
+            views[session] = view
+            render(forcing: session)
+        }
+        for _ in 0..<done.settles { send(.settled) }
     }
 
     // MARK: Refreshes
@@ -244,6 +319,7 @@ public final class PluginRuntime {
             }
         case .closeView(let session):
             views[session] = nil
+            searches[session]?.task.cancel()
         case .runOutput, .runExit:
             // The transport hands these to `HostClient` directly; a test
             // driving the runtime by hand lands here.
@@ -321,9 +397,12 @@ public final class PluginRuntime {
             }
             view.handlers = context.handlers
             for warning in context.warnings { send(.log(level: .warning, message: warning)) }
-            if root != view.lastRoot || session == forced {
+            // A search still running owes the host its answer: until then
+            // draws go out as updates to the last answer, or not at all.
+            let seq = searches[session] == nil ? view.seq : view.answered
+            if let seq, root != view.lastRoot || session == forced {
                 view.lastRoot = root
-                send(.view(session: session, seq: view.seq, root: root))
+                send(.view(session: session, seq: seq, root: root))
             }
             views[session] = view
         }
@@ -331,7 +410,13 @@ public final class PluginRuntime {
 
     private func searchView(_ session: Int) async {
         guard let view = views[session], let search = command(view.command)?.search else { return }
-        await run("search \(view.command)") { try await search(view.invocation) }
+        do {
+            try await search(view.invocation)
+        } catch {
+            // A newer query or a close cancelled it: nothing went wrong.
+            if Task.isCancelled || error is CancellationError { return }
+            send(.log(level: .error, message: "search \(view.command) failed: \(error)"))
+        }
     }
 
     private func runCommand(id: Int, command name: String, invocation: CommandInvocation) async {
