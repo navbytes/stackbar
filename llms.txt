@@ -95,8 +95,24 @@ cut to fit and refreshed by the host. Buttons, toggles, tappable content and
 rows act there too: a press reaches the plugin through Stackbar like a panel
 click, while Stackbar runs (0.21.0). Fields, pickers and sliders are drawn
 as look-alikes you can't edit, so give a widget one or two big actions, not
-a form. One tree serves every size: a list shows 3 rows small, 4 medium and
-9 large, and `render --surface widget --png` draws all three side by side.
+a form. Like Scriptable's `config.widgetFamily`, a widget can draw each
+desktop size its own way (protocol 31, Stackbar 0.42.0):
+
+```swift
+func widget(_ size: WidgetSize) -> ViewContent {
+    switch size {
+    case .small: VStack { Text(city).typography(.caption); Clock("HH:mm") }
+    case .medium: widget
+    case .large: VStack { widget; List { ForEach(upcoming) { Row($0.title, key: $0.id) } } }
+    }
+}
+```
+
+A small widget is about 170 points square, a medium one twice as wide, a
+large one twice as tall again. Stackbar asks only for the sizes on the
+desktop; without `widget(_:)`, or on an older Stackbar, `widget` shows at
+every size and a list shows 3 rows small, 4 medium and 9 large.
+`render --surface widget --png` draws all three side by side.
 
 Like a Scriptable widget's background, a widget's background fills it edge
 to edge: make the root a `ZStack` that opens with shapes or `Image(url:)`

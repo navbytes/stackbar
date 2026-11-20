@@ -16,18 +16,28 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// The extension can't fetch them itself. Nil in snapshots written
     /// before widgets showed remote images.
     public var images: [String]?
+    /// The tree for each widget size the plugin drew one for (protocol 31);
+    /// other sizes show `node`.
+    public var sizes: [WidgetSize: ViewNode]?
 
-    public init(pluginID: String, name: String, node: ViewNode, updatedAt: Date = Date(), images: [String]? = nil) {
+    public init(pluginID: String, name: String, node: ViewNode, updatedAt: Date = Date(), images: [String]? = nil, sizes: [WidgetSize: ViewNode]? = nil) {
         self.pluginID = pluginID
         self.name = name
         self.node = node
         self.updatedAt = updatedAt
         self.images = images
+        self.sizes = sizes
     }
+
+    /// The tree a widget of `size` shows.
+    public func node(for size: WidgetSize) -> ViewNode { sizes?[size] ?? node }
+
+    /// Every tree: the default and each size's, for image lookups.
+    public var trees: [ViewNode] { [node] + WidgetSize.allCases.compactMap { sizes?[$0] } }
 
     /// Whether the widget would draw the same: the update time aside.
     public func shows(sameAs other: WidgetSnapshot) -> Bool {
-        name == other.name && node == other.node && (images ?? []) == (other.images ?? [])
+        name == other.name && node == other.node && (images ?? []) == (other.images ?? []) && (sizes ?? [:]) == (other.sizes ?? [:])
     }
 }
 
@@ -77,6 +87,23 @@ public struct WidgetSnapshotStore: Sendable {
         try? FileManager.default.removeItem(at: file(pluginID))
         removeLegacy(pluginID)
     }
+
+    // MARK: Sizes in use
+
+    /// The widget sizes the app last found placed on the desktop and asks
+    /// plugins for (protocol 31). The extension asks the app to look again
+    /// when it is drawn at a size not in it.
+    public func placedSizes() -> [WidgetSize] {
+        JSONFile.read([WidgetSize].self, from: directory.appendingPathComponent("PlacedSizes.state"), setAside: false) ?? []
+    }
+
+    public func writePlacedSizes(_ sizes: [WidgetSize]) throws {
+        try JSONFile.write(sizes, to: directory.appendingPathComponent("PlacedSizes.state"))
+    }
+
+    /// The Darwin notification the extension posts when it is drawn at a
+    /// size the app hasn't asked plugins for.
+    public static let sizesNotification = "io.navbytes.stackbar.widget-sizes"
 
     // MARK: Remote images
 

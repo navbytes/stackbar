@@ -37,7 +37,12 @@ snapshot does, so what an author checked was not what reached the desktop:
 - `render --surface widget --png` draws small, medium and large side by side
   with the same views the extension uses.
 
-## Not in this change
+## Per-size layouts (protocol 31)
 
-Separate layouts per widget size need the plugin to know the size, which is
-a protocol change (31). Asked Naveen on 2026-11-20.
+Naveen approved on 2026-11-20. Like Scriptable's `config.widgetFamily`, a
+plugin can draw each size its own way with `func widget(_ size: WidgetSize)`,
+which defaults to `widget`. The host names the sizes placed on the desktop
+(`hello.widgetSizes`, then `HostMessage.widgetSizes` when that changes, sent
+only to plugins on 31+), and the plugin answers with `renderWidget(size:root:)`
+for each. Older plugins and older hosts keep one tree: an old kit ignores the
+extra `hello` key, and a new kit never sends `renderWidget` unless asked.

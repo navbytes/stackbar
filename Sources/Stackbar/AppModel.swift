@@ -67,6 +67,9 @@ final class AppModel {
     @ObservationIgnored private var widgetFlush: Task<Void, Never>?
     /// Presses on widget buttons, left by the widget extension.
     @ObservationIgnored private let widgetActions = WidgetActionInbox.shared()
+    /// The widget sizes placed on the desktop, which plugins on protocol 31
+    /// draw a tree for.
+    @ObservationIgnored private(set) var placedWidgetSizes: [WidgetSize] = []
     /// Which plugin tools agents may use (Settings → Agents).
     @ObservationIgnored let agentConsent = AgentConsent(file: StackbarPaths.dataDirectory.appendingPathComponent("agent-tools.json"))
     /// Plugins run in the App Sandbox unless `STACKBAR_SANDBOX=0` (for
@@ -201,6 +204,7 @@ final class AppModel {
         self.watcher = watcher
         updateAgentGateway()
         listenForWidgetActions()
+        listenForWidgetSizes()
         Task {
             await loadAfterFetchingHelpers(waiting)
             await checkStore()
@@ -522,6 +526,30 @@ final class AppModel {
         drainWidgetActions()
     }
 
+    /// The extension asks for a fresh look when it is drawn at a size the
+    /// app hasn't asked plugins for (a widget just added); the app also looks
+    /// at launch and after writing widgets.
+    private func listenForWidgetSizes() {
+        let observer = Unmanaged.passUnretained(self).toOpaque()
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), observer, { _, observer, _, _, _ in
+            guard let observer else { return }
+            let model = Unmanaged<AppModel>.fromOpaque(observer).takeUnretainedValue()
+            Task { @MainActor in await model.checkPlacedWidgetSizes() }
+        }, WidgetSnapshotStore.sizesNotification as CFString, nil, .deliverImmediately)
+        placedWidgetSizes = widgets.placedSizes()
+        Task { await checkPlacedWidgetSizes() }
+    }
+
+    /// Asks WidgetKit which sizes are on the desktop and tells the plugins
+    /// when that changed.
+    func checkPlacedWidgetSizes() async {
+        let sizes = await Platform.placedWidgetSizes()
+        guard sizes != placedWidgetSizes else { return }
+        placedWidgetSizes = sizes
+        try? widgets.writePlacedSizes(sizes)
+        for controller in controllers { controller.widgetSizesChanged(sizes) }
+    }
+
     /// Sends each waiting widget press to its plugin, as a panel click would.
     func drainWidgetActions() {
         for press in widgetActions.drain() {
@@ -545,8 +573,12 @@ final class AppModel {
         guard let node = controller.widget else { return }
         // The remote images fetched so far; the rest draw their placeholders
         // until they load, which calls this again.
-        let images = node.imageURLs.prefix(WidgetImages.maxPerWidget).filter { services.images.data(for: $0) != nil }
-        let snapshot = WidgetSnapshot(pluginID: controller.pluginID, name: controller.name, node: node, images: images.isEmpty ? nil : Array(images))
+        let sizes = controller.widgetSizes.filter { placedWidgetSizes.contains($0.key) && $0.value != node }
+        var snapshot = WidgetSnapshot(pluginID: controller.pluginID, name: controller.name, node: node, sizes: sizes.isEmpty ? nil : sizes)
+        var seen = Set<String>()
+        let urls = snapshot.trees.flatMap(\.imageURLs).filter { seen.insert($0).inserted }
+        let images = urls.prefix(WidgetImages.maxPerWidget).filter { services.images.data(for: $0) != nil }
+        snapshot.images = images.isEmpty ? nil : Array(images)
         guard widgetQueue.change(snapshot), widgetFlush == nil else { return }
         let delay = widgetQueue.delay(now: Date())
         widgetFlush = Task { @MainActor [weak self] in
@@ -585,6 +617,7 @@ final class AppModel {
         // Removed or turned off while it was being written.
         for snapshot in snapshots where !widgetQueue.remembers(snapshot.pluginID) { widgets.remove(snapshot.pluginID) }
         Platform.reloadWidgets()
+        await checkPlacedWidgetSizes()
     }
 
     private func forgetWidget(_ pluginID: String) {

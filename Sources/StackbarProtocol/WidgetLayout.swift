@@ -33,7 +33,7 @@ public struct WidgetLayers: Equatable, Sendable {
 }
 
 /// The desktop widget sizes, as WidgetKit's families.
-public enum WidgetSize: String, Codable, Sendable, CaseIterable {
+public enum WidgetSize: String, Codable, CodingKeyRepresentable, Sendable, CaseIterable {
     case small, medium, large
 
     /// How many rows a list shows at this size: a row is about 30 points

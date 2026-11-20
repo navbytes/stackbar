@@ -24,6 +24,8 @@ public actor PluginSupervisor {
     public enum Update: Sendable {
         case state(State)
         case render(Surface, ViewNode)
+        /// The widget tree for one desktop widget size (protocol 31).
+        case renderWidget(WidgetSize, ViewNode)
         case log(LogLevel, String)
         case tools([ToolSpec])
         /// What a left click on the status item does now (`nil`: the panel).
@@ -55,6 +57,12 @@ public actor PluginSupervisor {
 
     public private(set) var state: State = .stopped
     public private(set) var views: [Surface: ViewNode] = [:]
+    /// The widget tree for each size asked for, from plugins on protocol 31.
+    public private(set) var widgetViews: [WidgetSize: ViewNode] = [:]
+    /// The desktop widget sizes to ask the plugin for (`setWidgetSizes`).
+    public private(set) var widgetSizes: [WidgetSize] = []
+    /// The protocol the running helper answered `ready` with.
+    private var pluginProtocol: Int?
     public private(set) var tools: [ToolSpec] = []
     public private(set) var commands: [CommandSpec] = []
     /// The plugin's left-click action on its status item, if it set one.
@@ -134,6 +142,17 @@ public actor PluginSupervisor {
     /// Changes what the plugin may do from now on (after an update sheet).
     public func grant(_ capabilities: [Capability]) {
         granted.capabilities = capabilities
+    }
+
+    /// Asks a plugin with a widget for a tree per desktop widget size
+    /// (protocol 31). Sent at once to a helper that speaks 31, and in
+    /// `hello` to the next one; older plugins keep one tree.
+    public func setWidgetSizes(_ sizes: [WidgetSize]) {
+        let sizes = manifest.surfaces.contains(.widget) ? WidgetSize.allCases.filter(sizes.contains) : []
+        guard sizes != widgetSizes else { return }
+        widgetSizes = sizes
+        widgetViews = widgetViews.filter { sizes.contains($0.key) }
+        if let pluginProtocol, pluginProtocol >= 31 { send(.widgetSizes(sizes)) }
     }
 
     public func send(_ message: HostMessage) {
@@ -295,7 +314,9 @@ public actor PluginSupervisor {
             }
         }
         let offered = manifest.surfaces.filter(Surface.allCases.contains)
-        helper.send(.hello(protocolVersion: StackbarProtocolVersion.current, surfaces: offered, storage: storage))
+        pluginProtocol = nil
+        widgetViews = [:]
+        helper.send(.hello(protocolVersion: StackbarProtocolVersion.current, surfaces: offered, storage: storage, widgetSizes: widgetSizes.isEmpty ? nil : widgetSizes))
         if manifest.triggers.contains(.launch) {
             helper.send(.trigger(reason: .launch))
         }
@@ -375,11 +396,17 @@ public actor PluginSupervisor {
             if version != StackbarProtocolVersion.current {
                 onUpdate(.log(.warning, "plugin speaks protocol \(version), host speaks \(StackbarProtocolVersion.current); rebuild it"))
             }
+            pluginProtocol = version
             setState(.running)
         case .message(.render(let surface, let root)):
             let root = withinLimits(root)
             views[surface] = root
             onUpdate(.render(surface, root))
+        case .message(.renderWidget(let size, let root)):
+            guard widgetSizes.contains(size) else { return }
+            let root = withinLimits(root)
+            widgetViews[size] = root
+            onUpdate(.renderWidget(size, root))
         case .message(.log(let level, let message)):
             emitPluginLog(level, message)
         case .message(.settled):

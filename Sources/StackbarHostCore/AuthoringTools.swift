@@ -11,7 +11,9 @@ import StackbarProtocol
 public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
     /// Draws a surface; the closure it gets loads the remote images the
     /// tree names, fetched beforehand.
-    public typealias PNGRenderer = @Sendable (ViewNode, Surface, @escaping @Sendable (String) -> Data?) async -> Data?
+    /// The surface's tree, the surface, the widget's tree per size (protocol
+    /// 31; empty when the plugin draws one tree) and the fetched images.
+    public typealias PNGRenderer = @Sendable (ViewNode, Surface, [WidgetSize: ViewNode], @escaping @Sendable (String) -> Data?) async -> Data?
 
     private let loader: PluginLoader
     private let services: HostServices
@@ -189,11 +191,15 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
 
     private func render(_ session: PluginSession, surfaces: [Surface], format: String) async -> MCPToolResult {
         let views = await session.shownViews()
+        let sized = await session.widgetViews()
         let declared = await session.manifest?.surfaces ?? []
         let wanted = surfaces.filter(declared.contains)
         switch format {
         case "json":
-            let byName = Dictionary(uniqueKeysWithValues: wanted.compactMap { surface in views[surface].map { (surface.rawValue, $0) } })
+            var byName = Dictionary(uniqueKeysWithValues: wanted.compactMap { surface in views[surface].map { (surface.rawValue, $0) } })
+            if wanted.contains(.widget) {
+                for (size, node) in sized { byName["widget.\(size.rawValue)"] = node }
+            }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             return .text((try? encoder.encode(byName)).map { String(decoding: $0, as: UTF8.self) } ?? "{}")
@@ -204,15 +210,25 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             let images = services.images
             for surface in wanted {
                 guard let node = views[surface] else { continue }
-                if let manifest { await images.load(node, pluginID: manifest.id, allowedHosts: manifest.networkHosts) }
-                guard let data = await png(node, surface, { images.data(for: $0) }) else { continue }
+                let sizes = surface == .widget ? sized : [:]
+                if let manifest {
+                    for tree in [node] + Array(sizes.values) { await images.load(tree, pluginID: manifest.id, allowedHosts: manifest.networkHosts) }
+                }
+                guard let data = await png(node, surface, sizes, { images.data(for: $0) }) else { continue }
                 content.append(.text(surface.rawValue))
                 content.append(.image(data, mimeType: "image/png"))
             }
             return content.isEmpty ? .text("nothing rendered", isError: true) : MCPToolResult(content)
         default:
             var text = wanted.map { surface in
-                "== \(surface.rawValue) ==\n" + (views[surface].map { TreeTextRenderer.render($0) } ?? "(nothing rendered)")
+                var section = "== \(surface.rawValue) ==\n" + (views[surface].map { TreeTextRenderer.render($0) } ?? "(nothing rendered)")
+                if surface == .widget {
+                    for size in WidgetSize.allCases {
+                        guard let tree = sized[size], tree != views[.widget] else { continue }
+                        section += "\n== widget (\(size.rawValue)) ==\n" + TreeTextRenderer.render(tree)
+                    }
+                }
+                return section
             }.joined(separator: "\n")
             if wanted.contains(.menuBar), let click = await session.menuBarClick() {
                 text += "\n(click: \(click.title) {\(click.action)})"
@@ -221,7 +237,7 @@ public final class AuthoringTools: MCPToolProvider, @unchecked Sendable {
             if !commands.isEmpty { text += "\n== commands ==\n" + commands.map(Self.describe).joined(separator: "\n") }
             let tools = await session.tools()
             if !tools.isEmpty { text += "\n== tools ==\n" + tools.map { "\($0.name): \($0.description)" }.joined(separator: "\n") }
-            text += await Self.problems(session, views: wanted.compactMap { views[$0] })
+            text += await Self.problems(session, views: wanted.compactMap { views[$0] } + (wanted.contains(.widget) ? Array(sized.values) : []))
             return .text(text)
         }
     }

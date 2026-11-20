@@ -55,7 +55,12 @@ struct Provider: AppIntentTimelineProvider {
         // The app reloads timelines whenever a plugin's widget tree changes;
         // the 15-minute policy is only a fallback.
         let first = entry(for: configuration)
-        guard let snapshot = first.snapshot, snapshot.node.changesWithTime else {
+        // A size the app hasn't asked plugins for: a widget just placed.
+        // The app looks at what is on the desktop and asks for it.
+        if !WidgetSnapshotStore.shared().placedSizes().contains(WidgetSize(context.family)) {
+            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(WidgetSnapshotStore.sizesNotification as CFString), nil, nil, true)
+        }
+        guard let snapshot = first.snapshot, snapshot.node(for: WidgetSize(context.family)).changesWithTime else {
             return Timeline(entries: [first], policy: .after(Date().addingTimeInterval(15 * 60)))
         }
         // A clock or timed progress: an entry for each coming minute, since
@@ -109,7 +114,7 @@ struct StackbarWidgetView: View {
     var body: some View {
         if let snapshot = entry.snapshot {
             let plugin = snapshot.pluginID
-            let layers = snapshot.node.widgetLayers
+            let layers = snapshot.node(for: size).widgetLayers
             // The app writes the widget's remote images beside the snapshot;
             // the extension doesn't fetch.
             let images = Set(snapshot.images ?? [])
@@ -138,11 +143,15 @@ struct StackbarWidgetView: View {
         }
     }
 
-    private var size: WidgetSize {
+    private var size: WidgetSize { WidgetSize(family) }
+}
+
+extension WidgetSize {
+    init(_ family: WidgetFamily) {
         switch family {
-        case .systemSmall: return .small
-        case .systemLarge: return .large
-        default: return .medium
+        case .systemSmall: self = .small
+        case .systemLarge: self = .large
+        default: self = .medium
         }
     }
 }

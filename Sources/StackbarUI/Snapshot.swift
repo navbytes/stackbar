@@ -10,7 +10,9 @@ import StackbarProtocol
 public enum Snapshot {
     /// `images` gives the bytes of remote images the tree names, fetched
     /// beforehand: a snapshot is drawn at once and can't wait for them.
-    public static func png(_ node: ViewNode, surface: Surface, dark: Bool = false, scale: CGFloat = 2, images: (@Sendable (String) -> Data?)? = nil) -> Data? {
+    /// `widgetSizes`: the widget's tree per size, from a plugin that draws
+    /// one per size; the others show `node`.
+    public static func png(_ node: ViewNode, surface: Surface, widgetSizes: [WidgetSize: ViewNode] = [:], dark: Bool = false, scale: CGFloat = 2, images: (@Sendable (String) -> Data?)? = nil) -> Data? {
         let content: AnyView
         switch surface {
         case .menuBar:
@@ -22,7 +24,7 @@ public enum Snapshot {
             // Every size side by side, as the desktop draws them: one tree
             // has to read well in each.
             content = AnyView(HStack(alignment: .top, spacing: 20) {
-                ForEach(WidgetSize.allCases, id: \.self) { size in WidgetPreview(node: node, size: size) }
+                ForEach(WidgetSize.allCases, id: \.self) { size in WidgetPreview(node: widgetSizes[size] ?? node, size: size) }
             }
             .padding(20))
         }
