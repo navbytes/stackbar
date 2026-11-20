@@ -45,15 +45,19 @@ public enum StackbarProtocolVersion {
     /// 29 added views in row previews, drawn display-only beside the list.
     /// 30 added `loading` on a view's answer (the plugin is still fetching
     /// behind what it shows) and hidden search keywords on rows.
-    public static let current = 30
+    /// 31 added widget sizes: the host names the desktop widget sizes in use
+    /// (`hello`, `widgetSizes`) and the plugin draws a tree for each
+    /// (`renderWidget`).
+    public static let current = 31
 }
 
 /// Host → plugin.
 public enum HostMessage: Codable, Equatable, Sendable {
     /// The first message. The plugin answers with `ready`, then renders.
     /// `storage` is the plugin's saved values (JSON strings by key), so
-    /// `@Stored` reads never wait on the host.
-    case hello(protocolVersion: Int, surfaces: [Surface], storage: [String: String] = [:])
+    /// `@Stored` reads never wait on the host. `widgetSizes` (protocol 31)
+    /// are the desktop widget sizes in use; a plugin older than 31 ignores it.
+    case hello(protocolVersion: Int, surfaces: [Surface], storage: [String: String] = [:], widgetSizes: [WidgetSize]? = nil)
     /// Run `refresh()`, then re-render.
     case trigger(reason: TriggerReason)
     /// The user acted on something the plugin rendered.
@@ -78,6 +82,10 @@ public enum HostMessage: Codable, Equatable, Sendable {
     case updateView(session: Int, query: CommandQuery, seq: Int)
     /// The view was closed or popped; its handlers can go.
     case closeView(session: Int)
+    /// The desktop widget sizes in use changed (protocol 31): the plugin
+    /// sends `renderWidget` for each and stops sending the others. Sent only
+    /// to plugins that answered `ready` with 31 or later.
+    case widgetSizes([WidgetSize])
     /// Output of a streamed `run`, whose request had this id.
     case runOutput(id: Int, channel: RunChannel, data: Data)
     /// A streamed `run` ended; nothing more comes for this id.
@@ -104,6 +112,10 @@ public enum PluginMessage: Codable, Equatable, Sendable {
     case ready(protocolVersion: Int)
     /// The whole tree for one surface. Sent only when it changed.
     case render(surface: Surface, root: ViewNode)
+    /// The widget tree for one desktop widget size the host named
+    /// (protocol 31). Sent only when it changed. A size without one shows
+    /// the `widget` surface's tree.
+    case renderWidget(size: WidgetSize, root: ViewNode)
     case log(level: LogLevel, message: String)
     /// Sent after every host message has been fully handled (refresh or action
     /// done, renders sent). Lets a host or a test know the plugin is quiet.

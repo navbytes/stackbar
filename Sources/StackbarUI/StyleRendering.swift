@@ -105,8 +105,14 @@ struct TimedFraction<Content: View>: View {
     let timing: TimeRange?
     @ViewBuilder let content: (Double) -> Content
 
+    @Environment(\.stackbarSnapshot) private var snapshot
+    @Environment(\.stackbarNow) private var now
+
     var body: some View {
-        if let timing {
+        if let timing, snapshot {
+            // One frame (a snapshot, a widget entry): as of the moment shown.
+            content(timing.fraction(at: now ?? Date()))
+        } else if let timing {
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: Date() >= timing.end)) { context in
                 content(timing.fraction(at: context.date))
             }

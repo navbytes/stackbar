@@ -75,6 +75,38 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertNil(store.read("dev.x.y"))
     }
 
+    func testWidgetImagesLiveBesideSnapshotsAndArePruned() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = WidgetSnapshotStore(directory: directory)
+        let cover = "https://example.com/cover.jpg"
+        let old = "https://example.com/old.jpg"
+        try store.writeImage(Data([1, 2, 3]), for: cover)
+        try store.writeImage(Data([4]), for: old)
+        try store.write(WidgetSnapshot(pluginID: "dev.x.music", name: "Music", node: .image(.url(cover, placeholder: nil)), images: [cover]))
+        XCTAssertEqual(store.imageData(for: cover), Data([1, 2, 3]))
+        XCTAssertTrue(store.hasImage(for: old))
+        store.pruneImages()
+        XCTAssertTrue(store.hasImage(for: cover), "a snapshot still names it")
+        XCTAssertFalse(store.hasImage(for: old), "no snapshot names it any more")
+        XCTAssertNotEqual(store.imageFile(cover), store.imageFile(old))
+        XCTAssertEqual(store.imageFile(cover), store.imageFile(cover), "stable across calls")
+    }
+
+    func testPublishQueueWritesAgainWhenImagesArrive() {
+        var queue = WidgetPublishQueue()
+        let node = ViewNode.image(.url("https://example.com/a.png", placeholder: nil))
+        XCTAssertTrue(queue.change(WidgetSnapshot(pluginID: "a", name: "A", node: node)))
+        _ = queue.take(now: Date())
+        XCTAssertFalse(queue.change(WidgetSnapshot(pluginID: "a", name: "A", node: node)))
+        XCTAssertTrue(queue.change(WidgetSnapshot(pluginID: "a", name: "A", node: node, images: ["https://example.com/a.png"])),
+                      "the same tree with its image now fetched draws differently")
+    }
+
+    func testDownsamplingLeavesNonImagesAlone() {
+        XCTAssertEqual(WidgetImages.downsampled(Data([0, 1, 2])), Data([0, 1, 2]))
+    }
+
     func testPublishQueueDropsRepeatsAndSpacesReloads() {
         var queue = WidgetPublishQueue(debounce: 0.5, minimumInterval: 5)
         let start = Date(timeIntervalSince1970: 1000)

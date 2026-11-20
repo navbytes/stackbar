@@ -31,8 +31,14 @@ public protocol StackbarPlugin: AnyObject {
     @ViewBuilder var window: ViewContent { get }
     /// The widget surface. Buttons, toggles, tappables and rows act through
     /// the app while Stackbar runs; fields, pickers and sliders are drawn
-    /// disabled. Defaults to the panel's content.
+    /// as look-alikes. Defaults to the panel's content.
     @ViewBuilder var widget: ViewContent { get }
+    /// The widget for one desktop widget size, like Scriptable's
+    /// `config.widgetFamily`: a small widget is about 170 points square, a
+    /// medium one twice as wide, a large one twice as tall again. Defaults
+    /// to `widget`. Stackbar asks only for the sizes placed on the desktop
+    /// (0.42.0, protocol 31); older hosts show `widget` at every size.
+    @ViewBuilder func widget(_ size: WidgetSize) -> ViewContent
     /// The plugin's page in Stackbar's Settings window. List `.settings` in the
     /// manifest's surfaces to get one; the panel's footer then shows a gear
     /// that opens it. Put preferences here and keep the panel for actions.
@@ -63,6 +69,7 @@ extension StackbarPlugin {
     public var panel: ViewContent { [] }
     public var window: ViewContent { panel }
     public var widget: ViewContent { panel }
+    public func widget(_ size: WidgetSize) -> ViewContent { widget }
     public var settings: ViewContent { [] }
     public var menuBarClick: MenuBarAction? { nil }
     public var tools: [AgentTool] { [] }

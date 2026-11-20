@@ -2,6 +2,7 @@
 import AppKit
 import UserNotifications
 import StackbarHostCore
+import StackbarProtocol
 #if canImport(WidgetKit)
 import WidgetKit
 #endif
@@ -68,6 +69,23 @@ enum Platform {
     static func reloadWidgets() {
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()
+        #endif
+    }
+
+    /// The Stackbar widget sizes placed on the desktop now.
+    static func placedWidgetSizes() async -> [WidgetSize] {
+        #if canImport(WidgetKit)
+        guard let placed = try? await WidgetCenter.shared.currentConfigurations() else { return [] }
+        let families = placed.map(\.family)
+        return WidgetSize.allCases.filter { size in
+            switch size {
+            case .small: return families.contains(.systemSmall)
+            case .medium: return families.contains(.systemMedium)
+            case .large: return families.contains(.systemLarge)
+            }
+        }
+        #else
+        return []
         #endif
     }
 

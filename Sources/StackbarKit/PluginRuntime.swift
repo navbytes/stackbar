@@ -24,6 +24,10 @@ public final class PluginRuntime {
     private let send: Send
     private var surfaces: [Surface] = []
     private var lastSent: [Surface: ViewNode] = [:]
+    /// The desktop widget sizes the host draws (protocol 31), and the tree
+    /// last sent for each.
+    private var widgetSizes: [WidgetSize] = []
+    private var lastWidget: [WidgetSize: ViewNode] = [:]
     private var lastTools: [ToolSpec]?
     private var lastClick: MenuBarClick?
     private var lastCommands: [CommandSpec]?
@@ -257,8 +261,9 @@ public final class PluginRuntime {
 
     private func handleInOrder(_ message: HostMessage) async -> Bool {
         switch message {
-        case .hello(let hostProtocol, let offered, let storage):
+        case .hello(let hostProtocol, let offered, let storage, let sizes):
             Stackbar.hostProtocol = hostProtocol
+            widgetSizes = sizes ?? []
             Stackbar.storage.isScratch = preview != nil
             Stackbar.storage.load(preview == nil ? storage : [:])
             let declared = type(of: plugin).manifest.surfaces
@@ -322,6 +327,10 @@ public final class PluginRuntime {
         case .closeView(let session):
             views[session] = nil
             searches[session]?.task.cancel()
+        case .widgetSizes(let sizes):
+            widgetSizes = sizes
+            lastWidget = lastWidget.filter { sizes.contains($0.key) }
+            render()
         case .runOutput, .runExit:
             // The transport hands these to `HostClient` directly; a test
             // driving the runtime by hand lands here.
@@ -342,6 +351,17 @@ public final class PluginRuntime {
             if lastSent[surface] != root {
                 lastSent[surface] = root
                 send(.render(surface: surface, root: root))
+            }
+        }
+        // After the surfaces, so the `widget` tree's action ids don't move
+        // when the host starts asking for sizes.
+        if surfaces.contains(.widget) {
+            for size in widgetSizes {
+                let root = Self.root(for: .widget, plugin.widget(size).resolve(in: context))
+                if lastWidget[size] != root {
+                    lastWidget[size] = root
+                    send(.renderWidget(size: size, root: root))
+                }
             }
         }
         var click: MenuBarClick?

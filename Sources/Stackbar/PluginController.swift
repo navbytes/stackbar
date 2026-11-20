@@ -22,6 +22,8 @@ final class PluginController: Identifiable {
     private var panelTree: ViewNode?
     private var windowTree: ViewNode?
     private(set) var widget: ViewNode?
+    /// The widget per desktop widget size, from a plugin on protocol 31.
+    private(set) var widgetSizes: [WidgetSize: ViewNode] = [:]
     private var settingsTree: ViewNode?
     /// The host's "press again" for this plugin's actions that carry
     /// `confirm` (protocol 25): one arm across its panel, window, settings
@@ -218,6 +220,8 @@ final class PluginController: Identifiable {
             let (updates, continuation) = AsyncStream.makeStream(of: PluginSupervisor.Update.self)
             let next = PluginSupervisor(executable: loaded.binary, manifest: manifest, grantedCapabilities: review.granted, services: model.services) { continuation.yield($0) }
             supervisor = next
+            widgetSizes = [:]
+            await next.setWidgetSizes(model.placedWidgetSizes)
             // One consumer, so updates are applied in the order they happened.
             updatesTask = Task { [weak self] in
                 for await update in updates { self?.apply(update) }
@@ -253,6 +257,7 @@ final class PluginController: Identifiable {
         panelTree = nil
         windowTree = nil
         widget = nil
+        widgetSizes = [:]
         settingsTree = nil
         cancelConfirmation()
         menuBarClick = nil
@@ -351,7 +356,7 @@ final class PluginController: Identifiable {
     /// widget opens the panel for these instead of arming, since it can't
     /// redraw in time.
     func asksToConfirm(_ action: ActionID) -> Bool {
-        [panelTree, windowTree, settingsTree, widget].contains { $0?.confirmations[action] != nil }
+        ([panelTree, windowTree, settingsTree, widget] + widgetSizes.values.map(Optional.some)).contains { $0?.confirmations[action] != nil }
     }
 
     /// Esc, or the surface closing: forget an arm.
@@ -405,6 +410,12 @@ final class PluginController: Identifiable {
 
     func system(_ event: SystemEvent) {
         Task { await supervisor?.system(event) }
+    }
+
+    /// The desktop widget sizes placed on the desktop changed.
+    func widgetSizesChanged(_ sizes: [WidgetSize]) {
+        widgetSizes = widgetSizes.filter { sizes.contains($0.key) }
+        Task { await supervisor?.setWidgetSizes(sizes) }
     }
 
     func restart() {
@@ -473,7 +484,8 @@ final class PluginController: Identifiable {
         return { images.data(for: $0) }
     }
 
-    private func loadImages(_ root: ViewNode) {
+    /// `loaded` runs when one or more images newly arrive.
+    private func loadImages(_ root: ViewNode, loaded: (@MainActor @Sendable (PluginController) -> Void)? = nil) {
         guard let manifest, let images = model?.services.images, !root.imageURLs.isEmpty else { return }
         let pending = Set(pendingApproval.flatMap { capability -> [String] in
             if case .network(let hosts) = capability { return hosts }
@@ -482,8 +494,10 @@ final class PluginController: Identifiable {
         let hosts = manifest.networkHosts.filter { !pending.contains($0) }
         let pluginID = manifest.id
         Task { [weak self] in
-            let loaded = await images.load(root, pluginID: pluginID, allowedHosts: hosts)
-            if !loaded.isEmpty { self?.imageGeneration += 1 }
+            let fetched = await images.load(root, pluginID: pluginID, allowedHosts: hosts)
+            guard !fetched.isEmpty, let self else { return }
+            imageGeneration += 1
+            loaded?(self)
         }
     }
 
@@ -517,6 +531,12 @@ final class PluginController: Identifiable {
         case .render(.widget, let root):
             widget = root
             model?.widgetChanged(self)
+            // The widget extension can't fetch; the app hands it the images.
+            loadImages(root) { controller in controller.model?.widgetChanged(controller) }
+        case .renderWidget(let size, let root):
+            widgetSizes[size] = root
+            model?.widgetChanged(self)
+            loadImages(root) { controller in controller.model?.widgetChanged(controller) }
         case .render(.settings, let root):
             settingsTree = root
             confirmer.rendered(root, surface: .settings)

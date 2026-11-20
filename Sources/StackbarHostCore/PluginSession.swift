@@ -52,6 +52,8 @@ public actor PluginSession {
         supervisor = next
         binary = built
         expected = next.startupMessageCount
+        // Renders and previews show every widget size.
+        await next.setWidgetSizes(WidgetSize.allCases)
         await next.start()
         try await settle()
         return true
@@ -63,6 +65,12 @@ public actor PluginSession {
 
     public func views() async -> [Surface: ViewNode] {
         await supervisor?.views ?? [:]
+    }
+
+    /// The widget tree for each desktop widget size, from a plugin that
+    /// draws them (protocol 31); empty otherwise.
+    public func widgetViews() async -> [WidgetSize: ViewNode] {
+        await supervisor?.widgetViews ?? [:]
     }
 
     /// The surfaces as the app draws them: an action held by its first
@@ -270,7 +278,7 @@ public actor PluginSession {
         case .render(let surface, let root):
             confirmer.rendered(root, surface: surface)
             return
-        case .tools, .menuBarClick, .commands, .settled: return
+        case .tools, .menuBarClick, .commands, .settled, .renderWidget: return
         }
         if logLines.count > maxLogLines { logLines.removeFirst(logLines.count - maxLogLines) }
     }

@@ -145,17 +145,20 @@ public enum SurfaceParity {
 
     private static func widget(_ kind: Kind) -> String {
         switch kind {
-        case .list: return "First 4 rows, no filter"
+        case .list: return "First rows that fit (3 small, 4 medium, 9 large), no filter"
         case .row: return "Row; click = first action, sent through the app; one with confirm opens the panel"
         case .button: return "Button; click sends the action through the app; with confirm it opens the panel"
-        case .toggle: return "Toggle; click flips it through the app"
-        case .textField, .picker, .slider, .form: return "Drawn disabled"
+        case .toggle: return "Switch look-alike; click flips it through the app"
+        case .textField, .picker, .slider, .form: return "Drawn as a look-alike, not editable"
         case .editor: return "Its text, read-only"
         case .tappable: return "Content as a button; click sends the action through the app; with confirm it opens the panel"
         case .link: return "Link (opens Stackbar's URL)"
-        case .text, .label, .stack, .section, .badge, .progress, .divider, .labeled, .chart, .empty, .shape, .timer, .clock, .spacer, .grid: return "As panel"
-        case .styled: return "As panel, without hover"
-        case .image: return "Symbol; a remote image shows its placeholder"
+        case .clock: return "The time, drawn ahead for each minute"
+        case .progress: return "As panel; a timed one drawn ahead for each minute"
+        case .text, .label, .stack, .section, .badge, .divider, .labeled, .chart, .empty, .timer, .spacer, .grid: return "As panel"
+        case .shape: return "As panel; leading a root depth stack, the widget's full-bleed background"
+        case .styled: return "As panel, without hover; a root background fills the widget"
+        case .image: return "Symbol; a remote image the app fetched and handed over (placeholder until then)"
         }
     }
 

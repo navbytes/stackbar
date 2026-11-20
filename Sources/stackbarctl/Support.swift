@@ -68,7 +68,7 @@ func makeServices() -> HostServices {
 
 func pngRenderer(dark: Bool = false) -> AuthoringTools.PNGRenderer? {
     #if canImport(StackbarUI) && os(macOS)
-    return { node, surface, images in await MainActor.run { Snapshot.png(node, surface: surface, dark: dark, images: images) } }
+    return { node, surface, sizes, images in await MainActor.run { Snapshot.png(node, surface: surface, widgetSizes: sizes, dark: dark, images: images) } }
     #else
     return nil
     #endif
