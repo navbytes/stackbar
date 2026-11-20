@@ -102,7 +102,18 @@ The widget shows the `widget` surface (the panel when you don't write one),
 cut to fit and refreshed by the host. Buttons, toggles, tappable content and
 rows act there too: a press reaches the plugin through Stackbar like a panel
 click, while Stackbar runs (0.21.0). Fields, pickers and sliders are drawn
-disabled, so give a widget one or two big actions, not a form.
+as look-alikes you can't edit, so give a widget one or two big actions, not
+a form. One tree serves every size: a list shows 3 rows small, 4 medium and
+9 large, and `render --surface widget --png` draws all three side by side.
+
+Like a Scriptable widget's background, a widget's background fills it edge
+to edge: make the root a `ZStack` that opens with shapes or `Image(url:)`
+(a `Backdrop` is one), and its content keeps its own padding; or give the
+root a `.background(paint)`, and the content sits inside the widget's
+margins. Remote images show once Stackbar has fetched them. Use `Clock` for
+the time and `ProgressBar(timing:)` or `Timer` for countdowns: a widget
+can't redraw itself, so Stackbar draws those ahead for each minute, while
+a time you format yourself goes stale until the next refresh.
 
 ## Commands
 
@@ -389,7 +400,7 @@ light that follows the hue, numbers that move.
 - `.symbolEffect(.pulse | .breathe | .bounce | .rotate | .variableColor | .wiggle)`,
   `.symbolRendering(.hierarchical | .multicolor | .palette, palette: […])`, `.numericTransition()`,
   `.hover(scale: 1.03, highlight: .hoverWash)`, `.blur(20)`. Effects stop under Reduce Motion;
-  widgets draw no hover and show image placeholders.
+  widgets draw no hover.
 
 Leave text in the system's `.primary` and `.secondary` roles and color it with
 the theme only for emphasis. Keep the menu bar plain: a symbol, at most one

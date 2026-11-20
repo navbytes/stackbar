@@ -54,7 +54,15 @@ struct Provider: AppIntentTimelineProvider {
     func timeline(for configuration: SelectPlugin, in context: Context) async -> Timeline<SnapshotEntry> {
         // The app reloads timelines whenever a plugin's widget tree changes;
         // the 15-minute policy is only a fallback.
-        Timeline(entries: [entry(for: configuration)], policy: .after(Date().addingTimeInterval(15 * 60)))
+        let first = entry(for: configuration)
+        guard let snapshot = first.snapshot, snapshot.node.changesWithTime else {
+            return Timeline(entries: [first], policy: .after(Date().addingTimeInterval(15 * 60)))
+        }
+        // A clock or timed progress: an entry for each coming minute, since
+        // a widget can't redraw itself (a timer counts on its own).
+        let minute = Calendar.current.dateInterval(of: .minute, for: first.date)?.start ?? first.date
+        let ahead = (1...60).map { SnapshotEntry(date: minute.addingTimeInterval(Double($0) * 60), snapshot: snapshot) }
+        return Timeline(entries: [first] + ahead, policy: .atEnd)
     }
 
     private func entry(for configuration: SelectPlugin) -> SnapshotEntry {
@@ -95,19 +103,46 @@ struct WidgetActionIntent: AppIntent {
 
 struct StackbarWidgetView: View {
     let entry: SnapshotEntry
+    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetContentMargins) private var margins
 
     var body: some View {
         if let snapshot = entry.snapshot {
             let plugin = snapshot.pluginID
-            WidgetContentView(node: snapshot.node)
+            let layers = snapshot.node.widgetLayers
+            // The app writes the widget's remote images beside the snapshot;
+            // the extension doesn't fetch.
+            let images = Set(snapshot.images ?? [])
+            let store = WidgetSnapshotStore.shared()
+            let remote: @Sendable (String) -> Data? = { url in images.contains(url) ? store.imageData(for: url) : nil }
+            WidgetContentView(layers: layers, size: size, margins: margins)
+                .environment(\.stackbarNow, entry.date)
+                .environment(\.stackbarRemoteImage, remote)
                 .environment(\.stackbarWidgetButton, WidgetActionButton { action, value, plain, label in
                     let button = Button(intent: WidgetActionIntent(plugin: plugin, action: action, value: value)) { label }
                     return plain ? AnyView(button.buttonStyle(.plain)) : AnyView(button)
                 })
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(for: .widget) {
+                    if layers.background.isEmpty {
+                        Rectangle().fill(.fill.tertiary)
+                    } else {
+                        WidgetBackgroundView(layers: layers)
+                            .environment(\.stackbarNow, entry.date)
+                            .environment(\.stackbarRemoteImage, remote)
+                    }
+                }
         } else {
             ContentUnavailableView("No plugin", systemImage: "square.stack.3d.up", description: Text("Open Stackbar and add a plugin with a widget."))
+                .padding(margins)
                 .containerBackground(.fill.tertiary, for: .widget)
+        }
+    }
+
+    private var size: WidgetSize {
+        switch family {
+        case .systemSmall: return .small
+        case .systemLarge: return .large
+        default: return .medium
         }
     }
 }
@@ -121,5 +156,8 @@ struct StackbarWidget: Widget {
         .configurationDisplayName("Stackbar Plugin")
         .description("Shows a Stackbar plugin's widget. Its buttons work while Stackbar is running.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        // Margins are applied per tree: a tree with its own background
+        // draws to the edges (`WidgetLayers`).
+        .contentMarginsDisabled()
     }
 }

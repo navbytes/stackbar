@@ -144,7 +144,7 @@ final class SurfaceFitTests: XCTestCase {
 
     func testWidgetControlsActInTheLedger() {
         XCTAssertTrue(SurfaceParity.treatment(.button, on: .widget).contains("sends the action"))
-        XCTAssertEqual(SurfaceParity.treatment(.slider, on: .widget), "Drawn disabled")
+        XCTAssertEqual(SurfaceParity.treatment(.slider, on: .widget), "Drawn as a look-alike, not editable")
     }
 }
 

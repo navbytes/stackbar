@@ -473,7 +473,8 @@ final class PluginController: Identifiable {
         return { images.data(for: $0) }
     }
 
-    private func loadImages(_ root: ViewNode) {
+    /// `loaded` runs when one or more images newly arrive.
+    private func loadImages(_ root: ViewNode, loaded: (@MainActor @Sendable (PluginController) -> Void)? = nil) {
         guard let manifest, let images = model?.services.images, !root.imageURLs.isEmpty else { return }
         let pending = Set(pendingApproval.flatMap { capability -> [String] in
             if case .network(let hosts) = capability { return hosts }
@@ -482,8 +483,10 @@ final class PluginController: Identifiable {
         let hosts = manifest.networkHosts.filter { !pending.contains($0) }
         let pluginID = manifest.id
         Task { [weak self] in
-            let loaded = await images.load(root, pluginID: pluginID, allowedHosts: hosts)
-            if !loaded.isEmpty { self?.imageGeneration += 1 }
+            let fetched = await images.load(root, pluginID: pluginID, allowedHosts: hosts)
+            guard !fetched.isEmpty, let self else { return }
+            imageGeneration += 1
+            loaded?(self)
         }
     }
 
@@ -517,6 +520,8 @@ final class PluginController: Identifiable {
         case .render(.widget, let root):
             widget = root
             model?.widgetChanged(self)
+            // The widget extension can't fetch; the app hands it the images.
+            loadImages(root) { controller in controller.model?.widgetChanged(controller) }
         case .render(.settings, let root):
             settingsTree = root
             confirmer.rendered(root, surface: .settings)

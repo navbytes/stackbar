@@ -11,12 +11,23 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var name: String
     public var node: ViewNode
     public var updatedAt: Date
+    /// The remote images (`ImageSource.url`) of `node` whose bytes the app
+    /// has written beside the snapshot (`WidgetSnapshotStore.imageData`).
+    /// The extension can't fetch them itself. Nil in snapshots written
+    /// before widgets showed remote images.
+    public var images: [String]?
 
-    public init(pluginID: String, name: String, node: ViewNode, updatedAt: Date = Date()) {
+    public init(pluginID: String, name: String, node: ViewNode, updatedAt: Date = Date(), images: [String]? = nil) {
         self.pluginID = pluginID
         self.name = name
         self.node = node
         self.updatedAt = updatedAt
+        self.images = images
+    }
+
+    /// Whether the widget would draw the same: the update time aside.
+    public func shows(sameAs other: WidgetSnapshot) -> Bool {
+        name == other.name && node == other.node && (images ?? []) == (other.images ?? [])
     }
 }
 
@@ -67,6 +78,46 @@ public struct WidgetSnapshotStore: Sendable {
         removeLegacy(pluginID)
     }
 
+    // MARK: Remote images
+
+    /// Where the bytes of the widgets' remote images live: one file per URL.
+    public var imageDirectory: URL { directory.appendingPathComponent("Images", isDirectory: true) }
+
+    /// Writes an image a widget names, for the extension to draw.
+    public func writeImage(_ data: Data, for url: String) throws {
+        try FileManager.default.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
+        try data.write(to: imageFile(url), options: .atomic)
+    }
+
+    /// The bytes written for `url`, or nil.
+    public func imageData(for url: String) -> Data? {
+        try? Data(contentsOf: imageFile(url))
+    }
+
+    public func hasImage(for url: String) -> Bool {
+        FileManager.default.fileExists(atPath: imageFile(url).path)
+    }
+
+    /// Removes every image no snapshot names any more.
+    public func pruneImages() {
+        let kept = Set(all().flatMap { $0.images ?? [] }.map { imageFile($0).lastPathComponent })
+        let files = (try? FileManager.default.contentsOfDirectory(at: imageDirectory, includingPropertiesForKeys: nil)) ?? []
+        for file in files where !kept.contains(file.lastPathComponent) {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    /// A file name from the URL: FNV-1a, 64 bits, so it is stable across
+    /// launches and processes (Swift's `hashValue` is not).
+    func imageFile(_ url: String) -> URL {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in url.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return imageDirectory.appendingPathComponent(String(format: "%016llx", hash) + ".img")
+    }
+
     private func file(_ pluginID: String) -> URL {
         directory.appendingPathComponent(PluginBuilder.dataFileName(pluginID) + ".json")
     }
@@ -104,7 +155,7 @@ public struct WidgetPublishQueue: Sendable {
     /// last written: there is nothing to write.
     @discardableResult
     public mutating func change(_ snapshot: WidgetSnapshot) -> Bool {
-        if let last = written[snapshot.pluginID], last.name == snapshot.name, last.node == snapshot.node {
+        if let last = written[snapshot.pluginID], last.shows(sameAs: snapshot) {
             pending[snapshot.pluginID] = nil
             return false
         }

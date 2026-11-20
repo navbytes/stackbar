@@ -130,4 +130,35 @@ struct SnapshotToggle: View {
         }
     }
 }
+/// A form drawn in one frame: each field as its look-alike, and the submit
+/// button, for snapshots and widgets.
+struct SnapshotForm: View {
+    let form: FormNode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(form.fields, id: \.name) { field in
+                switch field.kind {
+                case .text(let placeholder), .multiline(let placeholder):
+                    LabeledContent(field.label) { SnapshotField(placeholder: placeholder ?? "", text: field.value?.textValue ?? "") }
+                case .application:
+                    LabeledContent(field.label) { SnapshotField(placeholder: "", text: field.value?.textValue ?? "") }
+                case .picker(let options):
+                    SnapshotPicker(title: field.label, options: options, selection: field.value?.textValue ?? options.first, segmented: false)
+                case .toggle:
+                    SnapshotToggle(title: field.label, isOn: field.value == .bool(true), trailing: false)
+                }
+            }
+            HStack {
+                Spacer()
+                Text(form.submitTitle)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 5))
+            }
+        }
+    }
+}
 #endif

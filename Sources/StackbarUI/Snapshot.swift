@@ -19,7 +19,12 @@ public enum Snapshot {
             // The panel is 380 points wide with 12 points of padding, as in PanelView.
             content = AnyView(NodeView(node: node, send: { _, _ in }).padding(12).frame(width: surface == .panel ? 380 : 520, alignment: .leading))
         case .widget:
-            content = AnyView(WidgetContentView(node: node).frame(width: 330, height: 155))
+            // Every size side by side, as the desktop draws them: one tree
+            // has to read well in each.
+            content = AnyView(HStack(alignment: .top, spacing: 20) {
+                ForEach(WidgetSize.allCases, id: \.self) { size in WidgetPreview(node: node, size: size) }
+            }
+            .padding(20))
         }
         let view = content
             .background(Color(nsColor: .windowBackgroundColor))

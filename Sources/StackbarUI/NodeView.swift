@@ -48,6 +48,10 @@ extension EnvironmentValues {
     /// after all. Set by the widget extension, where a press has to run an
     /// App Intent rather than a closure (protocol 17); nil elsewhere.
     @Entry public var stackbarWidgetButton: WidgetActionButton? = nil
+    /// The moment a snapshot or widget shows. A widget draws its timeline
+    /// entries ahead of time, so clocks and timed progress read this, not
+    /// the time the view happens to be drawn. Nil: now.
+    @Entry public var stackbarNow: Date? = nil
 }
 
 /// Wraps a widget's control in a button that sends `action` (with `value`)
@@ -76,6 +80,7 @@ public struct NodeView: View {
     @Environment(\.stackbarGroupedSections) private var grouped
     @Environment(\.stackbarWidgetButton) private var widgetButton
     @Environment(\.stackbarEditorFills) private var editorFills
+    @Environment(\.stackbarNow) private var now
 
     public init(node: ViewNode, send: @escaping SendAction) {
         self.node = node
@@ -123,9 +128,9 @@ public struct NodeView: View {
             widgetButton?.make(action, nil, false, AnyView(Group {
                 if let symbol { Label(title, systemImage: symbol) } else { Text(title) }
             }))
-        case .toggle(let title, let isOn, let action) where readOnly && widgetButton != nil && !snapshot:
+        case .toggle(let title, let isOn, let action) where readOnly && widgetButton != nil:
             widgetButton?.make(action, .bool(!isOn), true, AnyView(
-                Toggle(title, isOn: .constant(isOn)).allowsHitTesting(false)
+                SnapshotToggle(title: title, isOn: isOn, trailing: true).allowsHitTesting(false)
             ))
         case .button(let title, let symbol, let role, let action, _):
             Button(role: role == .critical ? .destructive : nil) {
@@ -199,7 +204,7 @@ public struct NodeView: View {
             SliderNodeView(title: title, value: value, range: low...max(high, low), step: step, action: action, live: live == true, send: send)
                 .tint(foreground?.flatColor)
                 .disabled(readOnly)
-        case .link(let title, _) where snapshot:
+        case .link(let title, _) where snapshot && widgetButton == nil:
             Text(title).foregroundStyle(foreground?.flatColor ?? .accentColor)
         case .link(let title, let url):
             if let destination = URL(string: url) {
@@ -213,6 +218,8 @@ public struct NodeView: View {
             } description: {
                 if let message { Text(message) }
             }
+        case .form(let form) where snapshot:
+            SnapshotForm(form: form)
         case .form(let form):
             FormNodeView(form: form, send: send)
                 .disabled(readOnly)
@@ -231,7 +238,7 @@ public struct NodeView: View {
                 .font(textFont(.body))
                 .foregroundStyle(tint(.primary))
         case .clock(let face) where snapshot:
-            Text(face.string(at: Date()))
+            Text(face.string(at: now ?? Date()))
                 .font(textFont(.body).monospacedDigit())
                 .foregroundStyle(tint(.primary))
         case .clock(let face):
