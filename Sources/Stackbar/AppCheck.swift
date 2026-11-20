@@ -74,6 +74,8 @@ enum AppCheck {
                 await checkReturn(app)
                 await checkActions(app, folder: folder)
                 await checkBack(app)
+                await checkArrowsInViews(app)
+                await checkStrayKeys(app)
             }
             if !isUpgrade {
                 await checkSettings(app, folder: folder)
@@ -266,6 +268,185 @@ enum AppCheck {
         record("⎋ from a command keeps the row it opened", opened && backed && kept,
                "opened \(chosen?.title ?? "nothing") \(opened), back on \(session.selectedEntry?.title ?? "nothing")")
         app.palette.hide()
+    }
+
+    /// Down moves the highlight in a plugin's list right after the list
+    /// opens, without Tab first. The key goes in as AppKit delivers a real
+    /// one, through the panel's first responder, so it fails the way a
+    /// person sees it fail when no field holds the keyboard. Each view
+    /// command is tried at several delays and along three paths: opened
+    /// from the root, the palette hidden and shown again on it, and Esc
+    /// back to the root then opened again. The detail names what held the
+    /// keyboard each time it failed.
+    private static func checkArrowsInViews(_ app: AppDelegate) async {
+        let session = app.palette.session
+        let commands = app.model.commands.registry.entries
+            .filter { $0.spec.kind == .view && $0.spec.arguments.isEmpty }
+            .prefix(10)
+        var tries = 0
+        var failures: [String] = []
+        var rescued: [String] = []
+        var skipped: [String] = []
+
+        func open(_ command: CommandRegistry.Entry) async -> CommandViewModel? {
+            // As a person does it: the name typed in the root's field, then Return.
+            session.query = command.spec.title
+            try? await Task.sleep(for: .milliseconds(120))
+            session.enter(command, source: .palette)
+            _ = await AppDriver.waitUntil(seconds: 10) {
+                if case .view = session.top { return true }
+                return false
+            }
+            if case .view(let view) = session.top { return view }
+            return nil
+        }
+
+        /// Waits `delay`, then presses Down; false when the highlight stayed.
+        func pressAndCheck(_ view: CommandViewModel, delay: Int, label: String) async -> Bool? {
+            try? await Task.sleep(for: .milliseconds(delay))
+            let early = keyHolder(app.palette.window)
+            guard await AppDriver.waitUntil(seconds: 5, { session.rows(of: view).count >= 2 && !view.isShowingPlaceholder }) else { return nil }
+            let before = session.selectedRow(of: view)?.key
+            let holder = keyHolder(app.palette.window)
+            let caught = session.strayKeys
+            // On the last row already (a two-row list opened again), Up is
+            // the arrow that can move.
+            pressArrow(up: before == session.rows(of: view).last?.key, in: app.palette.window)
+            await AppDriver.nextFrame()
+            try? await Task.sleep(for: .milliseconds(50))
+            tries += 1
+            let moved = session.selectedRow(of: view)?.key != before
+            if !moved { failures.append("\(label) +\(delay)ms: keyboard with \(early), then \(holder)") }
+            // Moved, but only because the window caught the key: no field
+            // held the keyboard, which before the catch was the dead arrows.
+            if moved, session.strayKeys != caught { rescued.append("\(label) +\(delay)ms: keyboard with \(early), then \(holder)") }
+            return moved
+        }
+
+        for command in commands {
+            let title = command.spec.title
+            commandLoop: for round in 0..<3 {
+                for delay in [0, 40, 120, 400] {
+                    app.palette.toggle()
+                    _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
+                    await AppDriver.nextFrame()
+                    guard let view = await open(command) else {
+                        skipped.append("\(title) didn't open")
+                        app.palette.hide()
+                        break commandLoop
+                    }
+                    guard await pressAndCheck(view, delay: delay, label: "\(title) opened") != nil else {
+                        skipped.append("\(title) has under 2 rows")
+                        app.palette.hide()
+                        break commandLoop
+                    }
+                    if round == 0 {
+                        // Hidden and shown again within the resume window: back on the view.
+                        app.palette.toggle()
+                        try? await Task.sleep(for: .milliseconds(150))
+                        app.palette.toggle()
+                        _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
+                        if case .view(let resumed) = session.top {
+                            _ = await pressAndCheck(resumed, delay: delay, label: "\(title) resumed")
+                        }
+                    } else if round == 1 {
+                        // Esc to the root, then the same command again.
+                        _ = session.back()
+                        await AppDriver.nextFrame()
+                        session.enter(command, source: .palette)
+                        _ = await AppDriver.waitUntil(seconds: 10) {
+                            if case .view(let again) = session.top { return again !== view }
+                            return false
+                        }
+                        if case .view(let again) = session.top {
+                            _ = await pressAndCheck(again, delay: delay, label: "\(title) after Esc")
+                        }
+                    }
+                    app.palette.hide()
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
+            // The command's own hotkey, pressed in another app: the palette
+            // opens straight on the view (Naveen's way to reproduce it).
+            guard !skipped.contains(where: { $0.hasPrefix(title) }) else { continue }
+            for delay in [0, 120, 400] {
+                NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.activate()
+                _ = await AppDriver.waitUntil(seconds: 3) { !NSApp.isActive }
+                try? await Task.sleep(for: .milliseconds(200))
+                app.model.commands.start(command, source: .hotkey)
+                let opened = await AppDriver.waitUntil(seconds: 10) {
+                    if case .view = session.top { return app.palette.isVisible }
+                    return false
+                }
+                if opened, case .view(let view) = session.top {
+                    _ = await pressAndCheck(view, delay: delay, label: "\(title) by hotkey")
+                }
+                app.palette.hide()
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        record("Down moves in a plugin's list right after it opens", tries > 0 && failures.isEmpty,
+               "\(tries - failures.count)/\(tries) moved. Failed: \(failures.joined(separator: "; ")). Only because the window caught the key: \(rescued.joined(separator: "; ")). Skipped: \(skipped.joined(separator: "; "))")
+    }
+
+    /// With the keyboard taken from every field on purpose, Down still
+    /// moves the highlight and the view's field takes the keyboard back,
+    /// so a focus lost some other way never leaves the arrows dead.
+    private static func checkStrayKeys(_ app: AppDelegate) async {
+        let session = app.palette.session
+        let commands = app.model.commands.registry.entries.filter { $0.spec.kind == .view && $0.spec.arguments.isEmpty }
+        for command in commands {
+            app.palette.toggle()
+            _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
+            session.enter(command, source: .palette)
+            let ready = await AppDriver.waitUntil(seconds: 10) {
+                guard case .view(let view) = session.top else { return false }
+                return session.rows(of: view).count >= 2 && !view.isShowingPlaceholder
+            }
+            guard ready, case .view(let view) = session.top, let window = app.palette.window else {
+                app.palette.hide()
+                continue
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+            window.makeFirstResponder(nil)
+            let taken = keyHolder(window)
+            let before = session.selectedRow(of: view)?.key
+            pressArrow(up: before == session.rows(of: view).last?.key, in: window)
+            await AppDriver.nextFrame()
+            try? await Task.sleep(for: .milliseconds(300))
+            let moved = session.selectedRow(of: view)?.key != before
+            let holder = keyHolder(window)
+            let back = holder.hasPrefix("field")
+            record("Down works with no field holding the keyboard", moved && back,
+                   "\(command.spec.title): keyboard with \(taken); Down moved \(moved); then keyboard with \(holder)")
+            app.palette.hide()
+            return
+        }
+        record("Down works with no field holding the keyboard", false, "no view command with 2 rows to try")
+    }
+
+    /// A plain Down (or Up) arrow, delivered as AppKit delivers a real key press.
+    private static func pressArrow(up: Bool = false, in window: NSWindow?) {
+        let character = up ? "\u{F700}" : "\u{F701}"
+        guard let window, let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.numericPad, .function], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil,
+            characters: character, charactersIgnoringModifiers: character, isARepeat: false, keyCode: up ? 126 : 125
+        ) else { return }
+        NSApp.sendEvent(event)
+    }
+
+    /// What holds the keyboard in the window: a text field (by its
+    /// placeholder), or the class of whatever else is first responder.
+    private static func keyHolder(_ window: NSWindow?) -> String {
+        guard let window else { return "no window" }
+        let key = window.isKeyWindow ? "" : " (window not key)"
+        guard let responder = window.firstResponder else { return "nothing" + key }
+        if let editor = responder as? NSTextView, let field = editor.delegate as? NSTextField {
+            return "field \"\(field.placeholderString ?? "")\"" + key
+        }
+        if responder === window { return "the window itself" + key }
+        return String(describing: type(of: responder)) + key
     }
 
     private static func checkSettings(_ app: AppDelegate, folder: URL) async {
