@@ -135,12 +135,19 @@ public struct CommandInvocation: Sendable, Equatable {
     public var source: InvocationSource
     /// The app and selection the user was in. Only for plugins with `.context`.
     public var context: InvocationContext?
+    /// True for a view's first `search`, as it opens with the text it was
+    /// given (a fallback's or Tab's text, an alias's, Spotlight's Input);
+    /// false for every search after, as the user types or changes an
+    /// argument. A view that acts on what it was opened with, like asking a
+    /// question, does it here, once. In the kit, so any Stackbar.
+    public var isOpening: Bool
 
-    public init(text: String = "", arguments: [String: String] = [:], source: InvocationSource = .palette, context: InvocationContext? = nil) {
+    public init(text: String = "", arguments: [String: String] = [:], source: InvocationSource = .palette, context: InvocationContext? = nil, isOpening: Bool = false) {
         self.text = text
         self.arguments = arguments
         self.source = source
         self.context = context
+        self.isOpening = isOpening
     }
 
     /// An argument's value, or `nil` when it was left empty.

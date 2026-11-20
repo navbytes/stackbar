@@ -104,7 +104,7 @@ public final class PluginRuntime {
         if preview == nil {
             switch message {
             case .openView(let session, let command, let query, let seq, let context):
-                let invocation = CommandInvocation(text: query.text, arguments: query.arguments, source: .palette, context: context)
+                let invocation = CommandInvocation(text: query.text, arguments: query.arguments, source: .palette, context: context, isOpening: true)
                 views[session] = OpenView(command: command, invocation: invocation, seq: seq)
                 startSearch(session, settles: 1 + absorbed)
                 return true
@@ -306,7 +306,7 @@ public final class PluginRuntime {
             await runCommand(id: id, command: command, invocation: CommandInvocation(arguments: arguments, source: source, context: context))
             render()
         case .openView(let session, let command, let query, let seq, let context):
-            let invocation = CommandInvocation(text: query.text, arguments: query.arguments, source: .palette, context: context)
+            let invocation = CommandInvocation(text: query.text, arguments: query.arguments, source: .palette, context: context, isOpening: true)
             views[session] = OpenView(command: command, invocation: invocation, seq: seq)
             await searchView(session)
             render(forcing: session)
@@ -414,6 +414,9 @@ public final class PluginRuntime {
 
     private func searchView(_ session: Int) async {
         guard let view = views[session], let search = command(view.command)?.search else { return }
+        // Only the view's first search is its opening one, even when the
+        // text changed before it started.
+        views[session]?.invocation.isOpening = false
         do {
             try await search(view.invocation)
         } catch {

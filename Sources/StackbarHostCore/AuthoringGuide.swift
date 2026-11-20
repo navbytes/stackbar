@@ -224,6 +224,9 @@ empty; `invocation.source` says where it started (`.palette`, `.hotkey`,
 `.link`, `.spotlight`, `.shortcuts`, ...) and `invocation.context` carries the
 front app, window title and selected text for plugins with `.context`, read
 when the command was triggered, before Stackbar's palette took focus.
+`invocation.isOpening` is true for a view's first search only, with the text
+it opened with (a fallback's, Tab's, an alias's), so a view that acts on that
+text, like asking a question, does it once and not on every keystroke (kit).
 
 A form in a view (or a panel) submits every field at once:
 
