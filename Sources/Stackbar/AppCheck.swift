@@ -285,6 +285,7 @@ enum AppCheck {
             .prefix(10)
         var tries = 0
         var failures: [String] = []
+        var rescued: [String] = []
         var skipped: [String] = []
 
         func open(_ command: CommandRegistry.Entry) async -> CommandViewModel? {
@@ -307,6 +308,7 @@ enum AppCheck {
             guard await AppDriver.waitUntil(seconds: 5, { session.rows(of: view).count >= 2 && !view.isShowingPlaceholder }) else { return nil }
             let before = session.selectedRow(of: view)?.key
             let holder = keyHolder(app.palette.window)
+            let caught = session.strayKeys
             // On the last row already (a two-row list opened again), Up is
             // the arrow that can move.
             pressArrow(up: before == session.rows(of: view).last?.key, in: app.palette.window)
@@ -315,6 +317,9 @@ enum AppCheck {
             tries += 1
             let moved = session.selectedRow(of: view)?.key != before
             if !moved { failures.append("\(label) +\(delay)ms: keyboard with \(early), then \(holder)") }
+            // Moved, but only because the window caught the key: no field
+            // held the keyboard, which before the catch was the dead arrows.
+            if moved, session.strayKeys != caught { rescued.append("\(label) +\(delay)ms: keyboard with \(early), then \(holder)") }
             return moved
         }
 
@@ -361,9 +366,27 @@ enum AppCheck {
                     try? await Task.sleep(for: .milliseconds(100))
                 }
             }
+            // The command's own hotkey, pressed in another app: the palette
+            // opens straight on the view (Naveen's way to reproduce it).
+            guard !skipped.contains(where: { $0.hasPrefix(title) }) else { continue }
+            for delay in [0, 120, 400] {
+                NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.activate()
+                _ = await AppDriver.waitUntil(seconds: 3) { !NSApp.isActive }
+                try? await Task.sleep(for: .milliseconds(200))
+                app.model.commands.start(command, source: .hotkey)
+                let opened = await AppDriver.waitUntil(seconds: 10) {
+                    if case .view = session.top { return app.palette.isVisible }
+                    return false
+                }
+                if opened, case .view(let view) = session.top {
+                    _ = await pressAndCheck(view, delay: delay, label: "\(title) by hotkey")
+                }
+                app.palette.hide()
+                try? await Task.sleep(for: .milliseconds(100))
+            }
         }
         record("Down moves in a plugin's list right after it opens", tries > 0 && failures.isEmpty,
-               "\(tries - failures.count)/\(tries) moved. Failed: \(failures.joined(separator: "; ")). Skipped: \(skipped.joined(separator: "; "))")
+               "\(tries - failures.count)/\(tries) moved. Failed: \(failures.joined(separator: "; ")). Only because the window caught the key: \(rescued.joined(separator: "; ")). Skipped: \(skipped.joined(separator: "; "))")
     }
 
     /// With the keyboard taken from every field on purpose, Down still

@@ -84,6 +84,9 @@ final class PaletteSession {
     /// Changes when a key found no field holding the keyboard, so the
     /// view puts its field back in charge.
     private(set) var focusRequests = 0
+    /// Keys the window caught for a field that didn't hold the keyboard;
+    /// the app check counts them.
+    @ObservationIgnored private(set) var strayKeys = 0
     /// ⌘ is held: the first rows show their ⌘1…⌘9.
     var commandHeld = false
     /// The plugin search the palette is inside: its name, then Tab, as in
@@ -913,6 +916,7 @@ final class PaletteSession {
     /// A key no field took (`PaletteStrayKey`): done as the field would
     /// have, and the field takes the keyboard back for the next one.
     func strayKey(_ key: PaletteStrayKey) {
+        strayKeys += 1
         takeKeyboardBack()
         switch key {
         case .move(let delta):
