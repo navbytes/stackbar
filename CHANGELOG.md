@@ -7,6 +7,7 @@ window. Write for people who use Stackbar, not for the code.
 
 ### Added
 - **`invocation.isOpening` for plugin authors.** A view's first search now says it is the one the view opened with, so a view that acts on the text it was given (Ask AI asking the question you typed in the palette) does it once, not on every keystroke after. It lives in StackbarKit, so it works with any Stackbar.
+- **`.debounce()` on view commands.** `Command(...).view(...).debounce(.milliseconds(250))` waits until typing pauses before a plugin's search runs, so a search that goes to the network sends one request per pause rather than one per letter. The first search when the view opens still runs at once. Also in StackbarKit.
 
 ### Fixed
 - **↑ and ↓ work as soon as a plugin's list opens.** Now and then, opening a plugin's search in the palette left the keyboard with no field, so the arrows and Return did nothing until you pressed Tab. The palette now catches any key that no field takes, so the arrows, Return and typing still work, and it hands the keyboard back to the search field. When that happens, the log says what was open, so the cause can be tracked down.

@@ -33,6 +33,8 @@ public struct Command: Sendable {
     var run: Run?
     var search: Search?
     var body: Body?
+    /// How long the kit waits after typing before `search`, from `.debounce`.
+    var debounce: Duration?
 
     /// A run command.
     public init(_ id: String, title: String, subtitle: String? = nil, symbol: String? = nil, keywords: [String] = [], run: @escaping Run) {
@@ -101,6 +103,19 @@ public struct Command: Sendable {
     public func fallback() -> Command {
         var copy = self
         copy.spec.fallback = true
+        return copy
+    }
+
+    /// Waits until typing pauses for `duration` before running the view's
+    /// `search`, so a burst of keystrokes is one fetch, not one per letter:
+    /// `.debounce(.milliseconds(250))` for a search that goes to the network.
+    /// A newer query cancels the wait (and a search already running). The
+    /// view's opening search runs at once, so it fills straight away. Leave
+    /// it off for local searches, which should feel instant. In the kit, so
+    /// any Stackbar.
+    public func debounce(_ duration: Duration) -> Command {
+        var copy = self
+        copy.debounce = duration
         return copy
     }
 

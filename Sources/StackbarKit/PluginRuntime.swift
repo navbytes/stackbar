@@ -387,6 +387,11 @@ public final class PluginRuntime {
         plugin.commands.first { $0.spec.id == id }
     }
 
+    private func command(view session: Int) -> (view: OpenView, command: Command)? {
+        guard let view = views[session], let command = command(view.command) else { return nil }
+        return (view, command)
+    }
+
     private func renderViews(forcing forced: Int?) {
         let loading = Stackbar.isUpdating
         for session in views.keys.sorted() {
@@ -413,7 +418,14 @@ public final class PluginRuntime {
     }
 
     private func searchView(_ session: Int) async {
-        guard let view = views[session], let search = command(view.command)?.search else { return }
+        guard let found = command(view: session), let search = found.command.search else { return }
+        var view = found.view
+        if let wait = found.command.debounce, !view.invocation.isOpening {
+            // A newer query cancels this wait: it searches instead.
+            guard (try? await Task.sleep(for: wait)) != nil, !Task.isCancelled else { return }
+            guard let current = views[session] else { return }
+            view = current
+        }
         // Only the view's first search is its opening one, even when the
         // text changed before it started.
         views[session]?.invocation.isOpening = false

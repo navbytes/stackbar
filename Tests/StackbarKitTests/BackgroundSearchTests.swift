@@ -170,4 +170,33 @@ final class BackgroundSearchTests: XCTestCase {
         XCTAssertEqual(plugin.openings.first, true)
         XCTAssertEqual(plugin.openings.filter { $0 }.count, 1)
     }
+
+    func testADebouncedViewSearchesOnceTypingPausesButOpensAtOnce() async throws {
+        let plugin = Debounced()
+        let runtime = PluginRuntime(plugin: plugin, send: outbox.send)
+        await runtime.handle(.hello(protocolVersion: StackbarProtocolVersion.current, surfaces: [.panel]))
+        await runtime.handle(.openView(session: 1, command: "find", query: CommandQuery(text: "a"), seq: 1, context: nil))
+        await runtime.waitForRefreshes()
+        XCTAssertEqual(plugin.queries, ["a"], "the opening search does not wait")
+
+        for (seq, text) in ["ab", "abc", "abcd"].enumerated() {
+            await runtime.handle(.updateView(session: 1, query: CommandQuery(text: text), seq: seq + 2))
+        }
+        await runtime.waitForRefreshes()
+        XCTAssertEqual(plugin.queries, ["a", "abcd"], "a burst of typing is one search")
+        let settled = outbox.take().filter { $0 == .settled }.count
+        XCTAssertEqual(settled, 5, "every message settles, the cancelled waits too")
+    }
+}
+
+@MainActor
+final class Debounced: StackbarPlugin {
+    static let manifest = Manifest(id: "test.debounced", name: "Debounced", surfaces: [.panel])
+    var queries: [String] = []
+    var panel: ViewContent { Text("Debounced") }
+    var commands: [Command] {
+        Command("find", title: "Find")
+            .view(search: { invocation in self.queries.append(invocation.text) }) { _ in Text("x") }
+            .debounce(.milliseconds(100))
+    }
 }
