@@ -6,6 +6,7 @@ window. Write for people who use Stackbar, not for the code.
 ## Unreleased
 
 ### Fixed
+- **Tab goes into any plugin command.** Tab only searched inside plugins whose search also answers the main search, so on a row like PR Cockpit's Search Pull Requests it handed your text to Ask AI instead. Tab on a command with its own list, form or fields now opens it, as Return does; plugins with a main-search search still get the "Search <Plugin>" chip.
 - **↑ and ↓ work as soon as a plugin's list opens.** Now and then, opening a plugin's search in the palette left the keyboard with no field, so the arrows and Return did nothing until you pressed Tab. The palette now catches any key that no field takes, so the arrows, Return and typing still work, and it hands the keyboard back to the search field. When that happens, the log says what was open, so the cause can be tracked down.
 
 ## 0.41.0

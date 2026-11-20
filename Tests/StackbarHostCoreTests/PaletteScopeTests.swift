@@ -36,6 +36,25 @@ final class PaletteScopeTests: XCTestCase {
         XCTAssertNil(target(PaletteIndex.Entry(pluginID: "git", pluginName: "Git Sync", title: "x", kind: .copy("x")), .default))
     }
 
+    func testTabOpensAnyOtherViewOrArgumentsCommand() {
+        let prs = CommandRegistry.Entry(pluginID: "pr", pluginName: "PR Cockpit", spec: CommandSpec(id: "search", title: "Search Pull Requests", kind: .view))
+        let translate = CommandRegistry.Entry(pluginID: "tr", pluginName: "Translate", spec: CommandSpec(id: "to", title: "Translate To", kind: .run,
+                                                                                                         arguments: [ArgumentSpec("text", placeholder: "Text")]))
+        let all = commands + [prs, translate]
+        let tab = { (entry: PaletteIndex.Entry, preference: CommandPreference) in
+            PaletteScope.tab(on: entry, commands: all) { _ in preference }
+        }
+        XCTAssertEqual(tab(row(all[1]), .default), .search(all[1]), "a root search still searches inside, under the chip")
+        XCTAssertEqual(tab(open("git", "Git Sync"), .default), .search(all[1]))
+        XCTAssertEqual(tab(row(prs), .default), .open(prs), "a view without a root search opens, with its own search field")
+        XCTAssertEqual(tab(row(all[2]), .default), .open(all[2]))
+        XCTAssertEqual(tab(row(translate), .default), .open(translate), "arguments to fill in: their fields")
+        XCTAssertNil(tab(row(all[0]), .default), "a plain run command: Tab stays Ask AI")
+        XCTAssertNil(tab(row(prs), CommandPreference(enabled: false)), "a disabled command doesn't")
+        XCTAssertNil(tab(open("docker", "Docker"), .default), "a plugin's Open row with no search")
+        XCTAssertNil(tab(PaletteIndex.Entry(pluginID: "pr", pluginName: "PR Cockpit", title: "x", kind: .copy("x")), .default))
+    }
+
     func testTheScopedRootListsOnlyThatPlugin() {
         let command = commands[1]
         let rows = (0..<60).map { RowNode(key: "\($0)", title: "repo \($0)", actions: [ActionRef(id: ActionID("row/\($0)/Open"), title: "Open")]) }
