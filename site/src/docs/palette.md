@@ -26,7 +26,7 @@ plugin with one has an **Open <Plugin>** row to get there.
 | ⌘K | Every action for the selection, with its own search |
 | ⌘1 … ⌘9 | Run the first nine results |
 | ⌘⇧F | Add the selection to Favorites, or take it off. Apps and files can be favourites too |
-| Tab | On a plugin's row (the bar shows "Search <Plugin> ⇥"), searches inside that plugin. Otherwise, with text typed, hands it to Ask AI when that plugin is installed, as Raycast's Quick AI does. Settings › Command Palette › Tab with text picks another fallback, such as Search Google, or none |
+| Tab | On a plugin's row (the bar shows "Search <Plugin> ⇥"), searches inside that plugin. On any other command with a list or form of its own, or fields to fill in (Search Pull Requests, Translate To), opens it as Return does. Otherwise, with text typed, hands it to Ask AI when that plugin is installed, as Raycast's Quick AI does. Settings › Command Palette › Tab with text picks another fallback, such as Search Google, or none |
 | Esc | Close ⌘K, leave a plugin's search, go back a step, then close |
 
 If you close the palette and open it again within a minute, it comes back

@@ -322,22 +322,40 @@ final class PaletteSession {
         return PaletteFallbacks.offered(availableFallbacks(), chosen: preferences.fallbacks) { preferences[$0] }
     }
 
-    /// The plugin search Tab on the selected row would enter: the row is a
-    /// plugin's root-search command or its Open row.
-    var scopeTarget: CommandRegistry.Entry? {
-        guard stack.isEmpty, scope == nil, let entry = selectedEntry else { return nil }
+    /// What Tab on the selected row does: search inside its plugin (a
+    /// root-search command or a plugin's Open row), or open its command (any
+    /// other view, or a command with arguments).
+    var tabAction: PaletteScope.Tab? {
+        guard stack.isEmpty, scope == nil, !collapsed, let entry = selectedEntry else { return nil }
         let commands: CommandCenter = model.commands
-        return PaletteScope.target(of: entry, commands: commands.registry.entries) { commands.preferences[$0] }
+        let action = PaletteScope.tab(on: entry, commands: commands.registry.entries) { commands.preferences[$0] }
+        // A fallback row ("Search Google for …") is one of the commands
+        // the typed text can go to; Tab's own fallback picks among those.
+        if case .open = action, root.role(of: entry) == .fallback { return nil }
+        return action
+    }
+
+    /// The plugin search Tab on the selected row would enter.
+    var scopeTarget: CommandRegistry.Entry? {
+        if case .search(let command) = tabAction { return command }
+        return nil
     }
 
     /// Tab at the root: searches inside the selected row's plugin when it
-    /// has a search, otherwise hands the text to the fallback.
+    /// has a search, opens the selected command when it has a view or
+    /// arguments of its own, otherwise hands the text to the fallback.
     func tab() -> Bool {
-        if let target = scopeTarget {
-            enterScope(target)
+        switch tabAction {
+        case .search(let command):
+            enterScope(command)
             return true
+        case .open:
+            guard let entry = selectedEntry else { return false }
+            activate(entry)
+            return true
+        case nil:
+            return tabToFallback()
         }
-        return tabToFallback()
     }
 
     /// Searches only inside `command`, from an empty field.
