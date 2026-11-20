@@ -33,6 +33,8 @@ public struct Command: Sendable {
     var run: Run?
     var search: Search?
     var body: Body?
+    /// How long the kit waits after typing before `search`, from `.debounce`.
+    var debounce: Duration?
 
     /// A run command.
     public init(_ id: String, title: String, subtitle: String? = nil, symbol: String? = nil, keywords: [String] = [], run: @escaping Run) {
@@ -104,6 +106,19 @@ public struct Command: Sendable {
         return copy
     }
 
+    /// Waits until typing pauses for `duration` before running the view's
+    /// `search`, so a burst of keystrokes is one fetch, not one per letter:
+    /// `.debounce(.milliseconds(250))` for a search that goes to the network.
+    /// A newer query cancels the wait (and a search already running). The
+    /// view's opening search runs at once, so it fills straight away. Leave
+    /// it off for local searches, which should feel instant. In the kit, so
+    /// any Stackbar.
+    public func debounce(_ duration: Duration) -> Command {
+        var copy = self
+        copy.debounce = duration
+        return copy
+    }
+
     /// Lets a run command take longer than the host's 30 seconds, up to
     /// ten minutes: a script, a build, a long download. 0.36.0; older hosts
     /// keep 30.
@@ -135,12 +150,19 @@ public struct CommandInvocation: Sendable, Equatable {
     public var source: InvocationSource
     /// The app and selection the user was in. Only for plugins with `.context`.
     public var context: InvocationContext?
+    /// True for a view's first `search`, as it opens with the text it was
+    /// given (a fallback's or Tab's text, an alias's, Spotlight's Input);
+    /// false for every search after, as the user types or changes an
+    /// argument. A view that acts on what it was opened with, like asking a
+    /// question, does it here, once. In the kit, so any Stackbar.
+    public var isOpening: Bool
 
-    public init(text: String = "", arguments: [String: String] = [:], source: InvocationSource = .palette, context: InvocationContext? = nil) {
+    public init(text: String = "", arguments: [String: String] = [:], source: InvocationSource = .palette, context: InvocationContext? = nil, isOpening: Bool = false) {
         self.text = text
         self.arguments = arguments
         self.source = source
         self.context = context
+        self.isOpening = isOpening
     }
 
     /// An argument's value, or `nil` when it was left empty.

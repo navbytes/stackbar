@@ -224,6 +224,13 @@ empty; `invocation.source` says where it started (`.palette`, `.hotkey`,
 `.link`, `.spotlight`, `.shortcuts`, ...) and `invocation.context` carries the
 front app, window title and selected text for plugins with `.context`, read
 when the command was triggered, before Stackbar's palette took focus.
+`invocation.isOpening` is true for a view's first search only, with the text
+it opened with (a fallback's, Tab's, an alias's), so a view that acts on that
+text, like asking a question, does it once and not on every keystroke (kit).
+A view whose search goes to the network adds `.debounce(.milliseconds(250))`:
+the kit waits until typing pauses before calling `search` (a newer query
+cancels the wait), and the opening search runs at once. Don't hand-roll a
+`Task.sleep` for it, and leave local searches without it (kit).
 
 A form in a view (or a panel) submits every field at once:
 
