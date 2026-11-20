@@ -49,8 +49,11 @@ usage:
   stackbarctl verify <bundle.stackbarplugin>
   stackbarctl install <bundle.stackbarplugin | https://…> | --index <url> <plugin-id>
   stackbarctl index build <dir> [--name <name>] [--homepage <url>] [--revoked <file.json>] [--key <file>]
+                          [--plugin-homepage-from <prefix> --plugin-homepage-to <prefix>]
                                     writes <dir>/index.json from every bundle under <dir>;
                                     a subfolder is the category; --key signs it (macOS);
+                                    plugin homepages starting with the from prefix get the
+                                    to prefix instead (empty drops them); sources are untouched;
                                     sign and index build refuse a manifest with publishingProblems
   stackbarctl index verify <index.json | https://…> --public-key <base64>
   stackbarctl index search <url> [query] [--public-key <base64>]

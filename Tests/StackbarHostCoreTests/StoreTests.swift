@@ -86,6 +86,21 @@ final class PluginStoreTests: XCTestCase {
         }
     }
 
+    func testMovingHomepagesChangesOnlyTheMatchingPrefix() {
+        let upstream = "https://github.com/navbytes/stackbar-plugins/tree/main/"
+        var own = entry("com.example.notes", "1.0.0")
+        own.homepage = "https://git.example.com/notes"
+        var clock = entry("dev.t.clock", "1.0.0")
+        clock.homepage = upstream + "Productivity/WorldClock"
+        let none = entry("dev.t.none", "1.0.0")
+        let index = PluginIndex(name: "Test", plugins: [own, clock, none])
+
+        let moved = index.movingHomepages(from: upstream, to: "https://git.example.com/stackbar-plugins/-/tree/main/")
+        XCTAssertEqual(moved.plugins.map(\.homepage), ["https://git.example.com/notes", "https://git.example.com/stackbar-plugins/-/tree/main/Productivity/WorldClock", nil])
+        XCTAssertEqual(index.movingHomepages(from: upstream, to: "").plugins.map(\.homepage), ["https://git.example.com/notes", nil, nil], "an empty replacement drops them")
+        XCTAssertEqual(index.movingHomepages(from: "", to: "https://x.example/").plugins.map(\.homepage), index.plugins.map(\.homepage), "an empty prefix changes nothing")
+    }
+
     func testManifestReportShape() throws {
         let manifest = Manifest(id: "dev.t.clock", name: "Clock", version: "1.0", summary: "The time.", minimumStackbar: "0.10.0", homepage: "http://x")
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: ManifestReport(manifest).encoded()) as? [String: Any])

@@ -314,6 +314,21 @@ public struct PluginIndex: Codable, Equatable, Sendable {
         return PluginIndex(name: name, plugins: entries, homepage: homepage, generated: formatter.string(from: generated), revoked: revoked?.isEmpty == false ? revoked : nil)
     }
 
+    /// The index with every plugin homepage that starts with `prefix` moved
+    /// to start with `replacement` instead; an empty `replacement` drops those
+    /// homepages. A copy of a store (docs/self-hosting.md) points its
+    /// plugins' links at its own repository this way while their signed
+    /// source, and so every digest keyed on it, stays as upstream wrote it.
+    public func movingHomepages(from prefix: String, to replacement: String) -> PluginIndex {
+        guard !prefix.isEmpty, prefix != replacement else { return self }
+        var copy = self
+        for position in copy.plugins.indices {
+            guard let homepage = copy.plugins[position].homepage, homepage.hasPrefix(prefix) else { continue }
+            copy.plugins[position].homepage = replacement.isEmpty ? nil : replacement + String(homepage.dropFirst(prefix.count))
+        }
+        return copy
+    }
+
     /// Throws unless `manifest` may be signed or listed: valid, and meeting
     /// what every published plugin needs (`publishingProblems`).
     public static func checkPublishable(_ manifest: Manifest) throws {
