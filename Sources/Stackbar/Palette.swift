@@ -97,6 +97,39 @@ final class PaletteController {
         noteLeft()
     }
 
+    /// The open for which a stray key was last logged.
+    private var loggedStrayKey = -1
+
+    /// A key that reached the window because no field held the keyboard.
+    /// A control of a plugin's view that holds it (a button, a toggle) keeps
+    /// it; otherwise the palette's field takes the keyboard back, and the
+    /// key does what it would have done there.
+    private func strayKey(_ event: NSEvent, in panel: NSWindow) -> Bool {
+        let holder = panel.firstResponder
+        guard holder == nil || holder === panel || holder === panel.contentView else { return false }
+        // Once per open: what was showing and what held the keyboard, so a
+        // way of losing it that this doesn't foresee still shows in the log.
+        if loggedStrayKey != session.shownCount {
+            loggedStrayKey = session.shownCount
+            let holderName = holder.map { $0 === panel ? "the window" : String(describing: type(of: $0)) } ?? "nothing"
+            HostLog.shared.write(.info, "palette: a key reached the window with no field holding the keyboard (\(holderName), on \(session.stageName)); took it back")
+        }
+        var modifiers: PaletteStrayKey.Modifiers = []
+        let flags = event.modifierFlags
+        if flags.contains(.shift) { modifiers.insert(.shift) }
+        if flags.contains(.control) { modifiers.insert(.control) }
+        if flags.contains(.option) { modifiers.insert(.option) }
+        if flags.contains(.command) { modifiers.insert(.command) }
+        guard let key = PaletteStrayKey(keyCode: event.keyCode, modifiers: modifiers,
+                                        characters: event.charactersIgnoringModifiers,
+                                        columns: session.showingActions ? nil : session.gridColumns) else {
+            session.takeKeyboardBack()
+            return false
+        }
+        session.strayKey(key)
+        return true
+    }
+
     /// The palette lost focus or was hidden part-way through something.
     private func noteLeft() {
         session.commandHeld = false
@@ -213,6 +246,10 @@ final class PaletteController {
         panel.onCancel = { [weak self] in self?.session.back() ?? false }
         panel.onClose = { [weak self] in self?.hide() }
         panel.onResign = { [weak self] in self?.noteLeft() }
+        panel.onStrayKey = { [weak self, weak panel] event in
+            guard let self, let panel else { return false }
+            return self.strayKey(event, in: panel)
+        }
         session.onCollapsedChange = { [weak self] collapsed in self?.resize(collapsed: collapsed) }
         return panel
     }
@@ -225,8 +262,18 @@ final class KeyablePanel: NSPanel {
     var onClose: (() -> Void)?
     /// Lost key status: clicked away, or hidden.
     var onResign: (() -> Void)?
+    /// A key press no view took. True when it was used.
+    var onStrayKey: ((NSEvent) -> Bool)?
 
     override var canBecomeKey: Bool { true }
+
+    /// Only keys that nothing in the window took get here: the responder
+    /// chain ends at the window. While a field holds the keyboard, SwiftUI's
+    /// `onKeyPress` has them first.
+    override func keyDown(with event: NSEvent) {
+        if onStrayKey?(event) == true { return }
+        super.keyDown(with: event)
+    }
 
     override func resignKey() {
         super.resignKey()
@@ -253,9 +300,23 @@ struct PaletteView: View {
     }
 
     enum Field: Hashable {
+        /// The root's search field.
         case search
+        /// An open view's own search field. Each view's is a value of its
+        /// own: two fields sharing one value made opening a view a write of
+        /// the value focus already had, which SwiftUI drops, so the new
+        /// field never took the keyboard.
+        case viewSearch(ObjectIdentifier)
         case argument(String)
         case actionSearch
+
+        /// The root's search field or an open view's.
+        var isSearch: Bool {
+            switch self {
+            case .search, .viewSearch: return true
+            case .argument, .actionSearch: return false
+            }
+        }
     }
 
     var body: some View {
@@ -275,6 +336,8 @@ struct PaletteView: View {
         .onChange(of: session.collapsed) { _, collapsed in session.onCollapsedChange(collapsed) }
         .onChange(of: session.shownCount) { _, _ in focusFirst() }
         .onChange(of: session.stack.map(\.id)) { _, _ in focusFirst() }
+        // A key reached the window with no field to take it: take it back.
+        .onChange(of: session.focusRequests) { _, _ in focusFirst(again: true) }
         .onChange(of: session.showingActions) { _, showing in
             if showing {
                 DispatchQueue.main.async { focus = .actionSearch }
@@ -460,7 +523,7 @@ struct PaletteView: View {
                 return .handled
             }
             // ⌘⌫ clears the search field: the open command's, or the root's.
-            if press.key == .delete, focus == .search {
+            if press.key == .delete, focus?.isSearch == true {
                 if case .view(let view) = session.top {
                     guard !view.query.isEmpty else { return .ignored }
                     view.query = ""
@@ -499,30 +562,37 @@ struct PaletteView: View {
         return .ignored
     }
 
-    private func focusFirst() {
+    /// Gives the keyboard to the open stage's field. `again` is for when
+    /// the window says no field holds it: focus may still name that field,
+    /// and writing the value it has is no change to SwiftUI, so it is
+    /// cleared first and set once a frame has passed.
+    private func focusFirst(again: Bool = false) {
         // After the window is key, or focus doesn't take.
         DispatchQueue.main.async {
-            switch session.top {
-            case .arguments(let entry, _):
-                // Only text fields take focus; a picker has none, and focus
-                // given to one left Return and the arrows going nowhere.
-                let fields = entry.spec.arguments.filter { $0.options == nil }
-                let empty = fields.first { (session.argumentValues[$0.name] ?? "").isEmpty }
-                focus = (empty ?? fields.first).map { .argument($0.name) }
-            case .view, .none:
-                // The root's search field and a view's are different fields
-                // that share `.search`. Setting the value it already has is
-                // no change, so the new field never took focus: the arrows
-                // and typing went nowhere until Tab. Clear it first.
-                if focus == .search {
-                    focus = nil
-                    DispatchQueue.main.async { focus = .search }
-                } else {
-                    focus = .search
-                }
-            case .approval:
+            if again, let current = focus, current == target {
                 focus = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) { focus = target }
+                return
             }
+            focus = target
+        }
+    }
+
+    /// The field the open stage starts in, or nil for none.
+    private var target: Field? {
+        switch session.top {
+        case .arguments(let entry, _):
+            // Only text fields take focus; a picker has none, and focus
+            // given to one left Return and the arrows going nowhere.
+            let fields = entry.spec.arguments.filter { $0.options == nil }
+            let empty = fields.first { (session.argumentValues[$0.name] ?? "").isEmpty }
+            return (empty ?? fields.first).map { .argument($0.name) }
+        case .view(let view):
+            return .viewSearch(ObjectIdentifier(view))
+        case .none:
+            return .search
+        case .approval:
+            return nil
         }
     }
 }
@@ -719,7 +789,7 @@ struct ViewHeader: View {
     var body: some View {
         TextField(Self.prompt(view.entry.spec.title), text: $view.query)
             .textFieldStyle(.plain)
-            .focused(focus, equals: .search)
+            .focused(focus, equals: .viewSearch(ObjectIdentifier(view)))
             .onSubmit(onSubmit)
         ArgumentFields(arguments: view.entry.spec.arguments, values: $view.arguments, focus: focus, onSubmit: onSubmit)
     }

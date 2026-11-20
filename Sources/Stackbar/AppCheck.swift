@@ -75,6 +75,7 @@ enum AppCheck {
                 await checkActions(app, folder: folder)
                 await checkBack(app)
                 await checkArrowsInViews(app)
+                await checkStrayKeys(app)
             }
             if !isUpgrade {
                 await checkSettings(app, folder: folder)
@@ -306,7 +307,9 @@ enum AppCheck {
             guard await AppDriver.waitUntil(seconds: 5, { session.rows(of: view).count >= 2 && !view.isShowingPlaceholder }) else { return nil }
             let before = session.selectedRow(of: view)?.key
             let holder = keyHolder(app.palette.window)
-            pressDown(in: app.palette.window)
+            // On the last row already (a two-row list opened again), Up is
+            // the arrow that can move.
+            pressArrow(up: before == session.rows(of: view).last?.key, in: app.palette.window)
             await AppDriver.nextFrame()
             try? await Task.sleep(for: .milliseconds(50))
             tries += 1
@@ -363,12 +366,49 @@ enum AppCheck {
                "\(tries - failures.count)/\(tries) moved. Failed: \(failures.joined(separator: "; ")). Skipped: \(skipped.joined(separator: "; "))")
     }
 
-    /// A plain Down arrow, delivered as AppKit delivers a real key press.
-    private static func pressDown(in window: NSWindow?) {
+    /// With the keyboard taken from every field on purpose, Down still
+    /// moves the highlight and the view's field takes the keyboard back,
+    /// so a focus lost some other way never leaves the arrows dead.
+    private static func checkStrayKeys(_ app: AppDelegate) async {
+        let session = app.palette.session
+        let commands = app.model.commands.registry.entries.filter { $0.spec.kind == .view && $0.spec.arguments.isEmpty }
+        for command in commands {
+            app.palette.toggle()
+            _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
+            session.enter(command, source: .palette)
+            let ready = await AppDriver.waitUntil(seconds: 10) {
+                guard case .view(let view) = session.top else { return false }
+                return session.rows(of: view).count >= 2 && !view.isShowingPlaceholder
+            }
+            guard ready, case .view(let view) = session.top, let window = app.palette.window else {
+                app.palette.hide()
+                continue
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+            window.makeFirstResponder(nil)
+            let taken = keyHolder(window)
+            let before = session.selectedRow(of: view)?.key
+            pressArrow(up: before == session.rows(of: view).last?.key, in: window)
+            await AppDriver.nextFrame()
+            try? await Task.sleep(for: .milliseconds(300))
+            let moved = session.selectedRow(of: view)?.key != before
+            let holder = keyHolder(window)
+            let back = holder.hasPrefix("field")
+            record("Down works with no field holding the keyboard", moved && back,
+                   "\(command.spec.title): keyboard with \(taken); Down moved \(moved); then keyboard with \(holder)")
+            app.palette.hide()
+            return
+        }
+        record("Down works with no field holding the keyboard", false, "no view command with 2 rows to try")
+    }
+
+    /// A plain Down (or Up) arrow, delivered as AppKit delivers a real key press.
+    private static func pressArrow(up: Bool = false, in window: NSWindow?) {
+        let character = up ? "\u{F700}" : "\u{F701}"
         guard let window, let event = NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            with: .keyDown, location: .zero, modifierFlags: [.numericPad, .function], timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber, context: nil,
-            characters: "\u{F701}", charactersIgnoringModifiers: "\u{F701}", isARepeat: false, keyCode: 125
+            characters: character, charactersIgnoringModifiers: character, isARepeat: false, keyCode: up ? 126 : 125
         ) else { return }
         NSApp.sendEvent(event)
     }

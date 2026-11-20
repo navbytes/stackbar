@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## Unreleased
+
+### Fixed
+- **↑ and ↓ work as soon as a plugin's list opens.** Now and then, opening a plugin's search in the palette left the keyboard with no field, so the arrows and Return did nothing until you pressed Tab. The palette now catches any key that no field takes, so the arrows, Return and typing still work, and it hands the keyboard back to the search field. When that happens, the log says what was open, so the cause can be tracked down.
+
 ## 0.41.0
 
 ### Added

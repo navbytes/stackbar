@@ -81,6 +81,9 @@ final class PaletteSession {
     var context: InvocationContext?
     /// Changes each time the palette opens, to take focus again.
     private(set) var shownCount = 0
+    /// Changes when a key found no field holding the keyboard, so the
+    /// view puts its field back in charge.
+    private(set) var focusRequests = 0
     /// ⌘ is held: the first rows show their ⌘1…⌘9.
     var commandHeld = false
     /// The plugin search the palette is inside: its name, then Tab, as in
@@ -888,6 +891,42 @@ final class PaletteSession {
             approve()
         case .view(let view):
             if let primary = selectedRow(of: view)?.actions.first { perform(primary, in: view) }
+        }
+    }
+
+    /// What is showing, for the log: the root, or the open command.
+    var stageName: String {
+        if showingActions { return "⌘K actions" }
+        switch top {
+        case .none: return scope.map { "the root, searching \($0.pluginName)" } ?? "the root"
+        case .view(let view): return "\(view.entry.pluginName) › \(view.entry.spec.title)"
+        case .arguments(let entry, _): return "\(entry.pluginName) › \(entry.spec.title) arguments"
+        case .approval(let entry, _, _): return "\(entry.pluginName) approval"
+        }
+    }
+
+    /// Asks the view to give its field the keyboard again.
+    func takeKeyboardBack() {
+        focusRequests += 1
+    }
+
+    /// A key no field took (`PaletteStrayKey`): done as the field would
+    /// have, and the field takes the keyboard back for the next one.
+    func strayKey(_ key: PaletteStrayKey) {
+        takeKeyboardBack()
+        switch key {
+        case .move(let delta):
+            move(delta)
+        case .submit:
+            submit()
+        case .type(let text):
+            if showingActions {
+                actionQuery += text
+            } else if case .view(let view) = top {
+                view.query += text
+            } else if stack.isEmpty {
+                query += text
+            }
         }
     }
 
