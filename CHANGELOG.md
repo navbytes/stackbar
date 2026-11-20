@@ -3,7 +3,7 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
-## Unreleased
+## 0.41.1
 
 ### Added
 - **`invocation.isOpening` for plugin authors.** A view's first search now says it is the one the view opened with, so a view that acts on the text it was given (Ask AI asking the question you typed in the palette) does it once, not on every keystroke after. It lives in StackbarKit, so it works with any Stackbar.
