@@ -273,7 +273,9 @@ enum AppCheck {
     /// opens, without Tab first. The key goes in as AppKit delivers a real
     /// one, through the panel's first responder, so it fails the way a
     /// person sees it fail when no field holds the keyboard. Each view
-    /// command is opened at a few delays; the detail names what held the
+    /// command is tried at several delays and along three paths: opened
+    /// from the root, the palette hidden and shown again on it, and Esc
+    /// back to the root then opened again. The detail names what held the
     /// keyboard each time it failed.
     private static func checkArrowsInViews(_ app: AppDelegate) async {
         let session = app.palette.session
@@ -283,44 +285,78 @@ enum AppCheck {
         var tries = 0
         var failures: [String] = []
         var skipped: [String] = []
+
+        func open(_ command: CommandRegistry.Entry) async -> CommandViewModel? {
+            // As a person does it: the name typed in the root's field, then Return.
+            session.query = command.spec.title
+            try? await Task.sleep(for: .milliseconds(120))
+            session.enter(command, source: .palette)
+            _ = await AppDriver.waitUntil(seconds: 10) {
+                if case .view = session.top { return true }
+                return false
+            }
+            if case .view(let view) = session.top { return view }
+            return nil
+        }
+
+        /// Waits `delay`, then presses Down; false when the highlight stayed.
+        func pressAndCheck(_ view: CommandViewModel, delay: Int, label: String) async -> Bool? {
+            try? await Task.sleep(for: .milliseconds(delay))
+            let early = keyHolder(app.palette.window)
+            guard await AppDriver.waitUntil(seconds: 5, { session.rows(of: view).count >= 2 && !view.isShowingPlaceholder }) else { return nil }
+            let before = session.selectedRow(of: view)?.key
+            let holder = keyHolder(app.palette.window)
+            pressDown(in: app.palette.window)
+            await AppDriver.nextFrame()
+            try? await Task.sleep(for: .milliseconds(50))
+            tries += 1
+            let moved = session.selectedRow(of: view)?.key != before
+            if !moved { failures.append("\(label) +\(delay)ms: keyboard with \(early), then \(holder)") }
+            return moved
+        }
+
         for command in commands {
-            for delay in [0, 120, 400] {
-                app.palette.toggle()
-                _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
-                await AppDriver.nextFrame()
-                // As a person does it: the name typed in the root's field, then Return.
-                session.query = command.spec.title
-                try? await Task.sleep(for: .milliseconds(150))
-                session.enter(command, source: .palette)
-                let opened = await AppDriver.waitUntil(seconds: 10) {
-                    if case .view = session.top { return true }
-                    return false
-                }
-                guard opened, case .view(let view) = session.top else {
-                    skipped.append("\(command.spec.title) didn't open")
+            let title = command.spec.title
+            commandLoop: for round in 0..<3 {
+                for delay in [0, 40, 120, 400] {
+                    app.palette.toggle()
+                    _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
+                    await AppDriver.nextFrame()
+                    guard let view = await open(command) else {
+                        skipped.append("\(title) didn't open")
+                        app.palette.hide()
+                        break commandLoop
+                    }
+                    guard await pressAndCheck(view, delay: delay, label: "\(title) opened") != nil else {
+                        skipped.append("\(title) has under 2 rows")
+                        app.palette.hide()
+                        break commandLoop
+                    }
+                    if round == 0 {
+                        // Hidden and shown again within the resume window: back on the view.
+                        app.palette.toggle()
+                        try? await Task.sleep(for: .milliseconds(150))
+                        app.palette.toggle()
+                        _ = await AppDriver.waitUntil(seconds: 5) { app.palette.isVisible }
+                        if case .view(let resumed) = session.top {
+                            _ = await pressAndCheck(resumed, delay: delay, label: "\(title) resumed")
+                        }
+                    } else if round == 1 {
+                        // Esc to the root, then the same command again.
+                        _ = session.back()
+                        await AppDriver.nextFrame()
+                        session.enter(command, source: .palette)
+                        _ = await AppDriver.waitUntil(seconds: 10) {
+                            if case .view(let again) = session.top { return again !== view }
+                            return false
+                        }
+                        if case .view(let again) = session.top {
+                            _ = await pressAndCheck(again, delay: delay, label: "\(title) after Esc")
+                        }
+                    }
                     app.palette.hide()
-                    break
+                    try? await Task.sleep(for: .milliseconds(100))
                 }
-                try? await Task.sleep(for: .milliseconds(delay))
-                let holderAtDelay = keyHolder(app.palette.window)
-                let hasRows = await AppDriver.waitUntil(seconds: 5) { session.rows(of: view).count >= 2 && !view.isShowingPlaceholder }
-                guard hasRows else {
-                    skipped.append("\(command.spec.title) has under 2 rows")
-                    app.palette.hide()
-                    break
-                }
-                let before = session.selectedRow(of: view)?.key
-                let holder = keyHolder(app.palette.window)
-                pressDown(in: app.palette.window)
-                await AppDriver.nextFrame()
-                try? await Task.sleep(for: .milliseconds(50))
-                let after = session.selectedRow(of: view)?.key
-                tries += 1
-                if before == after {
-                    failures.append("\(command.spec.title) +\(delay)ms: keyboard with \(holderAtDelay), then \(holder)")
-                }
-                app.palette.hide()
-                try? await Task.sleep(for: .milliseconds(100))
             }
         }
         record("Down moves in a plugin's list right after it opens", tries > 0 && failures.isEmpty,
