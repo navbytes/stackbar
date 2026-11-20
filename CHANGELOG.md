@@ -3,6 +3,18 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## 0.42.0
+
+### Added
+- **Widgets can have a layout for each size.** A plugin can now draw its small, medium and large desktop widgets differently, the way Scriptable widgets do, instead of squeezing one layout into every size. Stackbar asks plugins only for the sizes you have on your desktop. Plugin authors write `func widget(_ size: WidgetSize)`; plugins that don't keep one layout. Plugins use protocol 31.
+- **Backgrounds fill the whole widget.** A widget with its own background, such as Music's album art or a colour gradient, now fills the widget edge to edge rather than sitting as a card inside a grey frame.
+- **For people who run their own copy of the store:** `stackbarctl index build` can point plugin homepage links at your own repository, and the self-hosting guide covers building helpers without GitHub Actions.
+
+### Fixed
+- **Widgets now look like their previews.** Album covers, avatars and other pictures show in widgets; before, they stayed grey placeholders. Text fields, pickers and sliders draw properly, and app icons appear in rows.
+- **Clocks and timers in widgets keep time.** They used to stop at the time of the last refresh until macOS redrew the widget.
+- **Large widgets show more.** Lists show 3 rows in a small widget, 4 in a medium one and 9 in a large one, and content is no longer padded twice.
+
 ## 0.41.1
 
 ### Added
