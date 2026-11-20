@@ -59,7 +59,8 @@ fresh and signed with your key).
      "stackbar": "https://github.com/example-corp/stackbar",
      "idPrefixes": ["io.navbytes.stackbar.plugins.", "com.example.stackbar."],
      "exclude": ["Productivity/AskAI"],
-     "helpersURL": "helpers-bin"
+     "helpersURL": "helpers-bin",
+     "pluginHomepage": "https://github.com/example-corp/stackbar-plugins/tree/main/"
    }
    ```
 
@@ -69,6 +70,12 @@ fresh and signed with your key).
      `helpers-bin`, they sit beside `index.json`, so one host and one token
      serve the whole store. Upstream uses GitHub release assets, which a
      private repository won't serve to the app.
+   - `pluginHomepage` is where each plugin's "Homepage" link in the store
+     goes. Plugin source declares upstream's folder on GitHub. Publish moves
+     those links to yours in the signed index, and `null` drops them. **Don't
+     edit or sed-rewrite plugin source for this.** The source digest is what
+     a bundle, its prebuilt helper and its published version are matched by,
+     so a rewritten tree makes helpers miss and versions clash with upstream.
 
 3. If your stackbar repository is private, add a secret `STACKBAR_REPO_TOKEN`:
    a fine-grained PAT with contents read on it. CI uses it to fetch StackbarKit.
@@ -96,6 +103,41 @@ fresh and signed with your key).
              GH_TOKEN: ${{ github.token }}
          - run: <upload "$RUNNER_TEMP/store" to https://plugins.example.com/>
    ```
+
+   **Without GitHub Actions or Pages**, run the two scripts yourself on a Mac
+   with Xcode and your key. Start with an empty folder or the one you last
+   uploaded, because published bundles are never rewritten:
+
+   ```sh
+   scripts/publish.sh site publisher.key
+   scripts/helpers.sh --local site publisher.key ../stackbar
+   ```
+
+   `--local` builds helpers against each Stackbar checkout you name (newest
+   first, e.g. the tags your Macs run). It writes the binaries under
+   `site/<helpersURL>/` beside `helpers.json`, with no GitHub release.
+   `helpersURL` must then be a relative path. When it is null, `--local`
+   uses `helpers-bin`.
+
+   Either way, the host serves one static folder: `index.json`,
+   `helpers.json`, `site.json`, the category folders of bundles and renders,
+   and `helpers-bin/`. The app fetches every file with a plain GET. It
+   resolves relative URLs against `index.json`, so any static server works.
+   With nginx:
+
+   ```nginx
+   location /stackbar/ {
+       alias /srv/stackbar-store/;
+       # index.json and helpers.json change on each publish; bundles and
+       # helpers never change once written, so they can be cached.
+       location ~ /(index|helpers|site)\.json$ { add_header Cache-Control "no-cache"; }
+   }
+   ```
+
+   If the host needs a token, the app sends it as `Authorization: Bearer`
+   (see `store.authSecret` below). It sends the token only to URLs under the
+   folder of `index.json`, so keep helpers in a relative `helpersURL` and
+   don't move them to another host.
 
    Don't use private GitHub Pages: they need a browser sign-in, which the app
    can't do. If your host needs a token, set `store.authSecret` in the app's

@@ -175,6 +175,11 @@ func index(_ rest: [String]) async {
             let directory = URL(fileURLWithPath: rest[1])
             let revoked = try flag("--revoked", in: rest).map { try JSONDecoder().decode([PluginIndex.Revocation].self, from: Data(contentsOf: URL(fileURLWithPath: $0))) }
             var index = try PluginIndex.build(name: flag("--name", in: rest) ?? directory.lastPathComponent, root: directory, homepage: flag("--homepage", in: rest), revoked: revoked)
+            if let from = flag("--plugin-homepage-from", in: rest) {
+                let to = flag("--plugin-homepage-to", in: rest) ?? ""
+                guard to.isEmpty || to.hasPrefix("https://") else { fail("--plugin-homepage-to must be an https URL, or empty to drop the homepages") }
+                index = index.movingHomepages(from: from, to: to)
+            }
             if let keyFile = flag("--key", in: rest) {
                 let key = try privateKey(in: keyFile)
                 index = try index.signed(privateKey: key)
