@@ -17,6 +17,7 @@ struct StyleModifier: ViewModifier {
     var interactive = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.stackbarSnapshot) private var snapshot
+    @Environment(\.stackbarVibrant) private var vibrant
 
     func body(content: Content) -> some View {
         // In three steps, each type-erased, so the chain stays small enough
@@ -44,7 +45,7 @@ struct StyleModifier: ViewModifier {
                     .frame(width: frame.width.map { CGFloat($0) }, height: frame.height.map { CGFloat($0) }, alignment: frame.alignment?.alignment ?? .center)
                     .frame(maxWidth: frame.fillWidth == true ? .infinity : nil, maxHeight: frame.fillHeight == true ? .infinity : nil, alignment: frame.alignment?.alignment ?? .center)
             }
-            .ifLet(style.background) { view, fill in Self.fill(view, fill, snapshot: snapshot) }
+            .ifLet(style.background) { view, fill in Self.fill(view, fill, snapshot: snapshot, vibrant: vibrant) }
             .ifLet(style.border) { view, border in view.overlay { border.shape.view(fill: nil, stroke: border.paint.shapeStyle, lineWidth: border.width) } }
             .ifLet(style.clip) { $0.clipShape($1.anyShape) })
     }
@@ -52,7 +53,12 @@ struct StyleModifier: ViewModifier {
     /// A background: Liquid Glass as a glass effect, any other paint drawn
     /// in its shape behind the view. A snapshot draws glass as a light veil
     /// with a rim, since `ImageRenderer` draws no glass effect at all.
-    private static func fill(_ view: some View, _ fill: Fill, snapshot: Bool) -> AnyView {
+    /// A vibrant widget draws every background as a light veil, since
+    /// macOS desaturates it and an opaque fill would hide the text on it.
+    private static func fill(_ view: some View, _ fill: Fill, snapshot: Bool, vibrant: Bool = false) -> AnyView {
+        if vibrant {
+            return AnyView(view.background { fill.shape.view(fill: AnyShapeStyle(Color.primary.opacity(0.1)), stroke: nil, lineWidth: 0) })
+        }
         if case .material(.glass) = fill.paint {
             if snapshot {
                 return AnyView(view.background {

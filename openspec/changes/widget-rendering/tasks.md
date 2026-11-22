@@ -10,6 +10,10 @@
 - [x] 1.7 Ledger, authoring guide, llms.txt
 - [ ] 1.8 Mac check: Music widget shows the cover full-bleed; World Clock and Pomodoro widgets keep time for an hour with Stackbar idle; System Monitor small/medium/large; a widget toggle and button still act
 
+## 1b. Fixes from the first Mac check (2026-11-22)
+- [x] 1.9 No `textSelection` in widgets: WidgetKit drew every plain text and labeled value as a yellow no-entry box
+- [x] 1.10 Vibrant mode (desktop behind windows): style backgrounds draw as light veils instead of opaque fills that wash out to grey slabs
+
 ## 2. Store
 - [x] 2.1 World Clock: widget times from `Clock`, so they don't go stale
 
