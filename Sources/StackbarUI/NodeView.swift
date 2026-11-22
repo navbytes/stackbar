@@ -37,6 +37,10 @@ extension EnvironmentValues {
     /// Drawing for `Snapshot`: AppKit-backed controls (text fields, pickers)
     /// don't render off screen, so they draw as SwiftUI look-alikes.
     @Entry public var stackbarSnapshot: Bool = false
+    /// A desktop widget drawn in the vibrant (desaturated) mode macOS uses
+    /// while the desktop is behind windows: backgrounds turn to light
+    /// veils, since opaque fills would wash out to grey slabs.
+    @Entry public var stackbarVibrant: Bool = false
     /// An editor fills the space it is given (a plugin window) instead of
     /// keeping its panel height.
     @Entry public var stackbarEditorFills: Bool = false
@@ -90,7 +94,7 @@ public struct NodeView: View {
     public var body: some View {
         switch node {
         case .text(let string, let style, let role):
-            Text(string).font(textFont(style)).foregroundStyle(tint(role)).textSelection(.enabled)
+            Text(string).font(textFont(style)).foregroundStyle(tint(role)).selectable(!snapshot)
         case .label(let title, let symbol, let role):
             Label(title, systemImage: symbol).foregroundStyle(tint(role))
         case .stack(.vertical, let spacing, let alignment, let children):
@@ -168,7 +172,7 @@ public struct NodeView: View {
         case .divider:
             Divider()
         case .labeled(let label, let value, let role):
-            LabeledContent(label) { Text(value).foregroundStyle(tint(role)).textSelection(.enabled) }
+            LabeledContent(label) { Text(value).foregroundStyle(tint(role)).selectable(!snapshot) }
         case .chart(let values, let kind, let label, let role, let options):
             ChartNodeView(values: values, kind: kind, label: label, role: role, options: options ?? ChartOptions(), tint: foreground?.flatColor)
         case .textField(let placeholder, let text, let action):
@@ -1240,4 +1244,12 @@ public struct LookupIcon<Icon: View, Placeholder: View>: View {
 }
 #endif
 
+extension View {
+    /// Text selection, which a widget can't draw: WidgetKit shows a text
+    /// with `textSelection` as a yellow box with a no-entry sign.
+    @ViewBuilder
+    func selectable(_ enabled: Bool) -> some View {
+        if enabled { textSelection(.enabled) } else { self }
+    }
+}
 #endif

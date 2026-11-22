@@ -110,6 +110,7 @@ struct StackbarWidgetView: View {
     let entry: SnapshotEntry
     @Environment(\.widgetFamily) private var family
     @Environment(\.widgetContentMargins) private var margins
+    @Environment(\.widgetRenderingMode) private var renderingMode
 
     var body: some View {
         if let snapshot = entry.snapshot {
@@ -123,6 +124,7 @@ struct StackbarWidgetView: View {
             WidgetContentView(layers: layers, size: size, margins: margins)
                 .environment(\.stackbarNow, entry.date)
                 .environment(\.stackbarRemoteImage, remote)
+                .environment(\.stackbarVibrant, renderingMode == .vibrant)
                 .environment(\.stackbarWidgetButton, WidgetActionButton { action, value, plain, label in
                     let button = Button(intent: WidgetActionIntent(plugin: plugin, action: action, value: value)) { label }
                     return plain ? AnyView(button.buttonStyle(.plain)) : AnyView(button)
