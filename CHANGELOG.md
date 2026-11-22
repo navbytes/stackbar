@@ -3,6 +3,12 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## 0.42.1
+
+### Fixed
+- **Widget text shows again.** Plain text and values in desktop widgets showed as yellow boxes with a no-entry sign, and only looked right while you dragged the widget.
+- **Widgets stay readable when windows cover the desktop.** In that faded mode, coloured cards turned into solid grey slabs that hid their text. They now draw as light, see-through panels.
+
 ## 0.42.0
 
 ### Added
