@@ -479,7 +479,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.isReleasedWhenClosed = false
             let host = NSHostingController(rootView: StoreBrowser(model: model, store: model.store))
             host.sceneBridgingOptions = [.toolbars, .title]
-            window.contentViewController = host
+            window.hostSwiftUI(host, minSize: NSSize(width: 900, height: 600))
             window.setContentSize(NSSize(width: 1040, height: 720))
             window.center()
             window.setFrameAutosaveName("StackbarStore")
@@ -505,7 +505,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // SwiftUI, as they do in a Settings scene.
             let host = NSHostingController(rootView: SettingsView(model: model))
             host.sceneBridgingOptions = [.toolbars, .title]
-            window.contentViewController = host
+            window.hostSwiftUI(host, minSize: NSSize(width: 820, height: 560))
             window.setContentSize(NSSize(width: 900, height: 640))
             window.center()
             window.setFrameAutosaveName("StackbarSettings")

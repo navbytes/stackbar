@@ -3,6 +3,11 @@
 Each release's section is its release notes on GitHub and in the update
 window. Write for people who use Stackbar, not for the code.
 
+## 0.42.2
+
+### Fixed
+- **Stackbar no longer quits while Settings, the Store or a plugin's window is open.** A window whose contents kept changing size, such as a list that refreshes, could get stuck re-measuring itself until macOS stopped Stackbar. These windows now keep the size you give them.
+
 ## 0.42.1
 
 ### Fixed

@@ -70,7 +70,7 @@ final class PluginWindows: NSObject, NSWindowDelegate {
         )
         window.title = controller.name
         window.isReleasedWhenClosed = false
-        window.contentViewController = NSHostingController(rootView: PluginWindowView(controller: controller))
+        window.hostSwiftUI(NSHostingController(rootView: PluginWindowView(controller: controller)), minSize: PluginWindowView.minSize)
         window.setFrameAutosaveName("stackbar.window." + controller.pluginID)
         window.delegate = self
         window.center()
@@ -99,6 +99,7 @@ final class PluginWindows: NSObject, NSWindowDelegate {
 }
 
 struct PluginWindowView: View {
+    static let minSize = NSSize(width: 320, height: 240)
     let controller: PluginController
 
     var body: some View {
@@ -123,7 +124,7 @@ struct PluginWindowView: View {
                 }
             }
         }
-        .frame(minWidth: 320, minHeight: 240)
+        .frame(minWidth: Self.minSize.width, minHeight: Self.minSize.height)
         .environment(\.stackbarImageData, AppModel.previewImages(for: controller))
         .environment(\.stackbarRemoteImage, controller.remoteImages)
     }
@@ -177,6 +178,27 @@ final class PinAccessory: NSTitlebarAccessoryViewController {
         button.contentTintColor = pinned ? .controlAccentColor : .secondaryLabelColor
         button.toolTip = title
         button.setAccessibilityLabel(title)
+    }
+}
+
+extension NSWindow {
+    /// Shows SwiftUI in a window the user sizes. The hosting controller's
+    /// default sizing ties the window's frame to SwiftUI's min, ideal and
+    /// max sizes through constraints. Content in a scroll view whose height
+    /// follows its width (wrapping text, a plugin list that just refreshed)
+    /// then changed those sizes on every pass: the window resized, the
+    /// scroll view asked for layout again, and AppKit gave up after more
+    /// passes than the window has views and threw, which ended the app
+    /// (0.40.1, after hours open). The window keeps its own frame instead,
+    /// with the floor set here rather than read from SwiftUI each pass.
+    func hostSwiftUI<Content: View>(_ host: NSHostingController<Content>, minSize: NSSize) {
+        // Setting a view controller sizes the window to its view, which
+        // without sizing options has no size yet; keep the one asked for.
+        let size = contentRect(forFrameRect: frame).size
+        host.sizingOptions = []
+        contentViewController = host
+        contentMinSize = minSize
+        setContentSize(NSSize(width: max(size.width, minSize.width), height: max(size.height, minSize.height)))
     }
 }
 #endif
