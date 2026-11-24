@@ -12,6 +12,9 @@ struct PanelView: View {
     let controller: PluginController
     let model: AppModel
     let windows: PluginWindows
+    /// Told the height of the panel's contents whenever it changes, for a
+    /// window that sizes itself to them (the headless panel).
+    var onContentHeight: ((CGFloat) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -28,6 +31,9 @@ struct PanelView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        onContentHeight?(height)
+                    }
                 }
                 .frame(maxHeight: 560)
                 .environment(\.stackbarScrollTo, { key in proxy.scrollTo(key) })

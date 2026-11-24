@@ -13,6 +13,10 @@ final class HeadlessPanelController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private let windows: PluginWindows
     private var panel: KeyablePanel?
+    /// The content's own height at the panel's width, asked of SwiftUI.
+    private var idealSize: (() -> CGSize)?
+    private var fitPending = false
+    private static let width: CGFloat = 380
     private var hotKey: HotKey?
     private var hotKeySpec: String?
 
@@ -39,6 +43,7 @@ final class HeadlessPanelController: NSObject, NSWindowDelegate {
     func show() {
         let panel = self.panel ?? makePanel()
         self.panel = panel
+        fit()
         panel.center()
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
@@ -49,6 +54,31 @@ final class HeadlessPanelController: NSObject, NSWindowDelegate {
         guard let panel, panel.isVisible else { return }
         panel.orderOut(nil)
         controller.setVisible(.panel, false)
+    }
+
+    /// Sizes the panel to its content on the next turn of the run loop,
+    /// once, however many changes came in meanwhile: never from inside a
+    /// layout pass.
+    private func scheduleFit() {
+        guard !fitPending else { return }
+        fitPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            fitPending = false
+            fit()
+        }
+    }
+
+    /// The panel's content height (the scroll view stops growing at its own
+    /// cap), keeping the top edge where it is so the panel grows downward.
+    private func fit() {
+        guard let panel, let ideal = idealSize?() else { return }
+        let maxHeight = (panel.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
+        let height = min(max(ideal.height, panel.contentMinSize.height), maxHeight).rounded()
+        let current = panel.contentRect(forFrameRect: panel.frame)
+        guard abs(current.height - height) >= 1 else { return }
+        let frame = panel.frameRect(forContentRect: NSRect(x: current.minX, y: current.maxY - height, width: Self.width, height: height))
+        panel.setFrame(frame, display: true)
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -69,9 +99,18 @@ final class HeadlessPanelController: NSObject, NSWindowDelegate {
         panel.isMovableByWindowBackground = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
-        let hosting = NSHostingController(rootView: PanelView(controller: controller, model: model, windows: windows).frame(width: 380))
-        hosting.sizingOptions = [.preferredContentSize]
-        panel.contentViewController = hosting
+        let view = PanelView(controller: controller, model: model, windows: windows) { [weak self] _ in
+            self?.scheduleFit()
+        }
+        let hosting = NSHostingController(rootView: view.frame(width: Self.width))
+        // Not `.preferredContentSize`: that lets SwiftUI move this titled
+        // window's frame from inside AppKit's layout pass, and wrapping text
+        // in the scroll view (a Dictionary definition) kept changing the
+        // asked-for size each pass until AppKit threw and Stackbar quit
+        // (0.42.1). The panel sizes itself to its content after layout
+        // instead, in `fit()`, as the other windows do since 0.42.2.
+        panel.hostSwiftUI(hosting, minSize: NSSize(width: Self.width, height: 120))
+        idealSize = { [weak hosting] in hosting?.sizeThatFits(in: CGSize(width: Self.width, height: .greatestFiniteMagnitude)) ?? .zero }
         panel.delegate = self
         panel.onClose = { [weak self] in self?.hide() }
         return panel

@@ -7,6 +7,7 @@ window. Write for people who use Stackbar, not for the code.
 
 ### Fixed
 - **Stackbar no longer quits while Settings, the Store or a plugin's window is open.** A window whose contents kept changing size, such as a list that refreshes, could get stuck re-measuring itself until macOS stopped Stackbar. These windows now keep the size you give them.
+- **Plugins without a menu-bar icon, such as Dictionary, no longer crash Stackbar when their panel opens.** The floating panel hit the same re-measuring loop when its contents had wrapping text, like a long definition. The panel now fits itself to its contents after they are drawn.
 
 ## 0.42.1
 
