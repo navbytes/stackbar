@@ -7,7 +7,6 @@ window. Write for people who use Stackbar, not for the code.
 
 ### Fixed
 - **Stackbar no longer quits while Settings, the Store or a plugin's window is open.** A window whose contents kept changing size, such as a list that refreshes, could get stuck re-measuring itself until macOS stopped Stackbar. These windows now keep the size you give them.
-- **Looking words up no longer crashes Stackbar.** Typing in Define Word sent a look-up per keystroke, and several could reach the Mac's Dictionary at once, which it can't handle. Look-ups now run one at a time.
 
 ## 0.42.1
 
