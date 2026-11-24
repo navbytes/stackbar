@@ -10,7 +10,7 @@ extension MacSystem {
     }
 
     func define(_ word: String) async -> Definition? {
-        MacDictionary.define(word)
+        await MacDictionary.lookUp(word)
     }
 }
 
@@ -46,7 +46,20 @@ enum MacColorPicker {
 
 /// The Dictionary app's definitions (Dictionary Services), offline.
 enum MacDictionary {
-    static func define(_ word: String) -> Definition? {
+    /// Dictionary Services is not safe to call from two threads at once, and
+    /// search-as-you-type sends a look-up per keystroke, so overlapping calls
+    /// used to reach it together from the concurrent pool and crash the app.
+    /// Every look-up runs here, one at a time, off the main thread.
+    private static let queue = DispatchQueue(label: "io.navbytes.stackbar.dictionary", qos: .userInitiated)
+
+    static func lookUp(_ word: String) async -> Definition? {
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume(returning: define(word)) }
+        }
+    }
+
+    /// Call only on `queue`.
+    private static func define(_ word: String) -> Definition? {
         let length = (word as NSString).length
         guard length > 0, let text = DCSCopyTextDefinition(nil, word as CFString, CFRange(location: 0, length: length))?.takeRetainedValue() else { return nil }
         let definition = (text as String).trimmingCharacters(in: .whitespacesAndNewlines)
